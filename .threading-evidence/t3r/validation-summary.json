@@ -1,0 +1,715 @@
+{
+  "classification": "T3R PARTIAL \u2014 migration verified; nonzero-BSP hardware proof unavailable",
+  "implementation": "IMPLEMENTED (debug-only fixtures; production scheduling policy unchanged)",
+  "initial_source_exactly_t3": true,
+  "head": "eeba257e4c548af61a2b2c6aeeeb734ab8b07cc6",
+  "native_migration": [
+    {
+      "cpus": 2,
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164434.160709Z-migration-2cpu/result.json",
+      "serial_sha256": "336bd3bc5a8e620c195a5a10dc479121f2228d366ed5ed31b98b134de0105009",
+      "iso_sha256": "d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e",
+      "apic_ids": [
+        0,
+        1
+      ]
+    },
+    {
+      "cpus": 4,
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164501.457061Z-migration-4cpu/result.json",
+      "serial_sha256": "740062390f4e5f534ad831dd942a2fb668db0a93aad99f7138cb6ab31a58d84c",
+      "iso_sha256": "d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e",
+      "apic_ids": [
+        0,
+        1,
+        2,
+        3
+      ]
+    },
+    {
+      "cpus": 12,
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164529.503179Z-migration-12cpu/result.json",
+      "serial_sha256": "5aa36d056eb1d560abbd46c98bcc226b107f01d67d9b9a2f1426780953824244",
+      "iso_sha256": "d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e",
+      "apic_ids": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ]
+    }
+  ],
+  "compatibility": [
+    {
+      "suite": "std",
+      "status": "PASS",
+      "cpus": [
+        2,
+        4,
+        12
+      ],
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164832.313795Z-suite-std/result.json",
+      "kernel_source_matches_final": true
+    },
+    {
+      "suite": "fp",
+      "status": "PASS",
+      "cpus": [
+        2,
+        4,
+        12
+      ],
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165021.430200Z-suite-fp/result.json",
+      "kernel_source_matches_final": true
+    },
+    {
+      "suite": "production",
+      "status": "PASS",
+      "cpus": [
+        2
+      ],
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165443.557425Z-suite-production/result.json",
+      "kernel_source_matches_final": true
+    }
+  ],
+  "hardware_topology": [
+    {
+      "status": "BLOCKED / NOT_RUN",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164643.121240Z-nonzero-bsp-attempt/result.json",
+      "functional_migration": true,
+      "reason": "Actual BSP remained APIC 0; firmware slot 0 is BSP. CPU property did not produce the requested hardware.",
+      "firmware": [
+        "[T3R-FW] slot=0 processor=0 apic=0 bsp=0",
+        "[T3R-FW] slot=1 processor=1 apic=1 bsp=0"
+      ],
+      "cpu_identity": [
+        "[CPU-ID] logical=0 apic=0 bsp=true",
+        "[CPU-ID] logical=1 apic=1 bsp=false",
+        "[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6e7dc8 ist_df=0xffffffff8f124250 ist_nmi=0xffffffff8e9b6080",
+        "[CPU-ID] online logical=1 apic=1 tss=0xffffffff8e6e53c8 ist_df=0xffffffff8ecc4250 ist_nmi=0xffffffff8e9ba080"
+      ]
+    }
+  ],
+  "host_checks": [
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164052.010059Z-parser-controls/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164127.034671Z-topology-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164127.603910Z-kernel-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164138.942109Z-compat-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164139.513145Z-parser-controls/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164406.378160Z-topology-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164406.936846Z-kernel-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164408.493366Z-compat-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164409.055073Z-parser-controls/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164728.648422Z-handoff-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164731.244911Z-requests-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164731.913920Z-admission-host/result.json"
+    },
+    {
+      "status": "PASS",
+      "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164732.830533Z-scheduler-host/result.json"
+    }
+  ],
+  "historical_failures_preserved": [
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T163849.921267Z-fixture-build/result.json"
+  ],
+  "final_migration_matrix": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/result.json",
+  "kernel_source_matches_final_migration": true,
+  "remote-wake": {
+    "status": "PASS",
+    "cpus": [
+      2,
+      12
+    ],
+    "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/remote-wake/results.json"
+  },
+  "handoff": {
+    "status": "PASS",
+    "cpus": [
+      2,
+      12
+    ],
+    "result": "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/handoff/results.json"
+  },
+  "late_bsp": {
+    "status": "BLOCKED / NOT_RUN",
+    "reason": "Observed firmware puts actual BSP APIC 0 in slot 0; no available tested configuration produced a later BSP."
+  },
+  "negative_controls": {
+    "native_input": ".threading-evidence/t3r/20261105T164434.160709Z-migration-2cpu/serial.log",
+    "native_input_sha256": "336bd3bc5a8e620c195a5a10dc479121f2228d366ed5ed31b98b134de0105009",
+    "native_positive_accepted": true,
+    "controls": [
+      {
+        "name": "request_only",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "ab0265c2d9e57fecdfde6562ec7812c5b009e58788e71bf66931ca563aad8a8c"
+      },
+      {
+        "name": "wrong_process_incarnation",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "cb2592cc2da34c2c4f58f4dd51dc44f932fea8309c5e9c8cc7550b4984101c9d"
+      },
+      {
+        "name": "wrong_thread_incarnation",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "71b36aed5ada9b16b32b69e90596b602895ac34a3b6bd50029dd5d7bdd31919f"
+      },
+      {
+        "name": "identical_physical_cpu",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "cc9cfb19a93c6f6aebe2979b5b4b7bed9c3cf52c7c39dbe53c9d696703d67614"
+      },
+      {
+        "name": "missing_destination_execution",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "37a2c3547246c6660ed3e47ef293d836436e58d208b944a3d552c45854db0403"
+      },
+      {
+        "name": "invalid_topology_mapping",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "a42ee67a509709da9bee918dcd8590f9985b1d8646c9a4c53ffcfc67445c5223"
+      },
+      {
+        "name": "wrong_tss_owner",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "2e79d3017bb73d2c2caa98eb238fe026a9b1adeebf40847d791304e51e1e18f7"
+      },
+      {
+        "name": "missing_tls_validation",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "d8da422c833c69eb86ea4cd81212c7a5d8ad683e4f3e36b4835428911615ac08"
+      },
+      {
+        "name": "corrupt_fp_validation",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "e6a0f17f59f79de4ffffcda41aa91a17f8c0fd8448764d3833b3cb304330c08f"
+      },
+      {
+        "name": "missing_retirement",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "e77e32f1e352d227d988388b4fee09f1f2b1591f5e5a3ffd55bda89800278922"
+      },
+      {
+        "name": "incomplete_reaping",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "0caeefe91981d867af9be4d2a747b1b0b0124c28c0d936aa1ea9e6f78c0514ba"
+      },
+      {
+        "name": "abandoned_handoff_waiter",
+        "classification": "HOST PARSER NEGATIVE CONTROL",
+        "accepted": false,
+        "pass": true,
+        "sha256": "da053d733bbdfaa81f08f4f245597cc0107a5b66a371c7f4714093cdff405539"
+      }
+    ],
+    "pass": true
+  },
+  "formatting": {
+    "changed_spans_pass": true,
+    "files": [
+      {
+        "file": "kernel/src/arch/x86_64/cpu_identity.rs",
+        "discrepancies": []
+      },
+      {
+        "file": "kernel/src/sched/t3r_fixture.rs",
+        "discrepancies": []
+      },
+      {
+        "file": "kernel/build.rs",
+        "discrepancies": []
+      },
+      {
+        "file": "kernel/src/arch/x86_64/syscall.rs",
+        "discrepancies": [
+          {
+            "line": 400,
+            "changed": false
+          },
+          {
+            "line": 436,
+            "changed": false
+          },
+          {
+            "line": 557,
+            "changed": false
+          },
+          {
+            "line": 975,
+            "changed": false
+          },
+          {
+            "line": 979,
+            "changed": false
+          },
+          {
+            "line": 982,
+            "changed": false
+          },
+          {
+            "line": 1634,
+            "changed": false
+          },
+          {
+            "line": 1865,
+            "changed": false
+          },
+          {
+            "line": 1868,
+            "changed": false
+          },
+          {
+            "line": 1874,
+            "changed": false
+          },
+          {
+            "line": 1881,
+            "changed": false
+          },
+          {
+            "line": 1914,
+            "changed": false
+          },
+          {
+            "line": 2864,
+            "changed": false
+          },
+          {
+            "line": 3001,
+            "changed": false
+          },
+          {
+            "line": 3401,
+            "changed": false
+          },
+          {
+            "line": 3450,
+            "changed": false
+          },
+          {
+            "line": 3815,
+            "changed": false
+          },
+          {
+            "line": 7068,
+            "changed": false
+          },
+          {
+            "line": 7072,
+            "changed": false
+          },
+          {
+            "line": 7184,
+            "changed": false
+          },
+          {
+            "line": 7246,
+            "changed": false
+          },
+          {
+            "line": 7253,
+            "changed": false
+          },
+          {
+            "line": 10451,
+            "changed": false
+          },
+          {
+            "line": 12581,
+            "changed": false
+          },
+          {
+            "line": 12583,
+            "changed": false
+          },
+          {
+            "line": 12589,
+            "changed": false
+          },
+          {
+            "line": 12591,
+            "changed": false
+          },
+          {
+            "line": 12593,
+            "changed": false
+          },
+          {
+            "line": 12596,
+            "changed": false
+          },
+          {
+            "line": 12598,
+            "changed": false
+          },
+          {
+            "line": 12603,
+            "changed": false
+          },
+          {
+            "line": 12606,
+            "changed": false
+          },
+          {
+            "line": 12613,
+            "changed": false
+          },
+          {
+            "line": 12616,
+            "changed": false
+          },
+          {
+            "line": 12623,
+            "changed": false
+          },
+          {
+            "line": 12631,
+            "changed": false
+          },
+          {
+            "line": 12645,
+            "changed": false
+          },
+          {
+            "line": 12654,
+            "changed": false
+          },
+          {
+            "line": 12657,
+            "changed": false
+          },
+          {
+            "line": 12665,
+            "changed": false
+          },
+          {
+            "line": 12673,
+            "changed": false
+          },
+          {
+            "line": 12675,
+            "changed": false
+          },
+          {
+            "line": 12684,
+            "changed": false
+          },
+          {
+            "line": 12686,
+            "changed": false
+          }
+        ]
+      },
+      {
+        "file": "kernel/src/main.rs",
+        "discrepancies": [
+          {
+            "line": 218,
+            "changed": false
+          },
+          {
+            "line": 220,
+            "changed": false
+          },
+          {
+            "line": 222,
+            "changed": false
+          },
+          {
+            "line": 225,
+            "changed": false
+          },
+          {
+            "line": 227,
+            "changed": false
+          },
+          {
+            "line": 229,
+            "changed": false
+          },
+          {
+            "line": 231,
+            "changed": false
+          },
+          {
+            "line": 233,
+            "changed": false
+          },
+          {
+            "line": 235,
+            "changed": false
+          },
+          {
+            "line": 237,
+            "changed": false
+          },
+          {
+            "line": 239,
+            "changed": false
+          },
+          {
+            "line": 241,
+            "changed": false
+          },
+          {
+            "line": 243,
+            "changed": false
+          },
+          {
+            "line": 851,
+            "changed": false
+          }
+        ]
+      },
+      {
+        "file": "kernel/src/process/fd_table.rs",
+        "discrepancies": []
+      },
+      {
+        "file": "kernel/src/sched/handoff.rs",
+        "discrepancies": []
+      },
+      {
+        "file": "kernel/src/sched/mod.rs",
+        "discrepancies": [
+          {
+            "line": 90,
+            "changed": false
+          },
+          {
+            "line": 92,
+            "changed": false
+          },
+          {
+            "line": 94,
+            "changed": false
+          },
+          {
+            "line": 487,
+            "changed": false
+          },
+          {
+            "line": 492,
+            "changed": false
+          },
+          {
+            "line": 498,
+            "changed": false
+          },
+          {
+            "line": 504,
+            "changed": false
+          },
+          {
+            "line": 1083,
+            "changed": false
+          },
+          {
+            "line": 1149,
+            "changed": false
+          },
+          {
+            "line": 1213,
+            "changed": false
+          },
+          {
+            "line": 1836,
+            "changed": false
+          },
+          {
+            "line": 1924,
+            "changed": false
+          },
+          {
+            "line": 2720,
+            "changed": false
+          },
+          {
+            "line": 2734,
+            "changed": false
+          },
+          {
+            "line": 2876,
+            "changed": false
+          },
+          {
+            "line": 2882,
+            "changed": false
+          },
+          {
+            "line": 2924,
+            "changed": false
+          },
+          {
+            "line": 2979,
+            "changed": false
+          },
+          {
+            "line": 2984,
+            "changed": false
+          },
+          {
+            "line": 3136,
+            "changed": false
+          },
+          {
+            "line": 4390,
+            "changed": false
+          },
+          {
+            "line": 4394,
+            "changed": false
+          }
+        ]
+      }
+    ]
+  },
+  "clippy": {
+    "overall": "FAIL (existing unrelated diagnostics)",
+    "diagnostics": 155,
+    "changed_span_diagnostics": [],
+    "changed_span_pass": true,
+    "t3_baseline": ".threading-evidence/t3/current-clippy/clippy.jsonl",
+    "same_message_and_primary_file_multiset_as_t3": true
+  },
+  "production_exclusion": {
+    "images": [
+      {
+        "path": ".threading-evidence/t3r/ordinary-debug.elf",
+        "sha256": "8e24d63238f6aebce43da9a2e55da257ca482faa7dd0e120a9c9bcaf1fac4fd5",
+        "forbidden": {
+          "[T3R]": true,
+          "[T3R-FW]": true,
+          "T3R source": true,
+          "t3r_fixture": true
+        },
+        "pass": true
+      },
+      {
+        "path": ".threading-evidence/t3r/20261105T165443.557425Z-suite-production/kernel.elf",
+        "sha256": "60ef613f0ba268e4fee8036e2bd4e558271b81bee0676f73836074377999410d",
+        "forbidden": {
+          "[T3R]": true,
+          "[T3R-FW]": true,
+          "T3R source": true,
+          "t3r_fixture": true
+        },
+        "pass": true
+      },
+      {
+        "path": ".threading-evidence/t3r/release-feature.elf",
+        "sha256": "7e09a30d92a0c7c2d2a8b9949fb38f0c6704b867015b2a72f068ef48683bdea3",
+        "forbidden": {
+          "[T3R]": true,
+          "[T3R-FW]": true,
+          "T3R source": true,
+          "t3r_fixture": true
+        },
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "tlb_12cpu": [
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165624.806043Z-tlb-12cpu/result.json"
+  ],
+  "not_run": [
+    "Genuine nonzero BSP initialization/AP/IPI/NMI/TLB gate",
+    "BSP later in actual firmware enumeration",
+    "T2R deferred parent-exit, VM-teardown and exec races",
+    "T4\u2013T7"
+  ],
+  "retained_prior_evidence": [
+    ".threading-evidence/t1",
+    ".threading-evidence/t2",
+    ".threading-evidence/t2r",
+    ".threading-evidence/t3"
+  ],
+  "final_default_artifact": {
+    "status": "PASS",
+    "command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      "target/t3r-final-default.elf"
+    ],
+    "sha256": "9033461b55a77f9de513faffeb1b1c21ccdfef481caf2e277ce89ab7ad35003d",
+    "fixture_excluded": true,
+    "source_inventory_matches_final": true,
+    "initial_lockfile_restored": true
+  },
+  "unrelated_source_paths_preserved": 11083,
+  "native_std_lockfile_refresh": {
+    "status": "RESTORED exact initial bytes",
+    "generated_file": "native-std-lock-refresh/refreshed.Cargo.lock",
+    "scope": "six local package-version labels only; frozen compatibility image source inventories preserved"
+  }
+}

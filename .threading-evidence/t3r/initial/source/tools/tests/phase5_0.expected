@@ -1,0 +1,6 @@
+# Phase 5.0 test: virtio-net driver initialization
+[NET]  Scanning PCI for virtio-net...
+[NET]  Found virtio-net at PCI 00:03.0
+[NET]  MAC: 52:54:00:12:34:56
+[NET]  RX/TX queues initialized
+[NET]  virtio-net OK

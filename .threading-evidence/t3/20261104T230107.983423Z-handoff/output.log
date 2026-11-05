@@ -1,0 +1,4 @@
+1 CPUs: PASS (/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff/1cpu.serial.log)
+2 CPUs: PASS (/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff/2cpu.serial.log)
+4 CPUs: PASS (/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff/4cpu.serial.log)
+12 CPUs: PASS (/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff/12cpu.serial.log)

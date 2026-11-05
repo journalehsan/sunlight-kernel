@@ -1,0 +1,15 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t3r_regressions.py",
+    "std",
+    "--cpus",
+    "2",
+    "4",
+    "12"
+  ],
+  "exit_code": 0,
+  "seconds": 108.55364295397885
+}

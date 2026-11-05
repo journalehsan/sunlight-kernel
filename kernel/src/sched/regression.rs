@@ -12,13 +12,28 @@ static EXIT_RACES: AtomicUsize = AtomicUsize::new(0);
 struct Gate {
     replacements: Vec<Process>,
     second_wave: bool,
+    completed: bool,
     published: usize,
 }
 static GATE: spin::Mutex<Gate> = spin::Mutex::new(Gate {
     replacements: Vec::new(),
     second_wave: false,
+    completed: false,
     published: 0,
 });
+
+#[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+static COMPLETIONS: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+pub fn completion(s: &Scheduler, idx: usize) {
+    assert!(!s.stack_is_pinned(idx));
+    assert_eq!(s.processes[idx].owning_core, u8::MAX);
+    assert_eq!(s.processes[idx].queued_on_core, u8::MAX);
+    if s.processes[idx].name_str() == "t1-linux-completion" {
+        COMPLETIONS.fetch_add(1, Ordering::Relaxed);
+    }
+}
 
 pub fn note_deferred_reap() {
     DEFERRED.fetch_add(1, Ordering::Relaxed);
@@ -56,6 +71,16 @@ fn private(pid: usize, role: u64, hhdm: VirtAddr) -> Process {
     let entry = crate::process::elf_loader::load_elf(ELF, &mut p, &mut pmm, hhdm)
         .expect("scheduler fixture ELF");
     crate::process::spawn::map_user_stack(&mut p, &mut pmm, hhdm).unwrap();
+    #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+    {
+        use x86_64::structures::paging::{Page, Size4KiB};
+        let floor = layout::USER_STACK_TOP - layout::USER_STACK_SIZE;
+        assert_eq!(floor, 0x0000_7fff_ffdf_f000);
+        let mapped = Page::<Size4KiB>::from_start_address(VirtAddr::new(floor)).unwrap();
+        let guard = mapped - 1;
+        assert!(unsafe { p.address_space.lookup_entry(mapped, hhdm) }.is_some());
+        assert!(unsafe { p.address_space.lookup_entry(guard, hhdm) }.is_none());
+    }
     p.init_context(entry, layout::USER_STACK_TOP);
     p.set_initial_args(role, 0, 0, 0);
     p
@@ -93,6 +118,47 @@ fn borrower(pid: usize, owner: usize, vm: SharedAddressSpaceHandle, linux: bool)
     p
 }
 
+#[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+fn linux_completion(pid: usize, hhdm: VirtAddr) -> Process {
+    let elf = include_bytes!(concat!(env!("OUT_DIR"), "/syscall-linux-completion.elf"));
+    let mut pmm = crate::PMM.lock();
+    let mut p = unsafe { Process::new(pid, 0, "t1-linux-completion", &mut pmm, hhdm) };
+    let entry = crate::process::elf_loader::load_elf(elf, &mut p, &mut pmm, hhdm).unwrap();
+    crate::process::spawn::map_user_stack(&mut p, &mut pmm, hhdm).unwrap();
+    // This unpublished VM is exclusively owned here. Exercise the production
+    // completion store's alignment, mapping and write-permission checks.
+    use crate::memory::user::{read_process_atomic_u32, write_process_atomic_u32, UserMemoryError};
+    let floor = layout::USER_STACK_TOP - layout::USER_STACK_SIZE;
+    for address in [floor, floor + 4092] {
+        write_process_atomic_u32(&p, hhdm, address, 0x12345678).unwrap();
+        assert_eq!(
+            read_process_atomic_u32(&p, hhdm, address).unwrap(),
+            0x12345678
+        );
+    }
+    assert_eq!(
+        write_process_atomic_u32(&p, hhdm, floor + 1, 0),
+        Err(UserMemoryError::InvalidAddress)
+    );
+    assert_eq!(
+        write_process_atomic_u32(&p, hhdm, floor - 4, 0),
+        Err(UserMemoryError::Unmapped)
+    );
+    assert_eq!(
+        write_process_atomic_u32(&p, hhdm, entry & !3, 0),
+        Err(UserMemoryError::NotWritable)
+    );
+    assert_eq!(
+        write_process_atomic_u32(&p, hhdm, p.kernel_stack_top - 4, 0),
+        Err(UserMemoryError::KernelRange)
+    );
+    p.personality =
+        crate::process::ProcessPersonality::Linux(crate::process::LinuxProcessState::new());
+    p.linux_tgid = Some(pid);
+    p.init_context(entry, layout::USER_STACK_TOP);
+    p
+}
+
 pub fn run(hhdm: VirtAddr) {
     let cpus = ONLINE_CORES.load(Ordering::Acquire);
     init_cores(cpus);
@@ -117,10 +183,26 @@ pub fn run(hhdm: VirtAddr) {
         let shared = owner.address_space.shared_handle();
         SCHEDULER.lock().add_process_after_reaping(owner);
         for offset in 1..=2 {
-            let p = borrower(pid + offset, pid, shared.clone(), linux);
+            #[allow(unused_mut)]
+            let mut p = borrower(pid + offset, pid, shared.clone(), linux);
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            if !linux {
+                p.set_initial_args(
+                    4 + offset as u64,
+                    layout::USER_STACK_TOP - 0x90000,
+                    layout::USER_STACK_TOP - 0xa0000,
+                    0,
+                );
+            }
             SCHEDULER.lock().add_process_after_reaping(p);
         }
         pid += 3;
+    }
+    #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+    {
+        let process = linux_completion(pid, hhdm);
+        SCHEDULER.lock().add_process_after_reaping(process);
+        pid += 1;
     }
     // Replacement allocations happen at boot, never from a dispatch/IRQ path.
     let mut replacements = Vec::with_capacity(cpus);
@@ -170,6 +252,12 @@ pub fn on_tick(s: &mut Scheduler, cpu: usize) {
             && p.state == ProcessState::Running
             && (p.cpu_charge_since.is_some() || p.cpu_runtime_ns != 0)
         {
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            if (p.name_str() == "gate-borrower" && p.native_thread)
+                || p.name_str() == "t1-linux-completion"
+            {
+                continue; // hostile-RSP pair must finish itself, never be killed
+            }
             let owner = p.name_str().starts_with("gate-owner");
             if owner && s.live_address_space_borrowers(idx) != 0 {
                 continue;
@@ -190,6 +278,9 @@ pub fn on_tick(s: &mut Scheduler, cpu: usize) {
         }
     }
     let mut g = GATE.lock();
+    if g.completed {
+        return;
+    }
     if s.processes.iter().all(|p| p.state == ProcessState::Reaped) {
         if !g.second_wave {
             g.second_wave = true;
@@ -210,6 +301,11 @@ pub fn on_tick(s: &mut Scheduler, cpu: usize) {
                 assert!(core.context_switches > 0);
                 assert!(core.rr_queue.is_empty());
             }
+            g.completed = true;
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            assert_eq!(COMPLETIONS.load(Ordering::Relaxed), 32);
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            serial_println!("[T1] PASS invalid_rsp=unmapped,zero,noncanonical,guard-boundary sibling_iterations=32 completion_reuses=32 trusted_frames=checked");
             serial_println!(
                 "[SCHED-B] PASS cpus={} deferred_reaps={} reused={} exit_races={}",
                 s.online_cores,

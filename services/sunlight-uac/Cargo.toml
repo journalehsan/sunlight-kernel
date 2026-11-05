@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.6151-alpha.2"
+version = "0.2.6324-alpha.2"
+
+
+
+
 
 
 
@@ -650,6 +654,8 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+fastlane-contract-test = ["fastlane-mediated-accounting-test"]
+fastlane-mediated-accounting-test = ["fastlane-measurement-test"]
 fastlane-benchmark-test = ["fastlane-measurement-test"]
 fastlane-census-leak-test = ["fastlane-census-hold-test"]
 fastlane-census-hold-test = ["fastlane-mapping-test"]

@@ -1,0 +1,19 @@
+[
+  "docs/kernel/threading-t3r-topology-migration.md",
+  "kernel/Cargo.toml",
+  "kernel/build.rs",
+  "kernel/src/arch/x86_64/cpu_identity.rs",
+  "kernel/src/arch/x86_64/syscall.rs",
+  "kernel/src/main.rs",
+  "kernel/src/process/fd_table.rs",
+  "kernel/src/sched/handoff.rs",
+  "kernel/src/sched/mod.rs",
+  "kernel/src/sched/t3r_fixture.rs",
+  "tools/helios-probes/thread-migration-probe.S",
+  "tools/native-std-probe/Cargo.lock",
+  "tools/test_threading_t3r.py",
+  "tools/threading_t3r_receipt.py",
+  "tools/threading_t3r_regressions.py",
+  "tools/threading_t3r_run.py",
+  "tools/threading_t3r_validate.py"
+]

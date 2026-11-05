@@ -1,0 +1,126 @@
+{
+  "pass": true,
+  "commands": [
+    [
+      "rustc",
+      "--edition=2021",
+      "--test",
+      "kernel/src/arch/x86_64/cpu_topology.rs",
+      "-o",
+      "target/t3r-topology-test"
+    ],
+    [
+      "target/t3r-topology-test"
+    ],
+    [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-kernel",
+      "--lib",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--offline"
+    ],
+    [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-compat-linux",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--offline"
+    ],
+    [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools",
+      "-p",
+      "test_threading_t*.py",
+      "-v"
+    ],
+    [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--features",
+      "thread_migration_test",
+      "--offline"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/kernel.elf"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/threading_t3r_validate.py",
+      "guest",
+      "migration-2cpu",
+      "--iso",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/boot.iso",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--marker",
+      "[T3R] PASS"
+    ],
+    [
+      "python3",
+      "tools/threading_t3r_validate.py",
+      "guest",
+      "migration-4cpu",
+      "--iso",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/boot.iso",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--marker",
+      "[T3R] PASS"
+    ],
+    [
+      "python3",
+      "tools/threading_t3r_validate.py",
+      "guest",
+      "migration-12cpu",
+      "--iso",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/boot.iso",
+      "--cpus",
+      "12",
+      "--timeout",
+      "120",
+      "--marker",
+      "[T3R] PASS"
+    ]
+  ],
+  "guests": {
+    "2": "PASS",
+    "4": "PASS",
+    "12": "PASS"
+  },
+  "stage3": "PASS",
+  "elf_sha256": "0a24f0e93cbdcc34985d9c5f811e8aaa1c0d4671d4bd8ad7fef60ae06bbe7da3",
+  "iso_sha256": "d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e"
+}

@@ -169,6 +169,9 @@ fn main() -> anyhow::Result<()> {
 
 #[cfg(feature = "native-hayro-smoke")]
 fn native_std_checks() -> anyhow::Result<()> {
+    native_thread_mapping_rollback_checks()?;
+    native_thread_admission_checks()?;
+    native_futex_handoff_checks()?;
     use std::{
         io::{Read, Seek, SeekFrom},
         sync::{Arc, Mutex, OnceLock},
@@ -343,6 +346,26 @@ fn native_std_checks() -> anyhow::Result<()> {
         }
     }
     sunlight_ipc::debug_log("[DOCSERV] native Hayro PDF raster/recovery OK\n");
+    // Render actual pages concurrently through four independent native std
+    // workers. Each owns its PDF/cache state and returns only a small receipt.
+    let mut render_workers = Vec::new();
+    for page in 0..4 {
+        render_workers.push(std::thread::Builder::new().spawn(
+            move || -> anyhow::Result<(usize, u64)> {
+                let backend = sunlight_docserv::backends::hayro_backend::HayroBackend;
+                let document = backend.open(std::path::Path::new(path))?;
+                let bitmap = document.render_page(page, 0.5)?;
+                anyhow::ensure!(bitmap.width > 0 && bitmap.height > 0);
+                let checksum = bitmap.data.iter().map(|byte| u64::from(*byte)).sum();
+                Ok((bitmap.data.len(), checksum))
+            },
+        )?);
+    }
+    for worker in render_workers {
+        let (bytes, checksum) = worker.join().unwrap()?;
+        anyhow::ensure!(bytes > 0 && checksum > 0);
+    }
+    sunlight_ipc::debug_log("[NATIVE-STD] T2 Hayro workers=4 concurrent render/join OK\n");
     let path = "/tmp/native-hayro-rich-fixture.pdf";
     std::fs::write(
         path,
@@ -375,5 +398,219 @@ fn native_std_checks() -> anyhow::Result<()> {
         }
     }
     sunlight_ipc::debug_log("[DOCSERV] native Hayro text/vector/image pixels OK\n");
+    Ok(())
+}
+
+/// Exercise the real std Builder error contract, TLS destructors, joins and
+/// detach cleanup against kernel admission. This runs only in the smoke image.
+#[cfg(feature = "native-hayro-smoke")]
+fn native_thread_admission_checks() -> anyhow::Result<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, Instant};
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+    struct Witness;
+    impl Drop for Witness {
+        fn drop(&mut self) {
+            DROPS.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    std::thread_local! { static TLS: Witness = const { Witness }; }
+    for round in 0..3 {
+        let release = Arc::new((Mutex::new(false), Condvar::new()));
+        let mut handles = Vec::new();
+        let mut rejection = None;
+        for _ in 0..33 {
+            let release = release.clone();
+            match std::thread::Builder::new().spawn(move || {
+                TLS.with(|_| ());
+                let mut ready = release.0.lock().unwrap();
+                for _ in 0..5000 {
+                    if *ready {
+                        return;
+                    }
+                    ready = release
+                        .1
+                        .wait_timeout(ready, Duration::from_millis(10))
+                        .unwrap()
+                        .0;
+                }
+                panic!("bounded admission worker timed out");
+            }) {
+                Ok(handle) => handles.push(handle),
+                Err(error) => {
+                    rejection = error.raw_os_error();
+                    break;
+                }
+            }
+        }
+        anyhow::ensure!(handles.len() == 32, "std capacity was {}", handles.len());
+        anyhow::ensure!(rejection == Some(11), "std quota error was {rejection:?}");
+        *release.0.lock().unwrap() = true;
+        release.1.notify_all();
+        for (index, handle) in handles.into_iter().enumerate() {
+            if index % 2 == 0 {
+                handle.join().unwrap();
+            } else {
+                drop(handle);
+            }
+        }
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while DROPS.load(Ordering::SeqCst) != (round + 1) * 32 {
+            anyhow::ensure!(Instant::now() < deadline, "detached TLS cleanup timed out");
+            std::thread::yield_now();
+        }
+        // Spawn/join drives the runtime's quiescent detached-handle sweep.
+        // Retry only EAGAIN while the final physical handoff is being reaped.
+        for attempt in 0..4096 {
+            match std::thread::Builder::new().spawn(|| 42) {
+                Ok(handle) => {
+                    anyhow::ensure!(handle.join().unwrap() == 42);
+                    break;
+                }
+                Err(error) => {
+                    anyhow::ensure!(error.raw_os_error() == Some(11) && attempt < 4095);
+                    std::thread::yield_now();
+                }
+            }
+        }
+    }
+    sunlight_ipc::debug_log(
+        "[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK\n",
+    );
+    Ok(())
+}
+
+/// Fill the actual native region ledger, leaving exactly one record for a
+/// worker stack. TLS mapping then fails before publication; the complete stack
+/// mapping must be releasable even while the ledger is full.
+#[cfg(feature = "native-hayro-smoke")]
+fn native_thread_mapping_rollback_checks() -> anyhow::Result<()> {
+    use sunlight_libc::mman::*;
+    let flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD;
+    let mut pages = Vec::new();
+    let mut full = false;
+    for _ in 0..257 {
+        match mmap(
+            core::ptr::null_mut(),
+            4096,
+            PROT_READ | PROT_WRITE,
+            flags,
+            -1,
+            0,
+        ) {
+            Ok(page) => pages.push(page),
+            Err(_) => {
+                full = true;
+                break;
+            }
+        }
+    }
+    anyhow::ensure!(
+        full && !pages.is_empty(),
+        "bounded ledger pressure was not reached"
+    );
+    munmap(pages.pop().unwrap(), 4096).map_err(|_| anyhow::anyhow!("ledger release failed"))?;
+    for _ in 0..3 {
+        let result = std::thread::Builder::new().spawn(|| panic!("rejected child published"));
+        anyhow::ensure!(result.is_err(), "TLS mapping unexpectedly admitted");
+        anyhow::ensure!(result.unwrap_err().raw_os_error() == Some(12));
+        let proof = mmap(
+            core::ptr::null_mut(),
+            4096,
+            PROT_READ | PROT_WRITE,
+            flags,
+            -1,
+            0,
+        )
+        .map_err(|_| anyhow::anyhow!("failed spawn leaked its stack ledger slot"))?;
+        munmap(proof, 4096).map_err(|_| anyhow::anyhow!("proof mapping release failed"))?;
+    }
+    for page in pages {
+        munmap(page, 4096).map_err(|_| anyhow::anyhow!("ledger pressure cleanup failed"))?;
+    }
+    sunlight_ipc::debug_log(
+        "[NATIVE-STD] T2 full-ledger TLS failure rollback cycles=3 cleanup=allocation-free OK\n",
+    );
+    Ok(())
+}
+
+/// Exercise real std Mutex/Condvar paths on four independent addresses while
+/// another thread keeps making progress. Warm once, then reconcile allocations.
+#[cfg(feature = "native-hayro-smoke")]
+fn native_futex_handoff_checks() -> anyhow::Result<()> {
+    use std::sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc, Condvar, Mutex,
+    };
+    std::thread_local! { static T4A_TLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) }; }
+    let mut baseline = None;
+    for round in 0..3 {
+        let running = Arc::new(AtomicBool::new(true));
+        let progress = Arc::new(AtomicUsize::new(0));
+        let observer_running = running.clone();
+        let observer_progress = progress.clone();
+        let observer = std::thread::spawn(move || {
+            while observer_running.load(Ordering::Acquire) {
+                observer_progress.fetch_add(1, Ordering::Relaxed);
+                std::thread::yield_now();
+            }
+        });
+        let mut threads = Vec::new();
+        for pair in 0..4 {
+            let channel = Arc::new((Mutex::new((false, 0usize)), Condvar::new(), Condvar::new()));
+            for producer in [true, false] {
+                let channel = channel.clone();
+                threads.push(std::thread::spawn(move || {
+                    let seed = pair * 2 + usize::from(producer) + 1;
+                    T4A_TLS.with(|tls| {
+                        assert_eq!(tls.get(), 0);
+                        tls.set(seed);
+                    });
+                    let canary = [seed as u64; 32];
+                    for sequence in 0..128 {
+                        let (lock, data_ready, empty) = &*channel;
+                        if producer {
+                            let mut state = empty
+                                .wait_while(lock.lock().unwrap(), |state| state.0)
+                                .unwrap();
+                            state.1 = sequence;
+                            state.0 = true;
+                            data_ready.notify_one();
+                        } else {
+                            let mut state = data_ready
+                                .wait_while(lock.lock().unwrap(), |state| !state.0)
+                                .unwrap();
+                            assert_eq!(state.1, sequence);
+                            state.0 = false;
+                            empty.notify_one();
+                        }
+                        std::thread::yield_now();
+                    }
+                    assert_eq!(std::hint::black_box(canary), [seed as u64; 32]);
+                    T4A_TLS.with(|tls| assert_eq!(tls.get(), seed));
+                }));
+            }
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        running.store(false, Ordering::Release);
+        observer.join().unwrap();
+        anyhow::ensure!(progress.load(Ordering::Acquire) > 0);
+        drop(running);
+        drop(progress);
+        let stats = sunlight_libc::alloc::heap_stats();
+        let live = (stats.allocated_backing_bytes, stats.live_allocation_count);
+        if let Some(expected) = baseline {
+            anyhow::ensure!(live == expected, "T4A user allocation drift");
+        } else {
+            baseline = Some(live);
+        }
+        sunlight_ipc::debug_log(&format!("[NATIVE-STD] T4A handoff round={round} transfers=512 addresses=4 observer=ok TLS=ok heap={} live={}\n", live.0, live.1));
+    }
+    sunlight_ipc::debug_log(
+        "[NATIVE-STD] T4A mutex/condvar handoffs=1536 independent=4 progress/TLS/resources OK\n",
+    );
     Ok(())
 }

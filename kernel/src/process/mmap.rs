@@ -17,6 +17,9 @@ pub const MAP_PRIVATE: u32 = 0x02;
 pub const MAP_ANONYMOUS: u32 = 0x20;
 pub const MAP_FIXED: u32 = 0x10;
 pub const MAP_FIXED_NOREPLACE: u32 = 0x100000;
+/// Native stack/TLS resource storage retains exact allocation boundaries.
+/// This flag is native-only and is not a Linux mmap flag extension.
+pub const MAP_NATIVE_THREAD: u32 = 0x4000_0000;
 
 // mprotect flags
 pub const PROT_NONE: u32 = 0;
@@ -221,16 +224,17 @@ pub fn sys_mmap(
     pmm: &mut PhysicalMemoryManager,
     sched: &mut Scheduler,
 ) -> Result<u64, MmapError> {
+    if flags & MAP_NATIVE_THREAD != 0 && sched.current_process().is_linux_compat() {
+        return Err(MmapError::InvalidFlags);
+    }
     // Backed mappings are not implemented.  Reject descriptor/offset use so
     // no caller can mistake this for a file or device mapping interface.
     if fd != -1 || offset != 0 {
         return Err(MmapError::InvalidFlags);
     }
-    // PROT_NONE reservations become POSIX thread stacks in common libc
-    // implementations. Those stacks must stay fully present because this
-    // kernel can execute syscall and exception work on the user stack; a
-    // not-present stack page would fault again while delivering the first
-    // fault.
+    // Preserve the existing eager PROT_NONE reservation representation for
+    // Linux stacks. Ordinary syscall execution itself uses the private T1
+    // supervisor stack, independently of user-stack mapping permissions.
     let demand_backed = sched.current_process().is_linux_compat() && prot != PROT_NONE;
     map_anonymous_kind(
         addr,
@@ -280,7 +284,14 @@ fn map_anonymous_kind(
         result => result?,
     };
 
-    if flags & !(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_FIXED_NOREPLACE) != 0 {
+    if flags & !(MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_FIXED_NOREPLACE | MAP_NATIVE_THREAD)
+        != 0
+    {
+        return Err(MmapError::InvalidFlags);
+    }
+    if flags & MAP_NATIVE_THREAD != 0
+        && (addr != 0 || flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) != 0)
+    {
         return Err(MmapError::InvalidFlags);
     }
     if flags & (MAP_FIXED | MAP_FIXED_NOREPLACE) == (MAP_FIXED | MAP_FIXED_NOREPLACE) {
@@ -382,6 +393,9 @@ fn map_anonymous_kind(
     };
     if demand_backed {
         policy = policy.union(RegionPolicy::DEMAND);
+    }
+    if flags & MAP_NATIVE_THREAD != 0 {
+        policy = policy.union(RegionPolicy::NO_MERGE);
     }
     let region = MappingRegion::new(
         map_addr,
@@ -614,6 +628,10 @@ fn map_anonymous_kind(
         cursor.commit(&mut sched.current_memory_owner_mut().mmap_next);
     }
 
+    if replace_fixed {
+        let identity = sched.current_process().address_space.identity();
+        sched.cancel_futex_range(identity, map_addr, map_addr + span);
+    }
     Ok(map_addr)
 }
 
@@ -1004,6 +1022,7 @@ pub fn sys_munmap(
     }
 
     sched.current_process().address_space.commit_unmap(plan);
+    sched.cancel_futex_range(identity, addr, end);
     if !unsafe {
         sched
             .current_process()

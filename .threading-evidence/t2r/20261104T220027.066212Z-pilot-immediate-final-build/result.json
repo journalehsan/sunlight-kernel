@@ -1,0 +1,19 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "env",
+    "SUNLIGHT_T2R_CASE=immediate",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--features",
+    "thread_lifecycle_race_test",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 3.001699432992609
+}

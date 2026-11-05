@@ -1,0 +1,4 @@
+{
+  "classification": "OBSOLETE_RECEIPT_SCHEMA",
+  "reason": "Native prototype reached its terminal marker, but lacks the subsequently required measured baseline/cache receipt. Strict parser correctly rejects it. Stopped before replacement final-source pilots."
+}

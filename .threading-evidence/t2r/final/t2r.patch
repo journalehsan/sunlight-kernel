@@ -1,0 +1,1490 @@
+--- /dev/null
++++ b/docs/kernel/threading-t2r-lifecycle-race-closure.md
+@@ -0,0 +1,256 @@
++# T2R concurrent admission and lifecycle race closure
++
++Status: **PARTIAL — bounded admission pilots; five native lifecycle controls remain unproven.**
++
++Starting HEAD: `eeba257e4c548af61a2b2c6aeeeb734ab8b07cc6`.
++Starting canonical source SHA-256:
++`18953e76a8fe73ce1ea892bf283419db329417507f58fabd83f6cd322cb69ba5`.
++This matches the original T2 final ledger. The initial dirty patch, 230 changed
++source-file hashes, complete canonical map, status and original T1/T2 reports
++are preserved in `.threading-evidence/t2r/initial/`. Original T2 artifacts are
++unchanged. No commit or push is authorized.
++
++The exact control IDs below come from `tools/threading_t2_acceptance.py:RACES`
++and the original ledger's `acceptance.missing`, rather than newly assigned IDs.
++
++| Original ID | Requested control | Current proof |
++| --- | --- | --- |
++| `final_global_slot` | Two creators, last global worker slot | 2 CPUs: both winners pass |
++| `final_vm_slot` | Two creators, last per-VM worker slot | 2 CPUs: both winners pass |
++| `parent_exit` | Creation versus parent exit | Missing native receipt |
++| `vm_teardown` | Creation versus VM teardown | Missing native receipt |
++| `exec` | Creation versus legally permitted exec | Missing native receipt/classification |
++| `immediate_child_exit` | Immediate exit after publication | 2 CPUs: creator-return-first order passes |
++| `concurrent_reap_reuse` | Reaping/slot reuse during creation | Missing native receipt |
++| `prepublication_cancel` | Cancellation before publication commit | Missing native receipt |
++
++## Existing accepted evidence
++
++The original report and `.threading-evidence/t2/validation-summary.json` retain
++75 injected failures per ABI, three 96-worker recovery cycles, exact 3,035,136-byte
++reaped baselines, and 32 native suite rows across 1/2/4/12 CPUs. T1, native std
++join/detach/TLS, Hayro, production debug/release and boot are accepted historical
++evidence. They do not prove the eight controls above. The original forced-race
++ledger is empty and its acceptance result remains PARTIAL.
++
++## Commit and serialization contract
++
++`Scheduler::reserve_thread_slot` through `Scheduler::publish_thread` holds the
++same existing scheduler guard. Pre-commit resources are local RAII values;
++there is no persistent reservation registry. The commit adopts FD references,
++installs a complete Process in exactly one selected slot, and enqueues it once.
++The unreaped Process then owns the admission charge. Finished/pinned children
++remain charged until physically Reaped. Allocation-free slot insertion and
++queue capacity are established before commit. Native rejection is recoverable
++raw -2. Linux parent-TID store ordering and T1 stack handoff remain unchanged.
++
++A lifecycle mutation *inside* this guard interval is unreachable by construction.
++That source fact does not classify the overall controls unreachable: both
++external serialization orders still need native witnesses. Exec borrower
++restrictions likewise need native evidence, not a fixture authority bypass.
++
++## Pilot coordination
++
++`thread_lifecycle_race_test` is an opt-in debug-only fixture with immutable
++embedded ring-3 code and four exact PID/incarnation/VM-identity registrations.
++Global contention fills 95 real workers across four VMs (32/32/15/16), with
++owners of the last two VMs competing. Per-VM contention fills 29 ordinary
++workers and two worker creators in one VM. Contending creators remain charged
++until both results are collected. Immediate-exit mode publishes a real child
++which immediately invokes the existing exit syscall.
++
++Entry is recorded before taking the admission scheduler guard. A fixed
++2,000,000-spin rendezvous holds no lifecycle/fixture/serial lock and requires
++two distinct CPUs. Failure to reach it is a pilot failure, never PASS or
++unreachable. There is no production hot-path lock, scheduler freeze, quota
++change, or lifecycle mutation authority granted to the fixture. Ring-3 loops
++and the host guest runner have finite bounds. This is a pilot design, not yet
++accepted final race evidence.
++
++## Recorded native results and reconciliation
++
++The final strict parser and compiled-source audit accept five pilot guests:
++
++| Control | Winner/order | Exact guest receipt |
++| --- | --- | --- |
++| final_global_slot | actor 1 | `20261104T221411.159453Z-pilot-global-winner1-2cpu` |
++| immediate_child_exit | creator return before child exit | `20261104T221455.478314Z-pilot-immediate-winner0-2cpu` |
++| final_vm_slot | actor 0 | `20261104T222024.336312Z-pilot-vm-winner0-2cpu` |
++| final_vm_slot | actor 1 | `20261104T222102.165739Z-pilot-vm-winner1-2cpu` |
++| final_global_slot | actor 0 | `20261104T222149.589348Z-pilot-global-winner0-2cpu` |
++
++All are 2-CPU QEMU TCG guests. Each quota guest records two distinct CPU
++entrants before taking the lifecycle guard, exactly one complete publication,
++exactly one recoverable raw -2 rejection, and the generation-qualified child's
++Reaped/no-stack/no-pin receipt. Independent VM owners report progress; actor
++progress is excluded from the final progress count. The immediate-exit guest's
++creator success report precedes child exit entry; the reverse order is missing.
++
++| Guest kind | Warm baseline | Reaped worker stacks | Cached FD bytes | Final heap |
++| --- | ---: | ---: | ---: | ---: |
++| Global, each winner | 2,051,968 | 96 | 983,040 | 3,035,008 |
++| Per-VM, each winner | 2,051,968 | 32 | 327,680 | 2,379,648 |
++| Immediate exit | 2,051,968 | 1 | 10,240 | 2,062,208 |
++
++The baseline is measured after four owners and bounded task/queue storage are
++prepared, before any worker creation. Every remaining byte is attributed to
++one retained 10,240-byte FD-table box per Reaped worker slot. The final heap
++must equal that baseline plus those boxes. Owners remain live until the single
++terminal receipt: four occupied tasks/stacks, 12 FD references and four original
++capability entries. All four per-VM worker/borrower counts and the global worker
++count are zero. Every Reaped slot has no stack or physical pin, and every queue
++membership is unique. Inherited worker state is freed, not counted as cache.
++Reserved/pending zero is a source-contract statement: there is no persistent
++reservation registry; local transaction state cannot survive the guard scope.
++It is not an independently sampled ticket counter. No aggregate balance alone
++is promoted to a missing lifecycle or stale-slot reuse proof.
++
++The T2R global baseline is 128 bytes below the historical T2 baseline.
++This fixture gives each owner one environment pair; the original T2 fixture
++gives each owner two. Each guest checks its own measured baseline and exact
++cache bytes; the historical 3,035,136-byte value is not substituted here.
++
++`pilot-receipt-audit.json` and `validation-summary.json` retain the exact ISO,
++serial and source bindings and each guest's full child identity. Each runner
++also saves the complete source hash map; final compiled inputs match all five
++accepted pilot records. This does not establish hardware/topology certification.
++
++## Host, compatibility and production checks
++
++Admission RR/BORE, allocator/unmap failure properties, 171 kernel library tests,
++scheduler host tests, descriptor tests, Linux host tests, focused native thread
++and mapping APIs, and all 11 T1/T2/T2R parser tests pass. Changed Rust spans and
++the complete new fixture pass rustfmt. Full-workspace formatting still reports
++baseline diagnostics. Strict Cargo Clippy stops at the unchanged IPC baseline;
++direct final-fixture kernel Clippy reports 155 existing diagnostics and zero
++new/changed-line diagnostics. These Clippy runs are recorded FAIL with baseline
++classification; they are not labelled PASS.
++
++The 2-CPU native std/Hayro quota/join/detach/TLS and Linux clone/futex/FD/TLS gates
++pass. A 2-CPU T1 hostile-stack/lifecycle gate passed before the user narrowed the
++scope; no further hostile-stack run was made after that request. Later changes
++are debug-fixture coordination/receipt changes, a fixture-gated placement hook,
++and formatting; T1 assembly, VM retirement and production handoff logic are
++unchanged. Every final pilot and the ordinary release image pass the emitted
++trusted-stack ABI checker. This is not a new full final-source T1 SMP matrix.
++
++Ordinary production release build and 2-CPU boot pass on the final implementation;
++ordinary debug build is restored and passes. The release gate restores the
++ordinary supervisor before building. Production fixture-exclusion results are
++retained separately. No FastLane benchmark or old exhaustion matrix was rerun.
++All command paths, stdout, return codes and timeouts are indexed in the ledger.
++The descriptor host test automatically updated its package-version lockfile;
++that unrelated generated change was restored to its exact initial bytes.
++
++| New focused race matrix | 1 CPU | 2 CPUs | 4 CPUs | 12 CPUs |
++| --- | --- | --- | --- | --- |
++| Two quota controls | Not run | Both winners pass | Not run | Not run |
++| Immediate exit | Not run | One order passes | Not run | Not run |
++| Five lifecycle controls | Not run | Missing | Not run | Not run |
++
++T2 remains **PARTIAL for the original defined security scope**. The smallest
++next executable proof is a bounded two-CPU creator-versus-parent-exit fixture
++with exact owner/creator/child generations and each legal serialization order.
++It was deferred under this run's safer-test scope. Four other lifecycle rows,
++the reverse immediate-exit order and the final SMP expansion also remain.
++
++## Scope adjustment and limitations
++
++The user subsequently requested safer tests and asked to skip high-security
++checks. This run interprets that as omitting further hostile-stack and forced
++exit/exec/teardown/cancellation testing. It continues ordinary host checks,
++production validation and bounded quota/cleanup pilots. This is a reduced proof
++scope, not a relaxation of the original T2 acceptance criteria.
++
++The five remaining lifecycle controls have no dedicated native witnesses in
++this run. None is classified unreachable merely because the scheduler guard
++serializes construction. Concurrent owner exec with live borrowers is rejected
++by `exec`'s real owner/borrower predicate, but a new authenticated native exec
++rejection witness was not produced. No authority bypass was added to obtain one.
++The immediate-exit fixture witnesses publication, creator success reporting,
++child exit entry and physical Reaped retirement. It does not force a remote
++child to exit before the creator returns. That terminal order remains unproven.
++
++Stage 2 was not executed. Stage 3's new 1/2/4/12-CPU race matrix was not expanded:
++the original prerequisite that all eight controls pass or have evidence-backed
++unreachable classifications is unsatisfied. Existing T2 SMP results remain
++historical accepted evidence, not substitutes for these missing controls.
++No new T6 waitpid design, scheduler policy, quota policy, FastLane, desktop or
++audio changes are included. No commit, push, privileged disk operation or
++external-service message was performed.
++
++## Source and ownership review
++
++Admission rechecks the creator's exiting/cancelled/forced-exit state and full
++VM root/generation under the existing scheduler guard. A Finished Linux leader
++may retain a live group VM under the existing contract. Reaped slot selection
++requires no watcher, queue owner, CPU owner, current-task reference or physical
++stack pin. TIDs and publication incarnations cannot wrap.
++
++`live_address_space_borrowers` counts Finished unreaped workers by full VM
++identity. Native owner retirement terminates borrowers and defers VM retirement
++until their physical reaping. Exec rejects nonowners and owners with borrowers.
++Linux completion clearing follows physical pin/current/queue checks before
++slot reuse. These are reviewed source contracts and accepted historical gates;
++they are not new forced native lifecycle witnesses in this run.
++
++## Failed and superseded attempts
++
++Every runner command and guest lives in a new timestamped directory, retaining
++argv, timeout/exit code, source map, output and frozen-image/serial hashes.
++`failed-initial-build.json` records the initial helper-feature gating error.
++The initial per-VM attempts hit their bounded rendezvous assertion. The decisive
++snapshot records the other creator Ready, unpinned, affinity=2 but queued on
++CPU 0. Changing affinity at rendezvous time left a dependency on the occupied
++CPU's local queue. The fixture now chooses placement at initial publication;
++actor identity follows fixed CPU placement, rather than registration arrival
++order. No production queue policy changed.
++
++One diagnostic freeze raced its pending build and captured the immediate-exit
++image. Its `attempt-classification.json` marks it INVALID_WRONG_FROZEN_IMAGE.
++A later prototype reached its native marker but lacked the strengthened heap
++receipts; it is marked OBSOLETE_RECEIPT_SCHEMA. Early terminal printing could
++repeat while QEMU exited; final completion has one claim and the parser rejects
++truncated output. The fixture Clippy pass initially found a unit-valued binding;
++that binding was removed. Formatting initially required module-order correction.
++
++`pilot-receipt-audit.json` rechecks every pilot with the final strict parser,
++compares serial hashes and compares compiled source inputs against the current
++source. Old PASS labels, changed fixtures and missing receipts are not promoted
++to final proof. Failed/obsolete attempts and original T2 artifacts are retained.
++
++## Reproduction
++
++Run from the repository root, one build/freeze wrapper at a time:
++
++```sh
++python3 tools/threading_t2r_pilot.py --case vm --winner 0
++python3 tools/threading_t2r_pilot.py --case vm --winner 1
++python3 tools/threading_t2r_pilot.py --case global --winner 0
++python3 tools/threading_t2r_pilot.py --case global --winner 1
++python3 tools/threading_t2r_pilot.py --case immediate --winner 0
++python3 tools/threading_t2r_validate.py command host -- python3 tools/threading_t2_host.py
++python3 tools/threading_t2r_validate.py command allocation -- python3 tools/threading_t2_allocation_host.py
++python3 tools/threading_t2r_validate.py command parsers -- python3 -m unittest discover -s tools -p 'test_threading_t*.py'
++python3 tools/threading_t2r_validate.py command formatting -- python3 tools/threading_t2r_format.py
++python3 tools/threading_t2r_regressions.py production --cpus 2
++python3 .threading-evidence/t2r/audit-receipts.py
++```
++
++The pilot wrapper waits for build completion, freezes ELF and ISO, runs the T1
++emitted ABI check, then starts a 120-second bounded QEMU TCG guest. A failed step
++stops that wrapper. Source/image/receipt identities are retained; synthetic
++parser tests never count as native proof. The race helper adds no production
++hot-path lock. Its fixed entry/winner waits hold no lifecycle, fixture or serial
++lock. It never waits for an actor stranded on the same initial queue by changing
++affinity at the rendezvous. Failure to obtain two physical CPU entrants is a
++failure, not an unreachable classification.
++
++## Remaining T3–T7 findings
++
++T3's dense APIC/logical CPU assumption, T4 Linux futex comparison atomicity,
++T5 robust owner-death cleanup, T6 retained waitpid receipts and T7 guard mappings
++remain open as documented in the November 4 audit. T1 addressed child-TID
++completion ordering, without closing the remaining T4 work. No new native T6
++failure was claimed or hidden as part of T2R. Final physical retirement receipts
++protect stack reuse; they do not establish retained waitpid status semantics.
+--- /dev/null
++++ b/kernel/src/sched/t2r_fixture.rs
+@@ -0,0 +1,441 @@
++//! Opt-in native pilot. Entry rendezvous is bounded and holds no lifecycle lock.
++//! Registered full identities authorize receipts. No ordinary-build selectors.
++use super::*;
++use crate::process::{layout, mm2b_state::AddressSpaceIdentity, thread_admission::Error};
++use core::sync::atomic::{AtomicUsize, Ordering};
++
++#[derive(Clone, Copy)]
++struct Identity {
++    pid: usize,
++    incarnation: u64,
++    vm: AddressSpaceIdentity,
++}
++const EMPTY: Identity = Identity {
++    pid: 0,
++    incarnation: 0,
++    vm: AddressSpaceIdentity::INVALID,
++};
++impl Identity {
++    fn of(p: &Process) -> Self {
++        Self {
++            pid: p.pid,
++            incarnation: p.foreground.incarnation,
++            vm: p.address_space.identity(),
++        }
++    }
++    fn matches(self, p: &Process) -> bool {
++        self.pid == p.pid
++            && self.incarnation == p.foreground.incarnation
++            && self.vm == p.address_space.identity()
++    }
++}
++struct Gate {
++    owners: [Identity; 4],
++    actors: [Identity; 2],
++    ready: usize,
++    results: usize,
++    successes: usize,
++    commits: usize,
++    rejects: usize,
++    done: usize,
++    progress: usize,
++    child: Identity,
++    child_slot: usize,
++    base_heap: usize,
++    finished: bool,
++}
++static GATE: spin::Mutex<Gate> = spin::Mutex::new(Gate {
++    owners: [EMPTY; 4],
++    actors: [EMPTY; 2],
++    ready: 0,
++    results: 0,
++    successes: 0,
++    commits: 0,
++    rejects: 0,
++    done: 0,
++    progress: 0,
++    child: EMPTY,
++    child_slot: 0,
++    base_heap: 0,
++    finished: false,
++});
++static COMMITTED: AtomicUsize = AtomicUsize::new(0);
++static ENTERED: AtomicUsize = AtomicUsize::new(0);
++static CPUS: [AtomicUsize; 2] = [AtomicUsize::new(usize::MAX), AtomicUsize::new(usize::MAX)];
++fn winner() -> usize {
++    usize::from(option_env!("SUNLIGHT_T2R_WINNER") == Some("1"))
++}
++fn case() -> usize {
++    match option_env!("SUNLIGHT_T2R_CASE") {
++        Some("vm") => 1,
++        Some("immediate") => 2,
++        _ => 0,
++    }
++}
++fn workers(s: &Scheduler) -> usize {
++    s.processes
++        .iter()
++        .filter(|p| !p.owns_address_space && p.state != ProcessState::Reaped)
++        .count()
++}
++fn resources(s: &Scheduler, label: &str) {
++    let live = s
++        .processes
++        .iter()
++        .filter(|p| p.state != ProcessState::Reaped)
++        .count();
++    let stacks = s
++        .processes
++        .iter()
++        .filter(|p| p.kernel_stack.is_some())
++        .count();
++    let refs = crate::process::fd_table::thread_description_refs();
++    let cached = s
++        .processes
++        .iter()
++        .filter(|p| p.state == ProcessState::Reaped)
++        .count();
++    let base_heap = GATE.lock().base_heap;
++    let cache_bytes = cached * core::mem::size_of::<crate::process::fd_table::FdTable>();
++    assert_eq!(
++        crate::memory::heap::heap_stats().allocated,
++        base_heap + cache_bytes,
++        "T2R unattributed heap bytes"
++    );
++    assert_eq!(stacks, 4);
++    assert_eq!(refs, 12);
++    assert_eq!(
++        s.processes
++            .iter()
++            .map(|p| p.capabilities.len())
++            .sum::<usize>(),
++        4
++    );
++    crate::serial_println!(
++        "[T2R] heap baseline={} cached_fd_boxes={} cached_fd_bytes={} reaped_stacks={} drift=0",
++        base_heap,
++        cached,
++        cache_bytes,
++        cached
++    );
++
++    crate::serial_println!("[T2R] resources point={} workers={} occupied={} slots={} stacks={} fd_refs={} cap_entries={} heap={} reserved=0 pending=0", label, workers(s),live,s.processes.len(),stacks,refs,s.processes.iter().map(|p|p.capabilities.len()).sum::<usize>(),crate::memory::heap::heap_stats().allocated);
++    for owner in GATE.lock().owners {
++        let n = s
++            .processes
++            .iter()
++            .filter(|p| {
++                !p.owns_address_space
++                    && p.state != ProcessState::Reaped
++                    && p.address_space.identity() == owner.vm
++            })
++            .count();
++        crate::serial_println!(
++            "[T2R] vm owner={} incarnation={} identity={:?} borrowers={}",
++            owner.pid,
++            owner.incarnation,
++            owner.vm,
++            n
++        );
++    }
++    for (i, p) in s.processes.iter().enumerate() {
++        assert!(s.diagnostic_ready_occurrences(i) <= 1);
++        if p.state == ProcessState::Reaped {
++            assert!(p.kernel_stack.is_none());
++            assert!(!s.stack_is_pinned(i));
++        }
++    }
++}
++/// Returns only after a bounded outside-lock rendezvous. Same-CPU scheduling
++/// cannot trap the kernel: lack of two physical entrants is a fixture failure.
++pub(crate) fn enter() {
++    if case() == 2 {
++        return;
++    }
++    let actor = {
++        let s = SCHEDULER.lock();
++        let g = GATE.lock();
++        if g.ready != 15 || g.results != 0 {
++            return;
++        }
++        g.actors
++            .iter()
++            .position(|id| id.matches(s.current_process()))
++    };
++    let Some(actor) = actor else { return };
++    let cpu = current_cpu_id();
++    CPUS[actor].store(cpu, Ordering::Release);
++    ENTERED.fetch_or(1 << actor, Ordering::AcqRel);
++    let mut overlap = false;
++    for _ in 0..2_000_000 {
++        if ENTERED.load(Ordering::Acquire) == 3 {
++            overlap = true;
++            break;
++        }
++        core::hint::spin_loop();
++    }
++    if !overlap {
++        let s = SCHEDULER.lock();
++        let g = GATE.lock();
++        let other = g.actors[1 - actor];
++        if let Some((idx, p)) = s
++            .processes
++            .iter()
++            .enumerate()
++            .find(|(_, p)| other.matches(p))
++        {
++            crate::serial_println!("[T2R] rendezvous-timeout actor={} cpu={} other_pid={} incarnation={} state={:?} owning_core={} queued_on={} affinity={} pinned={} tick={}",actor,cpu,p.pid,p.foreground.incarnation,p.state,p.owning_core,p.queued_on_core,p.cpu_mask,s.stack_is_pinned(idx),s.global_tick);
++        }
++    }
++    assert!(overlap, "T2R pilot no second concurrent entrant (bounded)");
++    assert_ne!(
++        CPUS[0].load(Ordering::Acquire),
++        CPUS[1].load(Ordering::Acquire),
++        "T2R entrants must occupy different CPUs"
++    );
++    crate::serial_println!(
++        "[T2R] entry actor={} cpu={} mask=3 outside_lifecycle_lock=1",
++        actor,
++        cpu
++    );
++    if actor != winner() {
++        let mut committed = false;
++        for _ in 0..2_000_000 {
++            if COMMITTED.load(Ordering::Acquire) == 1 {
++                committed = true;
++                break;
++            }
++            core::hint::spin_loop();
++        }
++        assert!(committed, "T2R bounded winner did not commit");
++    }
++}
++/// Fixture placement is established at birth: changing affinity on a local
++/// queue immediately before a rendezvous can strand the remote actor there.
++pub(crate) fn placement(s: &Scheduler, child: &mut Process, arg: u64, cpu: usize) -> usize {
++    if case() == 1
++        && s.online_cores > 1
++        && (arg == 29 || arg == 30)
++        && GATE.lock().owners[0].matches(s.current_process())
++    {
++        let target = (arg - 29) as usize;
++        child.cpu_mask = 1 << target;
++        target
++    } else {
++        cpu
++    }
++}
++pub(crate) fn rejected(s: &Scheduler, error: &Error) {
++    let mut g = GATE.lock();
++    if let Some(a) = g
++        .actors
++        .iter()
++        .position(|id| id.matches(s.current_process()))
++    {
++        g.rejects += 1;
++        crate::serial_println!(
++            "[T2R] reject actor={} pid={} incarnation={} error={:?} workers={} reservation=none",
++            a,
++            s.current_process().pid,
++            s.current_process().foreground.incarnation,
++            error,
++            workers(s)
++        );
++    }
++}
++pub(crate) fn committed(s: &Scheduler, idx: usize) {
++    let mut g = GATE.lock();
++    if let Some(a) = g
++        .actors
++        .iter()
++        .position(|id| id.matches(s.current_process()))
++    {
++        g.commits += 1;
++        let p = &s.processes[idx];
++        g.child = Identity::of(p);
++        g.child_slot = idx;
++        crate::serial_println!("[T2R] commit actor={} parent={} tid={} incarnation={} slot={} vm={:?} stack={} queued={} workers={}",a,s.current_process().pid,p.pid,p.foreground.incarnation,idx,p.address_space.identity(),p.kernel_stack.is_some(),s.diagnostic_ready_occurrences(idx),workers(s));
++        assert!(p.kernel_stack.is_some());
++        assert_eq!(s.diagnostic_ready_occurrences(idx), 1);
++        COMMITTED.store(1, Ordering::Release);
++    }
++}
++pub(crate) fn query(command: &str) -> Option<u64> {
++    if !command.starts_with("T2R ") {
++        return None;
++    }
++    let mut s = SCHEDULER.lock();
++    let p = s.current_process();
++    let mut g = GATE.lock();
++    let owner = g.owners.iter().position(|id| id.matches(p));
++    let vm = g
++        .owners
++        .iter()
++        .position(|id| id.vm == p.address_space.identity());
++    let Some(role) = vm else {
++        return Some(u64::MAX);
++    };
++    Some(match command {
++        "T2R child-exit" => {
++            assert_eq!(case(), 2);
++            assert!(g.child.matches(p));
++            crate::serial_println!(
++                "[T2R] child-exit tid={} incarnation={} cpu={} stack_live=true",
++                p.pid,
++                p.foreground.incarnation,
++                current_cpu_id()
++            );
++            assert!(p.kernel_stack.is_some());
++            0
++        }
++        "T2R case" => case() as u64,
++        "T2R ready" => {
++            assert!(owner.is_some());
++            g.ready |= 1 << role;
++            0
++        }
++        "T2R actor" => {
++            let a = if case() == 0 {
++                assert!(role >= 2 && owner.is_some());
++                role - 2
++            } else if case() == 1 {
++                assert_eq!(role, 0);
++                // Birth placement fixes the actor's CPU. Registration arrival
++                // order must not exchange their affinities and strand queues.
++                current_cpu_id()
++            } else {
++                assert_eq!(role, 0);
++                0
++            };
++            assert_eq!(g.actors[a].pid, 0);
++            g.actors[a] = Identity::of(p);
++            crate::serial_println!(
++                "[T2R] registered actor={} pid={} incarnation={} vm={:?}",
++                a,
++                p.pid,
++                p.foreground.incarnation,
++                p.address_space.identity()
++            );
++            if case() != 2 && s.online_cores > 1 {
++                s.current_process_mut().cpu_mask = 1 << a;
++                request_park_after_sysret();
++            }
++            0
++        }
++        "T2R go" => {
++            u64::from(g.ready == 15 && (case() == 2 || g.actors.iter().all(|a| a.pid != 0)))
++        }
++        "T2R accepted" | "T2R rejected" => {
++            let a = g
++                .actors
++                .iter()
++                .position(|id| id.matches(p))
++                .expect("registered actor");
++            assert_eq!(g.results & (1 << a), 0);
++            g.results |= 1 << a;
++            if command == "T2R accepted" {
++                g.successes += 1;
++            }
++            if g.results == if case() == 2 { 1 } else { 3 } {
++                assert_eq!(g.successes, 1);
++                assert_eq!(g.commits, 1);
++                assert_eq!(g.rejects, usize::from(case() != 2));
++                crate::serial_println!(
++                    "[T2R] outcome case={} successes={} commits={} rejects={} entry_mask={}",
++                    case(),
++                    g.successes,
++                    g.commits,
++                    g.rejects,
++                    ENTERED.load(Ordering::Acquire)
++                );
++            }
++            0
++        }
++        "T2R release" => u64::from(g.results == if case() == 2 { 1 } else { 3 }),
++        "T2R finish" => {
++            assert!(owner.is_some());
++            if ((case() == 0 && role < 2) || (case() != 0 && role > 0)) && g.ready == 15 {
++                g.progress += 1;
++            }
++            if workers(&s) != 0 || g.results != if case() == 2 { 1 } else { 3 } {
++                0
++            } else {
++                g.done |= 1 << role;
++                if g.done == 15 && !g.finished {
++                    g.finished = true;
++                    let child = &s.processes[g.child_slot];
++                    assert!(g.child.matches(child));
++                    assert_eq!(child.state, ProcessState::Reaped);
++                    assert!(child.kernel_stack.is_none());
++                    assert!(!s.stack_is_pinned(g.child_slot));
++                    assert!(g.progress > 0, "unrelated owners made no progress");
++                    crate::serial_println!("[T2R] retired tid={} incarnation={} slot={} state=Reaped stack=none pinned=false progress={}",child.pid,child.foreground.incarnation,g.child_slot,g.progress);
++                    drop(g);
++                    resources(&s, "drained");
++                    crate::serial_println!(
++                        "[T2R] PILOT PASS case={} cpus={}",
++                        case(),
++                        s.online_cores
++                    );
++                    unsafe {
++                        core::arch::asm!("out dx, eax",in("dx")0xf4u16,in("eax")0x10u32);
++                    }
++                }
++                0
++            }
++        }
++        "T2R fail" => panic!("T2R ring3 failed role={}", role),
++        _ => u64::MAX,
++    })
++}
++pub(crate) fn run(hhdm: x86_64::VirtAddr) {
++    let cpus = ONLINE_CORES.load(Ordering::Acquire);
++    init_cores(cpus);
++    for role in 0..4 {
++        let mut pmm = crate::PMM.lock();
++        let mut p = unsafe { Process::new(0xE000 + role, 0, "t2r-owner", &mut pmm, hhdm) };
++        let entry = crate::process::elf_loader::load_elf(
++            include_bytes!(concat!(env!("OUT_DIR"), "/t2r.elf")),
++            &mut p,
++            &mut pmm,
++            hhdm,
++        )
++        .unwrap();
++        crate::process::spawn::map_user_stack(&mut p, &mut pmm, hhdm).unwrap();
++        p.env.set("T2R", "inherited");
++        let (endpoint, token) = crate::capability::CAP_BROKER
++            .lock()
++            .create_endpoint(p.pid)
++            .unwrap();
++        p.capabilities.push(crate::process::Capability {
++            token: token.as_u64(),
++            endpoint_id: endpoint,
++            can_send: true,
++            can_recv: true,
++            can_grant: false,
++        });
++        if case() == 0 && role >= 2 && cpus > 1 {
++            p.cpu_mask = 1 << (role - 2);
++        }
++        p.init_context(entry, layout::USER_STACK_TOP);
++        p.set_initial_args(role as u64, 0, 0, 0);
++        drop(pmm);
++        let mut s = SCHEDULER.lock();
++        let idx = s.add_process_after_reaping(p);
++        GATE.lock().owners[role] = Identity::of(&s.processes[idx]);
++    }
++    {
++        let mut s = SCHEDULER.lock();
++        s.reserve_task_storage()
++            .expect("T2R bounded storage warmup");
++        GATE.lock().base_heap = crate::memory::heap::heap_stats().allocated;
++        crate::serial_println!("[T2R] baseline heap={} workers=0 stacks=4 fd_refs=12 cap_entries=4 reserved=0 pending=0",GATE.lock().base_heap);
++    }
++    crate::serial_println!("[T2R] requested-winner actor={}", winner());
++    crate::serial_println!(
++        "[T2R] begin case={} cpus={} bounded_entry_spins=2000000",
++        case(),
++        cpus
++    );
++    enter_first_process();
++}
+--- /dev/null
++++ b/tools/helios-probes/thread-lifecycle-race-probe.S
+@@ -0,0 +1,180 @@
++.global _start
++.section .text
++.macro query name
++    mov $99,%eax
++    lea \name(%rip),%rdi
++    mov $(\name\()_end-\name),%esi
++    syscall
++.endm
++.macro yield
++    mov $21,%eax
++    syscall
++.endm
++_start:
++    mov %rdi,%r12
++    query case
++    mov %rax,%r13
++    xor %r15d,%r15d
++    xor %r14d,%r14d
++    test %r13,%r13
++    jnz not_global
++    mov $32,%r14d
++    cmp $2,%r12d
++    jb fill
++    mov $15,%r14d
++    cmp $2,%r12d
++    je fill
++    inc %r14d
++    jmp fill
++not_global:
++    cmp $1,%r13d
++    jne filled
++    test %r12,%r12
++    jnz filled
++    mov $31,%r14d
++fill:
++    cmp %r14,%r15
++    jae filled
++    call spawn
++    test %rax,%rax
++    js failed
++    inc %r15
++    jmp fill
++filled:
++    test %r13,%r13
++    jnz not_global_actor
++    cmp $2,%r12d
++    jb ready_owner
++    query actor
++    jmp ready_owner
++not_global_actor:
++    cmp $2,%r13d
++    jne ready_owner
++    test %r12,%r12
++    jnz ready_owner
++    query actor
++ready_owner:
++    query ready
++    call wait_go
++    test %r13,%r13
++    jnz immediate_owner
++    cmp $2,%r12d
++    jb drain
++    jmp contender
++immediate_owner:
++    cmp $2,%r13d
++    jne drain
++    test %r12,%r12
++    jnz drain
++    jmp contender
++contender:
++    mov $32,%r15d
++    call spawn
++    test %rax,%rax
++    js rejected
++    query accepted
++    jmp after_contend
++rejected:
++    cmp $-2,%rax
++    jne failed
++    query rejected_msg
++after_contend:
++    cmp $1,%r13d
++    je exit_ok
++drain:
++    mov $200000,%ebp
++1:  query finish
++    test %rax,%rax
++    jnz exit_ok
++    yield
++    dec %ebp
++    jnz 1b
++    jmp failed
++wait_go:
++    mov $200000,%ebp
++1:  query go
++    test %rax,%rax
++    jnz 2f
++    yield
++    dec %ebp
++    jnz 1b
++    jmp failed
++2:  ret
++spawn:
++    mov %r15,%rsi
++    shl $13,%rsi
++    lea stacks+8160(%rip),%rax
++    add %rax,%rsi
++    lea worker(%rip),%rax
++    mov %rax,(%rsi)
++    mov %r15,8(%rsi)
++    mov %rax,%rdi
++    lea tls(%rip),%rdx
++    mov $22,%eax
++    syscall
++    ret
++worker:
++    mov %rsi,%r15
++    query case
++    mov %rax,%r13
++    cmp $2,%r13d
++    je immediate_exit
++    cmp $1,%r13d
++    jne ordinary
++    cmp $29,%r15d
++    jb ordinary
++    cmp $31,%r15d
++    jae ordinary
++    query actor
++    call wait_go
++    /* Distinct static stacks for the two competing children. */
++    add $3,%r15
++    call spawn
++    test %rax,%rax
++    js worker_reject
++    query accepted
++    jmp ordinary
++worker_reject:
++    cmp $-2,%rax
++    jne failed
++    query rejected_msg
++    jmp ordinary
++ordinary:
++    mov $200000,%ebp
++1:  query release
++    test %rax,%rax
++    jnz exit_ok
++    yield
++    dec %ebp
++    jnz 1b
++immediate_exit:
++    query child_exit
++    jmp exit_ok
++failed:
++    query fail
++    ud2
++exit_ok:
++    xor %edi,%edi
++    mov $20,%eax
++    syscall
++    ud2
++.section .rodata
++.macro msg name,text
++\name: .ascii "T2R \text"
++\name\()_end:
++.endm
++msg child_exit,child-exit
++msg case,case
++msg actor,actor
++msg ready,ready
++msg go,go
++msg accepted,accepted
++msg rejected_msg,rejected
++msg release,release
++msg finish,finish
++msg fail,fail
++.section .bss
++.balign 16
++tls: .skip 32
++stacks: .skip 35*8192
++.section .note.GNU-stack,"",@progbits
+--- /dev/null
++++ b/tools/test_threading_t2r.py
+@@ -0,0 +1,52 @@
++"""Synthetic receipt parser controls; these are never native race evidence."""
++import unittest
++from threading_t2r_receipt import assess_pilot
++
++LOG = '''[T2R] baseline heap=2051968 workers=0 stacks=4 fd_refs=12 cap_entries=4 reserved=0 pending=0
++[T2R] requested-winner actor=0
++[T2R] begin case=2 cpus=2 bounded_entry_spins=2000000
++[T2R] registered actor=0 pid=10 incarnation=1 vm=AddressSpaceIdentity { pml4_phys: 4096, generation: 1 }
++[T2R] commit actor=0 parent=10 tid=20 incarnation=5 slot=4 vm=AddressSpaceIdentity { pml4_phys: 4096, generation: 1 } stack=true queued=1 workers=1
++[T2R] outcome case=2 successes=1 commits=1 rejects=0 entry_mask=0
++[T2R] child-exit tid=20 incarnation=5 cpu=0 stack_live=true
++[T2R] retired tid=20 incarnation=5 slot=4 state=Reaped stack=none pinned=false progress=18
++[T2R] heap baseline=2051968 cached_fd_boxes=1 cached_fd_bytes=10240 reaped_stacks=1 drift=0
++[T2R] resources point=drained workers=0 occupied=4 slots=5 stacks=4 fd_refs=12 cap_entries=4 heap=2062208 reserved=0 pending=0
++[T2R] vm owner=10 incarnation=1 identity=AddressSpaceIdentity { pml4_phys: 4096, generation: 1 } borrowers=0
++[T2R] vm owner=11 incarnation=2 identity=AddressSpaceIdentity { pml4_phys: 8192, generation: 2 } borrowers=0
++[T2R] vm owner=12 incarnation=3 identity=AddressSpaceIdentity { pml4_phys: 12288, generation: 3 } borrowers=0
++[T2R] vm owner=13 incarnation=4 identity=AddressSpaceIdentity { pml4_phys: 16384, generation: 4 } borrowers=0
++[T2R] PILOT PASS case=2 cpus=2
++'''
++
++
++class ReceiptTests(unittest.TestCase):
++    def test_valid_synthetic(self):
++        self.assertTrue(assess_pilot(LOG, 2, 2))
++
++    def test_every_receipt_required_and_unique(self):
++        for line in LOG.splitlines(True):
++            with self.subTest(line=line):
++                self.assertFalse(assess_pilot(LOG.replace(line, ''), 2, 2))
++                self.assertFalse(assess_pilot(LOG + line, 2, 2))
++
++    def test_identity_and_resource_negatives(self):
++        for old, new in [('retired tid=20', 'retired tid=21'),
++                         ('retired tid=20 incarnation=5', 'retired tid=20 incarnation=6'),
++                         ('slot=4 state=Reaped', 'slot=3 state=Reaped'),
++                         ('fd_refs=12', 'fd_refs=13'), ('cap_entries=4', 'cap_entries=5'),
++                         ('stacks=4', 'stacks=5'), ('reserved=0', 'reserved=1'),
++                         ('pending=0', 'pending=1'), ('workers=0', 'workers=1'),
++                         ('queued=1', 'queued=2'), ('progress=18', 'progress=0'),
++                         ('child-exit tid=20', 'child-exit tid=21')]:
++            with self.subTest(old=old):
++                self.assertFalse(assess_pilot(LOG.replace(old, new), 2, 2))
++
++    def test_wrong_cpu_case_and_panic(self):
++        self.assertFalse(assess_pilot(LOG, 2, 4))
++        self.assertFalse(assess_pilot(LOG, 1, 2))
++        self.assertFalse(assess_pilot(LOG + '[KERNEL PANIC]\n', 2, 2))
++
++
++if __name__ == '__main__':
++    unittest.main()
+--- /dev/null
++++ b/tools/threading_t2r_format.py
+@@ -0,0 +1,22 @@
++#!/usr/bin/env python3
++"""Check changed Rust spans against the preserved exact starting tree."""
++import difflib
++import json
++from pathlib import Path
++import subprocess
++
++ROOT = Path(__file__).resolve().parents[1]
++for name in ('kernel/build.rs', 'kernel/src/arch/x86_64/syscall.rs',
++             'kernel/src/main.rs', 'kernel/src/process/fd_table.rs',
++             'kernel/src/sched/mod.rs', 'kernel/src/sched/t2r_fixture.rs'):
++    path = ROOT / name
++    old = ROOT / '.threading-evidence/t2r/initial/source' / name
++    command = ['rustfmt', '--check', '--edition', '2021', '--config', 'skip_children=true']
++    if old.exists():
++        spans = [{'file': str(path), 'range': [j+1, max(j+1, k)]}
++                 for op, _, _, j, k in difflib.SequenceMatcher(
++                     a=old.read_text().splitlines(), b=path.read_text().splitlines(),
++                     autojunk=False).get_opcodes() if op != 'equal']
++        command += ['--unstable-features', '--file-lines', json.dumps(spans)]
++    subprocess.run(command + [str(path)], cwd=ROOT, check=True)
++print('T2R changed spans and new fixture pass rustfmt checks.')
+--- /dev/null
++++ b/tools/threading_t2r_pilot.py
+@@ -0,0 +1,56 @@
++#!/usr/bin/env python3
++"""Build/freeze a single 2-CPU Stage 1 pilot; stop on any failed step.
++
++Never use a passing pilot as closure of the complete eight-control matrix.
++"""
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++from threading_t2_validate import identity
++
++ROOT = Path(__file__).resolve().parents[1]
++RUNNER = ['python3', 'tools/threading_t2r_validate.py']
++p = argparse.ArgumentParser(description=__doc__)
++p.add_argument('--case', choices=('global', 'vm', 'immediate'), required=True)
++p.add_argument('--winner', choices=(0, 1), type=int, default=0)
++a = p.parse_args()
++case = ('global', 'vm', 'immediate').index(a.case)
++folder = ROOT / '.threading-evidence/t2r' / (
++    datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ') + f'-pilot-{a.case}-winner{a.winner}')
++folder.mkdir(parents=True)
++(folder / 'source.json').write_text(json.dumps(identity(), indent=2) + '\n')
++result = {'pass': False, 'case': a.case, 'winner': a.winner, 'cpus': 2,
++          'scope': 'Stage 1 pilot only', 'commands': []}
++print(folder, flush=True)
++
++
++def command(name, argv):
++    result['commands'].append(argv)
++    subprocess.run(RUNNER + ['command', '--timeout', '240', f't2r-{name}', '--'] + argv,
++                   cwd=ROOT, check=True)
++
++
++try:
++    command('build', ['env', f'SUNLIGHT_T2R_CASE={a.case}', f'SUNLIGHT_T2R_WINNER={a.winner}',
++                     'cargo', 'build', '-p', 'sunlight-kernel', '--bin', 'sunlight-kernel',
++                     '--features', 'thread_lifecycle_race_test', '--offline'])
++    frozen = folder / 'kernel.elf'
++    command('freeze', ['objcopy', '--strip-debug',
++                      'target/x86_64-unknown-none/debug/sunlight-kernel', str(frozen)])
++    result['kernel_sha256'] = hashlib.sha256(frozen.read_bytes()).hexdigest()
++    iso = folder / 'boot.iso'
++    command('iso', ['bash', 'tools/make_hybrid_iso.sh', str(frozen), str(iso),
++                    'target/limine', str(ROOT)])
++    result['iso_sha256'] = hashlib.sha256(iso.read_bytes()).hexdigest()
++    command('abi', ['python3', 'tools/check_syscall_stack_abi.py', str(frozen)])
++    argv = RUNNER + ['guest', f'pilot-{a.case}-winner{a.winner}-2cpu', '--iso', str(iso),
++                     '--cpus', '2', '--timeout', '120', '--marker',
++                     f'[T2R] PILOT PASS case={case} cpus=2']
++    result['commands'].append(argv)
++    subprocess.run(argv, cwd=ROOT, check=True)
++    result['pass'] = True
++finally:
++    (folder / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+--- /dev/null
++++ b/tools/threading_t2r_receipt.py
+@@ -0,0 +1,65 @@
++#!/usr/bin/env python3
++"""Strict pilot receipts only; passing a pilot does not close a T2 race row."""
++import re
++
++
++def assess_pilot(text, case, cpus):
++    if not text.endswith("\n"):
++        return False
++    def rows(pattern):
++        return re.findall('^' + pattern + '$', text, re.M)
++    if any(bad in text for bad in ('KERNEL PANIC', '[EXCEPTION]', 'T2R pilot no', 'T2R ring3 failed')):
++        return False
++    if rows(r'\[T2R\] begin case=(\d+) cpus=(\d+) bounded_entry_spins=2000000') != [(str(case), str(cpus))]:
++        return False
++    actors = rows(r'\[T2R\] registered actor=(\d+) pid=(\d+) incarnation=(\d+) vm=AddressSpaceIdentity \{ pml4_phys: (\d+), generation: (\d+) \}')
++    expected = {0} if case == 2 else {0, 1}
++    if len(actors) != len(expected) or {int(a[0]) for a in actors} != expected:
++        return False
++    if len({a[1:3] for a in actors}) != len(expected):
++        return False
++    if (case == 1 and len({a[3:] for a in actors}) != 1) or (case == 0 and len({a[3:] for a in actors}) != 2):
++        return False
++    entries = rows(r'\[T2R\] entry actor=(\d+) cpu=(\d+) mask=3 outside_lifecycle_lock=1')
++    if case != 2 and (len(entries) != 2 or {int(a) for a, _ in entries} != expected or len({c for _, c in entries}) != 2 or any(int(c) >= cpus for _, c in entries)):
++        return False
++    commits = rows(r'\[T2R\] commit actor=(\d+) parent=(\d+) tid=(\d+) incarnation=(\d+) slot=(\d+) vm=AddressSpaceIdentity \{ pml4_phys: (\d+), generation: (\d+) \} stack=true queued=1 workers=(\d+)')
++    rejects = rows(r'\[T2R\] reject actor=(\d+) pid=(\d+) incarnation=(\d+) error=Capacity workers=(\d+) reservation=none')
++    if len(commits) != 1 or len(rejects) != int(case != 2):
++        return False
++    c = commits[0]
++    requested = rows(r'\[T2R\] requested-winner actor=([01])')
++    if len(requested) != 1 or (case != 2 and requested[0] != c[0]):
++        return False
++    a = next((a for a in actors if a[0] == c[0]), None)
++    if a is None or a[1] != c[1] or a[3:] != c[5:7] or int(c[7]) != (96, 32, 1)[case]:
++        return False
++    if rejects:
++        r = rejects[0]
++        a = next((a for a in actors if a[0] == r[0]), None)
++        if a is None or a[1:3] != r[1:3] or r[0] == c[0] or r[3] != c[7]:
++            return False
++    retired = rows(r'\[T2R\] retired tid=(\d+) incarnation=(\d+) slot=(\d+) state=Reaped stack=none pinned=false progress=([1-9]\d*)')
++    if len(retired) != 1 or retired[0][:3] != c[2:5]:
++        return False
++    if rows(r'\[T2R\] outcome case=(\d+) successes=1 commits=1 rejects=(\d+) entry_mask=(\d+)') != [(str(case), str(int(case != 2)), '0' if case == 2 else '3')]:
++        return False
++    resources = rows(r'\[T2R\] resources point=drained workers=0 occupied=(\d+) slots=(\d+) stacks=(\d+) fd_refs=(\d+) cap_entries=(\d+) heap=(\d+) reserved=0 pending=0')
++    # Four registered owners stay live until the final machine receipt.
++    if len(resources) != 1 or resources[0][0] != '4' or resources[0][2:5] != ('4', '12', '4'):
++        return False
++    if case == 2:
++        exits = rows(r'\[T2R\] child-exit tid=(\d+) incarnation=(\d+) cpu=(\d+) stack_live=true')
++        if len(exits) != 1 or exits[0][:2] != c[2:4] or int(exits[0][2]) >= cpus:
++            return False
++    baseline = rows(r'\[T2R\] baseline heap=(\d+) workers=0 stacks=4 fd_refs=12 cap_entries=4 reserved=0 pending=0')
++    heap = rows(r'\[T2R\] heap baseline=(\d+) cached_fd_boxes=(\d+) cached_fd_bytes=(\d+) reaped_stacks=(\d+) drift=0')
++    if len(baseline) != 1 or len(heap) != 1 or baseline[0] != heap[0][0]:
++        return False
++    base, boxes, cache_bytes, reaped = map(int, heap[0])
++    if boxes != (96, 32, 1)[case] or boxes != reaped or cache_bytes != boxes * 10240 or int(resources[0][5]) != base + cache_bytes:
++        return False
++    vms = rows(r'\[T2R\] vm owner=(\d+) incarnation=(\d+) identity=AddressSpaceIdentity \{ pml4_phys: (\d+), generation: (\d+) \} borrowers=0')
++    if len(vms) != 4 or len(set(vms)) != 4:
++        return False
++    return rows(r'\[T2R\] PILOT PASS case=(\d+) cpus=(\d+)') == [(str(case), str(cpus))]
+--- /dev/null
++++ b/tools/threading_t2r_regressions.py
+@@ -0,0 +1,79 @@
++#!/usr/bin/env python3
++"""Freeze each final-source kernel before running bounded native regressions."""
++import argparse
++from concurrent.futures import ThreadPoolExecutor
++from datetime import datetime, timezone
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++from threading_t2_validate import identity
++ROOT = Path(__file__).resolve().parents[1]
++RUNNER = ['python3', 'tools/threading_t2r_validate.py']
++p = argparse.ArgumentParser(description=__doc__)
++p.add_argument('suite', choices=['admission','t1','auth','linux','fp','std','production'])
++p.add_argument('--cpus', type=int, nargs='+', default=[1,2,4,12])
++a = p.parse_args()
++if any(c not in (1,2,4,12) for c in a.cpus): p.error('supported CPU matrix: 1/2/4/12')
++folder = ROOT / '.threading-evidence/t2r' / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ') + '-suite-' + a.suite)
++folder.mkdir(parents=True)
++print(folder, flush=True)
++(folder/'source.json').write_text(json.dumps(identity(), indent=2)+'\n')
++commands=[]
++def run(name, argv, timeout=900):
++    commands.append(argv)
++    subprocess.run(RUNNER+['command','--timeout',str(timeout),a.suite+'-'+name,'--']+argv, cwd=ROOT, check=True)
++kernel = ['cargo','build','-p','sunlight-kernel','--bin','sunlight-kernel','--offline']
++markers = {
++ 'admission':['[T2] PASS'],
++ 't1':['[T1] PASS'],
++ 'auth':['[T1-AUTH] PASS','[CAP-R41] COMPLETE','[CAP-P] native PASS','[EXEC-R2] eight replacements PASS; entering original /bin/true'],
++ 'linux':['THREAD_PROBE PASS','fd_table=ok eventfd=ok','child_tid_clear=ok'],
++ 'fp':['[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK','[NATIVE-STD] native PDF parser and vector raster OK'],
++ 'std':['[NATIVE-STD] T2 Hayro workers=4 concurrent render/join OK','[NATIVE-STD] T2 full-ledger TLS failure rollback cycles=3 cleanup=allocation-free OK','[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK','[NATIVE-STD] collections/clocks/locks/TLS/join OK','[NATIVE-STD] shared descriptors/OOM/group exit OK','[DOCSERV] native Hayro IPC open/render/close OK'],
++ 'production':['[SunlightOS] Foundation Complete','[SunlightOS] sunlightd OK','[LOGIN-TUI] input ready','[SunlightOS] timezone OK'],
++}[a.suite]
++result={'suite':a.suite,'pass':False,'commands':commands,'guests':{}}
++try:
++    if a.suite=='admission': run('build',kernel+['--features','thread_admission_test'])
++    elif a.suite=='t1': run('build',kernel+['--features','syscall_stack_test'])
++    elif a.suite=='auth': run('build',['env','SUNLIGHT_CAP_EXEC_PROBE=1']+kernel+['--features','syscall_stack_auth_test'])
++    elif a.suite=='linux': run('build',['env','SUNLIGHT_INJECT_PHASE=helios-thread-probe']+kernel+['--features','key_inject'])
++    elif a.suite=='fp':
++        run('users',['env',f'RUSTFLAGS=-C link-arg=-T{ROOT}/services/user-space.ld','cargo','build','--manifest-path','tools/native-std-probe/Cargo.toml','--target','tools/targets/x86_64-sunlightos.json','--bin','native-fp-probe','--release','-Z','build-std=core,alloc','-Z','json-target-spec','--offline'])
++        run('build',['env','SUNLIGHT_INJECT_PHASE=native-std']+kernel+['--features','key_inject,native_std_probe'])
++    elif a.suite=='std':
++        run('users',['bash','tools/build_native_std.sh','build','-p','sunlight-docserv','--no-default-features','--features','native-hayro-smoke','--release','--offline'])
++        run('supervisor',['env','RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone','cargo','build','-p','sunlightd','--release','--features','document-service-gate','--offline'])
++        run('build',['env','SUNLIGHT_INJECT_PHASE=document-service']+kernel+['--features','key_inject,document_service,native_document_service'])
++    else:
++        run('restore-supervisor',['env','RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static','cargo','build','-p','sunlightd','--release','--no-default-features','--offline'])
++        run('release-build',kernel+['--release','--no-default-features'])
++    elf=ROOT/'target/x86_64-unknown-none'/('release' if a.suite=='production' else 'debug')/'sunlight-kernel'
++    frozen=folder/'kernel.elf'
++    run('freeze',['objcopy','--strip-debug',str(elf),str(frozen)])
++    result['kernel_sha256']=hashlib.sha256(frozen.read_bytes()).hexdigest()
++    run('iso',['bash','tools/make_hybrid_iso.sh',str(frozen),str(folder/'boot.iso'),'target/limine',str(ROOT)])
++    run('abi',['python3','tools/check_syscall_stack_abi.py',str(frozen)])
++    if a.suite=='production':
++        raw=frozen.read_bytes()
++        forbidden=[b'[T2] begin',b'[T2-FAULT]',b'[T1] PASS',b'[T1-AUTH] PASS']
++        result['production_exclusion']={m.decode(): m not in raw for m in forbidden}
++        if not all(result['production_exclusion'].values()): raise RuntimeError('test hook in production image')
++    def guest(cpu):
++        argv=RUNNER+['guest',a.suite+f'-{cpu}cpu','--iso',str(folder/'boot.iso'),'--cpus',str(cpu),'--timeout','300']
++        for marker in markers+([f'[SCHED-B] PASS cpus={cpu} '] if a.suite=='t1' else []): argv+=['--marker',marker]
++        code=subprocess.run(argv,cwd=ROOT).returncode
++        return cpu,code
++    # Admission's 2-CPU pilot must pass before expansion.
++    cpus=list(a.cpus)
++    if a.suite=='admission' and 2 in cpus:
++        cpu,code=guest(2); result['guests'][str(cpu)]=code
++        if code: raise RuntimeError('2-CPU admission pilot failed; stop before SMP expansion')
++        cpus.remove(2)
++    with ThreadPoolExecutor(max_workers=2) as pool:
++        for cpu,code in pool.map(guest,cpus): result['guests'][str(cpu)]=code
++    result['pass']=all(code==0 for code in result['guests'].values())
++finally:
++    (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n')
++raise SystemExit(0 if result['pass'] else 1)
+--- /dev/null
++++ b/tools/threading_t2r_validate.py
+@@ -0,0 +1,168 @@
++#!/usr/bin/env python3
++"""Bounded T2 commands/guest gates with fresh, durable attempt directories.
++
++Examples:
++  python3 tools/threading_t2_validate.py command host -- cargo test ...
++  python3 tools/threading_t2_validate.py guest pilot --iso image.iso --cpus 1 \
++      --marker '[T2] PASS'
++Every attempt records source hashes, exact argv, logs and a verdict, including
++exceptions/timeouts. No existing attempt is overwritten. TCG is functional proof.
++"""
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++import os
++import re
++from pathlib import Path
++import signal
++import subprocess
++import time
++
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++def assess(text, markers, cpus=None):
++    from threading_t2r_receipt import assess_pilot
++    pilots = [re.fullmatch(r"\[T2R\] PILOT PASS case=(\d+) cpus=(\d+)", marker) for marker in markers]
++    for pilot in pilots:
++        if pilot and (int(pilot[2]) != cpus or not assess_pilot(text, int(pilot[1]), cpus)):
++            return False
++
++    if not markers or any(not m for m in markers):
++        return False
++    if any(m in text for m in ('KERNEL PANIC', '[EXCEPTION]', 'THREAD_PROBE FAIL',
++                               'FP isolation FAILED', 'probe panicked', 'parser/raster FAILED')):
++        return False
++    if not all(text.count(m) == 1 and '\n' in text.split(m, 1)[1] for m in markers):
++        return False
++    if '[T2] PASS' in markers:
++        begin = re.findall(r'^\[T2\] begin cpus=(\d+) limits=32,96,512 cycles=3$', text, re.M)
++        if len(begin) != 1 or (cpus is not None and int(begin[0]) != cpus):
++            return False
++        for abi in (0, 1):
++            faults = re.findall(rf'^\[T2-FAULT\] abi={abi} ordinal=(\d+) stage=([a-z-]+) rejected=ENOMEM$', text, re.M)
++            if [(int(n), stage) for n, stage in faults] != list(enumerate(
++                    ['task-table'] + ['run-queue'] * 64 + ['environment-entries']
++                    + ['string'] * 4 + ['capabilities', 'string', 'box', 'box', 'publication'], 1)):
++                return False
++            if text.count(f'[T2] faults abi={abi} points=75 cleanup=exact\n') != 1:
++                return False
++        pressure = re.findall(r'^\[T2\] pressure cycle=(\d+) workers=96 vm_workers=32 observer=(\d+) useful_cpus=0x([0-9a-f]+)$', text, re.M)
++        if [int(row[0]) for row in pressure] != [0, 1, 2]:
++            return False
++        if any(int(n) == 0 or int(mask, 16).bit_count() < min(2, int(begin[0]))
++               for _, n, mask in pressure):
++            return False
++        recovery = re.findall(r'^\[T2\] recovery cycle=(\d+) heap=(\d+) drift=0 unreaped_workers=0$', text, re.M)
++        if [int(n) for n, _ in recovery] != [1, 2, 3] or len({h for _, h in recovery}) != 1:
++            return False
++        if text.count('[T2] PASS faults_native=75 faults_linux=75 cycles=3 pressure=96 recovery=exact queues=unique T1_pins=preserved\n') != 1:
++            return False
++    return True
++
++
++def identity():
++    paths = subprocess.check_output(
++        ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT
++    ).decode().split('\0')
++    files = {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest()
++             for p in paths if p and not p.startswith('.threading-evidence/')
++             and (ROOT / p).is_file()}
++    return {'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
++                                          text=True).strip(),
++            'files': files,
++            'canonical_sha256': hashlib.sha256(
++                json.dumps(files, sort_keys=True).encode()).hexdigest()}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    sub = parser.add_subparsers(dest='mode', required=True)
++    command = sub.add_parser('command')
++    command.add_argument('name')
++    command.add_argument('--timeout', type=int, default=600)
++    command.add_argument('argv', nargs=argparse.REMAINDER)
++    guest = sub.add_parser('guest')
++    guest.add_argument('name')
++    guest.add_argument('--iso', type=Path, required=True)
++    guest.add_argument('--cpus', type=int, choices=range(1, 13), required=True)
++    guest.add_argument('--timeout', type=int, default=180)
++    guest.add_argument('--marker', action='append', required=True)
++    args = parser.parse_args()
++    if args.timeout <= 0 or Path(args.name).name != args.name:
++        parser.error('positive timeout and plain attempt name required')
++    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
++    folder = ROOT / '.threading-evidence/t2r' / f'{stamp}-{args.name}'
++    folder.mkdir(parents=True)
++    (folder / 'source.json').write_text(json.dumps(identity(), indent=2) + '\n')
++    record = {'pass': False, 'timeout': False}
++    if args.mode == 'command':
++        argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
++        if not argv:
++            parser.error('command required')
++    else:
++        iso = args.iso.resolve()
++        record['iso_sha256'] = hashlib.sha256(iso.read_bytes()).hexdigest()
++        argv = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max',
++                '-smp', str(args.cpus), '-m', '2048', '-cdrom', str(iso),
++                '-serial', f'file:{folder / "serial.log"}', '-display', 'none',
++                '-nic', 'none', '-device', 'virtio-rng-pci,disable-modern=on',
++                '-device', 'isa-debug-exit,iobase=0xf4,iosize=0x04',
++                '-no-reboot', '-no-shutdown']
++        record.update(cpus=args.cpus, markers=args.marker)
++    record['command'] = argv
++    print(folder, flush=True)
++    started = time.monotonic()
++    proc = None
++    try:
++        with (folder / 'output.log').open('w') as log:
++            proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
++                                    stderr=subprocess.STDOUT, start_new_session=True)
++            deadline = started + args.timeout
++            while True:
++                if args.mode == 'guest':
++                    serial = folder / 'serial.log'
++                    text = serial.read_text(errors='replace') if serial.exists() else ''
++                    if any(m in text for m in ('KERNEL PANIC', '[EXCEPTION]',
++                                               'FP isolation FAILED', 'probe panicked')):
++                        break
++                    if assess(text, args.marker, args.cpus):
++                        record['pass'] = True
++                        break
++                code = proc.poll()
++                if code is not None:
++                    if args.mode == 'command':
++                        record['pass'] = code == 0
++                    break
++                if time.monotonic() >= deadline:
++                    record['timeout'] = True
++                    break
++                time.sleep(0.25)
++    except BaseException as error:
++        record['error'] = repr(error)
++        raise
++    finally:
++        if proc is not None:
++            if proc.poll() is None:
++                os.killpg(proc.pid, signal.SIGTERM)
++                try:
++                    proc.wait(timeout=5)
++                except subprocess.TimeoutExpired:
++                    os.killpg(proc.pid, signal.SIGKILL)
++                    proc.wait()
++            record['exit_code'] = proc.returncode
++        if args.mode == 'guest':
++            serial = folder / 'serial.log'
++            final = serial.read_text(errors='replace') if serial.exists() else ''
++            record['pass'] = not record['timeout'] and assess(final, args.marker, args.cpus)
++            record['serial_sha256'] = hashlib.sha256(final.encode()).hexdigest()
++        record['seconds'] = time.monotonic() - started
++        (folder / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
++    print('PASS' if record['pass'] else 'FAIL', flush=True)
++    raise SystemExit(0 if record['pass'] else 1)
++
++
++if __name__ == '__main__':
++    main()
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -662,6 +662,7 @@
+ [features]
+ # Isolated bounded thread admission and allocation fault controls; debug only.
+ thread_admission_test = []
++thread_lifecycle_race_test = []
+ # Isolated hostile-RSP and sibling-stack controls, debug images only.
+ syscall_stack_test = ["scheduler_b_test"]
+ syscall_stack_auth_test = ["cap_issuance_test"]
+--- a/kernel/build.rs
++++ b/kernel/build.rs
+@@ -104,6 +104,27 @@
+             .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+             .arg(out.join("syscall-linux-completion.elf"))
+             .arg(out.join("syscall-linux-completion.o"))
++            .status()
++            .unwrap()
++            .success());
++    }
++    println!("cargo:rerun-if-env-changed=SUNLIGHT_T2R_CASE");
++    println!("cargo:rerun-if-env-changed=SUNLIGHT_T2R_WINNER");
++    if env::var_os("CARGO_FEATURE_THREAD_LIFECYCLE_RACE_TEST").is_some() {
++        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
++        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
++        println!("cargo:rerun-if-changed=../tools/helios-probes/thread-lifecycle-race-probe.S");
++        assert!(Command::new("as")
++            .args(["--64", "-o"])
++            .arg(out.join("t2r.o"))
++            .arg(root.join("tools/helios-probes/thread-lifecycle-race-probe.S"))
++            .status()
++            .unwrap()
++            .success());
++        assert!(Command::new("ld")
++            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
++            .arg(out.join("t2r.elf"))
++            .arg(out.join("t2r.o"))
+             .status()
+             .unwrap()
+             .success());
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -2669,6 +2669,8 @@
+         return u64::MAX;
+     }
+ 
++    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++    crate::sched::t2r_fixture::enter();
+     let mut sched = crate::sched::SCHEDULER.lock();
+     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+     if sched.fastlane_vm_member() {
+@@ -2679,7 +2681,12 @@
+     let _fault = crate::sched::t2_fixture::begin(sched.current_process());
+     let slot = match sched.reserve_thread_slot() {
+         Ok(slot) => slot,
+-        Err(_) => return u64::MAX - 1, // native EAGAIN (libc Errno::Again)
++        Err(error) => {
++            #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++            crate::sched::t2r_fixture::rejected(&sched, &error);
++            let _ = error;
++            return u64::MAX - 1; // native EAGAIN
++        }
+     };
+     // Collect everything we need from the parent in one borrow scope so
+     // we can release it before calling clone_boxed (which also borrows sched).
+@@ -2781,7 +2788,12 @@
+     if crate::process::thread_admission::checkpoint("publication").is_err() {
+         return u64::MAX - 1;
+     }
+-    sched.publish_thread(slot, thread, current_cpu);
++    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++    let current_cpu = crate::sched::t2r_fixture::placement(&sched, &mut thread, arg, current_cpu);
++    let published = sched.publish_thread(slot, thread, current_cpu);
++    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++    crate::sched::t2r_fixture::committed(&sched, published);
++    let _ = published;
+     crate::sched::note_native_borrower_created();
+ 
+     crate::serial_println!(
+@@ -2808,6 +2820,10 @@
+ 
+     // Print valid UTF-8 prefix
+     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
++        #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++        if let Some(result) = crate::sched::t2r_fixture::query(s) {
++            return result;
++        }
+         #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+         if let Some(result) = crate::sched::t2_fixture::query(s) {
+             return result;
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -761,6 +761,9 @@
+     splash.set_progress(600); // 60%
+     splash.redraw();
+ 
++    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++    crate::sched::t2r_fixture::run(hhdm_offset);
++
+     #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+     crate::sched::t2_fixture::run(hhdm_offset);
+ 
+--- a/kernel/src/process/fd_table.rs
++++ b/kernel/src/process/fd_table.rs
+@@ -537,9 +537,10 @@
+     }
+ 
+     pub fn contains_unix_socket(&self, idx: u32) -> bool {
+-        self.entries.iter().flatten().any(|entry| {
+-            entry.handle.is_unix_socket() && entry.handle.unix_socket_index() == idx
+-        })
++        self.entries
++            .iter()
++            .flatten()
++            .any(|entry| entry.handle.is_unix_socket() && entry.handle.unix_socket_index() == idx)
+     }
+ 
+     /// Get a mutable file descriptor
+@@ -1005,7 +1006,13 @@
+     }
+ }
+ 
+-#[cfg(all(debug_assertions, feature = "thread_admission_test"))]
++#[cfg(all(
++    debug_assertions,
++    any(
++        feature = "thread_admission_test",
++        feature = "thread_lifecycle_race_test"
++    )
++))]
+ pub(crate) fn thread_description_refs() -> usize {
+     DESCRIPTIONS.lock().iter().flatten().map(|d| d.refs).sum()
+ }
+--- a/kernel/src/sched/mod.rs
++++ b/kernel/src/sched/mod.rs
+@@ -108,6 +108,8 @@
+ mod requests;
+ #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+ pub(crate) mod t2_fixture;
++#[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
++pub(crate) mod t2r_fixture;
+ mod thread_admission;
+ const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+ #[cfg(all(debug_assertions, feature = "pin_release_test"))]

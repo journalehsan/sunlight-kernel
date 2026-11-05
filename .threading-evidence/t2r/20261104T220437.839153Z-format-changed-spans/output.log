@@ -1,0 +1,19 @@
+Diff in /home/ehsantor/Projects/sunlightos-kernel/kernel/src/sched/mod.rs:108:
+ mod requests;
+ #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+ pub(crate) mod t2_fixture;
+[31m-mod thread_admission;
+(B[m #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+ pub(crate) mod t2r_fixture;
+[32m+mod thread_admission;
+(B[m const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+ #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+ pub mod pin_release_test;
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t2r_format.py", line 21, in <module>
+    subprocess.run(command + [str(path)], cwd=ROOT, check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['rustfmt', '--check', '--edition', '2021', '--config', 'skip_children=true', '--unstable-features', '--file-lines', '[{"file": "/home/ehsantor/Projects/sunlightos-kernel/kernel/src/sched/mod.rs", "range": [112, 113]}]', '/home/ehsantor/Projects/sunlightos-kernel/kernel/src/sched/mod.rs']' returned non-zero exit status 1.

@@ -1,0 +1,42 @@
+{
+  "argv": [
+    "qemu-system-x86_64",
+    "-machine",
+    "pc",
+    "-accel",
+    "tcg",
+    "-m",
+    "128",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-S",
+    "-qmp",
+    "stdio",
+    "-cpu",
+    "max",
+    "-global",
+    "max-x86_64-cpu.apic-id=42"
+  ],
+  "requests": [
+    {
+      "execute": "qmp_capabilities"
+    },
+    {
+      "execute": "query-cpus-fast"
+    },
+    {
+      "execute": "qom-get",
+      "arguments": {
+        "path": "/machine/unattached/device[0]",
+        "property": "apic-id"
+      }
+    },
+    {
+      "execute": "quit"
+    }
+  ],
+  "exit_code": 0,
+  "output": "{\"QMP\": {\"version\": {\"qemu\": {\"micro\": 2, \"minor\": 1, \"major\": 11}, \"package\": \"\"}, \"capabilities\": [\"oob\"]}}\n{\"return\": {}}\n{\"return\": [{\"thread-id\": 3261671, \"qom-type\": \"max-x86_64-cpu\", \"props\": {\"core-id\": 0, \"thread-id\": 0, \"socket-id\": 0}, \"qom-path\": \"/machine/unattached/device[0]\", \"cpu-index\": 0, \"target\": \"x86_64\"}]}\n{\"return\": 0}\n{\"timestamp\": {\"seconds\": 1793896920, \"microseconds\": 88849}, \"event\": \"SHUTDOWN\", \"data\": {\"guest\": false, \"reason\": \"host-qmp-quit\"}}\n{\"return\": {}}\n"
+}

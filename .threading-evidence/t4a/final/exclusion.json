@@ -1,0 +1,23 @@
+{
+  "images": {
+    "debug": {
+      "sha256": "8867f0c57282e373fcc1b7096a260eee158f0763200baa30bb4395c58dcf5b81",
+      "size": 272588560,
+      "absent": {
+        "[T4A]": true,
+        "T4A arm": true,
+        "t4a_fixture": true
+      }
+    },
+    "release": {
+      "sha256": "d5533829b1164fbd79d4b085a395e42d42f289896f77fa74b130d71498ca6d9a",
+      "size": 252710656,
+      "absent": {
+        "[T4A]": true,
+        "T4A arm": true,
+        "t4a_fixture": true
+      }
+    }
+  },
+  "release_feature_attempt": "20261105T181738.532525Z-release-feature-completion"
+}

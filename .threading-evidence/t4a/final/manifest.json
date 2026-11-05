@@ -1,0 +1,147 @@
+{
+  "status": "COMPLETE: supported private same-VM WAIT/WAKE and native timeout results",
+  "head": "eeba257e4c548af61a2b2c6aeeeb734ab8b07cc6",
+  "recorded_at": "2026-11-05T18:22:41.901557+00:00",
+  "source_sha256": {
+    "kernel/Cargo.toml": "04e720c252901d24746d620e77d59b54344e8138a898a523b5ab990666320952",
+    "kernel/build.rs": "ce8ab0fab55037691aed89c4be5dc7b40c8a1b691345e3c0ba746790d7330469",
+    "kernel/src/main.rs": "f7691ee64ffa0d11f9c313981514ce623089d10c344bb5a4d560ee30cff4e43d",
+    "kernel/src/arch/x86_64/syscall.rs": "69b814ff6ec4a5268521c158bdea12816b47909fc61aef80eddb8e59a4cc5097",
+    "kernel/src/memory/user.rs": "4ac50128adb55349fb322244eda9276c1960f86d9c128247aa15f8bcb8abe26a",
+    "kernel/src/process/mod.rs": "d55d5aa27172346419305fee2d5542436239ce402ff33d3de9594b80dd2bc50d",
+    "kernel/src/process/mmap.rs": "8510f491f9ebfa181d619e6b50251ce58784352113c4f79e60840ebb90ec9423",
+    "kernel/src/process/fd_table.rs": "16f8b114f3aa54979512714cb6e326e24e275fbe1cd3197871f0756a3a32df7f",
+    "kernel/src/process/spawn.rs": "f4d47338568c75896c2534598152dacbafd1aa93361f09567d90cadbdba0dbca",
+    "kernel/src/sched/mod.rs": "d161b542c44935a0c9038f2c2700e20015f42e94a7a9689f0420ade11a846cd4",
+    "kernel/src/sched/handoff.rs": "42a5a4f1277635ac31f2c7ee5963686a85b93ae93258126f922c5a11a2b05627",
+    "kernel/src/sched/t4a_fixture.rs": "0a96ffa59406356c44201926de6f955c26c40ab9c2a70370c9ded4fe8a87a151",
+    "sunlight-libc/src/std_runtime.rs": "0d16892cbd20208d042b0462bbcedaf16244e5d4dfbee6cc0307f4f9fd1f6394",
+    "sunlight-docserv/src/main.rs": "68d3e33cbfddfb0d7a26f265480ccf3bd4feb6cd9646e1a16a092ff7cc059e17",
+    "tools/helios-probes/atomic-futex-probe.rs": "8cf4bcdc34e8c1f0e818600c54df68b710042ec35f4da6afecc7ffc072199e27",
+    "tools/threading_t4a_validate.py": "ec60fe5c102cafed9b1afeadb1dce4a9a46bec624f8a731f7ebf0b5ae296686d",
+    "tools/threading_t4a_run.py": "7a2475819d37b530fa7d413fd102df947a274991952c62ffe4f5ab0de650c68b",
+    "tools/threading_t4a_format.py": "a85488cc79e3a6e3fa86c4d5c537ef920d1771b24a7bce8cc678514c3f6efe8a",
+    "tools/test_threading_t4a.py": "57fa1d036ce3ed05defafe27e4b753f8d097cec14018b4bcc63799cead46fd68",
+    "docs/kernel/threading-t4a-atomic-futex.md": "398e055e557d64836b56bfdf0e0e70580ffa80aec60ae78f3c62666969c03f1e"
+  },
+  "proof": {
+    "races": {
+      "bundle": ".threading-evidence/t4a/20261105T181008.050467Z-suite-races",
+      "pass": true,
+      "kernel_sha256": "8e95db8df2e7b41f0f910339af98cc5f0ad398e47a340f1a28e775d07d046ab2",
+      "iso_sha256": "c086b30367d6d3e8c18bd3ae7bd66073e636a9a60bac9091933a9ca0171ae744",
+      "tested_source_canonical_sha256": "a304a69253684aff732cf1f68df30bf4159f83f7faa5009c89183c3371deb794",
+      "final_changes_since_test": {
+        "docs/kernel/threading-t4a-atomic-futex.md": {
+          "tested": "2763fd0edeed26d9ab6a3d3b413f34aa4abcb408528e8527fc30dfad9966bcf1",
+          "final": "398e055e557d64836b56bfdf0e0e70580ffa80aec60ae78f3c62666969c03f1e"
+        }
+      },
+      "guests": {
+        "2": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181058.306770Z-races-2cpu"
+        },
+        "4": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181119.651419Z-races-4cpu"
+        },
+        "12": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181119.651749Z-races-12cpu"
+        }
+      }
+    },
+    "std": {
+      "bundle": ".threading-evidence/t4a/20261105T181152.684093Z-suite-std",
+      "pass": true,
+      "kernel_sha256": "c8fe50a998277df76996dcd1ab2f1b7ed5c85eef0788ee8511a6d61e7edfa7c1",
+      "iso_sha256": "756414388a47914fef75e7caf80d05c0a74a6719d044d90ee3362aee9cdc3264",
+      "tested_source_canonical_sha256": "a304a69253684aff732cf1f68df30bf4159f83f7faa5009c89183c3371deb794",
+      "final_changes_since_test": {
+        "docs/kernel/threading-t4a-atomic-futex.md": {
+          "tested": "2763fd0edeed26d9ab6a3d3b413f34aa4abcb408528e8527fc30dfad9966bcf1",
+          "final": "398e055e557d64836b56bfdf0e0e70580ffa80aec60ae78f3c62666969c03f1e"
+        }
+      },
+      "guests": {
+        "2": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181242.420033Z-std-2cpu"
+        },
+        "1": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181316.450363Z-std-1cpu"
+        },
+        "4": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181316.450660Z-std-4cpu"
+        },
+        "12": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181356.205719Z-std-12cpu"
+        }
+      }
+    },
+    "linux": {
+      "bundle": ".threading-evidence/t4a/20261105T181452.442388Z-suite-linux",
+      "pass": true,
+      "kernel_sha256": "26739dbda784e213d24a9bb1a664c72f0f4f3b073473f18c1aa2f1fbd3199588",
+      "iso_sha256": "43c102defac74118682170692ddcb87879d6830d202faf3f5d07a13718f1f373",
+      "tested_source_canonical_sha256": "a304a69253684aff732cf1f68df30bf4159f83f7faa5009c89183c3371deb794",
+      "final_changes_since_test": {
+        "docs/kernel/threading-t4a-atomic-futex.md": {
+          "tested": "2763fd0edeed26d9ab6a3d3b413f34aa4abcb408528e8527fc30dfad9966bcf1",
+          "final": "398e055e557d64836b56bfdf0e0e70580ffa80aec60ae78f3c62666969c03f1e"
+        }
+      },
+      "guests": {
+        "2": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181545.793114Z-linux-2cpu"
+        }
+      }
+    },
+    "production": {
+      "bundle": ".threading-evidence/t4a/20261105T181633.936566Z-suite-production",
+      "pass": true,
+      "kernel_sha256": "fdca16dc8a22ba24c8ee2fc30bd0c355ed48c7979f92a730696341f6328f3893",
+      "iso_sha256": "070aa6c1e8113630431c4f047cae71d7339afb83c61792e07cb5aef477b89bb0",
+      "tested_source_canonical_sha256": "a304a69253684aff732cf1f68df30bf4159f83f7faa5009c89183c3371deb794",
+      "final_changes_since_test": {
+        "docs/kernel/threading-t4a-atomic-futex.md": {
+          "tested": "2763fd0edeed26d9ab6a3d3b413f34aa4abcb408528e8527fc30dfad9966bcf1",
+          "final": "398e055e557d64836b56bfdf0e0e70580ffa80aec60ae78f3c62666969c03f1e"
+        }
+      },
+      "guests": {
+        "2": {
+          "pass": true,
+          "attempt": ".threading-evidence/t4a/20261105T181709.345041Z-production-2cpu"
+        }
+      }
+    }
+  },
+  "initial_paths_missing": [],
+  "initial_paths_changed": [
+    "kernel/build.rs",
+    "kernel/Cargo.toml",
+    "kernel/src/main.rs",
+    "kernel/src/memory/user.rs",
+    "kernel/src/sched/mod.rs",
+    "kernel/src/sched/handoff.rs",
+    "kernel/src/process/mod.rs",
+    "kernel/src/process/fd_table.rs",
+    "kernel/src/process/spawn.rs",
+    "kernel/src/process/mmap.rs",
+    "kernel/src/arch/x86_64/syscall.rs"
+  ],
+  "unrelated_changes_since_earliest_full_snapshot": [],
+  "documentation_only_after_native_tests": true,
+  "clippy_kernel": "clippy/comparison-completion.json",
+  "clippy_native_runtime": "clippy/libc/comparison.json",
+  "exclusion": "final/exclusion.json",
+  "production_fastlane_enabled": false,
+  "commit": false,
+  "push": false
+}

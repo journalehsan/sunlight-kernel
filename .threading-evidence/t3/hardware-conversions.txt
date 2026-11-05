@@ -1,0 +1,41 @@
+kernel/src/thermal_hw.rs:118:    let feat = core::arch::x86_64::__cpuid(1);
+kernel/src/thermal_hw.rs:194:    let apic = (core::arch::x86_64::__cpuid(1).ebx >> 24) as u8;
+kernel/src/entropy.rs:260:    let has_rdrand = core::arch::x86_64::__cpuid(1).ecx & (1 << 30) != 0;
+kernel/src/mm2a_host.rs:79:#[path = "memory/swap_slot.rs"]
+kernel/src/mm2a_host.rs:80:pub mod swap_slot;
+kernel/src/mm2a_host.rs:105:    fn stale_swap_slot_generation_is_rejected() {
+kernel/src/mm2a_host.rs:106:        let first = super::swap_slot::SlotId::new(3, 77, 41).unwrap();
+kernel/src/mm2a_host.rs:107:        let reused = super::swap_slot::SlotId::new(3, 77, 42).unwrap();
+kernel/src/mm2a_host.rs:111:        assert_eq!(super::swap_slot::SlotId::from_raw(first.raw()), Some(first));
+kernel/src/mm2a_host.rs:112:        assert_eq!(super::swap_slot::SlotId::from_raw(0), None);
+kernel/src/arch/x86_64/cpu_identity.rs:53:    core::arch::x86_64::__cpuid(1).ebx >> 24
+kernel/src/arch/x86_64/cpu_topology.rs:67:    pub fn ap_slot(&self, logical: usize) -> Option<usize> {
+kernel/src/arch/x86_64/cpu_topology.rs:97:            assert_eq!(map.ap_slot(logical), logical.checked_sub(1));
+kernel/src/arch/x86_64/cpu_topology.rs:109:        assert_eq!(map.ap_slot(ids.len()), None);
+kernel/src/arch/x86_64/smp.rs:34://! AP_ONLINE with Acquire/Release. AP_ONLINE is a readiness counter, never an
+kernel/src/arch/x86_64/smp.rs:81:pub static AP_ONLINE: AtomicU32 = AtomicU32::new(0);
+kernel/src/arch/x86_64/smp.rs:134:        let slot = super::cpu_identity::topology().ap_slot(logical).expect("BSP in AP startup");
+kernel/src/arch/x86_64/smp.rs:152:            if AP_ONLINE.load(Ordering::Acquire) >= expected {
+kernel/src/arch/x86_64/smp.rs:181:        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
+kernel/src/arch/x86_64/smp.rs:195:        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
+kernel/src/arch/x86_64/smp.rs:306:/// 2. Read AP index from AP_ONLINE (before incrementing — BSP serialises startup)
+kernel/src/arch/x86_64/smp.rs:311:/// 7. Increment AP_ONLINE (Release) — signals BSP to start next AP
+kernel/src/arch/x86_64/smp.rs:328:        .ap_slot(logical)
+kernel/src/arch/x86_64/smp.rs:330:    assert_eq!(ap_idx, AP_ONLINE.load(Ordering::Acquire) as usize);
+kernel/src/arch/x86_64/smp.rs:363:    let seq = AP_ONLINE.fetch_add(1, Ordering::Release) + 1;
+kernel/src/arch/x86_64/lapic.rs:35:const LAPIC_ICR_HIGH: usize = 0x310; // Interrupt Command Register high
+kernel/src/arch/x86_64/lapic.rs:153:pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
+kernel/src/arch/x86_64/lapic.rs:160:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/arch/x86_64/lapic.rs:168:pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
+kernel/src/arch/x86_64/lapic.rs:187:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/arch/x86_64/lapic.rs:220:pub unsafe fn send_fixed_ipi_bounded(cpu_id: usize, vector: u8) -> bool {
+kernel/src/arch/x86_64/lapic.rs:222:        if try_send_fixed_ipi(cpu_id, vector) {
+kernel/src/arch/x86_64/lapic.rs:240:pub unsafe fn send_nmi(cpu_id: usize) {
+kernel/src/arch/x86_64/lapic.rs:247:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/memory/mod.rs:16:pub mod swap_slot;
+kernel/src/memory/tlb.rs:315:            crate::arch::x86_64::lapic::send_fixed_ipi(target_cpu, SHOOTDOWN_VECTOR);
+kernel/src/memory/tlb.rs:320:            crate::arch::x86_64::lapic::send_nmi(target_cpu);
+kernel/src/memory/tlb.rs:493:                crate::arch::x86_64::lapic::send_fixed_ipi(cpu_id, TEST_VECTOR);
+kernel/src/sched/mod.rs:4276:            crate::arch::x86_64::lapic::send_fixed_ipi_bounded(
+kernel/src/memory/zram.rs:4:pub use super::swap_slot::SlotId;
+kernel/src/memory/zram.rs:5:use super::swap_slot::{MAX_SLOT_GENERATION, SLOT_INDEX_MASK};

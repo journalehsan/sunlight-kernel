@@ -1,0 +1,1 @@
+sample.pdf and sample.ps are original fixtures generated for these tests. Their text and graphics are dedicated to the public domain under CC0-1.0. The PDF has six pages; the PostScript file has one page. Both contain Helvetica text and a blue square. No external assets are used.

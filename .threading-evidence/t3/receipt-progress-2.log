@@ -1,0 +1,41 @@
+{
+  "implementation_unchanged": true,
+  "nonstandard": [
+    {
+      "attempt": "20261104T223836.843911Z-topology-sparse",
+      "cpus": 4,
+      "observed_apic_ids": [
+        0,
+        1,
+        2,
+        4
+      ],
+      "profile": "sparse",
+      "requested_hardware_observed": true,
+      "functional_gate": true
+    },
+    {
+      "attempt": "20261104T223836.847136Z-topology-nonzero",
+      "cpus": 1,
+      "observed_apic_ids": [
+        0
+      ],
+      "profile": "nonzero",
+      "requested_hardware_observed": false,
+      "functional_gate": true
+    },
+    {
+      "attempt": "20261104T224002.957026Z-topology-high",
+      "cpus": 2,
+      "observed_apic_ids": [
+        0,
+        64
+      ],
+      "profile": "high",
+      "requested_hardware_observed": true,
+      "functional_gate": true
+    }
+  ],
+  "tlb": []
+}
+{'t1': 'PASS', 'admission': 'PASS', 'auth': 'PASS', 'linux': 'PASS', 'fp': 'PASS', 'std': 'PASS', 'production': 'PASS'}

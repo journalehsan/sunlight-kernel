@@ -1,0 +1,89 @@
+use super::{pmm::PhysicalMemoryManager, vmm::VirtualMemoryManager};
+use linked_list_allocator::LockedHeap;
+use x86_64::{
+    structures::paging::{Page, PageSize, PageTableFlags, PhysFrame, Size4KiB},
+    VirtAddr,
+};
+
+const MIN_HEAP_START: u64 = 0xFFFF_FFFF_9000_0000;
+const HEAP_ALIGNMENT: u64 = 2 * 1024 * 1024;
+// Anonymous-page tracking and transactional mmap journals coexist with desktop
+// service state. Native std's renderer and viewer each map a 128 MiB heap; leave
+// room for replacing the tracking buffer and creating workers under that load.
+pub const HEAP_SIZE: usize = 16 * 1024 * 1024; // 16 MiB, bounded at boot
+pub const HEAP_PAGES: usize = HEAP_SIZE / Size4KiB::SIZE as usize;
+
+extern "C" {
+    static __kernel_end: u8;
+}
+
+pub fn heap_start() -> VirtAddr {
+    let kernel_end = core::ptr::addr_of!(__kernel_end) as u64;
+    let after_image = kernel_end
+        .checked_add(HEAP_ALIGNMENT - 1)
+        .expect("kernel image address overflow")
+        & !(HEAP_ALIGNMENT - 1);
+    let start = after_image.max(MIN_HEAP_START);
+    start
+        .checked_add(HEAP_SIZE as u64)
+        .expect("kernel heap address overflow");
+    VirtAddr::new(start)
+}
+
+#[global_allocator]
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+pub fn init_heap(vmm: &mut VirtualMemoryManager, pmm: &mut PhysicalMemoryManager) {
+    use super::accounting::PhysicalMemoryClass;
+    let start = heap_start();
+    for i in 0..HEAP_PAGES {
+        let page = Page::from_start_address(start + i as u64 * Size4KiB::SIZE).unwrap();
+        let frame = pmm
+            .alloc_frame_class(PhysicalMemoryClass::KernelHeap)
+            .expect("heap allocation failed");
+        // SAFETY: frame address is valid and page-aligned; mapping new pages is safe.
+        let phys = unsafe { PhysFrame::from_start_address_unchecked(frame) };
+        vmm.map_page(
+            page,
+            phys,
+            PageTableFlags::PRESENT | PageTableFlags::WRITABLE,
+            pmm,
+        )
+        .expect("heap page map failed");
+    }
+
+    // SAFETY: all heap pages are mapped with correct permissions.
+    unsafe {
+        ALLOCATOR.lock().init(start.as_mut_ptr(), HEAP_SIZE);
+    }
+}
+
+pub fn heap_diagnostic() {
+    let heap = ALLOCATOR.lock();
+    crate::serial_println!(
+        "[HEAP-DIAG] total={} used={} free={}",
+        heap.size(),
+        heap.used(),
+        heap.free(),
+    );
+}
+
+/// Lightweight heap accounting snapshot for telemetry.
+#[derive(Clone, Copy, Default)]
+pub struct HeapStats {
+    pub allocated: usize,
+    pub free: usize,
+    pub reusable: usize,
+}
+
+pub fn heap_stats() -> HeapStats {
+    let heap = ALLOCATOR.lock();
+    let used = heap.used();
+    let free = heap.free();
+    // "reusable" is the free pool; treat used as allocated.
+    HeapStats {
+        allocated: used,
+        free,
+        reusable: free,
+    }
+}

@@ -2,6 +2,14 @@
 mod channel_repeated;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]
 pub(crate) mod channel;
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+pub(crate) mod channel_contract;
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+mod channel_hybrid;
+#[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+pub(crate) mod hybrid_race;
+#[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+mod channel_contract_native;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_doorbell_test")))]
 pub(crate) mod channel_doorbell;
 #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
@@ -1126,7 +1134,7 @@ impl CapabilityBroker {
         crate::memory::security::revoke_display_authority_for_owner(owner_pid);
     }
 
-    #[cfg(any(test, feature = "cap_issuance_test", feature = "production_grant_test"))]
+    #[cfg(any(test, feature = "cap_issuance_test", feature = "production_grant_test", feature = "fastlane_hybrid_lifecycle_test"))]
     pub(crate) fn recipient_grant_count(&self, pid: usize) -> usize {
         self.auth_session_grants
             .iter()
@@ -1501,3 +1509,6 @@ pub struct Endpoint {
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
+
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_mediated_accounting_test")))]
+mod measurement_window;

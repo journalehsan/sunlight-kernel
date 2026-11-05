@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "git",
+    "diff",
+    "--check"
+  ],
+  "exit_code": 2,
+  "seconds": 0.250664424005663
+}

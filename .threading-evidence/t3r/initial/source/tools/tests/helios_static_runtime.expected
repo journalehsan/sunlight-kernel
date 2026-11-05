@@ -1,0 +1,29 @@
+[HELIOS] Linux ELF compatibility layer loaded
+[KBD]  Key injection enabled (phase=helios-static-runtime
+[EXEC] Linux ELF detected
+LINUX-PROBE argv-env PASS
+LINUX-PROBE auxv PASS
+LINUX-PROBE dup-cloexec PASS
+LINUX-PROBE brk PASS
+LINUX-PROBE mmap PASS
+LINUX-PROBE nanosleep PASS
+LINUX-PROBE invalid-syscall PASS
+LINUX-PROBE invalid-pointer PASS
+LINUX-PROBE getrandom PASS
+LINUX-PROBE TIER1 PASS
+LINUX-PROBE uname PASS
+LINUX-PROBE ids PASS
+LINUX-PROBE gettimeofday PASS
+LINUX-PROBE mkdir PASS
+LINUX-PROBE getdents64 PASS
+LINUX-PROBE pread-pwrite PASS
+LINUX-PROBE access PASS
+LINUX-PROBE open-flags PASS
+LINUX-PROBE dup3 PASS
+LINUX-PROBE stat-metadata PASS
+LINUX-PROBE readlink PASS
+LINUX-PROBE dirfd PASS
+LINUX-PROBE RUNTIME PASS
+LINUX-PROBE sbase-echo PASS
+[HELIOS-NOTE] terminal initialized
+[HELIOS-NOTE] interactive-ready

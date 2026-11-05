@@ -1,0 +1,16 @@
+# Phase 2B.5 — character translation, stream composition, relational join,
+# and formatted output.
+[TTY]  exit: tr a-z A-Z -> 0
+[TTY]  exit: tr -d x -> 0
+[TTY]  exit: paste /tests/paste-a /tests/paste-b -> 0
+[TTY]  exit: paste -s /tests/paste-serial -> 0
+[TTY]  exit: join /tests/join-a /tests/join-b -> 0
+[TTY]  exit: join -a 1 /tests/join-a /tests/join-b -> 0
+[TTY]  exit: printf %03d 7 -> 0
+[TTY]  exit: printf %b a\\nb -> 0
+[TTY]  exit: printf %d bad -> 1
+# Phase 2B.7A: POSIX stream, numbering, octal, and chunk utilities
+[TTY]  exit: nl /tests/paste-a -> 0
+[TTY]  exit: od -An -tx1 /tests/paste-a -> 0
+[TTY]  exit: split -l 1 /tests/paste-a /tmp/phase2b7 -> 0
+[TTY]  exit: tee /tmp/phase2b7-tee -> 0

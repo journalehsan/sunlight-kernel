@@ -439,6 +439,7 @@ pub extern "C" fn _start() -> ! {
     x86_64::instructions::interrupts::disable();
 
     serial::init();
+    arch::x86_64::cpu_identity::initialize();
     cpu::init_cpu_features();
 
     // Early firmware-neutral boot diagnostics (serial only; before FB/splash).
@@ -760,6 +761,18 @@ pub extern "C" fn _start() -> ! {
     splash.log("[CAP] Capability broker initialized");
     splash.set_progress(600); // 60%
     splash.redraw();
+
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::run(hhdm_offset);
+
+    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+    crate::sched::t3r_fixture::run(hhdm_offset);
+
+    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+    crate::sched::t2r_fixture::run(hhdm_offset);
+
+    #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+    crate::sched::t2_fixture::run(hhdm_offset);
 
     #[cfg(feature = "scheduler_b_test")]
     crate::sched::regression::run(hhdm_offset);
@@ -3359,6 +3372,8 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
     }
     crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    memory::shared_lifetime_gate::remote_release(&mut PMM.lock(), hhdm_offset);
     #[cfg(feature = "fastlane_f1_audit")]
     {
         let mut pmm = PMM.lock();

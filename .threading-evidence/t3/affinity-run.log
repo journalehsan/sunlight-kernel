@@ -1,0 +1,25 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231110.692614Z-suite-linux
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231111.098658Z-linux-build
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231127.095864Z-linux-freeze
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231128.050496Z-linux-iso
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231131.451254Z-linux-abi
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231132.013681Z-linux-2cpu
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231132.013881Z-linux-1cpu
+FAIL
+FAIL
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231632.803232Z-linux-12cpu
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231632.802703Z-linux-4cpu
+FAIL
+FAIL
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_affinity.py", line 14, in <module>
+    subprocess.run(['python3','tools/threading_t3_regressions.py','linux'],cwd=root,check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['python3', 'tools/threading_t3_regressions.py', 'linux']' returned non-zero exit status 1.

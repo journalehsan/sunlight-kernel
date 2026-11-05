@@ -14,7 +14,9 @@
 //!   (kernel-side shallow copy); mutations in one thread are not visible to
 //!   the other without Arc-based sharing.
 
-use crate::mman::{mmap, munmap, MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+use crate::mman::{
+    mmap, munmap, MAP_ANONYMOUS, MAP_NATIVE_THREAD, MAP_PRIVATE, PROT_READ, PROT_WRITE,
+};
 use crate::sys::{check, Errno, SYS_PROCESS_EXIT};
 
 const SYS_THREAD_SPAWN: u64 = 22;
@@ -84,16 +86,13 @@ pub unsafe fn spawn_with_stack(
     stack_size: usize,
     shared_descriptors: bool,
 ) -> Result<JoinHandle, Errno> {
-    let stack_size = stack_size.checked_add(4095).ok_or(Errno::TooBig)? & !4095;
-    if stack_size < 4096 {
-        return Err(Errno::Inval);
-    }
+    let stack_size = checked_stack_size(stack_size)?;
     // ── 1. Allocate the thread stack ─────────────────────────────────────────
     let stack_ptr = mmap(
         core::ptr::null_mut(),
         stack_size,
         PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD,
         -1,
         0,
     )?;
@@ -103,7 +102,7 @@ pub unsafe fn spawn_with_stack(
         core::ptr::null_mut(),
         4096,
         PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD,
         -1,
         0,
     )
@@ -153,5 +152,32 @@ pub unsafe fn spawn_with_stack(
             let _ = munmap(tls_ptr, 4096);
             Err(e)
         }
+    }
+}
+
+fn checked_stack_size(size: usize) -> Result<usize, Errno> {
+    let rounded = size.checked_add(4095).ok_or(Errno::TooBig)? & !4095;
+    if rounded < 4096 {
+        return Err(Errno::Inval);
+    }
+    Ok(rounded)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn rejects_invalid_stack_sizes_before_mapping() {
+        assert_eq!(checked_stack_size(0), Err(Errno::Inval));
+        assert_eq!(checked_stack_size(usize::MAX), Err(Errno::TooBig));
+        assert_eq!(checked_stack_size(usize::MAX - 4094), Err(Errno::TooBig));
+        assert_eq!(checked_stack_size(1), Ok(4096));
+        assert_eq!(checked_stack_size(4096), Ok(4096));
+        assert_eq!(checked_stack_size(4097), Ok(8192));
+    }
+    #[test]
+    fn admission_error_is_recoverable_and_never_a_tid() {
+        assert_eq!(check(crate::sys::EAGAIN_RAW), Err(Errno::Again));
+        assert_eq!(check(32), Ok(32));
     }
 }

@@ -1,0 +1,450 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 4 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T15:07:48Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf128ca0 (61737 frames, 241 MiB)
+[PMM] 1318/1559 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2440
+[ACPI] Found table: FACP at 0x7ffe22dc
+[ACPI] Found table: APIC at 0x7ffe2350
+[ACPI] Found table: HPET at 0x7ffe23e0
+[ACPI] Found table: WAET at 0x7ffe2418
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11757 end_count=7699 elapsed_counts=4058 tsc_delta=8474619 tsc_hz=2491809474
+[TIME] TSC calibrated ~2491809474 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63074400 lapic_initial_count=630744 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2491809474
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x15 minute=0x08 second=0x42 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T15:08:42Z assumed_basis=UTC
+wall: utc=2026-11-04T15:08:42Z unix=1793804922 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 4 logical processor(s) found, 4 usable
+[ACPI] MADT: 4 logical processor(s) detected (4 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SYSCALL] OK
+[SMP] Limine MP response: 4 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8eab8720..0xffffffff8eac8720
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8eac8720..0xffffffff8ead8720
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8ead8720..0xffffffff8eae8720
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 3 AP(s) online (4 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 4 CPU(s)
+[CAP]  Capability broker initialized
+[T2] resource-layout stack=32768 process=3152 fd_table=10240 inherited_budget=16384 headroom=2097152
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #1 't2-owner' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=37d memsz=37d prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #2 't2-owner' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #3 't2-owner' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #4 't2-owner' idx=3 burst_score=256 tier=High
+[T2] begin cpus=4 limits=32,96,512 cycles=3
+[SCHED] process 0 't2-owner' state=Ready
+[SCHED] Entering process 0 't2-owner' at rsp=0xffffffff90008fa0
+[SYSCALL] thread_spawn: parent=53248 tid=53252 trampoline=0x4002c1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53252 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53252 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53252 name='t2-owner'
+[SCHED] process_reaped pid=53252 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53252 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53252 cleared_msgs=0
+[THREAD-LIFECYCLE] created=1 finished=1 reaped=1 borrower_reclaim_skipped=1 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[T2-FAULT] abi=0 ordinal=1 stage=task-table rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=2 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=3 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=4 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=5 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=6 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=7 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=8 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=9 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=10 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=11 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=12 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=13 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=14 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=15 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=16 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=17 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=18 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=19 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=20 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=21 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=22 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=23 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=24 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=25 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=26 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=27 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=28 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=29 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=30 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=31 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=32 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=33 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=34 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=35 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=36 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=37 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=38 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=39 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=40 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=41 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=42 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=43 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=44 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=45 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=46 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=47 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=48 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=49 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=50 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=51 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=52 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=53 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=54 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=55 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=56 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=57 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=58 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=59 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=60 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=61 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=62 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=63 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=64 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=65 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=66 stage=environment-entries rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=67 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=68 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=69 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=70 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=71 stage=capabilities rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=72 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=73 stage=box rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=74 stage=box rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=75 stage=publication rejected=ENOMEM
+[SYSCALL] thread_spawn: parent=53248 tid=53253 trampoline=0x4002c1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53253 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53253 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53253 name='t2-owner'
+[SCHED] process_reaped pid=53253 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53253 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53253 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=1 max_live=1
+[T2] faults abi=0 points=75 cleanup=exact
+[HELIOS-THREAD] clone tgid=53249 tid=53254 tls=0x4020b0 stack=0x404130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53254 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53254 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53254 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53254 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53254 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53254 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53254 cleared_msgs=0
+[T2-FAULT] abi=1 ordinal=1 stage=task-table rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=2 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=3 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=4 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=5 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=6 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=7 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=8 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=9 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=10 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=11 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=12 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=13 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=14 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=15 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=16 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=17 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=18 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=19 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=20 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=21 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=22 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=23 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=24 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=25 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=26 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=27 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=28 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=29 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=30 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=31 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=32 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=33 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=34 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=35 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=36 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=37 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=38 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=39 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=40 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=41 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=42 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=43 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=44 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=45 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=46 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=47 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=48 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=49 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=50 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=51 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=52 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=53 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=54 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=55 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=56 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=57 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=58 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=59 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=60 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=61 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=62 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=63 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=64 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=65 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=66 stage=environment-entries rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=67 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=68 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=69 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=70 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=71 stage=capabilities rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=72 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=73 stage=box rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=74 stage=box rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=75 stage=publication rejected=ENOMEM
+[HELIOS-THREAD] clone tgid=53249 tid=53255 tls=0x4020b0 stack=0x404130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53255 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53255 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53255 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53255 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53255 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53255 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53255 cleared_msgs=0
+[T2] faults abi=1 points=75 cleanup=exact
+[HELIOS-THREAD] clone tgid=53249 tid=53256 tls=0x4020b0 stack=0x404130
+[SYSCALL] thread_spawn: parent=53250 tid=53257 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53258 tls=0x4020b0 stack=0x406130
+[SYSCALL] thread_spawn: parent=53250 tid=53259 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53260 tls=0x4020b0 stack=0x408130
+[HELIOS-THREAD] clone tgid=53249 tid=53261 tls=0x4020b0 stack=0x40a130
+[HELIOS-THREAD] clone tgid=53249 tid=53262 tls=0x4020b0 stack=0x40c130
+[SYSCALL] thread_spawn: parent=53250 tid=53263 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53264 tls=0x4020b0 stack=0x40e130
+[HELIOS-THREAD] clone tgid=53249 tid=53265 tls=0x4020b0 stack=0x410130
+[HELIOS-THREAD] clone tgid=53249 tid=53266 tls=0x4020b0 stack=0x412130
+[SYSCALL] thread_spawn: parent=53248 tid=53267 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53268 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53269 tls=0x4020b0 stack=0x414130
+[HELIOS-THREAD] clone tgid=53249 tid=53270 tls=0x4020b0 stack=0x416130
+[SYSCALL] thread_spawn: parent=53250 tid=53271 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53272 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53273 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53274 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53275 tls=0x4020b0 stack=0x418130
+[HELIOS-THREAD] clone tgid=53249 tid=53276 tls=0x4020b0 stack=0x41a130
+[HELIOS-THREAD] clone tgid=53249 tid=53277 tls=0x4020b0 stack=0x41c130
+[SYSCALL] thread_spawn: parent=53248 tid=53278 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53279 tls=0x4020b0 stack=0x41e130
+[HELIOS-THREAD] clone tgid=53249 tid=53280 tls=0x4020b0 stack=0x420130
+[SYSCALL] thread_spawn: parent=53250 tid=53281 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53282 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53283 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53284 tls=0x4020b0 stack=0x422130
+[SYSCALL] thread_spawn: parent=53250 tid=53285 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53286 tls=0x4020b0 stack=0x424130
+[HELIOS-THREAD] clone tgid=53249 tid=53287 tls=0x4020b0 stack=0x426130
+[HELIOS-THREAD] clone tgid=53249 tid=53288 tls=0x4020b0 stack=0x428130
+[HELIOS-THREAD] clone tgid=53249 tid=53289 tls=0x4020b0 stack=0x42a130
+[SYSCALL] thread_spawn: parent=53248 tid=53290 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53291 tls=0x4020b0 stack=0x42c130
+[HELIOS-THREAD] clone tgid=53249 tid=53292 tls=0x4020b0 stack=0x42e130
+[SYSCALL] thread_spawn: parent=53250 tid=53293 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53294 tls=0x4020b0 stack=0x430130
+[SYSCALL] thread_spawn: parent=53248 tid=53295 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53296 tls=0x4020b0 stack=0x432130
+[SYSCALL] thread_spawn: parent=53250 tid=53297 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53298 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53299 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53300 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53301 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53302 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53303 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53304 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53305 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53306 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53307 tls=0x4020b0 stack=0x434130
+[SYSCALL] thread_spawn: parent=53248 tid=53308 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53309 tls=0x4020b0 stack=0x436130
+[HELIOS-THREAD] clone tgid=53249 tid=53310 tls=0x4020b0 stack=0x438130
+[SYSCALL] thread_spawn: parent=53250 tid=53311 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53312 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53313 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53314 tls=0x4020b0 stack=0x43a130
+[SYSCALL] thread_spawn: parent=53248 tid=53315 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53316 tls=0x4020b0 stack=0x43c130
+[SYSCALL] thread_spawn: parent=53248 tid=53317 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53318 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53319 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53320 tls=0x4020b0 stack=0x43e130
+[HELIOS-THREAD] clone tgid=53249 tid=53321 tls=0x4020b0 stack=0x440130
+[HELIOS-THREAD] clone tgid=53249 tid=53322 tls=0x4020b0 stack=0x442130
+[SYSCALL] thread_spawn: parent=53250 tid=53323 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53324 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53325 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53326 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53327 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53328 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53329 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53330 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53331 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53332 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53333 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53334 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53335 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53336 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53337 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53338 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53339 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53340 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53341 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53342 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53343 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53344 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53345 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53346 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53347 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53348 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53349 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53350 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53351 trampoline=0x4002c1
+
+[KERNEL PANIC] panicked at kernel/src/sched/t2_fixture.rs:192:13:
+no useful remote CPU work

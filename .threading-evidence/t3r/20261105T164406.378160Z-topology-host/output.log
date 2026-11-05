@@ -1,0 +1,12 @@
+
+running 7 tests
+test tests::bsp_later ... ok
+test tests::high_ids ... ok
+test tests::contiguous ... ok
+test tests::maximum ... ok
+test tests::sparse ... ok
+test tests::invalid_topologies ... ok
+test tests::nonzero_bsp ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

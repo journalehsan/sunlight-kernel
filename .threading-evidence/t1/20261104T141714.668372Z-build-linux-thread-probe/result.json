@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/build_helios_probes.sh"
+  ],
+  "exit_code": 0,
+  "seconds": 0.25051091800560243
+}

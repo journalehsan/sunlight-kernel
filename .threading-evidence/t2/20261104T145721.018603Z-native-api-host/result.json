@@ -1,0 +1,16 @@
+{
+  "pass": false,
+  "timeout": true,
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "sunlight-libc",
+    "--lib",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--offline"
+  ],
+  "exit_code": -15,
+  "seconds": 600.1189265789872
+}

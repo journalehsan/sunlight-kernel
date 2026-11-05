@@ -1,0 +1,67 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+error[E0425]: cannot find function `id` in module `crate::arch::x86_64::lapic`
+   --> kernel/src/sched/t3r_fixture.rs:140:233
+    |
+140 | ...carnation,cpu,crate::arch::x86_64::lapic::id(),p.kernel_stack_top,fs,state.0,state.1,state.2,state.3);
+    |                                              ^^ not found in `crate::arch::x86_64::lapic`
+
+error[E0425]: cannot find function `id` in module `crate::arch::x86_64::lapic`
+   --> kernel/src/sched/t3r_fixture.rs:206:208
+    |
+206 | ...carnation,cpu,crate::arch::x86_64::lapic::id(),p.kernel_stack_top,fs,state.0,state.1,state.2,state.3);
+    |                                              ^^ not found in `crate::arch::x86_64::lapic`
+
+error[E0425]: cannot find function `thread_description_refs` in module `crate::process::fd_table`
+    --> kernel/src/sched/t3r_fixture.rs:288:50
+     |
+ 288 |             assert_eq!(crate::process::fd_table::thread_description_refs(), 3);
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^^^ not found in `crate::process::fd_table`
+     |
+note: found an item that was configured out
+    --> kernel/src/process/fd_table.rs:1016:15
+     |
+1011 |       any(
+     |  ________-
+1012 | |         feature = "thread_admission_test",
+1013 | |         feature = "thread_lifecycle_race_test"
+1014 | |     )
+     | |_____- the item is gated here
+1015 |   ))]
+1016 |   pub(crate) fn thread_description_refs() -> usize {
+     |                 ^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `sunlight-kernel` (bin "sunlight-kernel") due to 3 previous errors

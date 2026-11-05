@@ -1,6 +1,10 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.6151-alpha.2"
+version = "0.2.6324-alpha.2"
+
+
+
+
 
 
 
@@ -656,6 +660,18 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+# Isolated bounded thread admission and allocation fault controls; debug only.
+thread_admission_test = []
+thread_lifecycle_race_test = []
+# T4A bounded ring-3 futex race controls; excluded from production.
+atomic_futex_test = []
+thread_migration_test = []
+# Isolated hostile-RSP and sibling-stack controls, debug images only.
+syscall_stack_test = ["scheduler_b_test"]
+syscall_stack_auth_test = ["cap_issuance_test"]
+fastlane_contract_test = ["fastlane_shared_ring_test"]
+fastlane_hybrid_lifecycle_test = ["fastlane_contract_test"]
+fastlane_mediated_accounting_test = ["fastlane_measurement_test"]
 fastlane_measurement_test = ["fastlane_shared_ring_test"]
 fastlane_shared_ring_test = ["fastlane_repeated_test"]
 fastlane_repeated_test = ["fastlane_transfer_test"]

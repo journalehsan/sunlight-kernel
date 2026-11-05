@@ -1,0 +1,15 @@
+{
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/make_hybrid_iso.sh",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4a/20261105T175650.716474Z-suite-races/kernel.elf",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4a/20261105T175650.716474Z-suite-races/boot.iso",
+    "target/limine",
+    "/home/ehsantor/Projects/sunlightos-kernel"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 1.5238789719878696
+}

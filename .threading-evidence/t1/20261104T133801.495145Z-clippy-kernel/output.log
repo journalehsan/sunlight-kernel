@@ -1,0 +1,394 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Blocking waiting for file lock on build directory
+    Checking sunlight-block v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling sunlight-net v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+    Checking sunlight-ipc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+    Checking sunlight-virtio v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Checking sunlight-elf v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-elf)
+    Checking sunlight-compat-linux v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+    Checking sunlight-sensors v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+    Checking sunlight-smbios v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+   Compiling sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+    Checking sunlight-fat v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+    Checking sunlight-fs v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+error: failed to run custom build command for `sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)`
+
+Caused by:
+  process didn't exit successfully: `/home/ehsantor/Projects/sunlightos-kernel/target/debug/build/sunlight-kernel-6a9704cc503435b6/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_svg_apps.sh
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_native_std.sh
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/native-std
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-files
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-dialogd
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/docs/icons/SunlightOS
+  /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+
+  --- stderr
+  warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS="-j --jobserver-fds=4,5 --jobserver-auth=4,5"`: cannot open file descriptor 4 from the jobserver environment variable value: Bad file descriptor (os error 9)
+    |
+    = note: the build environment is likely misconfigured
+
+  warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+    * `bin` target `d2-fixture`
+    * `bin` target `d3-leaf`
+    * `bin` target `d3-parent`
+  warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+     Compiling compiler_builtins v0.1.160 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+     Compiling core v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core)
+     Compiling std v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std)
+     Compiling sunlight-tz v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tz)
+     Compiling sun-font v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-font)
+     Compiling sunlight-calendar v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-calendar)
+     Compiling sunlight-vortex-shell v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell)
+     Compiling sunlight-control-panel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel)
+  warning: this operation has no effect
+    --> services/sunlight-vortex-shell/build.rs:65:17
+     |
+  65 |             img[didx + 0] = 0xFF;
+     |                 ^^^^^^^^ help: consider reducing it to: `didx`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#identity_op
+     = note: `#[warn(clippy::identity_op)]` on by default
+
+     Compiling crc32fast v1.5.0
+     Compiling heapless v0.8.0
+     Compiling generic-array v0.14.7
+     Compiling thiserror v2.0.19
+     Compiling serde_core v1.0.228
+     Compiling serde v1.0.228
+     Compiling libm v0.2.16
+     Compiling anyhow v1.0.103
+  warning: `sunlight-vortex-shell` (build script) generated 1 warning
+  warning: sun-font@0.2.6324-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+     Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+     Compiling alloc v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc)
+     Compiling libc v0.2.185
+     Compiling panic_abort v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_abort)
+     Compiling rustc-demangle v0.1.27
+     Compiling cfg-if v1.0.4
+     Compiling rustc-literal-escaper v0.0.7
+     Compiling unwind v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/unwind)
+     Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+     Compiling panic_unwind v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_unwind)
+     Compiling std_detect v0.1.5 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std_detect)
+     Compiling hashbrown v0.17.1
+  error: none of the predicates in this `cfg_select` evaluated to true
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:71:1
+      |
+   71 | / cfg_select! {
+   72 | |     any(
+   73 | |         target_family = "unix",
+   74 | |         target_os = "wasi",
+  ...   |
+  110 | | }
+      | |_^
+
+  error: none of the predicates in this `cfg_select` evaluated to true
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/io/error/mod.rs:1:1
+     |
+   1 | / cfg_select! {
+   2 | |     target_os = "hermit" => {
+   3 | |         mod hermit;
+   4 | |         pub use hermit::*;
+  ...  |
+  51 | | }
+     | |_^
+
+  error[E0432]: unresolved imports `error::decode_error_kind`, `error::errno`, `error::error_string`, `error::is_interrupted`
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/io/mod.rs:44:17
+     |
+  44 | pub use error::{decode_error_kind, errno, error_string, is_interrupted};
+     |                 ^^^^^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^ no `is_interrupted` in `sys::io::error`
+     |                 |                  |      |
+     |                 |                  |      no `error_string` in `sys::io::error`
+     |                 |                  no `errno` in `sys::io::error`
+     |                 no `decode_error_kind` in `sys::io::error`
+
+  error[E0432]: unresolved imports `super::key::Key`, `super::key::LazyKey`, `super::key::get`, `super::key::set`
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:1:18
+    |
+  1 | use super::key::{Key, LazyKey, get, set};
+    |                  ^^^  ^^^^^^^  ^^^  ^^^ no `set` in `sys::thread_local::key`
+    |                  |    |        |
+    |                  |    |        no `get` in `sys::thread_local::key`
+    |                  |    no `LazyKey` in `sys::thread_local::key`
+    |                  no `Key` in `sys::thread_local::key`
+    |
+  note: module `crate::collections::hash::set` exists but is inaccessible
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/collections/hash/mod.rs:4:1
+    |
+  4 | pub mod set;
+    | ^^^^^^^^^^^^ not accessible
+
+  error[E0432]: unresolved imports `crate::sys::thread_local::key::LazyKey`, `crate::sys::thread_local::key::set`
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/guard/key.rs:6:37
+    |
+  6 | use crate::sys::thread_local::key::{LazyKey, set};
+    |                                     ^^^^^^^  ^^^ no `set` in `sys::thread_local::key`
+    |                                     |
+    |                                     no `LazyKey` in `sys::thread_local::key`
+    |
+  note: module `crate::collections::hash::set` exists but is inaccessible
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/collections/hash/mod.rs:4:1
+    |
+  4 | pub mod set;
+    | ^^^^^^^^^^^^ not accessible
+
+  error[E0425]: cannot find function `fill_bytes` in module `sys`
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/random.rs:67:14
+     |
+  67 |         sys::fill_bytes(bytes)
+     |              ^^^^^^^^^^ not found in `sys`
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:60:42
+      |
+   60 |         let new_ptr = GlobalAlloc::alloc(alloc, new_layout);
+      |                       ------------------ ^^^^^ unsatisfied trait bound
+      |                       |
+      |                       required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:64:34
+      |
+   64 |             GlobalAlloc::dealloc(alloc, ptr, old_layout);
+      |             -------------------- ^^^^^ unsatisfied trait bound
+      |             |
+      |             required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0425]: cannot find function `fill_bytes` in this scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/random/mod.rs:128:5
+      |
+  128 |     fill_bytes(&mut buf);
+      |     ^^^^^^^^^^ not found in this scope
+
+  error[E0599]: no method named `alloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:110:51
+      |
+  110 |         let ptr: *mut Value<T> = (unsafe { System.alloc(layout) }).cast();
+      |                                                   ^^^^^
+      |
+     ::: /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc` not found for this struct
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate` with a similar name
+      |
+  110 |         let ptr: *mut Value<T> = (unsafe { System.allocate(layout) }).cast();
+      |                                                        +++
+
+  error[E0599]: no method named `dealloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:146:20
+      |
+  146 |             System.dealloc(self.ptr.as_ptr().cast(), layout);
+      |                    ^^^^^^^
+      |
+     ::: /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ----------------- method `dealloc` not found for this struct
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `dealloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `deallocate` with a similar name
+      |
+  146 |             System.deallocate(self.ptr.as_ptr().cast(), layout);
+      |                           +++
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:149:47
+      |
+  149 |                     GlobalAlloc::alloc_zeroed(self, layout)
+      |                     ------------------------- ^^^^ unsatisfied trait bound
+      |                     |
+      |                     required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:151:40
+      |
+  151 |                     GlobalAlloc::alloc(self, layout)
+      |                     ------------------ ^^^^ unsatisfied trait bound
+      |                     |
+      |                     required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:185:52
+      |
+  185 |                 let raw_ptr = GlobalAlloc::realloc(self, ptr.as_ptr(), old_layout, new_size);
+      |                               -------------------- ^^^^ unsatisfied trait bound
+      |                               |
+      |                               required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:227:43
+      |
+  227 |             unsafe { GlobalAlloc::dealloc(self, ptr.as_ptr(), layout) }
+      |                      -------------------- ^^^^ unsatisfied trait bound
+      |                      |
+      |                      required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:277:52
+      |
+  277 |                 let raw_ptr = GlobalAlloc::realloc(self, ptr.as_ptr(), old_layout, new_size);
+      |                               -------------------- ^^^^ unsatisfied trait bound
+      |                               |
+      |                               required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0599]: no method named `alloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:455:20
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc` not found for this struct
+  ...
+  455 |             System.alloc(layout)
+      |                    ^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate` with a similar name
+      |
+  455 |             System.allocate(layout)
+      |                         +++
+
+  error[E0599]: no method named `dealloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:463:25
+      |
+  139 | pub struct System;
+      | ----------------- method `dealloc` not found for this struct
+  ...
+  463 |         unsafe { System.dealloc(ptr, Layout::from_size_align_unchecked(size, align)) }
+      |                         ^^^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `dealloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `deallocate` with a similar name
+      |
+  463 |         unsafe { System.deallocate(ptr, Layout::from_size_align_unchecked(size, align)) }
+      |                                +++
+
+  error[E0599]: no method named `realloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:477:20
+      |
+  139 | pub struct System;
+      | ----------------- method `realloc` not found for this struct
+  ...
+  477 |             System.realloc(ptr, old_layout, new_size)
+      |                    ^^^^^^^ method not found in `System`
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `realloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+
+  error[E0599]: no method named `alloc_zeroed` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:487:20
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc_zeroed` not found for this struct
+  ...
+  487 |             System.alloc_zeroed(layout)
+      |                    ^^^^^^^^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc_zeroed`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate_zeroed` with a similar name
+      |
+  487 |             System.allocate_zeroed(layout)
+      |                         +++
+
+  Some errors have detailed explanations: E0277, E0425, E0432, E0599.
+  For more information about an error, try `rustc --explain E0277`.
+  error: could not compile `std` (lib) due to 20 previous errors
+
+  thread 'main' (305) panicked at kernel/build.rs:139:5:
+  failed to build native SVG consumers
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

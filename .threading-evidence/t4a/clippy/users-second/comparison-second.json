@@ -1,0 +1,25 @@
+{
+  "baseline_exit": 0,
+  "current_exit": 0,
+  "baseline_records": 4,
+  "current_records": 5,
+  "added": [
+    [
+      "warning",
+      "clippy::missing_const_for_thread_local",
+      "initializer for `thread_local` value can be made `const`"
+    ],
+    [
+      "warning",
+      null,
+      "4 warnings emitted"
+    ]
+  ],
+  "removed": [
+    [
+      "warning",
+      null,
+      "3 warnings emitted"
+    ]
+  ]
+}

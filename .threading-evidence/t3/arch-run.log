@@ -1,0 +1,154 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225645.801076Z-canonical-t1
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+canonical-t1 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225646.101923Z-remote-wake
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+remote-wake 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225646.428888Z-handoff
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+handoff 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225646.727965Z-doorbell
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+doorbell 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225647.065659Z-tlb-build
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+tlb-build 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225647.460371Z-ordinary-debug-clippy
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+ordinary-debug-clippy 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225647.871294Z-canonical-production
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 223, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t3_validate.py", line 169, in main
+    proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+  File "/usr/lib/python3.14/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1990, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '--timeout'
+canonical-production 1

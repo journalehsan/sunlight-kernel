@@ -152,6 +152,18 @@ borrower_wait:
     mov $99, %eax
     syscall
 calls_begin:
+.ifdef T1AUTH
+    /* A second sibling remains runnable during authenticated IPC blocking. */
+    movq $0, borrower_release(%rip)
+    lea borrower_entry(%rip), %rdi
+    lea borrower_startup(%rip), %rsi
+    lea borrower_release(%rip), %rdx
+    mov $22, %eax
+    syscall
+    cmp $-1, %rax
+    je failed
+    mov %rax, second_borrower(%rip)
+.endif
     movq $16, reader_count(%rip)
 reader_call:
     mov %rbp, %rsi
@@ -188,6 +200,15 @@ reader_keep_auth:
     jnz reader_call
     cmpq $0, reader_exec(%rip)
     jz success
+.ifdef T1AUTH
+    movq $1, borrower_release(%rip)
+t1_wait_reaped:
+    mov second_borrower(%rip), %rdi
+    mov $156, %eax
+    syscall
+    test %rax, %rax
+    jz t1_wait_reaped
+.endif
     /* Exec must withdraw the old image's final delivered auth grant before the
      * replacement exits. Account grants remain unavailable. */
     lea exec_path(%rip), %rdi
@@ -225,6 +246,17 @@ owner_recv:
     jne failed
     cmp $0x123, %rdi
     jne failed
+.ifdef T1AUTH
+    /* The sibling's real Yield handler acknowledges only while the exact
+     * reader is BlockedOnIpc in the same VM. Delay the reply until then. */
+t1_wait_progress:
+    cmpq $1, 8(%rbx)
+    je t1_progress_seen
+    mov $21, %eax
+    syscall
+    jmp t1_wait_progress
+t1_progress_seen:
+.endif
     /* Mint an auth proof for this pending caller. Account session authority is
      * unavailable: its real syscall must explicitly deny even this trusted role. */
     mov %r15, %rdi
@@ -331,3 +363,9 @@ owner_count: .quad 0
 owner_auth: .quad 0
 reader_count: .quad 0
 reader_exec: .quad 0
+
+.ifdef T1AUTH
+.section .bss
+.balign 8
+second_borrower: .skip 8
+.endif

@@ -1,0 +1,57 @@
+{
+  "suite": "production",
+  "pass": true,
+  "commands": [
+    [
+      "env",
+      "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static",
+      "cargo",
+      "build",
+      "-p",
+      "sunlightd",
+      "--release",
+      "--no-default-features",
+      "--offline"
+    ],
+    [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--offline",
+      "--release",
+      "--no-default-features"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/release/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T194837.478586Z-suite-production/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T194837.478586Z-suite-production/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T194837.478586Z-suite-production/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T194837.478586Z-suite-production/kernel.elf"
+    ]
+  ],
+  "guests": {
+    "2": 0
+  },
+  "kernel_sha256": "381d8be1ceb5bce78ff161e644188bc26633440fa1868be78f9c28de836f5383",
+  "production_exclusion": {
+    "[T2] begin": true,
+    "[T2-FAULT]": true,
+    "[T1] PASS": true,
+    "[T1-AUTH] PASS": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "rustfmt",
+    "--edition",
+    "2021",
+    "--check",
+    "kernel/src/sched/t2r_fixture.rs",
+    "kernel/build.rs"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2507528389978688
+}

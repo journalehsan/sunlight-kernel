@@ -1,0 +1,14 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "fmt",
+    "-p",
+    "sunlight-kernel",
+    "--",
+    "--check"
+  ],
+  "exit_code": 1,
+  "seconds": 2.5021155919821467
+}

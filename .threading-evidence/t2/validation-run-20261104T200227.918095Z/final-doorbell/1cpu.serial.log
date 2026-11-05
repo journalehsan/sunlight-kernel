@@ -1,0 +1,770 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 1 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T20:17:54Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf135032 (61750 frames, 241 MiB)
+[PMM] 278/518 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x3ffe2323
+[ACPI] Found table: FACP at 0x3ffe21d7
+[ACPI] Found table: APIC at 0x3ffe224b
+[ACPI] Found table: HPET at 0x3ffe22c3
+[ACPI] Found table: WAET at 0x3ffe22fb
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11891 end_count=7891 elapsed_counts=4000 tsc_delta=8320812 tsc_hz=2482060775
+[TIME] TSC calibrated ~2482060775 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62622500 lapic_initial_count=626225 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2482060775
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x20 minute=0x18 second=0x32 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T20:18:32Z assumed_basis=UTC
+wall: utc=2026-11-04T20:18:32Z unix=1793823512 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=RDSEED conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 1 logical processor(s) found, 1 usable
+[ACPI] MADT: 1 logical processor(s) detected (1 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff80027db8
+[SYSCALL] OK
+[SMP] Limine MP response: 1 CPU(s), BSP LAPIC ID=0
+[SMP] Phase-1 bring-up complete: 0 AP(s) online (1 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 1 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 1 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 1 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=84 memsz=84 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[F13NA] begin cpus=1 rounds=42 slots=4 transport=kernel_fixture
+[F13NA] cpu cpu=0 apic=0 timer=masked
+[SCHED] CREATED process #1 'doorbell-fixture' idx=0 burst_score=256 tier=High
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=0 case=N1 generation=1 task_incarnation=1 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #2 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=1 case=N2 generation=2 task_incarnation=2 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #3 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=2 case=N3 generation=3 task_incarnation=3 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #4 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=3 case=N4 generation=4 task_incarnation=4 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #5 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=4 case=N5 generation=5 task_incarnation=5 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #6 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=5 case=N6 generation=6 task_incarnation=6 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #7 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=6 case=N7 generation=7 task_incarnation=7 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #8 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=7 case=N8 generation=8 task_incarnation=8 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #9 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=8 case=N9 generation=9 task_incarnation=9 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #10 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=9 case=N10 generation=10 task_incarnation=10 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #11 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=10 case=N11 generation=11 task_incarnation=11 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #12 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=11 case=N12 generation=13 task_incarnation=12 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #13 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=12 case=N12 generation=14 task_incarnation=13 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #14 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin external pid=62368 reason=doorbell-fixture-exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=doorbell-fixture-exit code=137 (external)
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=doorbell-fixture-exit
+[SCHED] process_exit_begin external pid=62368 reason=doorbell-duplicate-exit
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=13 case=N13 generation=15 task_incarnation=14 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #15 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin external pid=62368 reason=doorbell-fixture-exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=doorbell-fixture-exit code=137 (external)
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=doorbell-fixture-exit
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[SCHED] process_exit_begin external pid=62368 reason=doorbell-duplicate-exit
+[F13NA] cleanup round=14 case=N14 generation=16 task_incarnation=15 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #16 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=15 case=N15 generation=17 task_incarnation=16 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #17 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=16 case=N16 generation=18 task_incarnation=17 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #18 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=17 case=N10 generation=19 task_incarnation=18 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #19 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] CREATED process #20 'doorbell-fixture' idx=1 burst_score=256 tier=High
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=18 case=N17 generation=20 task_incarnation=19 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #21 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=19 case=N17 generation=21 task_incarnation=21 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #22 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=20 case=N17 generation=22 task_incarnation=22 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #23 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=21 case=N17 generation=23 task_incarnation=23 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #24 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=22 case=N17 generation=24 task_incarnation=24 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #25 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=23 case=N17 generation=25 task_incarnation=25 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #26 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=24 case=N17 generation=26 task_incarnation=26 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #27 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=25 case=N17 generation=27 task_incarnation=27 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #28 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=26 case=N17 generation=28 task_incarnation=28 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #29 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=27 case=N17 generation=29 task_incarnation=29 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #30 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=28 case=N17 generation=30 task_incarnation=30 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #31 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=29 case=N17 generation=31 task_incarnation=31 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #32 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=30 case=N17 generation=32 task_incarnation=32 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #33 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=31 case=N17 generation=33 task_incarnation=33 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #34 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=32 case=N17 generation=34 task_incarnation=34 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #35 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=33 case=N17 generation=35 task_incarnation=35 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #36 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=34 case=N17 generation=36 task_incarnation=36 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #37 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=35 case=N17 generation=37 task_incarnation=37 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #38 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=36 case=N17 generation=38 task_incarnation=38 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #39 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=37 case=N17 generation=39 task_incarnation=39 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #40 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=38 case=N17 generation=40 task_incarnation=40 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #41 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=39 case=N17 generation=41 task_incarnation=41 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #42 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=40 case=N17 generation=42 task_incarnation=42 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_slot_reused idx=0 pid=62368 (reused reaped slot)
+[SCHED] CREATED process #43 'doorbell-fixture' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62368 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62368 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62368 name='doorbell-fixture'
+[SCHED] process_reaped pid=62368 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62368 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62368 cleared_msgs=0
+[F13NA] cleanup round=41 case=N17 generation=43 task_incarnation=43 waiter=0 task_refs=0 queued=0 state=Reaped retired=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=62384 name='doorbell-fixture' reason=exit code=0
+[SCHED] terminating pid=62384 name='doorbell-fixture' reason=exit
+[SCHED] FINISHED process pid=62384 name='doorbell-fixture'
+[SCHED] process_reaped pid=62384 name='doorbell-fixture' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=62384 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=62384 cleared_msgs=0
+[F13NA] race round=0 case=N1 result=FORCED_AND_PASSED generation=1 incarnation=1 snapshot=1 sequence=1 registered=0 blocked=0 wakes=0 notifications=1 sources=0x1 consumer=0 resumes=1 selections=1 prepark=0 excluded=0 stale_rejected=0 ready=0 spurious=0 outcome=work cleanup=retired
+[F13NA] metrics round=0 wait_ns=0 notify_ns=422945 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=3 sends=2 handlers=2 idle_ns=0 idle_handlers=0 ticks=30 switches=2 unit=native_tcg_ns
+[F13NA] race round=1 case=N2 result=FORCED_AND_PASSED generation=2 incarnation=2 snapshot=0 sequence=1 registered=0 blocked=0 wakes=0 notifications=1 sources=0x1 consumer=0 resumes=1 selections=1 prepark=0 excluded=0 stale_rejected=1 ready=0 spurious=0 outcome=work cleanup=retired
+[F13NA] metrics round=1 wait_ns=0 notify_ns=49398 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=4 sends=3 handlers=3 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=2 case=N3 result=FORCED_AND_PASSED generation=3 incarnation=3 snapshot=0 sequence=1 registered=0 blocked=0 wakes=0 notifications=1 sources=0x1 consumer=0 resumes=1 selections=1 prepark=0 excluded=0 stale_rejected=1 ready=0 spurious=0 outcome=changed cleanup=retired
+[F13NA] metrics round=2 wait_ns=434421 notify_ns=46845 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=4 sends=3 handlers=3 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=3 case=N4 result=NOT_FORCED generation=4 incarnation=4 snapshot=0 sequence=1 registered=1 blocked=0 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=1 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=3 wait_ns=151142 notify_ns=516299 commit_ns=332163474 runnable_ns=332368705 execution_ns=333446756 clock_cpu=0 requests=7 sends=4 handlers=5 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=4 case=N5 result=FORCED_AND_PASSED generation=5 incarnation=5 snapshot=0 sequence=1 registered=1 blocked=0 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=1 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=4 wait_ns=3854 notify_ns=5051 commit_ns=335777803 runnable_ns=335779410 execution_ns=335838387 clock_cpu=0 requests=7 sends=4 handlers=5 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=5 case=N6 result=FORCED_AND_PASSED generation=6 incarnation=6 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=5 wait_ns=3081 notify_ns=31798 commit_ns=338227755 runnable_ns=338229245 execution_ns=338385536 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=6 case=N7 result=NOT_FORCED generation=7 incarnation=7 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=6 wait_ns=3265 notify_ns=16821 commit_ns=440676078 runnable_ns=440679943 execution_ns=440765477 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=100142700 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=7 case=N8 result=FORCED_AND_PASSED generation=8 incarnation=8 snapshot=0 sequence=8 registered=1 blocked=1 wakes=1 notifications=8 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=7 wait_ns=6453 notify_ns=266 commit_ns=442775039 runnable_ns=442776401 execution_ns=442861367 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=8 case=N9 result=FORCED_AND_PASSED generation=9 incarnation=9 snapshot=0 sequence=1 registered=2 blocked=2 wakes=2 notifications=1 sources=0x1 consumer=0 resumes=2 selections=3 prepark=0 excluded=0 stale_rejected=1 ready=2 spurious=1 outcome=notified cleanup=retired
+[F13NA] metrics round=8 wait_ns=2622 notify_ns=50135 commit_ns=445276670 runnable_ns=445278015 execution_ns=445341621 clock_cpu=0 requests=10 sends=7 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=6 unit=native_tcg_ns
+[F13NA] race round=9 case=N10 result=FORCED_AND_PASSED generation=10 incarnation=10 snapshot=0 sequence=0 registered=1 blocked=1 wakes=1 notifications=0 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=closed cleanup=retired
+[F13NA] metrics round=9 wait_ns=2871 notify_ns=0 commit_ns=0 runnable_ns=447313680 execution_ns=0 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=10 case=N11 result=FORCED_AND_PASSED generation=11 incarnation=11 snapshot=0 sequence=1 registered=0 blocked=0 wakes=0 notifications=1 sources=0x1 consumer=0 resumes=1 selections=1 prepark=0 excluded=0 stale_rejected=1 ready=0 spurious=0 outcome=closed cleanup=retired
+[F13NA] metrics round=10 wait_ns=0 notify_ns=47170 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=4 sends=3 handlers=3 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=11 case=N12 result=FORCED_AND_PASSED generation=13 incarnation=12 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=cancelled cleanup=retired
+[F13NA] metrics round=11 wait_ns=2882 notify_ns=1942 commit_ns=0 runnable_ns=451677919 execution_ns=0 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=12 case=N12 result=FORCED_AND_PASSED generation=14 incarnation=13 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=12 wait_ns=6883 notify_ns=55068 commit_ns=453688418 runnable_ns=453689854 execution_ns=453861789 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=13 case=N13 result=NOT_FORCED generation=15 incarnation=14 snapshot=0 sequence=0 registered=1 blocked=0 wakes=0 notifications=0 sources=0x1 consumer=0 resumes=0 selections=1 prepark=1 excluded=0 stale_rejected=1 ready=0 spurious=0 outcome=consumer_exit cleanup=retired
+[F13NA] metrics round=13 wait_ns=24122 notify_ns=0 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=6 sends=3 handlers=4 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=14 case=N14 result=FORCED_AND_PASSED generation=16 incarnation=15 snapshot=0 sequence=0 registered=1 blocked=1 wakes=0 notifications=0 sources=0x1 consumer=0 resumes=0 selections=1 prepark=0 excluded=0 stale_rejected=1 ready=0 spurious=0 outcome=consumer_exit cleanup=retired
+[F13NA] metrics round=14 wait_ns=3166 notify_ns=0 commit_ns=0 runnable_ns=0 execution_ns=0 clock_cpu=0 requests=5 sends=4 handlers=5 idle_ns=0 idle_handlers=0 ticks=0 switches=2 unit=native_tcg_ns
+[F13NA] race round=15 case=N15 result=FORCED_AND_PASSED generation=17 incarnation=16 snapshot=18446744073709551615 sequence=18446744073709551615 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=exhausted cleanup=retired
+[F13NA] metrics round=15 wait_ns=3418 notify_ns=40569 commit_ns=460925970 runnable_ns=460927614 execution_ns=461010744 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=16 case=N16 result=FORCED_AND_PASSED generation=18 incarnation=17 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=16 wait_ns=3015 notify_ns=6278 commit_ns=462908357 runnable_ns=462909710 execution_ns=462946046 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=17 case=N10 result=FORCED_AND_PASSED generation=19 incarnation=18 snapshot=0 sequence=0 registered=1 blocked=1 wakes=1 notifications=0 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=producer_exit cleanup=retired
+[F13NA] metrics round=17 wait_ns=5989 notify_ns=0 commit_ns=0 runnable_ns=464997405 execution_ns=0 clock_cpu=0 requests=7 sends=5 handlers=6 idle_ns=0 idle_handlers=0 ticks=0 switches=4 unit=native_tcg_ns
+[F13NA] race round=18 case=N17 result=FORCED_AND_PASSED generation=20 incarnation=19 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=18 wait_ns=3664 notify_ns=6783 commit_ns=469342161 runnable_ns=469343749 execution_ns=469533896 clock_cpu=0 requests=10 sends=7 handlers=8 idle_ns=0 idle_handlers=0 ticks=0 switches=6 unit=native_tcg_ns
+[F13NA] race round=19 case=N17 result=FORCED_AND_PASSED generation=21 incarnation=21 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=19 wait_ns=3078 notify_ns=6427 commit_ns=471538646 runnable_ns=471540211 execution_ns=471586995 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=20 case=N17 result=FORCED_AND_PASSED generation=22 incarnation=22 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=20 wait_ns=2750 notify_ns=5515 commit_ns=473412904 runnable_ns=473414145 execution_ns=473457598 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=21 case=N17 result=FORCED_AND_PASSED generation=23 incarnation=23 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=21 wait_ns=2628 notify_ns=5409 commit_ns=475258100 runnable_ns=475259279 execution_ns=475300359 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=22 case=N17 result=FORCED_AND_PASSED generation=24 incarnation=24 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=22 wait_ns=2661 notify_ns=5033 commit_ns=477092426 runnable_ns=477093533 execution_ns=477134500 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=23 case=N17 result=FORCED_AND_PASSED generation=25 incarnation=25 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=23 wait_ns=2512 notify_ns=5285 commit_ns=478926544 runnable_ns=478927911 execution_ns=478969161 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=24 case=N17 result=FORCED_AND_PASSED generation=26 incarnation=26 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=24 wait_ns=2730 notify_ns=5075 commit_ns=480745556 runnable_ns=480746687 execution_ns=480788244 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=25 case=N17 result=FORCED_AND_PASSED generation=27 incarnation=27 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=25 wait_ns=2876 notify_ns=5113 commit_ns=482578373 runnable_ns=482579498 execution_ns=482619012 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=26 case=N17 result=FORCED_AND_PASSED generation=28 incarnation=28 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=26 wait_ns=2466 notify_ns=5276 commit_ns=484416126 runnable_ns=484417489 execution_ns=484458245 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=27 case=N17 result=FORCED_AND_PASSED generation=29 incarnation=29 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=27 wait_ns=2426 notify_ns=4946 commit_ns=486243247 runnable_ns=486244340 execution_ns=486284303 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=28 case=N17 result=FORCED_AND_PASSED generation=30 incarnation=30 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=28 wait_ns=2602 notify_ns=5074 commit_ns=488077418 runnable_ns=488078551 execution_ns=488122506 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=29 case=N17 result=FORCED_AND_PASSED generation=31 incarnation=31 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=29 wait_ns=2371 notify_ns=4773 commit_ns=489922221 runnable_ns=489923264 execution_ns=489962372 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=30 case=N17 result=FORCED_AND_PASSED generation=32 incarnation=32 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=30 wait_ns=2437 notify_ns=5112 commit_ns=491743821 runnable_ns=491745084 execution_ns=491784974 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=31 case=N17 result=FORCED_AND_PASSED generation=33 incarnation=33 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=31 wait_ns=2771 notify_ns=5232 commit_ns=493660258 runnable_ns=493661426 execution_ns=493704833 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=32 case=N17 result=FORCED_AND_PASSED generation=34 incarnation=34 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=32 wait_ns=2558 notify_ns=5164 commit_ns=495511404 runnable_ns=495512678 execution_ns=495553751 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=33 case=N17 result=FORCED_AND_PASSED generation=35 incarnation=35 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=33 wait_ns=2477 notify_ns=5097 commit_ns=497345477 runnable_ns=497346780 execution_ns=497387341 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=34 case=N17 result=FORCED_AND_PASSED generation=36 incarnation=36 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=34 wait_ns=2617 notify_ns=4990 commit_ns=499173438 runnable_ns=499174579 execution_ns=499213787 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=35 case=N17 result=FORCED_AND_PASSED generation=37 incarnation=37 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=35 wait_ns=2482 notify_ns=4986 commit_ns=500993945 runnable_ns=500995029 execution_ns=501035308 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=36 case=N17 result=FORCED_AND_PASSED generation=38 incarnation=38 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=36 wait_ns=2390 notify_ns=4852 commit_ns=502843812 runnable_ns=502844805 execution_ns=502885249 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=37 case=N17 result=FORCED_AND_PASSED generation=39 incarnation=39 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=37 wait_ns=2409 notify_ns=4781 commit_ns=504632569 runnable_ns=504633542 execution_ns=504673333 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=38 case=N17 result=FORCED_AND_PASSED generation=40 incarnation=40 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=38 wait_ns=2550 notify_ns=4954 commit_ns=506449085 runnable_ns=506450100 execution_ns=506490258 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=39 case=N17 result=FORCED_AND_PASSED generation=41 incarnation=41 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=39 wait_ns=2506 notify_ns=4850 commit_ns=508244950 runnable_ns=508246010 execution_ns=508284819 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=40 case=N17 result=FORCED_AND_PASSED generation=42 incarnation=42 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=40 wait_ns=2473 notify_ns=4957 commit_ns=510076575 runnable_ns=510077609 execution_ns=510116697 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] race round=41 case=N17 result=FORCED_AND_PASSED generation=43 incarnation=43 snapshot=0 sequence=1 registered=1 blocked=1 wakes=1 notifications=1 sources=0x1 consumer=0 resumes=1 selections=2 prepark=0 excluded=0 stale_rejected=1 ready=1 spurious=0 outcome=notified cleanup=retired
+[F13NA] metrics round=41 wait_ns=2993 notify_ns=4973 commit_ns=511897037 runnable_ns=511898180 execution_ns=511938520 clock_cpu=0 requests=10 sends=8 handlers=9 idle_ns=0 idle_handlers=0 ticks=0 switches=5 unit=native_tcg_ns
+[F13NA] workload cpu=0 user_executions=72
+[F13NA] PASS cpus=1 rounds=42 created=43 retired=43 active=0 waiters=0 task_refs=0 obligations=0 deferred=0 pending=0 queued=0 pins=0 frames_before=67184 frames_after=67184 completions=37 metadata_heap_allocations=0 polling_wakes=0

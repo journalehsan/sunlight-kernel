@@ -1,0 +1,39 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "8f0c9585f09419ea4cc69e74f73e99c2cdd6ad5059657b8d1ac9ba4d3a77bc76",
+  "cpus": 2,
+  "markers": [
+    "THREAD_PROBE PASS",
+    "fd_table=ok eventfd=ok",
+    "child_tid_clear=ok"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "2",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/linux-thread/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T142038.037521Z-linux-thread-2cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "serial_sha256": "477aaaa0d9c22f6065d7a1ed953de66b1a06e71098c4713d72ac117c5a3858cc",
+  "seconds": 41.1096451979829
+}

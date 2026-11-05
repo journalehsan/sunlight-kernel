@@ -1,0 +1,1092 @@
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+struct EmbeddedBinary<'a> {
+    package: &'a str,
+    output: &'a str,
+    rustflags: &'a str,
+    args: &'a [&'a str],
+}
+
+fn main() {
+    if env::var_os("CARGO_FEATURE_NATIVE_DOORBELL_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let input = root.join("tools/helios-probes/doorbell-probe.S");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed={}", input.display());
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("doorbell-probe.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("doorbell-probe.elf"))
+            .arg(out.join("doorbell-probe.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    if env::var_os("CARGO_FEATURE_CAP_ISSUANCE_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        for fixture in ["capability-probe", "exec-r2"] {
+            let input = root.join(format!("tools/helios-probes/{fixture}.S"));
+            let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+            println!("cargo:rerun-if-changed={}", input.display());
+            let mut assembler = Command::new("as");
+            if fixture == "capability-probe"
+                && env::var_os("CARGO_FEATURE_SYSCALL_STACK_AUTH_TEST").is_some()
+            {
+                assembler.args(["--defsym", "T1AUTH=1"]);
+            }
+            assert!(assembler
+                .args(["--64", "-o"])
+                .arg(out.join(format!("{fixture}.o")))
+                .arg(input)
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("ld")
+                .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+                .arg(out.join(format!("{fixture}.elf")))
+                .arg(out.join(format!("{fixture}.o")))
+                .status()
+                .unwrap()
+                .success());
+        }
+    }
+    if env::var_os("CARGO_FEATURE_SCHEDULER_B_TEST").is_some()
+        || env::var_os("CARGO_FEATURE_REMOTE_WAKE_TEST").is_some()
+        || env::var_os("CARGO_FEATURE_PIN_RELEASE_TEST").is_some()
+    {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let input = root.join("tools/helios-probes/scheduler-probe.S");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed={}", input.display());
+        let mut assembler = Command::new("as");
+        if env::var_os("CARGO_FEATURE_SYSCALL_STACK_TEST").is_some() {
+            println!("cargo:rerun-if-changed=../tools/helios-probes/syscall-stack-control.inc");
+            assembler.args(["--defsym", "T1=1"]);
+        }
+        assert!(assembler
+            .current_dir(&root)
+            .args(["--64", "-o"])
+            .arg(out.join("scheduler-probe.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("scheduler-probe.elf"))
+            .arg(out.join("scheduler-probe.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    if env::var_os("CARGO_FEATURE_SYSCALL_STACK_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let input = root.join("tools/helios-probes/syscall-linux-completion-probe.S");
+        println!("cargo:rerun-if-changed={}", input.display());
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("syscall-linux-completion.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("syscall-linux-completion.elf"))
+            .arg(out.join("syscall-linux-completion.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing manifest dir"));
+    let workspace_root = manifest_dir
+        .parent()
+        .expect("kernel should live one directory below workspace root");
+    let target_dir = workspace_root.join("target");
+    let release_dir = target_dir.join("x86_64-unknown-none").join("release");
+    let scratch_target_dir = target_dir.join("embedded-build");
+
+    // SVG theme consumers link native std. Build in the independent scratch
+    // directory so nested Cargo cannot deadlock on this kernel build's lock.
+    for input in [
+        "tools/build_svg_apps.sh",
+        "tools/build_native_std.sh",
+        "tools/native-std",
+        "tools/targets/x86_64-sunlightos.json",
+        "sunlight-ui",
+        "sunlight-libc",
+        "sunlight-files",
+        "services/sunlight-vortex-shell",
+        "services/sunlight-dialogd",
+        "services/sunlight-control-panel",
+        "docs/icons/SunlightOS",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let svg_status = Command::new("bash")
+        .arg(workspace_root.join("tools/build_svg_apps.sh"))
+        .env("CARGO_TARGET_DIR", &scratch_target_dir)
+        .current_dir(workspace_root)
+        .status()
+        .expect("invoke native SVG app builder");
+    assert!(svg_status.success(), "failed to build native SVG consumers");
+    for output in [
+        "sunlight-vortex-shell",
+        "sunlight-files",
+        "sunlight-dialogd",
+        "sunlight-dialog",
+        "control-panel",
+    ] {
+        let source = scratch_target_dir
+            .join("x86_64-sunlightos/release")
+            .join(output);
+        let dest = target_dir.join("x86_64-sunlightos/release").join(output);
+        let bytes = fs::read(&source).expect("read native SVG application");
+        assert_eq!(&bytes[..4], b"\x7fELF");
+        assert_eq!(bytes[7], 0, "native SVG apps must use ELFOSABI_NONE");
+        assert_ne!(
+            &bytes[9..15],
+            b"HLNX01",
+            "native SVG apps must not use Helios"
+        );
+        if fs::read(&dest).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::create_dir_all(dest.parent().unwrap()).expect("create native output directory");
+            fs::copy(source, &dest).expect("stage native SVG application");
+        }
+    }
+
+    // Yazi is embedded unconditionally; ordinary kernel builds must prepare it
+    // too, rather than relying on a previous Yazi-specific test run.
+    let yazi_script = workspace_root.join("tools/build_yazi.sh");
+    let yazi_path = target_dir.join("x86_64-unknown-linux-musl/release/yazi");
+    let yazi_baseline = target_dir.join("yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi");
+    println!("cargo:rerun-if-changed={}", yazi_script.display());
+    println!("cargo:rerun-if-changed={}", yazi_path.display());
+    let needs_yazi_baseline = env::var_os("CARGO_FEATURE_KEY_INJECT").is_some();
+    if needs_yazi_baseline {
+        println!("cargo:rerun-if-changed={}", yazi_baseline.display());
+    }
+    if !yazi_path.is_file() || (needs_yazi_baseline && !yazi_baseline.is_file()) {
+        println!("cargo:warning=prebuilding embedded binary yazi for kernel");
+        let status = Command::new("bash")
+            .arg(&yazi_script)
+            .current_dir(workspace_root)
+            .status()
+            .expect("failed to invoke Yazi builder");
+        assert!(
+            status.success(),
+            "failed to build embedded Yazi; see tools/build_yazi.sh output above"
+        );
+    }
+
+    // The desktop advertises Document Viewer even when no renderer is enabled.
+    // Package its existing UI/client executable independently of MuPDF/Hayro.
+    let viewer_script = workspace_root.join("tools/build_docview.sh");
+    for input in [
+        "tools/build_docview.sh",
+        "tools/stamp_helios_elf.sh",
+        "sunlight-docview",
+        "sunlight-docserv/src/client.rs",
+        "sunlight-docserv/src/ipc.rs",
+        "sunlight-ui",
+        "sunlight-dialogs",
+        "ipc",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let native_viewer = env::var_os("CARGO_FEATURE_NATIVE_DOCUMENT_VIEWER").is_some();
+    let viewer_dest = target_dir.join(if native_viewer {
+        "x86_64-sunlightos/release/sunlight-docview"
+    } else {
+        "x86_64-unknown-linux-musl/release/sunlight-docview"
+    });
+    // Explicit legacy/UI smoke builds supply their own viewer features. Preserve
+    // that artifact; default builds always refresh the standalone UI/client.
+    if env::var_os("CARGO_FEATURE_DOCUMENT_VIEWER").is_none() {
+        let viewer_status = Command::new("bash")
+            .arg(&viewer_script)
+            .env("CARGO_TARGET_DIR", &scratch_target_dir)
+            .env_remove("DOCVIEW_FEATURES")
+            .current_dir(workspace_root)
+            .status()
+            .expect("failed to invoke document viewer builder");
+        assert!(
+            viewer_status.success(),
+            "failed to build document viewer UI"
+        );
+        let viewer_source =
+            scratch_target_dir.join("x86_64-unknown-linux-musl/release/sunlight-docview");
+        let viewer_bytes = fs::read(&viewer_source).expect("missing built document viewer");
+        assert_helios_elf(&viewer_source, &viewer_bytes);
+        if fs::read(&viewer_dest).ok().as_deref() != Some(viewer_bytes.as_slice()) {
+            fs::create_dir_all(viewer_dest.parent().unwrap())
+                .expect("create viewer artifact directory");
+            fs::copy(&viewer_source, &viewer_dest).expect("copy document viewer artifact");
+        }
+    }
+    let viewer_bytes =
+        fs::read(&viewer_dest).expect("missing document viewer; run bash tools/build_docview.sh");
+    if native_viewer {
+        assert_eq!(&viewer_bytes[..4], b"\x7fELF");
+        assert_eq!(viewer_bytes[7], 0, "native viewer must use ELFOSABI_NONE");
+        assert_ne!(
+            &viewer_bytes[9..15],
+            b"HLNX01",
+            "native viewer must not have a Helios stamp"
+        );
+    } else {
+        assert_helios_elf(&viewer_dest, &viewer_bytes);
+    }
+    println!("cargo:rerun-if-changed={}", viewer_dest.display());
+
+    // Renderer artifacts retain their actual native/Helios personality.
+    if env::var_os("CARGO_FEATURE_DOCUMENT_SERVICE").is_some() {
+        let native = env::var_os("CARGO_FEATURE_NATIVE_DOCUMENT_SERVICE").is_some();
+        let path = target_dir.join(if native {
+            "x86_64-sunlightos/release/sunlight-docserv"
+        } else {
+            "x86_64-unknown-linux-musl/release/sunlight-docserv"
+        });
+        println!("cargo:rerun-if-changed={}", path.display());
+        let bytes = fs::read(&path).unwrap_or_else(|err| {
+            panic!("missing renderer {}: {err}; run bash tools/build_docserv.sh (or set DOCSERV_BACKEND=mupdf-legacy for the legacy feature)", path.display())
+        });
+        if native {
+            assert_eq!(&bytes[..4], b"\x7fELF");
+            assert_eq!(bytes[7], 0, "native Hayro must use ELFOSABI_NONE");
+            assert_ne!(
+                &bytes[9..15],
+                b"HLNX01",
+                "native Hayro must not be stamped as Helios"
+            );
+        } else {
+            assert_helios_elf(&path, &bytes);
+        }
+    }
+
+    if env::var_os("CARGO_FEATURE_NATIVE_STD_PROBE").is_some() {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root
+                .join("tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe")
+                .display()
+        );
+    }
+
+    let build_timestamp = build_timestamp();
+    println!("cargo:rustc-env=SUNLIGHT_BUILD_TIMESTAMP={build_timestamp}");
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+
+    let service_rustflags = "-C link-arg=-Tservices/user-space.ld -C relocation-model=static";
+    let tls_rustflags = concat!(
+        "-C link-arg=-Tservices/user-space.ld -C relocation-model=static ",
+        "--cfg aes_force_soft ",
+        "--cfg polyval_force_soft ",
+        "--cfg poly1305_force_soft ",
+        "--cfg chacha20_force_soft ",
+        "--cfg curve25519_dalek_backend=\"serial\""
+    );
+
+    let binaries = [
+        EmbeddedBinary {
+            package: "sunlight-init",
+            output: "sunlight-init",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-timer-server",
+            output: "sunlight-timer-server",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-swapd",
+            output: "sunlight-swapd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-kbd",
+            output: "sunlight-kbd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-mouse",
+            output: "sunlight-mouse",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-usb-mouse",
+            output: "sunlight-usb-mouse",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "deviced",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "deviced"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-networkd",
+            output: "networkd",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "networkd"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-powerd",
+            output: "powerd",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "powerd"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-thermald",
+            output: "thermald",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "thermald"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-thermald",
+            output: "thermalctl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "thermalctl"],
+        },
+        // vfs-server (pulls in sunlight-fs which seeds /etc/locale.conf, /etc/locale.gen etc.)
+        EmbeddedBinary {
+            package: "sunlight-vfs-server",
+            output: "sunlight-vfs-server",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-tty-server",
+            output: "sunlight-tty-server",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-net-server",
+            output: "net_server",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "timezone_service",
+            output: "timezone_service",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-timed",
+            output: "timed",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-tz",
+            output: "tzutils",
+            rustflags: service_rustflags,
+            args: &["--release", "--features", "tzutils", "--bin", "tzutils"],
+        },
+        EmbeddedBinary {
+            package: "sunlightd",
+            output: "sunlightd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "rand_service",
+            output: "rand_service",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "secret_store_test",
+            output: "secret_store_test",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        // sunshell (includes localectl builtin; transitively builds sunlight-locale etc.)
+        EmbeddedBinary {
+            package: "sunshell",
+            output: "sshl",
+            rustflags: service_rustflags,
+            args: &[
+                "--features",
+                "sunlight",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "sunlight-utils",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "echo",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "echo"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "cat",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "cat"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "pwd",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "pwd"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "true",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "true"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "false",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "false"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "basename",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "basename"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "dirname",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "dirname"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "head",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "head"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "cmp",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "cmp"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "cksum",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "cksum"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "wc",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "wc"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "cut",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "cut"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "fold",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "fold"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "expand",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "expand"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "grep",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "grep"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "sort",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "sort"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "uniq",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "uniq"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "comm",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "comm"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "tr",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "tr"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "paste",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "paste"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "join",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "join"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "printf",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "printf"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "tee",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "tee"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "nl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "nl"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "od",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "od"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "split",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "split"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "find",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "find"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
+            output: "xargs",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "xargs"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-net-utils",
+            output: "sunlight-net-utils",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-top",
+            output: "sunlight-top",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "memoryctl",
+            output: "memoryctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-fetch",
+            output: "fetch",
+            rustflags: service_rustflags,
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "sunlightctl",
+            output: "sunlightctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "mezzoctl",
+            output: "mezzoctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "devicectl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "devicectl"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-deviced",
+            output: "sunlight-hwinfo",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "sunlight-hwinfo"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-networkd",
+            output: "networkctl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "networkctl"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-powerd",
+            output: "powerctl",
+            rustflags: service_rustflags,
+            args: &["--release", "--bin", "powerctl"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-niced",
+            output: "niced",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-gcd",
+            output: "gcd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-kv",
+            output: "sunlight-kv",
+            rustflags: service_rustflags,
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "sunlight-kvctl",
+            output: "sunlight-kvctl",
+            rustflags: service_rustflags,
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        // Wise Owl Phase 1.1: native short-term cognitive memory service + CLI.
+        EmbeddedBinary {
+            package: "wiseowl-memory",
+            output: "wiseowl-memoryd",
+            rustflags: service_rustflags,
+            args: &[
+                "--bin",
+                "wiseowl-memoryd",
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "wiseowl-memory",
+            output: "wiseowl-memoryctl",
+            rustflags: service_rustflags,
+            args: &[
+                "--bin",
+                "wiseowl-memoryctl",
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "sunlight-tls",
+            output: "sunlight-tls",
+            rustflags: tls_rustflags,
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "certificatectl",
+            output: "certificatectl",
+            rustflags: service_rustflags,
+            args: &[
+                "--features",
+                "sunlightos",
+                "--no-default-features",
+                "--release",
+            ],
+        },
+        EmbeddedBinary {
+            package: "sunlight-uac",
+            output: "uac_service",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-sessiond",
+            output: "sunlight-sessiond",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-sessionctl",
+            output: "sunlight-sessionctl",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        // Session Configuration Phase 1 test fixtures (short native startup apps).
+        EmbeddedBinary {
+            package: "sunlight-startup-fixture",
+            output: "su1",
+            rustflags: service_rustflags,
+            args: &["--bin", "su1", "--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-startup-fixture",
+            output: "su2",
+            rustflags: service_rustflags,
+            args: &["--bin", "su2", "--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-sm",
+            output: "sunlight-sm",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-solar",
+            output: "solar",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-sunsay",
+            output: "sunlight-sunsay",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-zoxide",
+            output: "z",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-dict",
+            output: "dict",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-hangman",
+            output: "hangman",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-runner",
+            output: "sunlight-runner",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sun-exec",
+            output: "sun-exec",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sun-open",
+            output: "sun-open",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-terminal",
+            output: "sunlight-terminal",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-chronos",
+            output: "sunlight-chronos",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-tasks",
+            output: "sunlight-tasks",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-bench",
+            output: "sunbench",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-calculator",
+            output: "calculator",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-welcome",
+            output: "welcome",
+            rustflags: service_rustflags,
+            args: &["--bin", "welcome", "--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-widget-gallery",
+            output: "widget-gallery",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-calendar",
+            output: "sunlight-calendar",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-reminders",
+            output: "sunlight-reminders",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-devices",
+            output: "sunlight-devices",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "rappid-rabbit",
+            output: "rappid-rabbit",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-api-lab",
+            output: "sunlight-api-lab",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-light-lens",
+            output: "light-lens",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-voice-recorder",
+            output: "voice-recorder",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "melody-mina",
+            output: "melody-mina",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "mezzo",
+            output: "mezzo",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-thumbd",
+            output: "sunlight-thumbd",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+        EmbeddedBinary {
+            package: "cpu-utils",
+            output: "cpufeat",
+            rustflags: service_rustflags,
+            args: &["--release"],
+        },
+    ];
+
+    for bin in binaries {
+        let path = release_dir.join(bin.output);
+        let needs_build = !path.exists() || !userspace_elf_looks_valid(&path);
+        if needs_build {
+            if path.exists() {
+                println!(
+                    "cargo:warning=rebuilding embedded binary {} (missing or kernel-linked ELF)",
+                    bin.package
+                );
+            }
+            build_package(
+                workspace_root,
+                scratch_target_dir.as_path(),
+                release_dir.as_path(),
+                bin,
+            );
+        }
+    }
+
+    let probes_script = workspace_root.join("tools/build_helios_probes.sh");
+    println!("cargo:rerun-if-changed={}", probes_script.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("tools/helios-probes").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("third_party/sbase").display()
+    );
+    let probe_status = Command::new("bash")
+        .arg(&probes_script)
+        .current_dir(workspace_root)
+        .status()
+        .unwrap_or_else(|err| panic!("failed to invoke helios probe builder: {err}"));
+    if !probe_status.success() {
+        panic!("failed to build Helios Linux probes");
+    }
+
+    println!("cargo:rerun-if-changed=build.rs");
+}
+
+fn build_timestamp() -> String {
+    let mut command = Command::new("date");
+    command.arg("-u");
+    if let Ok(epoch) = env::var("SOURCE_DATE_EPOCH") {
+        command.args(["-d", &format!("@{epoch}")]);
+    }
+    command.arg("+%Y-%m-%dT%H:%M:%SZ");
+    command
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned())
+}
+
+/// Reject ELFs linked with the kernel linker script (vaddr in HHDM / -2GiB).
+/// Manual `cargo build -p <svc>` without userspace RUSTFLAGS produces those
+/// and previously stuck forever because build.rs only checked `exists()`.
+fn userspace_elf_looks_valid(path: &Path) -> bool {
+    let Ok(bytes) = fs::read(path) else {
+        return false;
+    };
+    if bytes.len() < 64 || &bytes[0..4] != b"\x7fELF" {
+        return false;
+    }
+    // ELF64 e_entry at offset 24, little-endian.
+    if bytes.len() < 32 {
+        return false;
+    }
+    let entry = u64::from_le_bytes(bytes[24..32].try_into().unwrap_or([0; 8]));
+    // Userspace services link at 0x400000; kernel image lives in high canonical space.
+    entry >= 0x400000 && entry < 0x0000_8000_0000_0000
+}
+
+fn build_package(
+    workspace_root: &Path,
+    scratch_target_dir: &Path,
+    release_dir: &Path,
+    bin: EmbeddedBinary<'_>,
+) {
+    println!(
+        "cargo:warning=prebuilding embedded binary {} for kernel",
+        bin.package
+    );
+
+    let scratch_release_dir = scratch_target_dir
+        .join("x86_64-unknown-none")
+        .join("release");
+    fs::create_dir_all(&scratch_release_dir).expect("failed to create scratch target dir");
+
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(workspace_root)
+        .env("CARGO_TARGET_DIR", scratch_target_dir)
+        // The parent Cargo process exports its target-specific encoded flags
+        // to build scripts. Do not let those kernel linker flags override the
+        // explicit user-space flags below in the child Cargo invocation.
+        .env_remove("CARGO_ENCODED_RUSTFLAGS")
+        .env("RUSTFLAGS", bin.rustflags)
+        .arg("build")
+        .arg("--package")
+        .arg(bin.package)
+        .args(bin.args);
+
+    let status = cmd.status().unwrap_or_else(|err| {
+        panic!("failed to invoke cargo for {}: {err}", bin.package);
+    });
+
+    if !status.success() {
+        panic!("failed to build embedded binary {}", bin.package);
+    }
+
+    let built_path = scratch_release_dir.join(bin.output);
+    let dest_path = release_dir.join(bin.output);
+    fs::create_dir_all(release_dir).expect("failed to create embedded output dir");
+    fs::copy(&built_path, &dest_path).unwrap_or_else(|err| {
+        panic!(
+            "failed to copy embedded binary {} from {} to {}: {err}",
+            bin.package,
+            built_path.display(),
+            dest_path.display()
+        );
+    });
+}
+
+fn assert_helios_elf(path: &Path, bytes: &[u8]) {
+    assert!(
+        bytes.starts_with(b"\x7fELF")
+            && bytes.get(7) == Some(&3)
+            && bytes.get(9..15) == Some(b"HLNX01".as_slice()),
+        "{} is not a stamped Helios ELF; rebuild its document executable",
+        path.display()
+    );
+}

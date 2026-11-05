@@ -1,0 +1,18 @@
+{
+  "pass": true,
+  "suite": "linux",
+  "attempts": [
+    ".threading-evidence/t4a/20261105T181452.841963Z-linux-build",
+    ".threading-evidence/t4a/20261105T181538.547220Z-linux-freeze",
+    ".threading-evidence/t4a/20261105T181540.269710Z-linux-abi",
+    ".threading-evidence/t4a/20261105T181541.624862Z-linux-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4a/20261105T181545.793114Z-linux-2cpu"
+    }
+  },
+  "kernel_sha256": "26739dbda784e213d24a9bb1a664c72f0f4f3b073473f18c1aa2f1fbd3199588",
+  "iso_sha256": "43c102defac74118682170692ddcb87879d6830d202faf3f5d07a13718f1f373"
+}

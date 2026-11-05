@@ -1,0 +1,18 @@
+{
+  "pass": false,
+  "classification": "FIXTURE_COMPILE_FAILURE",
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--features",
+    "thread_lifecycle_race_test",
+    "--offline"
+  ],
+  "exit_code": 1,
+  "log": "failed-initial-build.log",
+  "reason": "Descriptor diagnostic helper was initially gated to the original T2 feature only; corrected to include the T2R fixture."
+}

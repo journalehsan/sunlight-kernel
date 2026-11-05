@@ -842,3 +842,9 @@ fn boundary(ep: EndpointId, c: Actor, h: fl::Handle, label: u64) {
     assert_eq!(m.label, label);
     assert_eq!(m.words[0], h.generation);
 }
+
+#[cfg(feature = "fastlane-mediated-accounting-test")]
+pub(crate) mod mediated_accounting;
+
+#[cfg(feature = "fastlane-contract-test")]
+pub(crate) mod operation;

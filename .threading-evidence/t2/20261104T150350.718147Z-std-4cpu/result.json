@@ -1,0 +1,40 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "b711ed82887a95cf368c9ced82a01897e6c29cf187561d3acef4d8f179d17c1d",
+  "cpus": 4,
+  "markers": [
+    "[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK",
+    "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+    "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+    "[DOCSERV] native Hayro IPC open/render/close OK"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T150142.317501Z-suite-std/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T150350.718147Z-std-4cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "serial_sha256": "dbc5a13e668436c54d57cd54f1b6586967217eaef7abafceaa1bc24d909eb499",
+  "seconds": 27.31538946100045
+}

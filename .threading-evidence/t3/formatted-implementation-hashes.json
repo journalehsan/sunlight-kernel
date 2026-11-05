@@ -1,0 +1,13 @@
+{
+  "kernel/src/arch/x86_64/cpu_identity.rs": "a5571fa38ce3b65ecc436b5f92a4c02b80567d7aef5900d2e8a6bdb5c642819e",
+  "kernel/src/arch/x86_64/cpu_topology.rs": "a68e1fa8fee617f63731e426906334621677bdcf05d4040d39d41023e9b9fcf5",
+  "kernel/src/arch/x86_64/smp.rs": "a46425b962ca8068ce385c9f098a4664064ecdeb639f4a4e19788067acd9b8d5",
+  "kernel/src/arch/x86_64/lapic.rs": "a449accfccdb033b1cf5c7fcaa81b5a9414b3056003f9afee7d3e581adf79ac4",
+  "kernel/src/arch/x86_64/mod.rs": "8476378c4fec281d941e917a76c81dad6b2485103a77c3223fabdc526a379aeb",
+  "kernel/src/arch/x86_64/interrupts.rs": "d34c89d0d2b63dca647556e71913a373f10ff018ee2b93c89a2e74ca5efabea0",
+  "kernel/src/main.rs": "461063266092b236a62389219bba2f6e5b8af37bc0879361d88a3749d925478a",
+  "kernel/src/sched/mod.rs": "e0b216832e9f07e128f8f2ef578643c3311aa43c91c2ed32d143b244b608899f",
+  "kernel/src/sched/remote_wake_test.rs": "b473dc03849e56317ec6cb327ab01b8859e2de7c498805f108f29380bd51eee0",
+  "kernel/src/sched/doorbell_test.rs": "5c93439b24ef8946b6da91a52cdb36c8c02aee6a06e1b94803acb1be8ffd8025",
+  "kernel/src/sched/pin_release_test.rs": "be40068872bee7269676b0a6f66e5435274fb0a636907e788ef6cc404cc5c2d5"
+}

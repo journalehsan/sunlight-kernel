@@ -4,6 +4,8 @@ use crate::process::Process;
 
 impl Process {
     pub(crate) fn withdraw_exec_image_roles(&mut self) {
+        #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+        { self.contract_service = None; }
         // These roles were installed by a trusted launch chain or an embedded
         // image. A replacement must not inherit permission to authenticate
         // sessions, establish login trust, or manage services merely by PID.

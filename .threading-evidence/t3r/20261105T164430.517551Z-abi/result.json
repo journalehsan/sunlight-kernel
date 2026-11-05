@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/check_syscall_stack_abi.py",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/kernel.elf"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2514239290030673
+}

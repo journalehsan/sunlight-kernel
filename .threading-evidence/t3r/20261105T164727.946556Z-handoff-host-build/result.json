@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "--test",
+    "kernel/src/sched/handoff.rs",
+    "-o",
+    "target/t3r-handoff-host"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2516390240052715
+}

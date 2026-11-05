@@ -1,0 +1,8 @@
+# Phase 5.2 test: DHCP and DNS
+[DHCP] Sending DISCOVER...
+[DHCP] Got OFFER from 10.0.2.2
+[DHCP] Sending REQUEST...
+[DHCP] Lease acquired: 10.0.2.15/24
+[DHCP] Gateway: 10.0.2.2
+[DHCP] DNS: 10.0.2.3
+[DHCP] OK

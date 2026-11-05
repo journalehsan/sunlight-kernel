@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/check_syscall_stack_abi.py", line 53, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/check_syscall_stack_abi.py", line 32, in main
+    symbol = next(line.split()[-1] for line in symbols.splitlines()
+                  if 'syscall_entry' in line and ' T ' in line)
+StopIteration

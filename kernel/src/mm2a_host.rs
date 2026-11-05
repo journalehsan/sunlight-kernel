@@ -578,7 +578,16 @@ mod tests {
 #[path = "capability/lifecycle_host.rs"]
 mod lifecycle_host;
 #[cfg(test)]
-mod process { pub use crate::lifecycle_host::Process; }
+mod process {
+    #[path = "env.rs"]
+    pub mod env;
+    #[path = "thread_admission.rs"]
+    pub mod thread_admission;
+    pub use crate::lifecycle_host::Process;
+    #[path = "ipc_identity.rs"]
+    mod ipc_identity;
+    pub use ipc_identity::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
+}
 #[cfg(test)]
 mod sched { pub use crate::lifecycle_host::Scheduler; }
 #[cfg(test)]

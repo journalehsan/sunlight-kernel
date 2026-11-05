@@ -43,6 +43,71 @@ fn pair(b: &mut CapabilityBroker, s: SessionRef) -> Handle {
 }
 
 #[test]
+fn hybrid_reply_revocation_and_completion_share_channel_lifetime() {
+    use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
+    use super::super::channel_contract::{Phase, Service};
+    for completion_first in [false, true] {
+        let (mut b, s) = setup();
+        let h = pair(&mut b, s);
+        let target = IpcReplyTarget { endpoint_id: 12, call: IpcCallId {
+            pid: 10, incarnation: id(10).incarnation, generation: 42,
+        }};
+        let policy = b.channels.policies.for_service(id(11), Service::RequiredStream).unwrap();
+        let c = &mut b.channels.row_mut(h).unwrap().contract;
+        c.begin(Service::RequiredStream, 0x10202, false).unwrap();
+        c.finish().unwrap();
+        c.policy_identity = Some(policy);
+        c.hybrid_started = true;
+        c.hybrid_reply = Some(target);
+        assert!(b.hybrid_reply_allowed(target));
+        if completion_first {
+            b.hybrid_reply_finished(target, IpcCallOutcome::ReplyDelivered(42));
+        }
+        b.channel_revoke(h, id(10)).unwrap();
+        if !completion_first {
+            assert!(!b.hybrid_reply_allowed(target));
+            // A different call generation is not accidentally channel-bound.
+            let unrelated = IpcReplyTarget { call: IpcCallId { generation: 43, ..target.call }, ..target };
+            assert!(b.hybrid_reply_allowed(unrelated));
+            // Undrained reply metadata prevents channel-row reuse.
+            let next = b.channel_propose(id(6), id(12), s, 0, 3, 100).unwrap();
+            assert_eq!(b.channels.rows.len(), 2);
+            b.channel_revoke(next, id(12)).unwrap();
+            b.hybrid_reply_finished(target, IpcCallOutcome::PeerClosed(42));
+        }
+        let c = b.channels.row_mut(h).unwrap().contract;
+        assert!(c.hybrid_started);
+        assert!(c.hybrid_reply.is_none());
+        assert_eq!(c.phase, Phase::Closed);
+    }
+}
+
+#[test]
+fn hybrid_policy_reuse_cannot_restore_original_reply() {
+    use super::super::channel_contract::Service;
+    use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
+    let (mut b, s) = setup();
+    let h = pair(&mut b, s);
+    let old = b.channels.policies.for_service(id(11), Service::RequiredStream).unwrap();
+    let target = IpcReplyTarget { endpoint_id: 12, call: IpcCallId {
+        pid: 10, incarnation: id(10).incarnation, generation: 42,
+    }};
+    let c = &mut b.channels.row_mut(h).unwrap().contract;
+    c.begin(Service::RequiredStream, 0x10202, false).unwrap();
+    c.finish().unwrap();
+    c.policy_identity = Some(old);
+    c.hybrid_started = true;
+    c.hybrid_reply = Some(target);
+    b.channels.policies.retire_process(11);
+    let new = b.channels.policies.for_service(id(11), Service::RequiredStream).unwrap();
+    assert_eq!(old.policy_id, new.policy_id);
+    assert_ne!(old.generation, new.generation);
+    assert!(!b.hybrid_reply_allowed(target));
+    b.hybrid_reply_finished(target, IpcCallOutcome::ExplicitlyCancelled(42));
+    assert!(!b.channels.row_mut(h).unwrap().live());
+}
+
+#[test]
 fn authenticated_bell_roles_ordering_terminal_and_reuse() {
     let (mut b, s) = setup();
     for cycle in 0..1000 {

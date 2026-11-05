@@ -1,0 +1,10 @@
+
+running 5 tests
+test tests::every_supported_target_has_independent_bounded_state ... ok
+test tests::repeated_requests_coalesce_without_consuming_another_cpu ... ok
+test tests::new_request_after_dispatch_entry_survives ... ok
+test tests::local_intent_does_not_own_a_remote_delivery ... ok
+test tests::two_sources_share_delivery_and_post_ack_publication_survives ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

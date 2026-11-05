@@ -1,0 +1,7 @@
+{
+  "format_only_files": [
+    "kernel/src/sched/mod.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "sunlight-libc/src/std_runtime.rs"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "modified_existing_files": [
+    "kernel/src/arch/x86_64/interrupts.rs",
+    "kernel/src/arch/x86_64/lapic.rs",
+    "kernel/src/arch/x86_64/mod.rs",
+    "kernel/src/arch/x86_64/smp.rs",
+    "kernel/src/main.rs",
+    "kernel/src/sched/doorbell_test.rs",
+    "kernel/src/sched/mod.rs",
+    "kernel/src/sched/pin_release_test.rs",
+    "kernel/src/sched/remote_wake_test.rs",
+    "tools/helios-probes/linux-thread-probe.S"
+  ],
+  "new_files": [
+    "docs/kernel/threading-t3-cpu-apic-identity.md",
+    "kernel/src/arch/x86_64/cpu_identity.rs",
+    "kernel/src/arch/x86_64/cpu_topology.rs",
+    "tools/test_threading_t3.py",
+    "tools/threading_t3_affinity.py",
+    "tools/threading_t3_arch.py",
+    "tools/threading_t3_clippy.py",
+    "tools/threading_t3_delivery.py",
+    "tools/threading_t3_extra.py",
+    "tools/threading_t3_finish.py",
+    "tools/threading_t3_format.py",
+    "tools/threading_t3_matrix.py",
+    "tools/threading_t3_receipt.py",
+    "tools/threading_t3_regressions.py",
+    "tools/threading_t3_validate.py"
+  ],
+  "unexpected_existing_modifications": []
+}

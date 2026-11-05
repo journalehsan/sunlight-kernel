@@ -1,0 +1,11 @@
+{
+  "elf_sha256": "1961dd2570cf6a1d0430e5d20e174b00566ebfd6f3e307f9eaed9e2afa849612",
+  "size": 252710656,
+  "absent": {
+    "[T4A]": true,
+    "T4A arm": true,
+    "t4a_fixture": true
+  },
+  "valid": false,
+  "reason": "The feature-release command failed before Cargo: --timeout was after the positional REMAINDER argument. This was a pre-existing release image; not proof for T4A source."
+}

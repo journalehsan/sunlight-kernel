@@ -37,7 +37,13 @@ fn main() {
             let input = root.join(format!("tools/helios-probes/{fixture}.S"));
             let out = PathBuf::from(env::var("OUT_DIR").unwrap());
             println!("cargo:rerun-if-changed={}", input.display());
-            assert!(Command::new("as")
+            let mut assembler = Command::new("as");
+            if fixture == "capability-probe"
+                && env::var_os("CARGO_FEATURE_SYSCALL_STACK_AUTH_TEST").is_some()
+            {
+                assembler.args(["--defsym", "T1AUTH=1"]);
+            }
+            assert!(assembler
                 .args(["--64", "-o"])
                 .arg(out.join(format!("{fixture}.o")))
                 .arg(input)
@@ -61,7 +67,13 @@ fn main() {
         let input = root.join("tools/helios-probes/scheduler-probe.S");
         let out = PathBuf::from(env::var("OUT_DIR").unwrap());
         println!("cargo:rerun-if-changed={}", input.display());
-        assert!(Command::new("as")
+        let mut assembler = Command::new("as");
+        if env::var_os("CARGO_FEATURE_SYSCALL_STACK_TEST").is_some() {
+            println!("cargo:rerun-if-changed=../tools/helios-probes/syscall-stack-control.inc");
+            assembler.args(["--defsym", "T1=1"]);
+        }
+        assert!(assembler
+            .current_dir(&root)
             .args(["--64", "-o"])
             .arg(out.join("scheduler-probe.o"))
             .arg(input)
@@ -75,6 +87,119 @@ fn main() {
             .status()
             .unwrap()
             .success());
+    }
+    if env::var_os("CARGO_FEATURE_SYSCALL_STACK_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let input = root.join("tools/helios-probes/syscall-linux-completion-probe.S");
+        println!("cargo:rerun-if-changed={}", input.display());
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("syscall-linux-completion.o"))
+            .arg(input)
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("syscall-linux-completion.elf"))
+            .arg(out.join("syscall-linux-completion.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    if env::var_os("CARGO_FEATURE_ATOMIC_FUTEX_TEST").is_some()
+        && env::var("PROFILE").as_deref() == Ok("debug")
+    {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed=../tools/helios-probes/atomic-futex-probe.rs");
+        assert!(
+            Command::new(env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
+                .arg(root.join("tools/helios-probes/atomic-futex-probe.rs"))
+                .args([
+                    "--edition=2021",
+                    "--target=x86_64-unknown-none",
+                    "-Cpanic=abort",
+                    "-Copt-level=2",
+                    "-Crelocation-model=static",
+                    "-Clink-arg=-Tservices/user-space.ld",
+                    "-o"
+                ])
+                .arg(out.join("t4a.elf"))
+                .current_dir(&root)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+    if env::var_os("CARGO_FEATURE_THREAD_MIGRATION_TEST").is_some()
+        && env::var("PROFILE").as_deref() == Ok("debug")
+    {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed=../tools/helios-probes/thread-migration-probe.S");
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("t3r.o"))
+            .arg(root.join("tools/helios-probes/thread-migration-probe.S"))
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("t3r.elf"))
+            .arg(out.join("t3r.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    println!("cargo:rerun-if-env-changed=SUNLIGHT_T2R_CASE");
+    println!("cargo:rerun-if-env-changed=SUNLIGHT_T2R_WINNER");
+    if env::var_os("CARGO_FEATURE_THREAD_LIFECYCLE_RACE_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed=../tools/helios-probes/thread-lifecycle-race-probe.S");
+        assert!(Command::new("as")
+            .args(["--64", "-o"])
+            .arg(out.join("t2r.o"))
+            .arg(root.join("tools/helios-probes/thread-lifecycle-race-probe.S"))
+            .status()
+            .unwrap()
+            .success());
+        assert!(Command::new("ld")
+            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+            .arg(out.join("t2r.elf"))
+            .arg(out.join("t2r.o"))
+            .status()
+            .unwrap()
+            .success());
+    }
+    if env::var_os("CARGO_FEATURE_THREAD_ADMISSION_TEST").is_some() {
+        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        println!("cargo:rerun-if-changed=../tools/helios-probes/thread-admission-probe.S");
+        for (name, linux) in [("t2-native", false), ("t2-linux", true)] {
+            let mut assembler = Command::new("as");
+            if linux {
+                assembler.args(["--defsym", "LINUX=1"]);
+            }
+            assert!(assembler
+                .arg("--64")
+                .arg(root.join("tools/helios-probes/thread-admission-probe.S"))
+                .arg("-o")
+                .arg(out.join(format!("{name}.o")))
+                .status()
+                .unwrap()
+                .success());
+            assert!(Command::new("ld")
+                .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+                .arg(out.join(format!("{name}.elf")))
+                .arg(out.join(format!("{name}.o")))
+                .status()
+                .unwrap()
+                .success());
+        }
     }
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing manifest dir"));
     let workspace_root = manifest_dir

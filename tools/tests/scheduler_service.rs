@@ -176,6 +176,11 @@ impl Scheduler {
 }
 mod arch {
     pub mod x86_64 {
+        // Host contexts have no hardware stack; T1's actual validator is run
+        // in the native matrix. Preserve the dispatch/accounting extraction.
+        pub mod syscall_stack {
+            pub fn validate(_: &crate::Process) {}
+        }
         pub mod interrupts {
             pub fn tsc_hz() -> u64 {
                 1_000_000_000

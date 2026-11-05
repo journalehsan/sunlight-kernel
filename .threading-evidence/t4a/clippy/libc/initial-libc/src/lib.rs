@@ -1,0 +1,892 @@
+#![no_std]
+
+//! Minimal userland libc for SunlightOS (the lucerna role in Luxos).
+//!
+//! Thin safe wrappers over the kernel's SYSCALL ABI: syscall number in `rax`,
+//! arguments in `rdi`/`rsi`/`rdx`, return value in `rax`. The raw ABI reserves
+//! the values immediately below `u64::MAX` for structured errors; callers see
+//! those through `Errno`, never as internal numeric diagnostics. Syscall
+//! numbers must stay in sync with `SunlightSyscall` in
+//! `kernel/src/arch/x86_64/syscall.rs`.
+
+// ── Core syscall layer ───────────────────────────────────────────────────────
+pub mod rand;
+pub mod sys;
+
+// ── libc extension modules ───────────────────────────────────────────────────
+
+/// Reclaiming userspace allocator plus C ABI malloc/free/realloc/calloc.
+/// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
+pub mod alloc;
+/// Program startup ABI documentation and raw argv helpers.
+pub mod crt0;
+/// Environment variable access via the SysV envp pointer.
+pub mod env;
+/// POSIX errno storage and `__errno_location()`.
+pub mod errno;
+/// File descriptor helpers: `lseek`, `fstat`, `isatty`.
+pub mod fd;
+/// Shared file-manager copy/move operations (requires an application allocator).
+#[cfg(any(test, feature = "file-ops"))]
+pub mod file_ops;
+/// Launch-trace argv parsing for GUI apps.
+pub mod launch_trace;
+/// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
+pub mod mem;
+/// POSIX memory mapping wrappers (`mmap`, `munmap`).
+pub mod mman;
+/// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
+pub mod power;
+pub mod secret_store;
+/// Strict, fail-closed configuration loader for the future SSH daemon.
+pub mod ssh_config;
+#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+pub mod std_runtime;
+/// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
+pub mod string;
+/// Canonical user-space app launch resolution and tracing.
+pub mod sun_exec;
+/// Global file-open resolver (extension MIME + default app associations).
+pub mod sun_open;
+/// Native thread spawning.
+pub mod thread;
+/// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
+pub mod time;
+/// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
+pub mod tls;
+
+pub use rand::{getrandom, GRND_NONCRYPTO};
+pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};
+
+/// A userland file descriptor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fd(pub u32);
+
+pub const STDIN: Fd = Fd(0);
+pub const STDOUT: Fd = Fd(1);
+pub const STDERR: Fd = Fd(2);
+
+/// Maximum path length accepted by kernel `read_user_cstr` callers.
+pub const MAX_PATH: usize = 256;
+/// Maximum argv entries the kernel reads in `sys_exec` (one slot is the NULL).
+pub const MAX_ARGS: usize = 15;
+const ARG_ARENA: usize = 1024;
+pub const O_RDONLY: u64 = 0x0;
+pub const O_WRONLY: u64 = 0x1;
+pub const O_RDWR: u64 = 0x2;
+pub const O_CREAT: u64 = 0x40;
+pub const O_EXCL: u64 = 0x80;
+pub const O_TRUNC: u64 = 0x200;
+pub const O_APPEND: u64 = 0x400;
+pub const O_NOFOLLOW: u64 = 0x0002_0000;
+pub const O_CLOEXEC: u64 = 0x0008_0000;
+const SPAWN_STDIO_EXTENSION: u64 = sunlight_ipc::spawn_env::STDIO_EXTENSION;
+pub const SEEK_SET: i32 = 0;
+pub const SEEK_CUR: i32 = 1;
+pub const SEEK_END: i32 = 2;
+
+/// Copy `bytes` into `buf` as a NUL-terminated C string.
+fn cstr<'a>(buf: &'a mut [u8], bytes: &[u8]) -> Result<*const u8, Errno> {
+    if bytes.is_empty() || bytes.contains(&0) {
+        return Err(Errno::Inval);
+    }
+    if bytes.len() >= buf.len() {
+        return Err(Errno::TooBig);
+    }
+    buf[..bytes.len()].copy_from_slice(bytes);
+    buf[bytes.len()] = 0;
+    Ok(buf.as_ptr())
+}
+
+/// Open a file by absolute path. Flags/mode are reserved (pass 0 in the ABI).
+pub fn open(path: &[u8]) -> Result<Fd, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, 0, 0) };
+    checked_fd(ret)
+}
+
+pub fn open_with_flags_mode(path: &[u8], flags: u64, mode: u16) -> Result<Fd, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall3(sys::SYS_OPEN, path_ptr as u64, flags, mode as u64) };
+    checked_fd(ret)
+}
+
+pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
+    open_with_flags_mode(path, flags, 0)
+}
+
+pub fn create(path: &[u8]) -> Result<Fd, Errno> {
+    open_with_flags_mode(path, O_WRONLY | O_CREAT, 0o644)
+}
+
+pub fn close(fd: Fd) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_CLOSE, fd.0 as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn dup(fd: Fd) -> Result<Fd, Errno> {
+    checked_fd(unsafe { sys::syscall1(sys::SYS_DUP, fd.0 as u64) })
+}
+
+pub fn dup2(old: Fd, new: Fd) -> Result<Fd, Errno> {
+    checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) })
+}
+
+/// Read the process CWD into a caller-owned, kernel-sized path buffer.
+///
+/// Path resolution remains a kernel responsibility. This wrapper only
+/// marshals the bounded output buffer and validates the kernel's returned
+/// pointer and NUL termination; it does not normalize `.`/`..` or slashes.
+pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_GETCWD, buf.as_mut_ptr() as u64, buf.len() as u64) };
+    let returned = sys::check(ret)?;
+    if returned != buf.as_mut_ptr() as u64 {
+        return Err(Errno::Failed);
+    }
+    bounded_cwd_len(buf)
+}
+
+/// Change the current process CWD using the kernel's path-resolution contract.
+/// The path is bounded and NUL-checked here; `.`/`..` resolution remains in the kernel.
+pub fn chdir(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_CHDIR, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+fn bounded_cwd_len(buf: &[u8]) -> Result<usize, Errno> {
+    let Some(len) = buf.iter().position(|&byte| byte == 0) else {
+        return Err(Errno::TooBig);
+    };
+    if len == 0 {
+        return Err(Errno::Failed);
+    }
+    Ok(len)
+}
+
+pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+    if buf.len() > sys::MAX_IO_COUNT {
+        return Err(Errno::TooBig);
+    }
+    let ret = unsafe {
+        sys::syscall3(
+            sys::SYS_READ,
+            fd.0 as u64,
+            buf.as_mut_ptr() as u64,
+            buf.len() as u64,
+        )
+    };
+    sys::check_io_count(ret, buf.len())
+}
+
+pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
+    if buf.len() > sys::MAX_IO_COUNT {
+        return Err(Errno::TooBig);
+    }
+    let ret = unsafe {
+        sys::syscall3(
+            sys::SYS_WRITE,
+            fd.0 as u64,
+            buf.as_ptr() as u64,
+            buf.len() as u64,
+        )
+    };
+    sys::check_io_count(ret, buf.len())
+}
+
+pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {
+    let ret = unsafe { sys::syscall3(sys::SYS_LSEEK, fd.0 as u64, offset as u64, whence as u64) };
+    let position = sys::check(ret)?;
+    if position > i64::MAX as u64 {
+        return Err(Errno::Failed);
+    }
+    Ok(position)
+}
+
+pub fn fstat(fd: Fd) -> Result<Stat, Errno> {
+    let mut out = Stat::zeroed();
+    let ret = unsafe { sys::syscall2(sys::SYS_FSTAT, fd.0 as u64, (&mut out as *mut Stat) as u64) };
+    sys::check(ret).map(|_| out)
+}
+
+/// Replace the current process image. On success the kernel switches to the
+/// new image at the next reschedule, so a `Ok(())` return means "accepted".
+pub fn exec(path: &[u8], argv: &[&[u8]]) -> Result<(), Errno> {
+    if argv.len() > MAX_ARGS {
+        return Err(Errno::TooBig);
+    }
+
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+
+    // argv strings packed into one arena, pointer table NULL-terminated.
+    let mut arena = [0u8; ARG_ARENA];
+    let mut ptrs = [core::ptr::null::<u8>(); MAX_ARGS + 1];
+    let mut used = 0usize;
+    for (i, arg) in argv.iter().enumerate() {
+        let end = used + arg.len() + 1;
+        if end > arena.len() || arg.contains(&0) {
+            return Err(Errno::TooBig);
+        }
+        arena[used..used + arg.len()].copy_from_slice(arg);
+        arena[end - 1] = 0;
+        ptrs[i] = arena[used..].as_ptr();
+        used = end;
+    }
+
+    let ret = unsafe { sys::syscall3(sys::SYS_EXEC, path_ptr as u64, ptrs.as_ptr() as u64, 0) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn getpid() -> u64 {
+    unsafe { sys::syscall0(sys::SYS_GETPID) }
+}
+
+pub fn getuid() -> u64 {
+    unsafe { sys::syscall0(sys::SYS_GETUID) }
+}
+
+pub fn getgid() -> u64 {
+    unsafe { sys::syscall0(sys::SYS_GETGID) }
+}
+
+pub fn getnice(pid: u64) -> Result<i8, Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_GETNICE, pid) };
+    let value = sys::check(ret)? as i64;
+    if (-10..=10).contains(&value) {
+        Ok(value as i8)
+    } else {
+        Err(Errno::Failed)
+    }
+}
+
+pub fn setnice(pid: u64, nice: i8) -> Result<i8, Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_SETNICE, pid, nice as i64 as u64) };
+    let value = sys::check(ret)? as i64;
+    if (-10..=10).contains(&value) {
+        Ok(value as i8)
+    } else {
+        Err(Errno::Failed)
+    }
+}
+
+/// Yield the CPU to the scheduler.
+pub fn yield_now() {
+    unsafe {
+        sys::syscall0(sys::SYS_PROCESS_YIELD);
+    }
+}
+
+/// One directory entry as returned by the ReadDir syscall (80 bytes,
+/// layout shared with `sys_readdir` in the kernel).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DirEntry {
+    pub name: [u8; 64],
+    pub name_len: u8,
+    pub file_type: u8,
+    _pad: [u8; 6],
+    pub size: u64,
+}
+
+pub const FT_FILE: u8 = 1;
+pub const FT_DIR: u8 = 2;
+
+impl DirEntry {
+    pub const fn zeroed() -> Self {
+        Self {
+            name: [0; 64],
+            name_len: 0,
+            file_type: 0,
+            _pad: [0; 6],
+            size: 0,
+        }
+    }
+
+    pub fn name_bytes(&self) -> &[u8] {
+        &self.name[..(self.name_len as usize).min(64)]
+    }
+}
+
+/// File metadata as returned by the StatPath syscall (24 bytes, layout
+/// shared with `sys_stat_path` in the kernel).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Stat {
+    pub size: u64,
+    pub uid: u32,
+    pub gid: u32,
+    pub mode: u16,
+    pub file_type: u8,
+    _pad: u8,
+    pub nlinks: u32,
+}
+
+impl Stat {
+    pub const fn zeroed() -> Self {
+        Self {
+            size: 0,
+            uid: 0,
+            gid: 0,
+            mode: 0,
+            file_type: 0,
+            _pad: 0,
+            nlinks: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SysInfo {
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub uptime_secs: u64,
+    pub unix_time: u64,
+    pub swap_total_kb: u64,
+    pub swap_used_kb: u64,
+    pub swap_compressed_kb: u64,
+}
+
+/// List a directory into `entries`; returns how many were filled.
+pub fn read_dir(path: &[u8], entries: &mut [DirEntry]) -> Result<usize, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe {
+        sys::syscall3(
+            sys::SYS_READDIR,
+            path_ptr as u64,
+            entries.as_mut_ptr() as u64,
+            core::mem::size_of_val(entries) as u64,
+        )
+    };
+    sys::check(ret).map(|n| n as usize)
+}
+
+/// Read a page of directory entries starting at an entry offset.
+/// A page holds at most 64 entries; callers continue until an empty page.
+pub fn read_dir_from(path: &[u8], entries: &mut [DirEntry], offset: usize) -> Result<usize, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe {
+        sys::syscall4(
+            sys::SYS_READDIR_FROM,
+            path_ptr as u64,
+            entries.as_mut_ptr() as u64,
+            core::mem::size_of_val(entries) as u64,
+            offset as u64,
+        )
+    };
+    sys::check(ret).map(|n| n as usize)
+}
+
+/// Atomically move within a mounted filesystem without replacing any entry.
+pub fn rename_no_replace(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+    let mut old_buf = [0u8; MAX_PATH];
+    let mut new_buf = [0u8; MAX_PATH];
+    let old_ptr = cstr(&mut old_buf, old)?;
+    let new_ptr = cstr(&mut new_buf, new)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_RENAME_NO_REPLACE, old_ptr as u64, new_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+/// Reserve backing storage for an expected final file size without changing
+/// the visible length. This avoids fragmented growth for large RAMFS copies.
+pub fn file_reserve(fd: Fd, size: usize) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_FILE_RESERVE, fd.0 as u64, size as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+/// Force content and metadata for an open file to stable media.
+pub fn file_sync(fd: Fd) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall1(sys::SYS_FILE_SYNC, fd.0 as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+/// Force directory-entry changes for `path` to stable media.
+pub fn dir_sync(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_DIR_SYNC, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn stat(path: &[u8]) -> Result<Stat, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let mut out = Stat {
+        size: 0,
+        uid: 0,
+        gid: 0,
+        mode: 0,
+        file_type: 0,
+        _pad: 0,
+        nlinks: 0,
+    };
+    let ret = unsafe {
+        sys::syscall3(
+            sys::SYS_STAT,
+            path_ptr as u64,
+            (&mut out as *mut Stat) as u64,
+            0,
+        )
+    };
+    sys::check(ret).map(|_| out)
+}
+
+pub fn mkdir(path: &[u8], mode: u16) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall3(sys::SYS_MKDIR, path_ptr as u64, mode as u64, 0) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn unlink(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_UNLINK, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn rename(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+    let mut old_buf = [0u8; MAX_PATH];
+    let mut new_buf = [0u8; MAX_PATH];
+    let old_ptr = cstr(&mut old_buf, old)?;
+    let new_ptr = cstr(&mut new_buf, new)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_RENAME, old_ptr as u64, new_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn chmod(path: &[u8], mode: u16) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_CHMOD, path_ptr as u64, mode as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall3(sys::SYS_CHOWN, path_ptr as u64, uid as u64, gid as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub(crate) fn secret_create_temp(path: &[u8], mode: u16) -> Result<Fd, Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall2(sys::SYS_SECRET_CREATE, path_ptr as u64, mode as u64) };
+    checked_fd(ret)
+}
+
+pub(crate) fn secret_publish(
+    temporary: &[u8],
+    destination: &[u8],
+    mode: u16,
+    replace: bool,
+) -> Result<(), Errno> {
+    let mut temporary_buf = [0u8; MAX_PATH];
+    let mut destination_buf = [0u8; MAX_PATH];
+    let temporary_ptr = cstr(&mut temporary_buf, temporary)?;
+    let destination_ptr = cstr(&mut destination_buf, destination)?;
+    let ret = unsafe {
+        sys::syscall4(
+            sys::SYS_SECRET_PUBLISH,
+            temporary_ptr as u64,
+            destination_ptr as u64,
+            mode as u64,
+            replace as u64,
+        )
+    };
+    sys::check(ret).map(|_| ())
+}
+
+pub(crate) fn secret_remove_temp(path: &[u8]) -> Result<(), Errno> {
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+    let ret = unsafe { sys::syscall1(sys::SYS_SECRET_REMOVE_TEMP, path_ptr as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn sysinfo() -> Result<SysInfo, Errno> {
+    let mut raw = [0u64; 7];
+    let ret = unsafe { sys::syscall1(sys::SYS_SYSINFO, raw.as_mut_ptr() as u64) };
+    sys::check(ret).map(|_| SysInfo {
+        total_ram_kb: raw[0],
+        used_ram_kb: raw[1],
+        uptime_secs: raw[2],
+        unix_time: raw[3],
+        swap_total_kb: raw[4],
+        swap_used_kb: raw[5],
+        swap_compressed_kb: raw[6],
+    })
+}
+
+/// Swap out a caller-owned anonymous range through the normal MM lifecycle.
+pub fn freezram_fill(
+    start_address: *mut u8,
+    requested_pages: u64,
+) -> Result<sunlight_ipc::swap_policy::FillDiagnostics, Errno> {
+    let mut result = sunlight_ipc::swap_policy::FillDiagnostics::default();
+    let ret = unsafe {
+        sys::syscall6(
+            sys::SYS_SWAPCTL,
+            0,
+            start_address as u64,
+            requested_pages,
+            (&mut result as *mut sunlight_ipc::swap_policy::FillDiagnostics) as u64,
+            core::mem::size_of::<sunlight_ipc::swap_policy::FillDiagnostics>() as u64,
+            0,
+        )
+    };
+    sys::check(ret).map(|_| result)
+}
+
+/// Create an anonymous pipe; returns (read_end, write_end).
+pub fn pipe() -> Result<(Fd, Fd), Errno> {
+    let mut fds = [0i32; 2];
+    let ret = unsafe { sys::syscall1(sys::SYS_PIPE, fds.as_mut_ptr() as u64) };
+    sys::check(ret)?;
+    if fds[0] < 0 || fds[1] < 0 {
+        return Err(Errno::Failed);
+    }
+    Ok((Fd(fds[0] as u32), Fd(fds[1] as u32)))
+}
+
+/// Native readiness for 1 to 3 pipe readers. Timeout must be 0 or -1.
+/// A negative timeout parks until a descriptor
+/// becomes ready; the kernel registers the wait under the producer's lock.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PollFd {
+    pub fd: i32,
+    pub events: i16,
+    pub revents: i16,
+}
+pub fn poll(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, Errno> {
+    let result = unsafe {
+        sys::syscall3(
+            sys::SYS_POLL,
+            fds.as_mut_ptr() as u64,
+            fds.len() as u64,
+            timeout_ms as u64,
+        )
+    };
+    sys::check(result).map(|n| n as usize)
+}
+
+fn checked_fd(ret: u64) -> Result<Fd, Errno> {
+    let fd = sys::check(ret)?;
+    let fd = u32::try_from(fd).map_err(|_| Errno::Failed)?;
+    // Native descriptors are signed `int`s at the ABI boundary.  Reject a
+    // malformed high-bit value instead of turning it into an invalid `Fd`.
+    if fd > i32::MAX as u32 {
+        return Err(Errno::Failed);
+    }
+    Ok(Fd(fd))
+}
+
+/// Create a pseudo-terminal pair by asking `pty_server` for a fresh session.
+///
+/// Returns `(master_cap, slave_cap)`:
+/// - `master_cap` is used by the GUI terminal emulator.
+/// - `slave_cap` is the endpoint `sshl` should attach to as its stdio.
+///
+/// The current IPC transport can carry two capability tokens in the reply
+/// message, which is enough for the PTY broker to hand out both ends without
+/// a second round trip.
+pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::CapabilityToken), Errno> {
+    let Some(pty_cap) = sunlight_ipc::nameserver_lookup_timeout("pty", 100) else {
+        return Err(Errno::Again);
+    };
+
+    let req = sunlight_ipc::IpcMsg::with_label(sunlight_ipc::PtyMsg::CREATE).word(
+        0,
+        sunlight_ipc::PtyMsg::FLAG_CANONICAL | sunlight_ipc::PtyMsg::FLAG_ECHO,
+    );
+    let reply = match sunlight_ipc::ipc_call_timeout(pty_cap, req, 1000) {
+        Ok(reply) => reply,
+        Err(
+            sunlight_ipc::IpcCallError::Timeout
+            | sunlight_ipc::IpcCallError::QueueFull
+            | sunlight_ipc::IpcCallError::Cancelled,
+        ) => return Err(Errno::Again),
+        Err(sunlight_ipc::IpcCallError::PeerClosed) => return Err(Errno::Failed),
+        Err(_) => return Err(Errno::Failed),
+    };
+
+    if reply.label != sunlight_ipc::PtyMsg::REPLY
+        || reply.cap_count < 2
+        || reply.caps[0] == sunlight_ipc::CapabilityToken::INVALID
+        || reply.caps[1] == sunlight_ipc::CapabilityToken::INVALID
+    {
+        return Err(Errno::Failed);
+    }
+
+    Ok((reply.caps[0], reply.caps[1]))
+}
+
+/// Return the calling process's authoritative controlling-terminal geometry.
+/// Native TUI applications and Helios `TIOCGWINSZ` consume the same
+/// generation-qualified kernel cache published by `pty_server`.
+pub fn terminal_winsize() -> Option<sunlight_ipc::TerminalWinsize> {
+    sunlight_ipc::tty_winsize()
+}
+
+/// Spawn a new process running `path` (posix_spawn-style). `stdout` becomes
+/// the child's fd 1 when given (e.g. a pipe write end). Returns the child pid.
+pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Errno> {
+    spawn_with_stdio(path, argv, None, stdout, None)
+}
+
+/// Spawn while optionally wiring the child's standard descriptors from
+/// descriptors owned by the caller. Omitted descriptors keep normal TTY
+/// inheritance behavior. Descriptor slots are duplicated into the child.
+pub fn spawn_with_stdio(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+) -> Result<u64, Errno> {
+    spawn_impl(path, argv, stdin, stdout, stderr, None)
+}
+
+/// Spawn with a complete replacement environment, leaving the caller's process
+/// environment unchanged. `environment` is a bounded UTF-8 KEY=VALUE\0 blob;
+/// an empty slice supplies an empty environment. Invalid/duplicate names are
+/// rejected before the syscall. Credentials and capabilities remain inherited.
+pub fn spawn_with_stdio_env(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+    environment: &[u8],
+) -> Result<u64, Errno> {
+    use sunlight_ipc::spawn_env::{validate, EnvironmentError};
+    validate(environment).map_err(|e| match e {
+        EnvironmentError::TooLarge => Errno::TooBig,
+        _ => Errno::Inval,
+    })?;
+    spawn_impl(path, argv, stdin, stdout, stderr, Some(environment))
+}
+
+fn spawn_impl(
+    path: &[u8],
+    argv: &[&[u8]],
+    stdin: Option<Fd>,
+    stdout: Option<Fd>,
+    stderr: Option<Fd>,
+    environment: Option<&[u8]>,
+) -> Result<u64, Errno> {
+    if argv.len() > MAX_ARGS {
+        return Err(Errno::TooBig);
+    }
+
+    let mut path_buf = [0u8; MAX_PATH];
+    let path_ptr = cstr(&mut path_buf, path)?;
+
+    let mut arena = [0u8; ARG_ARENA];
+    let mut ptrs = [core::ptr::null::<u8>(); MAX_ARGS + 1];
+    let mut used = 0usize;
+    for (i, arg) in argv.iter().enumerate() {
+        let end = used + arg.len() + 1;
+        if end > arena.len() || arg.contains(&0) {
+            return Err(Errno::TooBig);
+        }
+        arena[used..used + arg.len()].copy_from_slice(arg);
+        arena[end - 1] = 0;
+        ptrs[i] = arena[used..].as_ptr();
+        used = end;
+    }
+
+    let stdin_arg = stdin.map_or(u64::MAX, |fd| fd.0 as u64);
+    let stdout_arg = stdout.map_or(u64::MAX, |fd| fd.0 as u64);
+    let stderr_arg = stderr.map_or(u64::MAX, |fd| fd.0 as u64);
+    let transport = sunlight_ipc::spawn_env::SpawnEnvironment {
+        argv: ptrs.as_ptr() as u64,
+        bytes: environment.map_or(0, |blob| blob.as_ptr() as u64),
+        len: environment.map_or(0, |blob| blob.len() as u64),
+    };
+    let (arguments, extension) = if environment.is_some() {
+        (
+            &transport as *const _ as u64,
+            sunlight_ipc::spawn_env::ENV_EXTENSION,
+        )
+    } else {
+        (ptrs.as_ptr() as u64, SPAWN_STDIO_EXTENSION)
+    };
+    let ret = unsafe {
+        sys::syscall6(
+            sys::SYS_SPAWN,
+            path_ptr as u64,
+            arguments,
+            stdout_arg,
+            stdin_arg,
+            stderr_arg,
+            extension,
+        )
+    };
+    sys::check(ret)
+}
+
+/// Non-blocking wait: Ok(Some(code)) once the child exited, Ok(None) while
+/// it is still running, Err for unknown pid.
+pub fn try_waitpid(pid: u64) -> Result<Option<u64>, Errno> {
+    let ret = unsafe {
+        sys::syscall2(
+            sys::SYS_WAITPID,
+            pid,
+            sunlight_ipc::WAITPID_NOHANG_EXTENSION,
+        )
+    };
+    match sys::check(ret) {
+        Ok(code) => Ok(Some(code)),
+        Err(Errno::Again) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// Blocking wait using the kernel's parked child wait. Keep this separate from
+/// the nonblocking probe so synchronous executors do not poll a live child.
+pub fn waitpid(pid: u64) -> Result<u64, Errno> {
+    loop {
+        let ret = unsafe { sys::syscall2(sys::SYS_WAITPID, pid, 0) };
+        match sys::check(ret) {
+            Ok(code) => return Ok(code),
+            Err(Errno::Again) => yield_now(),
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+pub fn kill(pid: u64, sig: u32) -> Result<(), Errno> {
+    let ret = unsafe { sys::syscall2(sys::SYS_KILL, pid, sig as u64) };
+    sys::check(ret).map(|_| ())
+}
+
+pub fn map_telemetry() -> Result<*const u8, Errno> {
+    let ret = unsafe { sys::syscall0(sys::SYS_MAP_TELEMETRY) };
+    sys::check(ret).map(|addr| addr as *const u8)
+}
+
+/// Write all bytes in `buf` to `fd`, looping over partial writes and retrying
+/// transient `EAGAIN` results.
+pub fn write_all(fd: Fd, buf: &[u8]) -> Result<(), Errno> {
+    write_all_with(buf, |chunk| write(fd, chunk), || yield_now())
+}
+
+fn write_all_with<W, Y>(mut buf: &[u8], mut write_once: W, mut retry: Y) -> Result<(), Errno>
+where
+    W: FnMut(&[u8]) -> Result<usize, Errno>,
+    Y: FnMut(),
+{
+    while !buf.is_empty() {
+        match write_once(buf) {
+            Ok(n) => {
+                if n == 0 {
+                    return Err(Errno::Failed);
+                }
+                buf = &buf[n..];
+            }
+            Err(Errno::Again) => retry(),
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod write_all_tests {
+    use super::*;
+
+    #[test]
+    fn retries_again_and_handles_partial_writes() {
+        let mut calls = 0;
+        let mut retries = 0;
+        let mut received = [0u8; 5];
+        let mut received_len = 0;
+        let result = write_all_with(
+            b"hello",
+            |chunk| {
+                calls += 1;
+                if calls == 1 {
+                    return Err(Errno::Again);
+                }
+                let count = chunk.len().min(2);
+                received[received_len..received_len + count].copy_from_slice(&chunk[..count]);
+                received_len += count;
+                Ok(count)
+            },
+            || retries += 1,
+        );
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(retries, 1);
+        assert_eq!(&received[..received_len], b"hello");
+    }
+
+    #[test]
+    fn preserves_non_retryable_write_errors() {
+        let result = write_all_with(b"x", |_| Err(Errno::Failed), || {});
+        assert_eq!(result, Err(Errno::Failed));
+    }
+}
+
+#[cfg(test)]
+mod fd_contract_tests {
+    use super::*;
+
+    #[test]
+    fn path_marshalling_rejects_empty_embedded_nul_and_too_long_paths() {
+        let mut storage = [0u8; MAX_PATH];
+        assert_eq!(cstr(&mut storage, b""), Err(Errno::Inval));
+        assert_eq!(cstr(&mut storage, b"a\0b"), Err(Errno::Inval));
+        assert_eq!(cstr(&mut storage, &[b'x'; MAX_PATH]), Err(Errno::TooBig));
+        assert!(cstr(&mut storage, &[b'x'; MAX_PATH - 1]).is_ok());
+    }
+
+    #[test]
+    fn descriptor_results_are_never_narrowed() {
+        assert_eq!(checked_fd(7), Ok(Fd(7)));
+        assert_eq!(checked_fd(u32::MAX as u64), Err(Errno::Failed));
+        assert_eq!(checked_fd(u64::MAX), Err(Errno::Failed));
+    }
+
+    #[test]
+    fn cwd_result_requires_a_nonempty_nul_terminated_path() {
+        assert_eq!(bounded_cwd_len(b"/\0unused"), Ok(1));
+        assert_eq!(bounded_cwd_len(b"/etc/sunlight\0"), Ok(13));
+        assert_eq!(bounded_cwd_len(b""), Err(Errno::TooBig));
+        assert_eq!(bounded_cwd_len(b"\0"), Err(Errno::Failed));
+        assert_eq!(bounded_cwd_len(&[b'x'; MAX_PATH]), Err(Errno::TooBig));
+    }
+}
+
+/// Create all missing directory components of `path` (create_dir_all semantics).
+/// Failures on intermediate components are silently ignored (they likely exist).
+pub fn mkdir_recursive(path: &[u8]) -> Result<(), Errno> {
+    if path.is_empty() {
+        return Err(Errno::Inval);
+    }
+    let mut i = 1usize;
+    while i <= path.len() {
+        if i == path.len() || path[i] == b'/' {
+            let _ = mkdir(&path[..i], 0o755);
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+pub fn exit(code: u64) -> ! {
+    unsafe {
+        sys::syscall1(sys::SYS_PROCESS_EXIT, code);
+    }
+    // The kernel never returns from ProcessExit; satisfy the type system.
+    loop {
+        core::hint::spin_loop();
+    }
+}

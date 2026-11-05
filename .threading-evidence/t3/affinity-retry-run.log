@@ -1,0 +1,22 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161639.253728Z-suite-linux
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161639.590868Z-linux-build
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161648.414583Z-linux-freeze
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161649.170416Z-linux-iso
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161650.489949Z-linux-abi
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161651.061364Z-linux-1cpu
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161651.061173Z-linux-2cpu
+PASS
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161736.962656Z-linux-4cpu
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161737.212180Z-linux-12cpu
+PASS
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161824.624172Z-affinity-sparse
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261105T161824.621000Z-affinity-high
+PASS
+PASS
+[('sparse', 0), ('high', 0)]

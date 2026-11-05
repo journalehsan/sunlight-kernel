@@ -1,0 +1,15 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "sunlight-compat-linux",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2507608649902977
+}

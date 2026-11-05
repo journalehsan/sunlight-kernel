@@ -1,0 +1,36 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225726.763724Z-canonical-t1
+PASS
+canonical-t1 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T225859.847335Z-remote-wake
+PASS
+remote-wake 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230107.983423Z-handoff
+PASS
+handoff 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230328.208950Z-doorbell
+PASS
+doorbell 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230612.076554Z-tlb-build
+PASS
+tlb-build 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230644.585511Z-tlb-freeze
+PASS
+tlb-freeze 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230645.985168Z-tlb-iso
+PASS
+tlb-iso 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230650.744864Z-tlb-standard
+PASS
+tlb standard 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230737.377426Z-tlb-sparse
+PASS
+tlb sparse 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230813.885890Z-tlb-high
+PASS
+tlb high 0
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230848.928195Z-ordinary-debug-clippy
+FAIL
+ordinary-debug-clippy 1
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230923.397705Z-canonical-production
+PASS
+canonical-production 0

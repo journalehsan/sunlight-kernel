@@ -1,0 +1,41 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_compat_linux-1ca0c73760af0d74)
+
+running 29 tests
+test abi::tests::errno_encoding_is_negative_linux_errno ... ok
+test abi::tests::native_sentinels_do_not_masquerade_as_linux_errno ... ok
+test affinity::tests::current_online_cpu_mask_and_raw_return_size ... ok
+test affinity::tests::rejects_small_or_misaligned_buffer ... ok
+test abi::tests::linux_syscall_numbers_match_x86_64 ... ok
+test abi::winsize_tests::linux_geometry_probe_has_exact_x86_64_layout ... ok
+test clone::tests::observed_flags_decode_to_linux_thread_resources ... ok
+test clone::tests::validation_accepts_independent_optional_thread_features ... ok
+test clone::tests::validation_rejects_broken_dependencies_and_exit_signals ... ok
+test clone::tests::validation_rejects_unsupported_process_and_namespace_flags ... ok
+test eventfd::tests::eventfd_create_zero_and_initial_value ... ok
+test eventfd::tests::eventfd_duplicate_shared_state_and_close_lifetime ... ok
+test eventfd::tests::eventfd_invalid_flags_and_write_value ... ok
+test eventfd::tests::eventfd_overflow_and_writable_readiness ... ok
+test eventfd::tests::eventfd_read_resets_and_write_accumulates ... ok
+test eventfd::tests::eventfd_semaphore_read_one ... ok
+test eventfd::tests::pooled_eventfd_duplicate_survives_first_close ... ok
+test madvise::tests::observed_advice_and_rounding ... ok
+test madvise::tests::rejects_misalignment_unknown_advice_and_overflow ... ok
+test open_flags::tests::open_accepts_largefile_readonly ... ok
+test open_flags::tests::open_creation_flags_do_not_leak_into_getfl ... ok
+test open_flags::tests::open_directory_constraints_remain_visible_in_getfl ... ok
+test open_flags::tests::open_largefile_preserves_cloexec_separately ... ok
+test open_flags::tests::open_rejects_unknown_and_unsupported_flags ... ok
+test tests::basic_syscalls_translate ... ok
+test tests::intercepted_open_follows_rules ... ok
+test tests::mmap_flags_accept_linux_stack_advice_without_weakening_contract ... ok
+test tests::special_handling_is_flagged ... ok
+test tests::unsupported_returns_enosys ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

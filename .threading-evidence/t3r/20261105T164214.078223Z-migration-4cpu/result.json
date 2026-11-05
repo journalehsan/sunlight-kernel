@@ -1,0 +1,45 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "4249fea473b85e515b657e6462096dcbf5e86e8a426003d68a76ca9ababcaa50",
+  "cpus": 4,
+  "markers": [
+    "[T3R] PASS"
+  ],
+  "topology": "standard",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164126.157853Z-migration/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164214.078223Z-migration-4cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "observed_apic_ids": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "0557527f4740fcb1d0bf98c9d61c774a2028588eb6235f194b7c18f0e04d806d",
+  "seconds": 22.78894046798814
+}

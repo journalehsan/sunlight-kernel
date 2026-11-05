@@ -1,0 +1,38 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "447c6960e86e642a350f91618cd6e4516b9cade296da1ba4bf61b4d85f2cd69b",
+  "cpus": 12,
+  "markers": [
+    "[T1] PASS",
+    "[SCHED-B] PASS cpus=12 "
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "12",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/atomic-controls/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T141900.508012Z-atomic-12cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "serial_sha256": "32d540c6ac9d8eb40ec82fb9163df323a00413175908adf0c61b20e4577558c4",
+  "seconds": 35.83796345198061
+}

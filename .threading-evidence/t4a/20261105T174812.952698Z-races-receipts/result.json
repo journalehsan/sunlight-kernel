@@ -1,0 +1,18 @@
+{
+  "timeout": false,
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools",
+    "-p",
+    "test_threading_t4a.py",
+    "-v"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 0.5198973490041681
+}

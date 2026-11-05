@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "env",
+    "SUNLIGHT_INJECT_PHASE=native-std",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--no-default-features",
+    "--features",
+    "key_inject,native_std_probe",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 20.765006835004897
+}

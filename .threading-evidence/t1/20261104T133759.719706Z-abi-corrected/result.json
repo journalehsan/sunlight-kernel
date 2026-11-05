@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/check_syscall_stack_abi.py",
+    ".threading-evidence/t1/images/pilot/kernel.elf"
+  ],
+  "exit_code": 0,
+  "seconds": 0.25057824100076687
+}

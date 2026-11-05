@@ -1,0 +1,102 @@
+[
+  {
+    "suite": "admission",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "admission"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "t1",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "t1"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "auth",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "auth"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "linux",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "linux"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "fp",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "fp"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "std",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "std"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "pin-r2d",
+    "command": [
+      "python3",
+      "tools/test_remote_wake_smp.py",
+      "--pin-r2d",
+      "--cpus",
+      "1",
+      "2",
+      "4",
+      "12",
+      "--timeout",
+      "180",
+      "--evidence-dir",
+      ".threading-evidence/t2/final-pin-r2d"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "doorbell",
+    "command": [
+      "python3",
+      "tools/test_native_doorbell.py",
+      "--cpus",
+      "1",
+      "2",
+      "4",
+      "12",
+      "--timeout",
+      "180",
+      "--evidence-dir",
+      ".threading-evidence/t2/final-doorbell"
+    ],
+    "exit_code": 0
+  },
+  {
+    "suite": "production",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "production",
+      "--cpus",
+      "2"
+    ],
+    "exit_code": 0
+  }
+]

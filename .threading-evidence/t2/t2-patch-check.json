@@ -1,0 +1,13 @@
+{
+  "command": [
+    "git",
+    "-C",
+    "/tmp/t2-patch-check-sptwj740",
+    "apply",
+    "--check",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/final/t2.patch"
+  ],
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": ""
+}

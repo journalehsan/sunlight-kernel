@@ -1,0 +1,67 @@
+--- validated/kernel/src/arch/x86_64/smp.rs
++++ kernel/src/arch/x86_64/smp.rs
+@@ -130,8 +130,12 @@
+             continue;
+         }
+ 
+-        let logical = super::cpu_identity::topology().logical_id(cpu_info.lapic_id).expect("unmapped AP");
+-        let slot = super::cpu_identity::topology().ap_slot(logical).expect("BSP in AP startup");
++        let logical = super::cpu_identity::topology()
++            .logical_id(cpu_info.lapic_id)
++            .expect("unmapped AP");
++        let slot = super::cpu_identity::topology()
++            .ap_slot(logical)
++            .expect("BSP in AP startup");
+         assert_eq!(slot, ap_idx, "AP startup ownership mismatch");
+ 
+         let stack_top: u64 = unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
+@@ -178,7 +182,9 @@
+     if cpu_id == 0 {
+         crate::arch::x86_64::interrupts::set_tss_rsp0(stack_top);
+     } else {
+-        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
++        let ap_idx = super::cpu_identity::topology()
++            .ap_slot(cpu_id)
++            .expect("invalid AP TSS owner");
+         if ap_idx < MAX_APS {
+             unsafe {
+                 AP_TSS_STORE[ap_idx].privilege_stack_table[0] = VirtAddr::new(stack_top);
+@@ -192,7 +198,9 @@
+     if cpu_id == 0 {
+         crate::arch::x86_64::interrupts::current_tss_rsp0()
+     } else {
+-        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
++        let ap_idx = super::cpu_identity::topology()
++            .ap_slot(cpu_id)
++            .expect("invalid AP TSS owner");
+         if ap_idx < MAX_APS {
+             unsafe { AP_TSS_STORE[ap_idx].privilege_stack_table[0].as_u64() }
+         } else {
+--- validated/kernel/src/sched/doorbell_test.rs
++++ kernel/src/sched/doorbell_test.rs
+@@ -606,7 +606,10 @@
+     }
+     unsafe { crate::arch::x86_64::lapic::mask_timer_for_remote_wake_test() };
+     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+-        assert_eq!(Some(crate::arch::x86_64::lapic::local_apic_id()), crate::arch::x86_64::cpu_identity::topology().apic_id(cpu));
++        assert_eq!(
++            Some(crate::arch::x86_64::lapic::local_apic_id()),
++            crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
++        );
+         serial_println!(
+             "[F13NA] cpu cpu={} apic={} timer=masked",
+             cpu,
+--- validated/kernel/src/sched/pin_release_test.rs
++++ kernel/src/sched/pin_release_test.rs
+@@ -223,7 +223,10 @@
+     }
+     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+         let apic = crate::arch::x86_64::lapic::local_apic_id() as usize;
+-        assert_eq!(Some(apic as u32), crate::arch::x86_64::cpu_identity::topology().apic_id(cpu));
++        assert_eq!(
++            Some(apic as u32),
++            crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
++        );
+         serial_println!("[R2V] cpu cpu={} apic={}", cpu, apic);
+     }
+     if r2d_a_round() && cpu == 1 && PHASE.load(Ordering::Acquire) == 2 {

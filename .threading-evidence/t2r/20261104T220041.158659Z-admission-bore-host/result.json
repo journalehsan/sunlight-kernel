@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t2_host.py",
+    "--bore"
+  ],
+  "exit_code": 0,
+  "seconds": 0.5007203059794847
+}

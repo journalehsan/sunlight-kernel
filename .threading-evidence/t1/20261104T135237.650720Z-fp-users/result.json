@@ -1,0 +1,19 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "env",
+    "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static",
+    "cargo",
+    "build",
+    "-p",
+    "sunlightd",
+    "-p",
+    "sunshell",
+    "--release",
+    "--no-default-features",
+    "--offline"
+  ],
+  "exit_code": 101,
+  "seconds": 3.2515011119976407
+}

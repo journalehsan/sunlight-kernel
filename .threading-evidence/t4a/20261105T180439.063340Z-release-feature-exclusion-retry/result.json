@@ -1,0 +1,19 @@
+{
+  "timeout": false,
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--release",
+    "--features",
+    "atomic_futex_test",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 11.522866648010677
+}

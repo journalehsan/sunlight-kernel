@@ -1,0 +1,22 @@
+{
+  "timeout": false,
+  "command": [
+    "--timeout",
+    "900",
+    "--",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--release",
+    "--features",
+    "atomic_futex_test",
+    "--offline"
+  ],
+  "error": "FileNotFoundError(2, 'No such file or directory')",
+  "source_unchanged": true,
+  "pass": false,
+  "seconds": 0.26463418899220414
+}

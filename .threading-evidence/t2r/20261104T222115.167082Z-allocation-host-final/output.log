@@ -1,0 +1,13 @@
+
+running 8 tests
+test allocation_free_unmap_preserves_all_unaffected_page_coverage ... ok
+test cold_task_and_queue_reservations_return_real_allocator_errors ... ok
+test env::tests::sorted_inheritance_and_all_allocation_failures ... ok
+test full_ledger_middle_split_is_still_an_explicit_capacity_boundary ... ok
+test real_allocator_failure_returns_errors_for_owned_thread_resources ... ok
+test thread_admission::tests::quota_boundaries_and_overflow ... ok
+test thread_resource_release_at_full_ledger_needs_neither_allocation_nor_capacity ... ok
+test unmap_all_shapes_without_any_heap_allocation ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

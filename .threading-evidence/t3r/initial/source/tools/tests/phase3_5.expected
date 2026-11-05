@@ -1,0 +1,9 @@
+# Phase 3.5 virtio-blk + FAT32 + VFS integration gate
+[BLK]  Found virtio-blk
+[BLK]  Read LBA 0 OK
+[FAT]  FAT32 detected
+[VFS]  /boot OK
+[VFS]  Read: "SunlightOS FAT32 boot volume\n"
+[VFS]  Read: "Phase 3.5 FAT32 OK\n"
+[VFS]  /boot/MISSING.TXT ENOENT OK
+[SunlightOS] Phase 3.5 OK

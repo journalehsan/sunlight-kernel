@@ -1,0 +1,53 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+error: unexpected `cfg` condition value: `syscall_stack_auth_test`
+    --> kernel/src/arch/x86_64/syscall.rs:2550:37
+     |
+2550 |         #[cfg(all(debug_assertions, feature = "syscall_stack_auth_test"))]
+     |                                     ^^^^^^^^^^-------------------------
+     |                                               |
+     |                                               help: there is a expected value with a similar name: `"syscall_stack_test"`
+     |
+     = note: expected values for `feature` are: `authenticated_cancel_test`, `authenticated_completion_exit_test`, `authenticated_completion_race_test`, `authenticated_exec_test`, `authenticated_reply_test`, `cap_issuance_test`, `cpu_accounting_diag`, `default`, `demand_test`, `dependency_test`, `document_postscript`, `document_service`, `document_viewer`, `fastlane_census_trace`, `fastlane_channel_test`, `fastlane_contract_test`, `fastlane_coord_diag`, `fastlane_coord_same_cpu`, `fastlane_coord_spin`, `fastlane_doorbell_if_control`, `fastlane_doorbell_test`, `fastlane_doorbell_trace`, `fastlane_f11_audit`, `fastlane_f1_audit`, `fastlane_hybrid_lifecycle_test`, `fastlane_m31_prerepair`, `fastlane_m31_retention_test`, `fastlane_mapping_test`, `fastlane_measurement_test`, `fastlane_mediated_accounting_test`, `fastlane_repeated_test`, `fastlane_shared_ring_test`, `fastlane_transfer_test`, `grant_history_test`, and `grant_history_transport_test` and 32 more
+     = help: consider adding `syscall_stack_auth_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+note: the lint level is defined here
+    --> kernel/src/main.rs:3:9
+     |
+   3 | #![deny(warnings)]
+     |         ^^^^^^^^
+     = note: `#[deny(unexpected_cfgs)]` implied by `#[deny(warnings)]`
+
+error: could not compile `sunlight-kernel` (bin "sunlight-kernel") due to 1 previous error

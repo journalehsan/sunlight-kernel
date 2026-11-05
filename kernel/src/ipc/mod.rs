@@ -872,6 +872,11 @@ pub(crate) fn deliver_reply_to_target(
     caps: &mut CapabilityBroker,
     bus: &mut IpcBus,
 ) -> Result<(), IpcError> {
+    #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+    if !caps.hybrid_reply_allowed(target) {
+        withdraw_hybrid_reply_on_bus(target, sched, caps, bus);
+        return Err(IpcError::InvalidArgument);
+    }
     let _ = bus.reply_waiter_remove(target.endpoint_id, target.call);
     // Abandonment paths below can never adopt this key into a replacement PID.
 
@@ -1061,6 +1066,10 @@ fn finish_call(
         }
         sched.processes[idx].ipc_deadline = None;
         sched.processes[idx].ipc_call_outcome = Some(outcome);
+        #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+        if let Some(target) = target {
+            caps.hybrid_reply_finished(target, outcome);
+        }
         #[cfg(feature = "authenticated_exec_test")]
         if let Some(target) = target {
             crate::capability::exec_retirement_trace::terminal(target, outcome);
@@ -1692,6 +1701,34 @@ pub fn deferred_reply_is_live(server_pid: usize, token: u64, sched: &Scheduler) 
         return false;
     };
     reply_target_is_live(entry.target, sched)
+}
+
+#[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+fn withdraw_hybrid_reply_on_bus(
+    target: IpcReplyTarget,
+    sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
+    bus: &mut IpcBus,
+) {
+    bus.remove_pending_call(target.endpoint_id, target.call);
+    bus.reply_waiter_remove(target.endpoint_id, target.call);
+    if reply_target_is_live(target, sched) {
+        let idx = sched.processes.iter().position(|p| p.pid == target.call.pid).unwrap();
+        finish_call(sched, idx, IpcCallOutcome::PeerClosed(target.call.generation), caps);
+    }
+    remove_deferred_target(sched, target);
+    for process in &mut sched.processes {
+        cancel_reply_target(&mut process.ipc_reply_target, target);
+    }
+}
+
+#[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+pub(crate) fn withdraw_hybrid_reply(
+    target: IpcReplyTarget,
+    sched: &mut Scheduler,
+    caps: &mut CapabilityBroker,
+) {
+    with_shard(target.endpoint_id, |bus| withdraw_hybrid_reply_on_bus(target, sched, caps, bus));
 }
 
 pub(crate) fn reply_target_is_live(target: IpcReplyTarget, sched: &Scheduler) -> bool {

@@ -1,0 +1,30 @@
+{
+  "pass": true,
+  "suite": "races",
+  "attempts": [
+    ".threading-evidence/t4a/20261105T181008.312944Z-races-host-kernel",
+    ".threading-evidence/t4a/20261105T181026.372399Z-races-host-linux",
+    ".threading-evidence/t4a/20261105T181027.188121Z-races-host-scheduler",
+    ".threading-evidence/t4a/20261105T181030.266718Z-races-receipts",
+    ".threading-evidence/t4a/20261105T181031.095024Z-races-build",
+    ".threading-evidence/t4a/20261105T181054.506649Z-races-freeze",
+    ".threading-evidence/t4a/20261105T181055.352517Z-races-abi",
+    ".threading-evidence/t4a/20261105T181056.164578Z-races-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4a/20261105T181058.306770Z-races-2cpu"
+    },
+    "4": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4a/20261105T181119.651419Z-races-4cpu"
+    },
+    "12": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4a/20261105T181119.651749Z-races-12cpu"
+    }
+  },
+  "kernel_sha256": "8e95db8df2e7b41f0f910339af98cc5f0ad398e47a340f1a28e775d07d046ab2",
+  "iso_sha256": "c086b30367d6d3e8c18bd3ae7bd66073e636a9a60bac9091933a9ca0171ae744"
+}

@@ -537,9 +537,10 @@ impl FdTable {
     }
 
     pub fn contains_unix_socket(&self, idx: u32) -> bool {
-        self.entries.iter().flatten().any(|entry| {
-            entry.handle.is_unix_socket() && entry.handle.unix_socket_index() == idx
-        })
+        self.entries
+            .iter()
+            .flatten()
+            .any(|entry| entry.handle.is_unix_socket() && entry.handle.unix_socket_index() == idx)
     }
 
     /// Get a mutable file descriptor
@@ -785,6 +786,36 @@ impl FdTable {
         }
     }
 
+    /// An unpublished snapshot owns storage only. It acquires descriptor/backend
+    /// references at the non-failing commit point, while SCHEDULER still protects
+    /// the source. Dropping a failed snapshot must not release those references.
+    pub(crate) fn try_thread_snapshot(
+        source: Option<&Self>,
+    ) -> Result<alloc::boxed::Box<Self>, super::thread_admission::Error> {
+        let mut table = super::thread_admission::try_box_uninit::<Self>()?;
+        unsafe {
+            let entries = core::ptr::addr_of_mut!((*table.as_mut_ptr()).entries)
+                as *mut Option<FileDescriptor>;
+            for idx in 0..256 {
+                entries
+                    .add(idx)
+                    .write(source.and_then(|source| source.entries[idx]));
+            }
+            Ok(table.assume_init())
+        }
+    }
+
+    /// Must be called exactly once for a snapshot, immediately before insertion.
+    pub(crate) fn retain_thread_snapshot(&self) {
+        for entry in self.entries.iter().flatten() {
+            retain_eventfd(entry.handle);
+            retain_socket(entry.handle);
+            retain_pipe(entry.handle);
+            retain_unix_socket(entry.handle);
+            retain_description(entry.description);
+        }
+    }
+
     /// Reduce rights on a file descriptor (can never increase)
     pub fn reduce_rights(&mut self, fd: i32, new_rights: CapRights) -> Result<(), FdError> {
         let fd_entry = self.get_mut(fd).ok_or(FdError::InvalidFd)?;
@@ -972,5 +1003,49 @@ mod tests {
         assert_eq!(table.get(new_fd).unwrap().handle, FileHandle::vfs(7));
         assert_eq!(table.get(new_fd).unwrap().flags & 0x0008_0000, 0x0008_0000);
         assert_eq!(table.get(old).unwrap().flags & 0x0008_0000, 0);
+    }
+}
+
+#[cfg(all(
+    debug_assertions,
+    any(
+        feature = "thread_admission_test",
+        feature = "thread_lifecycle_race_test",
+        feature = "thread_migration_test",
+        feature = "atomic_futex_test"
+    )
+))]
+pub(crate) fn thread_description_refs() -> usize {
+    DESCRIPTIONS.lock().iter().flatten().map(|d| d.refs).sum()
+}
+
+#[cfg(test)]
+mod thread_snapshot_tests {
+    use super::*;
+    #[test]
+    fn failed_and_uncommitted_snapshots_never_adopt_references() {
+        let mut parent = FdTable::new();
+        let description = parent.get(0).unwrap().description as usize;
+        let refs = || DESCRIPTIONS.lock()[description].as_ref().unwrap().refs;
+        let before = refs();
+        super::super::thread_admission::host_fault::arm(1);
+        assert!(FdTable::try_thread_snapshot(Some(&parent)).is_err());
+        super::super::thread_admission::host_fault::arm(0);
+        assert_eq!(refs(), before);
+        drop(FdTable::try_thread_snapshot(Some(&parent)).unwrap());
+        assert_eq!(refs(), before);
+        let mut child = FdTable::try_thread_snapshot(Some(&parent)).unwrap();
+        child.retain_thread_snapshot();
+        assert_eq!(refs(), before + 1);
+        child.take_all_handles();
+        assert_eq!(refs(), before);
+        parent.take_all_handles();
+    }
+    #[test]
+    fn shared_descriptor_placeholder_allocates_no_descriptions() {
+        let mut child = FdTable::try_thread_snapshot(None).unwrap();
+        assert!((0..256).all(|fd| child.get(fd).is_none()));
+        child.retain_thread_snapshot();
+        assert!(child.take_all_handles().iter().all(Option::is_none));
     }
 }

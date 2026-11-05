@@ -1,0 +1,7 @@
+THREAD_PROBE main_pid=0x
+THREAD_PROBE worker_pid=0x
+shared_memory=ok
+fd_table=ok eventfd=ok
+tls=ok
+child_tid_clear=ok
+THREAD_PROBE PASS

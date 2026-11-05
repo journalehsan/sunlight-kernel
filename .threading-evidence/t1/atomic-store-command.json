@@ -1,0 +1,8 @@
+[
+  "objdump",
+  "-d",
+  "-Mintel",
+  "--no-show-raw-insn",
+  "--disassemble=_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32",
+  ".threading-evidence/t1/images/atomic-controls/kernel.elf"
+]

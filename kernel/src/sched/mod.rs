@@ -106,6 +106,15 @@ mod handoff;
 pub mod perf;
 pub(crate) mod quantum;
 mod requests;
+#[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+pub(crate) mod t2_fixture;
+#[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+pub(crate) mod t2r_fixture;
+#[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+pub(crate) mod t3r_fixture;
+#[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+pub(crate) mod t4a_fixture;
+mod thread_admission;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
 #[cfg(all(debug_assertions, feature = "pin_release_test"))]
 pub mod pin_release_test;
@@ -275,6 +284,7 @@ fn on_task_ran(process: &mut Process, ticks_used: u64, q: u32) {
 
 /// Maximum number of logical CPUs supported by the per-core scheduler.
 pub const MAX_CORES: usize = 64;
+const _: () = assert!(MAX_CORES == crate::arch::x86_64::smp::MAX_APS + 1);
 static STACK_HANDOFFS: handoff::Handoffs<MAX_CORES> = handoff::Handoffs::new();
 
 /// Called before a naked IRQ stub publishes its outgoing context. The returned
@@ -1071,6 +1081,8 @@ impl Scheduler {
             delta = now.saturating_sub(p.last_start_ns);
         }
         p.last_start_ns = 0;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        p.measurement.charge_probe(p.cpu_runtime_ns, p.cpu_charge_since, now);
         sunlight_ipc::cpu_accounting::checkpoint(
             &mut p.cpu_runtime_ns,
             &mut p.cpu_charge_since,
@@ -1104,6 +1116,8 @@ impl Scheduler {
             return;
         }
         let now = now_ns();
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.placement(current_cpu_id());
         self.processes[idx].last_start_ns = now;
         self.processes[idx].cpu_charge_since = Some(now);
         let cpu_id = current_cpu_id();
@@ -1133,6 +1147,8 @@ impl Scheduler {
     fn stop_execution_clock(&mut self, idx: usize, preserve_turn: bool) {
         let now = now_ns();
         let p = &mut self.processes[idx];
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        p.measurement.charge_probe(p.cpu_runtime_ns, p.cpu_charge_since, now);
         sunlight_ipc::cpu_accounting::checkpoint(
             &mut p.cpu_runtime_ns,
             &mut p.cpu_charge_since,
@@ -1769,7 +1785,7 @@ impl Scheduler {
     /// RSP of the next process to resume (0 = stay on current context).
     pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
         #[cfg(feature = "scheduler_perf_diag")]
-        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].invocations, 1);
+        perf::add(&perf::CPU[cpu_id].invocations, 1);
         #[cfg(feature = "cpu_accounting_diag")]
         {
             self.cpu_events[cpu_id][0] = self.cpu_events[cpu_id][0].saturating_add(1);
@@ -1823,6 +1839,7 @@ impl Scheduler {
                 let next_rsp = self.processes[next].context_rsp;
                 #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
                 self.trace_bell_process("dispatch-idle", next, next_rsp, cpu_id as u64);
+                crate::arch::x86_64::syscall_stack::validate(&self.processes[next]);
                 let next_stack_top = self.processes[next].kernel_stack_top;
                 let next_fs_base = self.processes[next].fs_base;
                 self.set_core_current_task(cpu_id, Some(next));
@@ -1838,6 +1855,10 @@ impl Scheduler {
                     x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
                 }
                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+                #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+                t3r_fixture::dispatched(self, next, cpu_id);
+                #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+                t4a_fixture::dispatched(self, next, cpu_id);
                 self.start_charging_runtime(next);
                 self.retain_priority_request(cpu_id, next);
                 return next_rsp;
@@ -1950,6 +1971,7 @@ impl Scheduler {
             crate::capability::channel_race::diagnostic_dispatch(self.processes[next].pid, cpu_id);
             #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
             self.trace_bell_process("dispatch", next, next_rsp, cpu_id as u64);
+            crate::arch::x86_64::syscall_stack::validate(&self.processes[next]);
             let next_stack_top = self.processes[next].kernel_stack_top;
             let next_fs_base = self.processes[next].fs_base;
             let prev = current;
@@ -1973,6 +1995,10 @@ impl Scheduler {
             // delivers to the correct kernel stack.  Uses the per-core TSS
             // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
             crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+            #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+            t3r_fixture::dispatched(self, next, cpu_id);
+            #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+            t4a_fixture::dispatched(self, next, cpu_id);
 
             #[cfg(feature = "scheduler_timer_trace")]
             crate::scheduler_timer_trace::checkpoint(self, 4, self.processes[next].pid);
@@ -2097,8 +2123,8 @@ impl Scheduler {
     }
 
     fn wake_native_futex_index(&mut self, idx: usize) {
-        self.processes[idx].native_futex_wait = None;
-        self.processes[idx].native_futex_deadline = None;
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        t4a_fixture::waking(self, idx);
         self.record_wakeup(idx, false);
         self.processes[idx].state = ProcessState::Ready;
         self.processes[idx].priority_wake_pending = true;
@@ -2108,34 +2134,46 @@ impl Scheduler {
         } else {
             self.enqueue_ready(idx);
         }
+        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+        t3r_fixture::woken(self, idx);
     }
 
-    pub fn cancel_native_futex_range(
+    /// Retire both ABI registrations before a committed mapping can be reused.
+    /// No access to the old word is needed; cancellation is a spurious wake.
+    pub fn cancel_futex_range(
         &mut self,
         identity: crate::process::mm2b_state::AddressSpaceIdentity,
         start: u64,
         end: u64,
     ) {
         for idx in 0..self.processes.len() {
-            if self.processes[idx].state == ProcessState::BlockedOnIo
-                && self.processes[idx].address_space.identity() == identity
-                && self.processes[idx]
-                    .native_futex_wait
-                    .is_some_and(|address| address >= start && address < end)
+            if self.processes[idx].state != ProcessState::BlockedOnIo
+                || self.processes[idx].address_space.identity() != identity
             {
+                continue;
+            }
+            let in_range = |address| address >= start && address < end;
+            if self.processes[idx].native_futex_wait.is_some_and(in_range) {
                 self.wake_native_futex_index(idx);
+            } else if self.processes[idx]
+                .linux_state()
+                .and_then(|state| state.futex_wait)
+                .is_some_and(in_range)
+            {
+                self.wake_linux_futex_index(idx);
             }
         }
     }
 
     fn expire_native_futex_timeouts(&mut self) {
-        let now = crate::arch::x86_64::interrupts::now_ns();
+        let now = crate::timekeeping::monotonic_ns();
         for idx in 0..self.processes.len() {
             if self.processes[idx].state == ProcessState::BlockedOnIo
                 && self.processes[idx]
                     .native_futex_deadline
                     .is_some_and(|deadline| deadline <= now)
             {
+                self.processes[idx].complete_futex_wait(2);
                 self.wake_native_futex_index(idx);
             }
         }
@@ -2197,6 +2235,9 @@ impl Scheduler {
     }
 
     pub(crate) fn record_wakeup(&mut self, idx: usize, ipc: bool) {
+        // Generic signal/I/O wakes must detach too: otherwise a later I/O
+        // block can be consumed by an old futex wake or expired deadline.
+        self.processes[idx].complete_futex_wait(0);
         #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
         self.processes[idx].measurement.wakeup();
         #[cfg(feature = "cpu_accounting_diag")]
@@ -2306,21 +2347,24 @@ impl Scheduler {
             {
                 continue;
             }
-            if let Some(state) = self.processes[idx].linux_state_mut() {
-                state.futex_wait = None;
-            }
-            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
-            self.processes[idx].state = ProcessState::Ready;
-            self.processes[idx].priority_wake_pending = true;
-            self.remove_from_ready_queues(idx);
-            if let Some(cpu) = self.live_owner_core(idx) {
-                request_reschedule_on(cpu);
-            } else {
-                self.enqueue_ready(idx);
-            }
+            self.wake_linux_futex_index(idx);
             woken += 1;
         }
         woken
+    }
+
+    fn wake_linux_futex_index(&mut self, idx: usize) {
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        t4a_fixture::waking(self, idx);
+        self.record_wakeup(idx, false);
+        self.processes[idx].state = ProcessState::Ready;
+        self.processes[idx].priority_wake_pending = true;
+        self.remove_from_ready_queues(idx);
+        if let Some(cpu) = self.live_owner_core(idx) {
+            request_reschedule_on(cpu);
+        } else {
+            self.enqueue_ready(idx);
+        }
     }
 
     /// Block the current Linux task until a poll timeout expires. Syscall
@@ -2673,6 +2717,9 @@ impl Scheduler {
             self.processes[idx].exit_code = 128 + 9;
             #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
             self.doorbell_peer_exit(idx);
+            #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+            self.processes[idx].measurement.abort();
+            self.processes[idx].clear_futex_wait();
             self.processes[idx].state = ProcessState::Finished;
             self.processes[idx].slice_credit = None;
             self.processes[idx].exit_cleanup_pending = true;
@@ -2767,15 +2814,29 @@ impl Scheduler {
 
         // External group termination finishes a sibling from another CPU.
         // Clear its TID only after it is no longer executing on any CPU.
-        // The ordinary self-exit path already performed this step.
+        // Self-exit follows the same path. The retained Process (and its exact
+        // VM identity) is the bounded completion record; slot reuse follows
+        // Reaped, and the physical pin was checked before reaching here.
         self.clear_linux_child_tid(idx);
 
         let pid = self.processes[idx].pid;
         #[cfg(feature = "native_session_race_test")]
-        if self.processes[idx].trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlight-sessiond") {
-            crate::capability::session_h3_trace::record(10, pid as u64, self.processes[idx].foreground.incarnation, 2, self.processes[idx].address_space.identity().generation, 0);
+        if self.processes[idx].trusted_auth_broker
+            || (cfg!(feature = "native_session_h4_test")
+                && self.processes[idx].name_str() == "sunlight-sessiond")
+        {
+            crate::capability::session_h3_trace::record(
+                10,
+                pid as u64,
+                self.processes[idx].foreground.incarnation,
+                2,
+                self.processes[idx].address_space.identity().generation,
+                0,
+            );
         }
-        let name: alloc::string::String = self.processes[idx].name_str().into();
+        let name_bytes = self.processes[idx].name;
+        let name_len = name_bytes.iter().position(|b| *b == 0).unwrap_or(32);
+        let name = core::str::from_utf8(&name_bytes[..name_len]).unwrap_or("?");
         let is_native_borrower = self.processes[idx].native_thread;
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::checkpoint(self, 20, pid);
@@ -2923,6 +2984,7 @@ impl Scheduler {
         #[cfg(feature = "scheduler_timer_trace")]
         crate::scheduler_timer_trace::checkpoint(self, 22, pid);
         // Clear per-process kernel structures (idempotent clears).
+        self.processes[idx].clear_futex_wait();
         let ipc_q_len = self.processes[idx].ipc_queue.len();
         self.processes[idx].ipc_queue.clear();
         self.processes[idx].ipc_reply = None;
@@ -2959,7 +3021,9 @@ impl Scheduler {
                 .deferred_reply_targets
                 .retain(|entry| entry.target.call.pid != dead_pid);
         }
-        self.processes[idx].capabilities.clear();
+        self.processes[idx].capabilities = Vec::new();
+        self.processes[idx].env = crate::process::env::EnvMap::new();
+        self.processes[idx].cwd = alloc::string::String::new();
         // Only the group owner holds the (currently empty) SEM_UNDO table.
         // Reaping this owner was deferred until every Linux worker reaped.
         self.processes[idx].linux_sysv_semadj = None;
@@ -3013,6 +3077,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+        t3r_fixture::retired(self, idx);
         #[cfg(feature = "production_grant_test")]
         if self.processes[idx].ppid == 0xF4F0 {
             crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
@@ -3091,14 +3157,16 @@ impl Scheduler {
             return;
         };
         let identity = self.processes[idx].address_space.identity();
-        if crate::memory::user::copy_to_process_bytes(
+        if crate::memory::user::write_process_atomic_u32(
             &self.processes[idx],
             hhdm,
             address,
-            &0u32.to_ne_bytes(),
+            0,
         )
         .is_ok()
         {
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            regression::completion(self, idx);
             let woken = self.wake_linux_futex(identity, address, 1);
             serial_println!(
                 "[HELIOS-THREAD] clear_child_tid tid={} addr={:#x} woken={}",
@@ -3221,6 +3289,9 @@ impl Scheduler {
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         self.doorbell_peer_exit(idx);
         self.processes[idx].exit_code = code;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.abort();
+        self.processes[idx].clear_futex_wait();
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
@@ -3292,6 +3363,9 @@ impl Scheduler {
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         self.doorbell_peer_exit(idx);
         self.processes[idx].exit_code = code;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.abort();
+        self.processes[idx].clear_futex_wait();
         self.processes[idx].state = ProcessState::Finished;
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
@@ -4080,7 +4154,8 @@ static mut CORE_IDLE_STACKS: [[u8; crate::process::KERNEL_STACK_SIZE]; MAX_CORES
 /// resulting `iretq` reads a zeroed/garbage CS and raises `#GP` (err=0) — the
 /// desktop appears frozen because the gpf_handler loops on `hlt`.
 pub(crate) fn core_idle_stack_top(cpu_id: usize) -> u64 {
-    let cpu = cpu_id.min(MAX_CORES - 1);
+    assert!(cpu_id < MAX_CORES, "invalid logical idle stack owner");
+    let cpu = cpu_id;
     unsafe {
         core::ptr::addr_of!(CORE_IDLE_STACKS[cpu][crate::process::KERNEL_STACK_SIZE - 1]) as u64 + 1
     }
@@ -4120,7 +4195,7 @@ pub fn check_reschedule_on(cpu_id: usize) -> bool {
     }
     #[cfg(feature = "scheduler_perf_diag")]
     if requested {
-        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].rearms, 1);
+        perf::add(&perf::CPU[cpu_id].rearms, 1);
     }
     requested
 }
@@ -4144,7 +4219,7 @@ pub fn request_reschedule_on(cpu_id: usize) {
     pin_release_test::requested(cpu_id);
     let source_cpu = current_cpu_id();
     #[cfg(feature = "scheduler_perf_diag")]
-    perf::add(&perf::CPU[source_cpu.min(MAX_CORES - 1)].requests, 1);
+    perf::add(&perf::CPU[source_cpu].requests, 1);
     if cpu_id != source_cpu && SCHEDULER_READY.load(Ordering::Acquire) {
         if RESCHEDULE_MASK.request_delivery(cpu_id) {
             DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
@@ -4408,8 +4483,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let is_linux_worker = sched.processes[cur]
         .linux_tgid
         .is_some_and(|tgid| tgid != my_pid);
-    sched.clear_linux_child_tid(cur);
-    let my_name: alloc::string::String = sched.processes[cur].name_str().into();
+    // Completion is published by the existing pin-gated reaper after the
+    // final physical handoff, for self-exit and remote termination alike.
+    let my_name_bytes = sched.processes[cur].name;
+    let my_name_len = my_name_bytes.iter().position(|b| *b == 0).unwrap_or(32);
+    let my_name = core::str::from_utf8(&my_name_bytes[..my_name_len]).unwrap_or("?");
     serial_println!(
         "[SCHED] process_mark_finished pid={} name='{}' reason={} code={}",
         my_pid,
@@ -4418,6 +4496,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         code
     );
 
+    #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+    sched.processes[cur].measurement.abort();
     sched.account_current_runtime();
     sched.stop_execution_clock(cur, false);
     sched.increment_context_switches(cpu_id); // exiting task -> idle
@@ -4425,6 +4505,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     {
         let process = &mut sched.processes[cur];
         process.exit_code = code;
+        process.clear_futex_wait();
         process.state = crate::process::ProcessState::Finished;
         process.exit_cleanup_pending = true;
         process.owning_core = u8::MAX;
@@ -4452,7 +4533,7 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         my_name,
         reason
     );
-    note_process_finished(my_pid, &my_name);
+    note_process_finished(my_pid, my_name);
 
     let parent_pid = sched.processes[cur].ppid;
     let parent_waiting = sched
@@ -4522,6 +4603,7 @@ pub fn enter_first_process() -> ! {
             mark_scheduler_ready();
             let rsp = sched.processes[idx].context_rsp;
             let fs_base = sched.processes[idx].fs_base;
+            crate::arch::x86_64::syscall_stack::validate(&sched.processes[idx]);
             let kernel_stack_top = sched.processes[idx].kernel_stack_top;
             unsafe {
                 sched.processes[idx].address_space.activate();
@@ -4570,17 +4652,10 @@ pub fn try_current_pid() -> usize {
 
 // ─── SMP helpers ──────────────────────────────────────────────────────────────
 
-/// Return the current logical CPU index using the initial APIC ID from CPUID.
-///
-/// BSP has APIC ID 0 on all supported platforms. APs are parked until SMP
-/// Phase 1 LAPIC timers are wired; until then this always returns 0 on the
-/// BSP. When per-core timers fire, each AP's CPUID gives its own APIC ID,
-/// mapping directly to an index into CORES[].
+/// Return the dense logical CPU identity from the immutable boot topology.
 #[inline]
 pub fn current_cpu_id() -> usize {
-    // CPUID leaf 1, EBX[31:24] = initial APIC ID (valid for up to 256 logical CPUs).
-    let apic_id = core::arch::x86_64::__cpuid(1).ebx as usize >> 24;
-    apic_id.min(MAX_CORES - 1)
+    crate::arch::x86_64::cpu_identity::current()
 }
 
 /// Initialise the per-core scheduler after SMP bring-up.
@@ -4590,7 +4665,12 @@ pub fn current_cpu_id() -> usize {
 /// online_cores field so that enqueue_process(), steal_work(), and
 /// schedule_tick() are aware of all available cores.
 pub fn init_cores(total_cpus: usize) {
-    let count = total_cpus.min(MAX_CORES).max(1);
+    assert_eq!(
+        total_cpus,
+        crate::arch::x86_64::cpu_identity::topology().count()
+    );
+    assert!((1..=MAX_CORES).contains(&total_cpus));
+    let count = total_cpus;
     ONLINE_CORES.store(count, Ordering::Release);
     init_core_idle_contexts(count);
     {

@@ -1,4 +1,6 @@
-//! Authenticated userspace actors using ordinary IPC for coordination.
+#[cfg(feature = "fastlane-contract-test")]
+pub(super) mod operation;
+// Authenticated userspace actors using ordinary IPC for coordination.
 #[cfg(feature = "fastlane-doorbell-test")]
 pub(super) mod doorbell;
 #[cfg(feature = "fastlane-mapping-test")]
@@ -89,6 +91,12 @@ pub fn actor(args: &[&str]) -> ! {
     let mut benchmark = shared_ring::benchmark::Consumer::new();
     #[cfg(feature = "fastlane-benchmark-test")]
     let mut fair_benchmark = shared_ring::fair_benchmark::Consumer::new();
+    #[cfg(feature = "fastlane-mediated-accounting-test")]
+    let mut mediated_accounting = shared_ring::mediated_accounting::Consumer::new();
+    #[cfg(feature = "fastlane-contract-test")]
+    let mut operation = operation::Endpoint::new();
+    #[cfg(feature = "fastlane-contract-test")]
+    let mut ring_operation = shared_ring::operation::Endpoint::new();
     loop {
         let m = sunlight_ipc::ipc_recv_timeout(ep, 10000).expect("actor command");
         #[cfg(feature = "fastlane-benchmark-test")]
@@ -101,12 +109,22 @@ pub fn actor(args: &[&str]) -> ! {
             fair_benchmark.request(m);
             continue;
         }
+        #[cfg(feature = "fastlane-mediated-accounting-test")]
+        if shared_ring::mediated_accounting::handles(m.label) {
+            mediated_accounting.request(m); continue;
+        }
+        #[cfg(feature = "fastlane-contract-test")]
+        if operation.handle(m) { continue; }
+        #[cfg(feature = "fastlane-contract-test")]
+        if ring_operation.handle(m) { continue; }
         assert_eq!(m.label, CMD);
         let h = fl::Handle {
             token: m.words[1],
             generation: m.words[2],
         };
         match m.words[0] {
+            #[cfg(feature = "fastlane-mediated-accounting-test")]
+            120..=125 => mediated_accounting.command(m,parent),
             #[cfg(feature = "fastlane-benchmark-test")]
             100..=103 => benchmark.command(m, parent),
             #[cfg(feature = "fastlane-benchmark-test")]

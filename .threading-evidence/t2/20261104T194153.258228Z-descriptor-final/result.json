@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "test",
+    "--manifest-path",
+    "tools/tests/fd-description/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--offline",
+    "--",
+    "--test-threads=1"
+  ],
+  "exit_code": 0,
+  "seconds": 0.250771007995354
+}

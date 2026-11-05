@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "--test",
+    "kernel/src/arch/x86_64/cpu_topology.rs",
+    "-o",
+    "target/t3r-topology-test"
+  ],
+  "exit_code": 0,
+  "seconds": 0.25060929101891816
+}

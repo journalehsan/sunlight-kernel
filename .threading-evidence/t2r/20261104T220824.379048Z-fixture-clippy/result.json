@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    ".threading-evidence/t2r/fixture-clippy-driver.py",
+    ".threading-evidence/t2r/fixture-clippy-detail"
+  ],
+  "exit_code": 1,
+  "seconds": 19.26871748699341
+}

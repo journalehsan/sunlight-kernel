@@ -39,6 +39,7 @@ static TSS: spin::Lazy<TaskStateSegment> = spin::Lazy::new(|| {
         let stack_start = VirtAddr::from_ptr(unsafe { &STACK1 });
         stack_start + STACK_SIZE as u64
     };
+    tss.interrupt_stack_table[1] = VirtAddr::new(super::syscall_stack::nmi_stack_top(0));
     tss
 });
 
@@ -149,8 +150,11 @@ pub fn init() {
     }
     idt.general_protection_fault.set_handler_fn(gpf_handler);
     idt.page_fault.set_handler_fn(page_fault_handler);
-    idt.non_maskable_interrupt
-        .set_handler_fn(tlb_shootdown_nmi_entry);
+    unsafe {
+        idt.non_maskable_interrupt
+            .set_handler_fn(tlb_shootdown_nmi_entry)
+            .set_stack_index(1);
+    }
 
     // Use naked timer handler to enable manual context switching.
     unsafe {
@@ -171,7 +175,7 @@ pub fn init() {
 
     // MM-2B synchronous remote TLB shootdown IPI.
     idt[crate::memory::tlb::SHOOTDOWN_VECTOR].set_handler_fn(tlb_shootdown_ipi_entry);
-    #[cfg(feature = "mm2b_smp_test")]
+    #[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
     idt[crate::memory::tlb::TEST_VECTOR].set_handler_fn(tlb_test_ipi_entry);
 
     idt.load();
@@ -201,6 +205,17 @@ pub fn init() {
     // which is already wired to `timer_entry` in the IDT above.
     unsafe {
         crate::arch::x86_64::lapic::init_lapic();
+        assert_eq!(
+            Some(lapic::local_apic_id()),
+            super::cpu_identity::topology().apic_id(0)
+        );
+        serial_println!(
+            "[CPU-ID] bsp logical=0 apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
+            lapic::local_apic_id(),
+            &*TSS as *const TaskStateSegment as u64,
+            TSS.interrupt_stack_table[0].as_u64(),
+            TSS.interrupt_stack_table[1].as_u64()
+        );
         crate::arch::x86_64::lapic::calibrate_lapic_timer(100);
         crate::arch::x86_64::lapic::arm_lapic_timer();
         // Mask PIC IRQ0 (timer). IRQ1 (keyboard) and IRQ2 (cascade) stay
@@ -238,7 +253,7 @@ extern "x86-interrupt" fn tlb_shootdown_nmi_entry(_stack_frame: InterruptStackFr
     crate::memory::tlb::handle_shootdown_ipi();
 }
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) {
     crate::sched::accounting::interrupt_entry_local();
     crate::memory::tlb::handle_test_ipi();
@@ -1142,6 +1157,8 @@ pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
             bench_reason |= 1;
         }
         sched.tick(cpu_id, ticks_total);
+        #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+        crate::sched::t2_fixture::on_tick(&sched);
         #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
         crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
         #[cfg(all(debug_assertions, feature = "pin_release_test"))]

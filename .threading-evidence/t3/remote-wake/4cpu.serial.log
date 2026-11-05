@@ -1,0 +1,306 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU-ID] logical=2 apic=2 bsp=false
+[CPU-ID] logical=3 apic=3 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 4 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T22:59:00Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf1240c8 (61733 frames, 241 MiB)
+[PMM] 276/516 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x3ffe243a
+[ACPI] Found table: FACP at 0x3ffe22d6
+[ACPI] Found table: APIC at 0x3ffe234a
+[ACPI] Found table: HPET at 0x3ffe23da
+[ACPI] Found table: WAET at 0x3ffe2412
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11906 end_count=7906 elapsed_counts=4000 tsc_delta=8332005 tsc_hz=2485399597
+[TIME] TSC calibrated ~2485399597 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e61dfb8 ist_df=0xffffffff8eedfba8 ist_nmi=0xffffffff8e6ef040
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62785000 lapic_initial_count=627850 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2485399597
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x23 minute=0x00 second=0x38 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T23:00:38Z assumed_basis=UTC
+wall: utc=2026-11-04T23:00:38Z unix=1793833238 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=RDSEED conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 4 logical processor(s) found, 4 usable
+[ACPI] MADT: 4 logical processor(s) detected (4 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8006e2bc
+[SYSCALL] OK
+[SMP] Limine MP response: 4 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8e7ed040..0xffffffff8e7fd040
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8006e2bc
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8d5d7078 ist_df=0xffffffff8e7fd040 ist_nmi=0xffffffff8e6f3040
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8e7fd040..0xffffffff8e80d040
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff8006e2bc
+[CPU-ID] online logical=2 apic=2 tss=0xffffffff8d5d70e0 ist_df=0xffffffff8e80d040 ist_nmi=0xffffffff8e6f7040
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8e80d040..0xffffffff8e81d040
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff8006e2bc
+[CPU-ID] online logical=3 apic=3 tss=0xffffffff8d5d7148 ist_df=0xffffffff8e81d040 ist_nmi=0xffffffff8e6fb040
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 3 AP(s) online (4 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 4 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #1 'remote-wake-probe' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #2 'remote-wake-probe' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #3 'remote-wake-probe' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #4 'remote-wake-probe' idx=3 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #5 'remote-wake-probe' idx=4 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #6 'remote-wake-probe' idx=5 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #7 'remote-wake-probe' idx=6 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #8 'remote-wake-probe' idx=7 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #9 'remote-wake-probe' idx=8 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #10 'remote-wake-probe' idx=9 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #11 'remote-wake-probe' idx=10 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=76 memsz=76 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #12 'remote-wake-probe' idx=11 burst_score=256 tier=High
+[F13NR] begin cpus=4 target=1 mode=xapic apic_base=0xfee00900 injected_busy=3
+[F13NR] idle cpu=1 apic_base=0xfee00800
+[F13NR] publish source=2 target=1 round=0 idle_published=true apic_base=0xfee00800
+[F13NR] publish source=3 target=1 round=0 idle_published=true apic_base=0xfee00800
+[SCHED] process_exit_begin reason=exit
+[F13NR] publish source=0 target=1 round=0 idle_published=true apic_base=0xfee00900
+[SCHED] process_mark_finished pid=61698 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61698 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61698 name='remote-wake-probe'
+[F13NR] executed pid=61698 source=2 target=1 round=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61699 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61699 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61699 name='remote-wake-probe'
+[F13NR] executed pid=61699 source=3 target=1 round=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61696 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61696 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61696 name='remote-wake-probe'
+[F13NR] executed pid=61696 source=0 target=1 round=0
+[SCHED] process_reaped pid=61696 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61696 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61696 cleared_msgs=0
+[SCHED] process_reaped pid=61698 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61698 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61698 cleared_msgs=0
+[SCHED] process_reaped pid=61699 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61699 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61699 cleared_msgs=0
+[F13NR] publish source=0 target=1 round=1 idle_published=true apic_base=0xfee00900
+[F13NR] publish source=2 target=1 round=1 idle_published=true apic_base=0xfee00800
+[F13NR] publish source=3 target=1 round=1 idle_published=true apic_base=0xfee00800
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61760 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61760 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61760 name='remote-wake-probe'
+[F13NR] executed pid=61760 source=0 target=1 round=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61762 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61762 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61762 name='remote-wake-probe'
+[F13NR] executed pid=61762 source=2 target=1 round=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61763 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61763 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61763 name='remote-wake-probe'
+[F13NR] executed pid=61763 source=3 target=1 round=1
+[SCHED] process_reaped pid=61760 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61760 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61760 cleared_msgs=0
+[SCHED] process_reaped pid=61762 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61762 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61762 cleared_msgs=0
+[F13NR] publish source=3 target=1 round=2 idle_published=true apic_base=0xfee00800
+[F13NR] publish source=0 target=1 round=2 idle_published=true apic_base=0xfee00900
+[F13NR] publish source=2 target=1 round=2 idle_published=true apic_base=0xfee00800
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61827 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61827 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61827 name='remote-wake-probe'
+[F13NR] executed pid=61827 source=3 target=1 round=2
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61824 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61824 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61824 name='remote-wake-probe'
+[F13NR] executed pid=61824 source=0 target=1 round=2
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61826 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61826 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61826 name='remote-wake-probe'
+[F13NR] executed pid=61826 source=2 target=1 round=2
+[SCHED] process_reaped pid=61763 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61763 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61763 cleared_msgs=0
+[SCHED] process_reaped pid=61824 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61824 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61824 cleared_msgs=0
+[SCHED] process_reaped pid=61827 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61827 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61827 cleared_msgs=0
+[F13NR] publish source=0 target=1 round=3 idle_published=true apic_base=0xfee00900
+[F13NR] publish source=2 target=1 round=3 idle_published=true apic_base=0xfee00800
+[F13NR] publish source=3 target=1 round=3 idle_published=true apic_base=0xfee00800
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61888 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61888 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61888 name='remote-wake-probe'
+[F13NR] executed pid=61888 source=0 target=1 round=3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61890 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61890 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61890 name='remote-wake-probe'
+[F13NR] executed pid=61890 source=2 target=1 round=3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61891 name='remote-wake-probe' reason=exit code=0
+[SCHED] terminating pid=61891 name='remote-wake-probe' reason=exit
+[SCHED] FINISHED process pid=61891 name='remote-wake-probe'
+[F13NR] executed pid=61891 source=3 target=1 round=3
+[SCHED] process_reaped pid=61826 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61826 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61826 cleared_msgs=0
+[SCHED] process_reaped pid=61888 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61888 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61888 cleared_msgs=0
+[SCHED] process_reaped pid=61890 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61890 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61890 cleared_msgs=0
+[SCHED] process_reaped pid=61891 name='remote-wake-probe' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61891 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61891 cleared_msgs=0
+[F13NR] PASS cpus=4 sources=0xd target=1 requests=12 attempts=23 accepted=14 handled=14 opportunities=15 executed=12 deferred=0 unresolved=0 hardware_busy=0 injected_busy=9 rounds=4 cleanup=reaped frames_before=66652 frames_after=66652

@@ -1,0 +1,1 @@
+Stopped after case 2 stalled: fixture did not require the waker to begin executing before the waiter entered its locked rendezvous. No SMP expansion authorized by this failed pilot.

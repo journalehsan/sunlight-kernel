@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    ".threading-evidence/t2/check_format.py"
+  ],
+  "exit_code": 0,
+  "seconds": 1.0007754779944662
+}

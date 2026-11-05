@@ -1,0 +1,62 @@
+{
+  "suite": "fp",
+  "pass": true,
+  "commands": [
+    [
+      "env",
+      "RUSTFLAGS=-C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld",
+      "cargo",
+      "build",
+      "--manifest-path",
+      "tools/native-std-probe/Cargo.toml",
+      "--target",
+      "tools/targets/x86_64-sunlightos.json",
+      "--bin",
+      "native-fp-probe",
+      "--release",
+      "-Z",
+      "build-std=core,alloc",
+      "-Z",
+      "json-target-spec",
+      "--offline"
+    ],
+    [
+      "env",
+      "SUNLIGHT_INJECT_PHASE=native-std",
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--offline",
+      "--features",
+      "key_inject,native_std_probe"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165021.430200Z-suite-fp/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165021.430200Z-suite-fp/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165021.430200Z-suite-fp/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T165021.430200Z-suite-fp/kernel.elf"
+    ]
+  ],
+  "guests": {
+    "2": 0,
+    "4": 0,
+    "12": 0
+  },
+  "kernel_sha256": "4e2857203958abf22c57850ef5b5e81cc4fc4e677eada1614aef1e5ff74eeab8"
+}

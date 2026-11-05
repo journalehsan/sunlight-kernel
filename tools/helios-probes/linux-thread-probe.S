@@ -11,6 +11,34 @@
 .endm
 
 _start:
+    /* Affinity bits identify dense logical CPUs even with sparse APIC IDs. */
+    mov $204, %eax
+    xor %edi, %edi
+    mov $8, %esi
+    lea affinity_mask(%rip), %rdx
+    syscall
+    cmp $8, %rax
+    jne failed
+    mov affinity_mask(%rip), %rax
+    test %rax, %rax
+    jz failed
+    lea 1(%rax), %rcx
+    test %rcx, %rax
+    jne failed
+    mov $204, %eax
+    xor %edi, %edi
+    mov $4, %esi
+    lea affinity_mask(%rip), %rdx
+    syscall
+    cmp $-22, %rax
+    jne failed
+    print msg_affinity_mask, msg_affinity_mask_len
+    mov affinity_mask+4(%rip), %edi
+    call print_hex
+    mov affinity_mask(%rip), %edi
+    call print_hex
+    print msg_nl, 1
+
     /* Both threads must retain their own FS base over scheduling. */
     mov $158, %eax
     mov $0x1002, %edi
@@ -292,9 +320,9 @@ signal_handler:
     ret
 
 .section .rodata
-msg_main:   .ascii "THREAD_PROBE main_pid=0x"
+msg_main:   .ascii "main_pid=0x"
 .set msg_main_len, . - msg_main
-msg_worker: .ascii "THREAD_PROBE worker_pid=0x"
+msg_worker: .ascii "worker_pid=0x"
 .set msg_worker_len, . - msg_worker
 msg_tid:    .ascii " main_tid=0x"
 .set msg_tid_len, . - msg_tid
@@ -309,6 +337,8 @@ msg_tls:    .ascii "tls=ok\n"
 .set msg_tls_len, . - msg_tls
 msg_clear:  .ascii "child_tid_clear=ok\n"
 .set msg_clear_len, . - msg_clear
+msg_affinity_mask: .ascii "affinity_mask="
+.set msg_affinity_mask_len, . - msg_affinity_mask
 msg_pass:   .ascii "THREAD_PROBE PASS\n"
 .set msg_pass_len, . - msg_pass
 msg_fail:   .ascii "THREAD_PROBE FAIL\n"
@@ -344,3 +374,6 @@ old_action: .skip 32
 old_mask: .skip 8
 main_tls_seen: .skip 8
 worker_tls_seen: .skip 8
+
+.align 8
+affinity_mask: .skip 8

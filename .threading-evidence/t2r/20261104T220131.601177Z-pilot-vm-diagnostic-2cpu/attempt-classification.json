@@ -1,0 +1,4 @@
+{
+  "classification": "INVALID_WRONG_FROZEN_IMAGE",
+  "reason": "Freeze raced pending build; frozen ELF hash equals immediate-exit image. Never native VM-race evidence. Replaced by diagnostic-r2 after awaiting build completion."
+}

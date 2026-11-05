@@ -1,0 +1,16 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools",
+    "-p",
+    "test_fastlane_native_boundary.py"
+  ],
+  "exit_code": 0,
+  "seconds": 0.25066746499214787
+}

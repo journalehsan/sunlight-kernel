@@ -1,0 +1,923 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 1 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T22:44:52Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf131ce9 (61746 frames, 241 MiB)
+[PMM] 1321/1562 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2329
+[ACPI] Found table: FACP at 0x7ffe21dd
+[ACPI] Found table: APIC at 0x7ffe2251
+[ACPI] Found table: HPET at 0x7ffe22c9
+[ACPI] Found table: WAET at 0x7ffe2301
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11904 end_count=7904 elapsed_counts=4000 tsc_delta=8312082 tsc_hz=2479456656
+[TIME] TSC calibrated ~2479456656 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6f55e8 ist_df=0xffffffff8f131cc3 ist_nmi=0xffffffff8efb3380
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63047400 lapic_initial_count=630474 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2479456656
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x22 minute=0x46 second=0x01 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T22:46:01Z assumed_basis=UTC
+wall: utc=2026-11-04T22:46:01Z unix=1793832361 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 1 logical processor(s) found, 1 usable
+[ACPI] MADT: 1 logical processor(s) detected (1 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8003a0d0
+[SYSCALL] OK
+[SMP] Limine MP response: 1 CPU(s), BSP LAPIC ID=0
+[SMP] Phase-1 bring-up complete: 0 AP(s) online (1 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 1 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 1 CPU(s)
+[CAP]  Capability broker initialized
+[CAP] Created endpoint 0 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 1 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 2 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 3 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 4 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 5 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 6 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 7 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 8 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 9 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 10 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 11 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 12 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 13 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 14 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 15 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 16 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 17 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 18 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 19 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 20 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 21 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 22 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 23 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 24 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 25 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 26 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 27 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 28 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 29 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 30 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 31 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 32 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 33 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 34 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 35 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 36 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 37 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 38 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 39 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 40 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 41 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 42 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 43 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 44 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 45 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 46 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 47 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 48 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 49 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 50 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 51 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 52 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 53 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 54 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 55 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 56 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 57 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 58 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 59 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 60 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 61 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 62 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 63 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 64 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 65 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 66 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 67 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 68 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 69 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 70 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 71 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 72 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 73 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 74 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 75 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 76 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 77 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 78 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 79 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 80 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 81 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 82 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 83 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 84 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 85 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 86 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 87 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 88 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 89 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 90 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 91 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 92 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 93 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 94 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 95 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 96 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 97 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 98 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 99 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 100 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 101 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 102 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 103 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 104 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 105 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 106 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 107 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 108 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 109 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 110 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 111 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 112 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 113 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 114 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 115 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 116 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 117 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 118 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 119 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 120 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 121 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 122 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 123 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 124 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 125 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 126 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 127 for pid=1
+[CAP] Revoked IPC capability
+[CAP-P] issuance samples=endpoint_create_including_uart count=128 units=guest_tsc p50=280012 p95=426872 p99=687340 max=4785582 collisions=0 scope=local_broker_no_contention
+[CAP-P] issuance samples=mint count=128 units=guest_tsc p50=3468 p95=5537 p99=221390 max=794816 collisions=0 scope=local_broker_no_contention
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[CAP] Created endpoint 2 for pid=3
+[HISTORY-E] boundary capacity=65536 history=65536 active=0 oldest=denied newest=denied extra=TokenHistoryFull existing=usable partial=0 entropy_after_full=unchanged restart=UNSUPPORTED scope=isolated-production-broker cpu=0
+[SESSION-E2] sequential case=0 epoch=1 session=1 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=1 epoch=1 session=2 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=2 epoch=1 session=3 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=3 epoch=1 session=4 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] boundary PASS registrations=4 revoked=2 expired=1 owner_retired=1 live=0 receipts=0 grants=0 capacity=4 pending_commit=0 consumption_refs=0 revocation_ops=0 ipc_completions=0 epoch_allocations=2 exhausted=denied old_epoch=denied cpu=0 scope=isolated-production-broker remote_races=NOT_FORCED
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[GRANT-D] retired-token local_broker recycled_storage=observed repeated_candidate=rejected stuck_source=failed_closed old_lookup=denied active=0 scope=isolated_production_broker
+[CAP-P] shm-cycle=0 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=1 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=2 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=3 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=4 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=5 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=6 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=7 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=8 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=9 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=10 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=11 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=12 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=13 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=14 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=15 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=16 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=17 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=18 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=19 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=20 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=21 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=22 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=23 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=24 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=25 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=26 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=27 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=28 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=29 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=30 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=31 free_before=334283 free_after=334283 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] SHM prediction regression: 1984 denied; 32 delegated legacy maps; zero frame drift
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[CAP-P] local fault injection: entropy/reservation/SHM rollback/collision/retry bound OK
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[CAP] Created endpoint 0 for pid=61953
+[CAP] Created endpoint 1 for pid=61952
+[SCHED] CREATED process #1 'cap-probe' idx=0 burst_score=256 tier=High
+[SCHED] CREATED process #2 'cap-probe' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #3 'cap-probe' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #4 'cap-probe' idx=3 burst_score=256 tier=High
+[CAP-P] native begin cpus=1 workers=2 predictions_per_worker=124 issuance_cycles_per_worker=128
+[SCHED] process 0 'cap-probe' state=Ready
+[SCHED] Entering process 0 'cap-probe' at rsp=0xffffffff900083a0
+[SHM]  map_shared_page: OK
+[SYSCALL] thread_spawn: parent=61953 tid=61956 trampoline=0x40032f
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[MM-0] exec rejected while address-space borrowers are live
+[CAP] Created endpoint 2 for pid=61954
+[SHM]  alloc_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 3 for pid=61954
+[CAP] Created endpoint 4 for pid=61954
+[CAP] Created endpoint 5 for pid=61954
+[CAP] Created endpoint 6 for pid=61954
+[CAP] Created endpoint 7 for pid=61954
+[CAP] Created endpoint 8 for pid=61954
+[CAP] Created endpoint 9 for pid=61954
+[CAP] Created endpoint 10 for pid=61954
+[CAP] Created endpoint 11 for pid=61954
+[CAP] Created endpoint 12 for pid=61954
+[CAP] Created endpoint 13 for pid=61954
+[CAP] Created endpoint 14 for pid=61954
+[CAP] Created endpoint 15 for pid=61954
+[CAP] Created endpoint 16 for pid=61954
+[CAP] Created endpoint 17 for pid=61954
+[CAP] Created endpoint 18 for pid=61954
+[CAP] Created endpoint 19 for pid=61954
+[CAP] Created endpoint 20 for pid=61954
+[CAP] Created endpoint 21 for pid=61954
+[CAP] Created endpoint 22 for pid=61954
+[CAP] Created endpoint 23 for pid=61954
+[CAP] Created endpoint 24 for pid=61954
+[CAP] Created endpoint 25 for pid=61954
+[CAP] Created endpoint 26 for pid=61954
+[CAP] Created endpoint 27 for pid=61954
+[CAP] Created endpoint 28 for pid=61954
+[CAP] Created endpoint 29 for pid=61954
+[CAP] Created endpoint 30 for pid=61954
+[CAP] Created endpoint 31 for pid=61954
+[CAP] Created endpoint 32 for pid=61954
+[CAP] Created endpoint 33 for pid=61954
+[CAP] Created endpoint 34 for pid=61954
+[CAP] Created endpoint 35 for pid=61954
+[CAP] Created endpoint 36 for pid=61954
+[CAP] Created endpoint 37 for pid=61954
+[CAP] Created endpoint 38 for pid=61954
+[CAP] Created endpoint 39 for pid=61954
+[CAP] Created endpoint 40 for pid=61954
+[CAP] Created endpoint 41 for pid=61954
+[CAP] Created endpoint 42 for pid=61954
+[CAP] Created endpoint 43 for pid=61954
+[CAP] Created endpoint 44 for pid=61954
+[CAP] Created endpoint 45 for pid=61954
+[CAP] Created endpoint 46 for pid=61954
+[CAP] Created endpoint 47 for pid=61954
+[CAP] Created endpoint 48 for pid=61954
+[CAP] Created endpoint 49 for pid=61954
+[CAP] Created endpoint 50 for pid=61954
+[CAP] Created endpoint 51 for pid=61954
+[CAP] Created endpoint 52 for pid=61954
+[CAP] Created endpoint 53 for pid=61954
+[CAP] Created endpoint 54 for pid=61954
+[CAP] Created endpoint 55 for pid=61954
+[CAP] Created endpoint 56 for pid=61954
+[CAP] Created endpoint 57 for pid=61954
+[CAP] Created endpoint 58 for pid=61954
+[CAP] Created endpoint 59 for pid=61954
+[CAP] Created endpoint 60 for pid=61954
+[CAP] Created endpoint 61 for pid=61954
+[CAP] Created endpoint 62 for pid=61954
+[CAP] Created endpoint 63 for pid=61954
+[CAP] Created endpoint 64 for pid=61954
+[CAP] Created endpoint 65 for pid=61954
+[CAP] Created endpoint 66 for pid=61954
+[CAP] Created endpoint 67 for pid=61954
+[CAP] Created endpoint 68 for pid=61954
+[CAP] Created endpoint 69 for pid=61954
+[CAP] Created endpoint 70 for pid=61954
+[CAP] Created endpoint 71 for pid=61954
+[CAP] Created endpoint 72 for pid=61954
+[CAP] Created endpoint 73 for pid=61954
+[CAP] Created endpoint 74 for pid=61954
+[CAP] Created endpoint 75 for pid=61954
+[CAP] Created endpoint 76 for pid=61954
+[CAP] Created endpoint 77 for pid=61954
+[CAP] Created endpoint 78 for pid=61954
+[CAP] Created endpoint 79 for pid=61954
+[CAP] Created endpoint 80 for pid=61954
+[CAP] Created endpoint 81 for pid=61954
+[CAP] Created endpoint 82 for pid=61954
+[CAP] Created endpoint 83 for pid=61954
+[CAP] Created endpoint 84 for pid=61954
+[CAP] Created endpoint 85 for pid=61954
+[CAP] Created endpoint 86 for pid=61954
+[CAP] Created endpoint 87 for pid=61954
+[CAP] Created endpoint 88 for pid=61954
+[CAP] Created endpoint 89 for pid=61954
+[CAP] Created endpoint 90 for pid=61954
+[CAP] Created endpoint 91 for pid=61954
+[CAP] Created endpoint 92 for pid=61954
+[CAP] Created endpoint 93 for pid=61954
+[CAP] Created endpoint 94 for pid=61954
+[CAP] Created endpoint 95 for pid=61954
+[CAP] Created endpoint 96 for pid=61954
+[CAP] Created endpoint 97 for pid=61954
+[CAP] Created endpoint 98 for pid=61954
+[CAP] Created endpoint 99 for pid=61954
+[CAP] Created endpoint 100 for pid=61954
+[CAP] Created endpoint 101 for pid=61954
+[CAP] Created endpoint 102 for pid=61954
+[CAP] Created endpoint 103 for pid=61954
+[CAP] Created endpoint 104 for pid=61954
+[CAP] Created endpoint 105 for pid=61954
+[CAP] Created endpoint 106 for pid=61954
+[CAP] Created endpoint 107 for pid=61954
+[CAP] Created endpoint 108 for pid=61954
+[CAP] Created endpoint 109 for pid=61954
+[CAP] Created endpoint 110 for pid=61954
+[CAP] Created endpoint 111 for pid=61954
+[CAP] Created endpoint 112 for pid=61954
+[CAP] Created endpoint 113 for pid=61954
+[CAP] Created endpoint 114 for pid=61954
+[CAP] Created endpoint 115 for pid=61954
+[CAP] Created endpoint 116 for pid=61954
+[CAP] Created endpoint 117 for pid=61954
+[CAP] Created endpoint 118 for pid=61954
+[CAP] Created endpoint 119 for pid=61954
+[CAP] Created endpoint 120 for pid=61954
+[CAP] Created endpoint 121 for pid=61954
+[CAP] Created endpoint 122 for pid=61954
+[CAP] Created endpoint 123 for pid=61954
+[CAP] Created endpoint 124 for pid=61954
+[CAP] Created endpoint 125 for pid=61954
+[CAP] Created endpoint 126 for pid=61954
+[CAP] Created endpoint 127 for pid=61954
+[CAP] Created endpoint 128 for pid=61954
+[CAP] Created endpoint 129 for pid=61954
+[CAP] Created endpoint 130 for pid=61954
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61954 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61954 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61954 name='cap-probe'
+[CAP] Created endpoint 131 for pid=61955
+[SHM]  alloc_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 132 for pid=61955
+[CAP] Created endpoint 133 for pid=61955
+[CAP] Created endpoint 134 for pid=61955
+[CAP] Created endpoint 135 for pid=61955
+[CAP] Created endpoint 136 for pid=61955
+[CAP] Created endpoint 137 for pid=61955
+[CAP] Created endpoint 138 for pid=61955
+[CAP] Created endpoint 139 for pid=61955
+[CAP] Created endpoint 140 for pid=61955
+[CAP] Created endpoint 141 for pid=61955
+[CAP] Created endpoint 142 for pid=61955
+[CAP] Created endpoint 143 for pid=61955
+[CAP] Created endpoint 144 for pid=61955
+[CAP] Created endpoint 145 for pid=61955
+[CAP] Created endpoint 146 for pid=61955
+[CAP] Created endpoint 147 for pid=61955
+[CAP] Created endpoint 148 for pid=61955
+[CAP] Created endpoint 149 for pid=61955
+[CAP] Created endpoint 150 for pid=61955
+[CAP] Created endpoint 151 for pid=61955
+[CAP] Created endpoint 152 for pid=61955
+[CAP] Created endpoint 153 for pid=61955
+[CAP] Created endpoint 154 for pid=61955
+[CAP] Created endpoint 155 for pid=61955
+[CAP] Created endpoint 156 for pid=61955
+[CAP] Created endpoint 157 for pid=61955
+[CAP] Created endpoint 158 for pid=61955
+[CAP] Created endpoint 159 for pid=61955
+[CAP] Created endpoint 160 for pid=61955
+[CAP] Created endpoint 161 for pid=61955
+[CAP] Created endpoint 162 for pid=61955
+[CAP] Created endpoint 163 for pid=61955
+[CAP] Created endpoint 164 for pid=61955
+[CAP] Created endpoint 165 for pid=61955
+[CAP] Created endpoint 166 for pid=61955
+[CAP] Created endpoint 167 for pid=61955
+[CAP] Created endpoint 168 for pid=61955
+[CAP] Created endpoint 169 for pid=61955
+[CAP] Created endpoint 170 for pid=61955
+[CAP] Created endpoint 171 for pid=61955
+[CAP] Created endpoint 172 for pid=61955
+[CAP] Created endpoint 173 for pid=61955
+[CAP] Created endpoint 174 for pid=61955
+[CAP] Created endpoint 175 for pid=61955
+[CAP] Created endpoint 176 for pid=61955
+[CAP] Created endpoint 177 for pid=61955
+[CAP] Created endpoint 178 for pid=61955
+[CAP] Created endpoint 179 for pid=61955
+[CAP] Created endpoint 180 for pid=61955
+[CAP] Created endpoint 181 for pid=61955
+[CAP] Created endpoint 182 for pid=61955
+[CAP] Created endpoint 183 for pid=61955
+[CAP] Created endpoint 184 for pid=61955
+[CAP] Created endpoint 185 for pid=61955
+[CAP] Created endpoint 186 for pid=61955
+[CAP] Created endpoint 187 for pid=61955
+[CAP] Created endpoint 188 for pid=61955
+[CAP] Created endpoint 189 for pid=61955
+[CAP] Created endpoint 190 for pid=61955
+[CAP] Created endpoint 191 for pid=61955
+[CAP] Created endpoint 192 for pid=61955
+[CAP] Created endpoint 193 for pid=61955
+[CAP] Created endpoint 194 for pid=61955
+[CAP] Created endpoint 195 for pid=61955
+[CAP] Created endpoint 196 for pid=61955
+[CAP] Created endpoint 197 for pid=61955
+[CAP] Created endpoint 198 for pid=61955
+[CAP] Created endpoint 199 for pid=61955
+[CAP] Created endpoint 200 for pid=61955
+[CAP] Created endpoint 201 for pid=61955
+[CAP] Created endpoint 202 for pid=61955
+[CAP] Created endpoint 203 for pid=61955
+[CAP] Created endpoint 204 for pid=61955
+[CAP] Created endpoint 205 for pid=61955
+[CAP] Created endpoint 206 for pid=61955
+[CAP] Created endpoint 207 for pid=61955
+[CAP] Created endpoint 208 for pid=61955
+[CAP] Created endpoint 209 for pid=61955
+[CAP] Created endpoint 210 for pid=61955
+[CAP] Created endpoint 211 for pid=61955
+[CAP] Created endpoint 212 for pid=61955
+[CAP] Created endpoint 213 for pid=61955
+[CAP] Created endpoint 214 for pid=61955
+[CAP] Created endpoint 215 for pid=61955
+[CAP] Created endpoint 216 for pid=61955
+[CAP] Created endpoint 217 for pid=61955
+[CAP] Created endpoint 218 for pid=61955
+[CAP] Created endpoint 219 for pid=61955
+[CAP] Created endpoint 220 for pid=61955
+[CAP] Created endpoint 221 for pid=61955
+[CAP] Created endpoint 222 for pid=61955
+[CAP] Created endpoint 223 for pid=61955
+[CAP] Created endpoint 224 for pid=61955
+[CAP] Created endpoint 225 for pid=61955
+[CAP] Created endpoint 226 for pid=61955
+[CAP] Created endpoint 227 for pid=61955
+[CAP] Created endpoint 228 for pid=61955
+[CAP] Created endpoint 229 for pid=61955
+[CAP] Created endpoint 230 for pid=61955
+[CAP] Created endpoint 231 for pid=61955
+[CAP] Created endpoint 232 for pid=61955
+[CAP] Created endpoint 233 for pid=61955
+[CAP] Created endpoint 234 for pid=61955
+[CAP] Created endpoint 235 for pid=61955
+[CAP] Created endpoint 236 for pid=61955
+[CAP] Created endpoint 237 for pid=61955
+[CAP] Created endpoint 238 for pid=61955
+[CAP] Created endpoint 239 for pid=61955
+[CAP] Created endpoint 240 for pid=61955
+[CAP] Created endpoint 241 for pid=61955
+[CAP] Created endpoint 242 for pid=61955
+[CAP] Created endpoint 243 for pid=61955
+[CAP] Created endpoint 244 for pid=61955
+[CAP] Created endpoint 245 for pid=61955
+[CAP] Created endpoint 246 for pid=61955
+[CAP] Created endpoint 247 for pid=61955
+[CAP] Created endpoint 248 for pid=61955
+[CAP] Created endpoint 249 for pid=61955
+[CAP] Created endpoint 250 for pid=61955
+[CAP] Created endpoint 251 for pid=61955
+[CAP] Created endpoint 252 for pid=61955
+[CAP] Created endpoint 253 for pid=61955
+[CAP] Created endpoint 254 for pid=61955
+[CAP] Created endpoint 255 for pid=61955
+[CAP] Created endpoint 256 for pid=61955
+[CAP] Created endpoint 257 for pid=61955
+[CAP] Created endpoint 258 for pid=61955
+[CAP] Created endpoint 259 for pid=61955
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61955 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61955 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61955 name='cap-probe'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61956 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61956 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61956 name='cap-probe'
+[EXEC-R3] live borrower rejected exec; borrower exited PASS
+[SYSCALL] thread_spawn: parent=61953 tid=61957 trampoline=0x40032f
+[SCHED] process_reaped pid=61954 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61954 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61954 cleared_msgs=0
+[SCHED] process_reaped pid=61955 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61955 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61955 cleared_msgs=0
+[SCHED] process_reaped pid=61956 name='cap-probe' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61956 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61956 cleared_msgs=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[CAP-R41] START op=real-auth-reply-account-denied pid=61953 incarnation=2 vm=67 request=1 pending=1
+[CAP-R41] boundary stale-incarnation=denied real-call-cancel=retired duplicate=stable pending=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61957 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61957 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61957 name='cap-probe'
+[SCHED] process_reaped pid=61957 name='cap-probe' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61957 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61957 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[CAP-PR] exec authority withdrawn before VM activation records=1 remaining=0 account=0
+[EXEC-R3] authority commit=1 pid=61953 incarnation=2 old_generation=67 new_generation=70 roles=withdrawn endpoint=preserved uid=preserved old_views=1
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 272920576, generation: 67 } new_vm=AddressSpaceIdentity { pml4_phys: 279416832, generation: 70 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=518 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=2 pid=61953 incarnation=2 old_generation=70 new_generation=71 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 279416832, generation: 70 } new_vm=AddressSpaceIdentity { pml4_phys: 281563136, generation: 71 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=3 pid=61953 incarnation=2 old_generation=71 new_generation=72 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 281563136, generation: 71 } new_vm=AddressSpaceIdentity { pml4_phys: 283709440, generation: 72 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=4 pid=61953 incarnation=2 old_generation=72 new_generation=73 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 283709440, generation: 72 } new_vm=AddressSpaceIdentity { pml4_phys: 285855744, generation: 73 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=5 pid=61953 incarnation=2 old_generation=73 new_generation=74 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 285855744, generation: 73 } new_vm=AddressSpaceIdentity { pml4_phys: 288002048, generation: 74 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=6 pid=61953 incarnation=2 old_generation=74 new_generation=75 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 288002048, generation: 74 } new_vm=AddressSpaceIdentity { pml4_phys: 290148352, generation: 75 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=7 pid=61953 incarnation=2 old_generation=75 new_generation=76 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 290148352, generation: 75 } new_vm=AddressSpaceIdentity { pml4_phys: 292294656, generation: 76 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=8 pid=61953 incarnation=2 old_generation=76 new_generation=77 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 292294656, generation: 76 } new_vm=AddressSpaceIdentity { pml4_phys: 294440960, generation: 77 } kernel_rsp=0xffffffff90013c80 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[EXEC-R2] eight replacements PASS; entering original /bin/true
+[SYSCALL] exec path=/bin/true, argc=0, envc=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5fe memsz=5fe prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=29 memsz=29 prot=Read
+[EXEC] Stack: argc=0 envc=0 auxv=2 rsp=0x7fffffffefb0
+[EXEC] Loaded ELF entry=0x400030, stack=0x7fffffffefb0
+[EXEC-R3] authority commit=9 pid=61953 incarnation=2 old_generation=77 new_generation=78 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 294440960, generation: 77 } new_vm=AddressSpaceIdentity { pml4_phys: 296587264, generation: 78 } kernel_rsp=0xffffffff90013c80 entry=0x400030 user_rsp=0x7fffffffefb0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400030
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61953 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61953 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61953 name='cap-probe'
+[SCHED] process_reaped pid=61953 name='cap-probe' user_frames=514 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61953 frames=514 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61953 cleared_msgs=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=2 cpu=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61952 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61952 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61952 name='cap-probe'
+[SCHED] process_reaped pid=61952 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61952 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61952 cleared_msgs=0
+[T1-AUTH] PASS sibling_progress=blocked-authenticated-ipc private_kernel_stack=checked
+[CAP-R41] COMPLETE delivered_auth_consumed=15 stale_incarnation=denied real_call_cancel=retired pending=0 active_auth_account=0 cpus=1
+[CAP-PR] lifecycle PASS auth=17 account=0 account_denied=35 post_reap_records=0 late_auth=denied late_account=denied cpus=1
+[CAP-P] native PASS cpus=1 workers=2 predictions_denied=248 issuance_cycles=256 free_before=334283 free_after=334283 data_delta=0 pt_delta=0 mappings=0 tokens=0 ticks=200

@@ -1,0 +1,12 @@
+# Phase 3.8 expected serial output
+[ELF]  Static ELF loader initialized
+[KERN] spawn endpoint registered
+[TTY]  Login success: root (uid=0, gid=0)
+[TTY]  Spawning /bin/sshl (pid=5)...
+[TTY]  Shell: sshl v0.1.0 running
+[TTY]  cmd: whoami -> root
+[TTY]  cmd: id -> uid=0(root) gid=0(root) groups=0(root),10(wheel)
+[TTY]  cmd: useradd testuser -> OK
+[TTY]  cmd: id testuser -> uid=1001(testuser) gid=100(users)
+[TTY]  cmd: userdel testuser -> OK
+[SunlightOS] Phase 3.8 OK

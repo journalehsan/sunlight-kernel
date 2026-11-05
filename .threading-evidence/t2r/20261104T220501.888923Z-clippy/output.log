@@ -1,0 +1,763 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-fat v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+    Checking sunlight-ipc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+    Checking sunlight-virtio v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Checking sunlight-smbios v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+    Checking sunlight-compat-linux v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+    Checking sunlight-sensors v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+   Compiling sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+error: manual `RangeInclusive::contains` implementation
+   --> sunlight-sensors/src/lib.rs:288:5
+    |
+288 |     v >= TEMP_MIN_SANE_MC && v <= TEMP_MAX_SANE_MC
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(TEMP_MIN_SANE_MC..=TEMP_MAX_SANE_MC).contains(&v)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+    = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: manual `!RangeInclusive::contains` implementation
+   --> sunlight-sensors/src/lib.rs:471:12
+    |
+471 |         if tj < 60 || tj > 120 {
+    |            ^^^^^^^^^^^^^^^^^^^ help: use: `!(60..=120).contains(&tj)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+error: clamp-like pattern without using clamp function
+   --> sunlight-tui/build.rs:165:20
+    |
+165 |         let left = m.xmin.max(-128).min(127) as i8;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `m.xmin.clamp(-128, 127)`
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+    = note: `-D clippy::manual-clamp` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_clamp)]`
+
+error: clamp-like pattern without using clamp function
+   --> sunlight-tui/build.rs:167:19
+    |
+167 |         let top = top_raw.max(-128).min(127) as i8;
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `top_raw.clamp(-128, 127)`
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+
+error: this operation has no effect
+   --> sunlight-tui/build.rs:249:17
+    |
+249 |             img[didx + 0] = 0xFF; // B
+    |                 ^^^^^^^^ help: consider reducing it to: `didx`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#identity_op
+    = note: `-D clippy::identity-op` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::identity_op)]`
+
+error: could not compile `sunlight-sensors` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `sunlight-tui` (build script) due to 3 previous errors
+error: manual `Range::contains` implementation
+    --> kernel/build.rs:1078:5
+     |
+1078 |     entry >= 0x400000 && entry < 0x0000_8000_0000_0000
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(0x400000..0x0000_8000_0000_0000).contains(&entry)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+     = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: manual case-insensitive ASCII comparison
+   --> sunlight-smbios/src/lib.rs:221:27
+    |
+221 |             .all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_ignore_case_cmp
+    = note: `-D clippy::manual-ignore-case-cmp` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_ignore_case_cmp)]`
+help: consider using `.eq_ignore_ascii_case()` instead
+    |
+221 -             .all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+221 +             .all(|(x, y)| x.eq_ignore_ascii_case(y))
+    |
+
+error: using `contains()` instead of `iter().any()` is more efficient
+   --> sunlight-smbios/src/lib.rs:279:5
+    |
+279 |     PLACEHOLDERS.iter().any(|p| *p == lower)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `PLACEHOLDERS.contains(&lower)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_contains
+    = note: `-D clippy::manual-contains` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_contains)]`
+
+error: could not compile `sunlight-kernel` (build script) due to 1 previous error
+error: unsafe function's docs are missing a `# Safety` section
+  --> sunlight-virtio/src/blk.rs:72:5
+   |
+72 | /     pub unsafe fn init(
+73 | |         io_base: u16,
+74 | |         queue_phys: u64,
+75 | |         queue_virt: u64,
+76 | |         req_phys: u64,
+77 | |         req_virt: u64,
+78 | |     ) -> Option<Self> {
+   | |_____________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+   = note: `-D clippy::missing-safety-doc` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::missing_safety_doc)]`
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:211:5
+    |
+211 |     pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:221:5
+    |
+221 |     pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:230:5
+    |
+230 |     pub unsafe fn flush(&mut self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:336:5
+    |
+336 | /     pub unsafe fn init(
+337 | |         info: &VirtioGpuPciInfo,
+338 | |         hhdm: u64,
+339 | |         ctrl_q_phys: u64,
+...   |
+348 | |         cursor_virt: u64,
+349 | |     ) -> Option<Self> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: could not compile `sunlight-smbios` (lib) due to 2 previous errors
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:470:5
+    |
+470 |     pub unsafe fn get_display_info(&mut self) -> Option<(u32, u32)> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:482:5
+    |
+482 |     pub unsafe fn get_display_modes(&mut self) -> Option<[VirtioGpuDisplayOne; 16]> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:506:5
+    |
+506 | /     pub unsafe fn resource_create_2d(
+507 | |         &mut self,
+508 | |         resource_id: u32,
+509 | |         format: u32,
+510 | |         w: u32,
+511 | |         h: u32,
+512 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:537:5
+    |
+537 | /     pub unsafe fn resource_attach_backing(
+538 | |         &mut self,
+539 | |         resource_id: u32,
+540 | |         entries: &[VirtioGpuMemEntry],
+541 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual slice size calculation
+   --> sunlight-virtio/src/gpu.rs:563:27
+    |
+563 |         let entries_len = (n * core::mem::size_of::<VirtioGpuMemEntry>()) as u32;
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `core::mem::size_of_val(entries)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_slice_size_calculation
+    = note: `-D clippy::manual-slice-size-calculation` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_slice_size_calculation)]`
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:586:5
+    |
+586 | /     pub unsafe fn set_scanout(
+587 | |         &mut self,
+588 | |         scanout_id: u32,
+589 | |         resource_id: u32,
+590 | |         w: u32,
+591 | |         h: u32,
+592 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:616:5
+    |
+616 | /     pub unsafe fn transfer_to_host_2d(
+617 | |         &mut self,
+618 | |         resource_id: u32,
+619 | |         x: u32,
+...   |
+623 | |         stride: u32,
+624 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:649:5
+    |
+649 | /     pub unsafe fn resource_flush(
+650 | |         &mut self,
+651 | |         resource_id: u32,
+652 | |         x: u32,
+...   |
+655 | |         h: u32,
+656 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:679:5
+    |
+679 | /     pub unsafe fn update_cursor(
+680 | |         &mut self,
+681 | |         scanout_id: u32,
+682 | |         resource_id: u32,
+...   |
+686 | |         hot_y: u32,
+687 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:712:5
+    |
+712 |     pub unsafe fn move_cursor(&mut self, scanout_id: u32, x: u32, y: u32) -> Result<(), u32> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: this function has too many arguments (8/7)
+   --> sunlight-virtio/src/gpu.rs:800:5
+    |
+800 | /     unsafe fn ctrl3(
+801 | |         &mut self,
+802 | |         cmd_phys: u64,
+803 | |         cmd_len: u32,
+...   |
+808 | |         rsp_type_v: *const u32,
+809 | |     ) -> u32 {
+    | |____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `-D clippy::too-many-arguments` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::too_many_arguments)]`
+
+error: this function has too many arguments (8/7)
+   --> sunlight-virtio/src/gpu.rs:855:5
+    |
+855 | /     unsafe fn submit2(
+856 | |         q: &mut Virtq,
+857 | |         q_idx: u16,
+858 | |         d0_phys: u64,
+...   |
+863 | |         notify_mult: u32,
+864 | |     ) {
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+error: this function has too many arguments (10/7)
+   --> sunlight-virtio/src/gpu.rs:892:5
+    |
+892 | /     unsafe fn submit3(
+893 | |         q: &mut Virtq,
+894 | |         q_idx: u16,
+895 | |         d0_phys: u64,
+...   |
+902 | |         notify_mult: u32,
+903 | |     ) {
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+error: manual implementation of `.is_multiple_of()`
+  --> compat-linux/src/affinity.rs:10:35
+   |
+10 |     if cpusetsize < MASK_BYTES || cpusetsize % core::mem::size_of::<u64>() != 0 {
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!cpusetsize.is_multiple_of(core::mem::size_of::<u64>())`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+   = note: `-D clippy::manual-is-multiple-of` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_is_multiple_of)]`
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:128:1
+    |
+128 | pub unsafe fn pci_read8(bus: u8, slot: u8, func: u8, offset: u8) -> u8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:140:1
+    |
+140 | pub unsafe fn read_bar_mmio_base(bus: u8, slot: u8, func: u8, bar_idx: u8) -> Option<u64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:165:1
+    |
+165 | pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:270:1
+    |
+270 | pub unsafe fn find_virtio_blk() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:298:1
+    |
+298 | pub unsafe fn find_virtio_net() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:328:1
+    |
+328 | pub unsafe fn find_virtio_rng() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:353:1
+    |
+353 | pub unsafe fn probe_vmxnet3() -> Result<Option<Vmxnet3PciInfo>, Vmxnet3ProbeError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:408:1
+    |
+408 | pub unsafe fn find_vmxnet3() -> Option<Vmxnet3PciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:417:1
+    |
+417 | pub unsafe fn probe_vmware_svga() -> Result<Option<VmwareSvgaPciInfo>, VmwareSvgaProbeError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: this returns a `Result<_, ()>`
+  --> compat-linux/src/open_flags.rs:19:1
+   |
+19 | pub fn parse(raw: u64) -> Result<OpenFlags, ()> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use a custom `Error` type instead
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_unit_err
+   = note: `-D clippy::result-unit-err` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::result_unit_err)]`
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:475:1
+    |
+475 | pub unsafe fn find_vmware_svga() -> Option<VmwareSvgaPciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:480:1
+    |
+480 | pub unsafe fn vmware_svga_present() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:484:1
+    |
+484 | pub unsafe fn find_vmware_svga_bdf() -> Option<(u8, u8, u8)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: you should consider adding a `Default` implementation for `RuleSet<N>`
+   --> compat-linux/src/lib.rs:112:5
+    |
+112 | /     pub const fn new() -> Self {
+113 | |         Self { rules: Vec::new() }
+114 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+    = note: `-D clippy::new-without-default` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::new_without_default)]`
+help: try adding this
+    |
+111 + impl<const N: usize> Default for RuleSet<N> {
+112 +     fn default() -> Self {
+113 +         Self::new()
+114 +     }
+115 + }
+    |
+
+error: you should consider adding a `Default` implementation for `RuleIndex<U, G, R>`
+   --> compat-linux/src/lib.rs:129:5
+    |
+129 | /     pub const fn new() -> Self {
+130 | |         Self {
+131 | |             uid_rules: LinearMap::new(),
+132 | |             gid_rules: LinearMap::new(),
+...   |
+135 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+128 + impl<const U: usize, const G: usize, const R: usize> Default for RuleIndex<U, G, R> {
+129 +     fn default() -> Self {
+130 +         Self::new()
+131 +     }
+132 + }
+    |
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:668:1
+    |
+668 | pub unsafe fn vmxnet3_present() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:673:1
+    |
+673 | pub unsafe fn find_vmxnet3_bdf() -> Option<(u8, u8, u8)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:692:1
+    |
+692 | pub unsafe fn pci_read32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:702:1
+    |
+702 | pub unsafe fn pci_write32(bus: u8, slot: u8, func: u8, offset: u8, value: u32) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:714:1
+    |
+714 | pub unsafe fn outl(port: u16, val: u32) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: you should consider adding a `Default` implementation for `MockCapabilityBroker<N>`
+   --> compat-linux/src/lib.rs:231:5
+    |
+231 | /     pub const fn new() -> Self {
+232 | |         Self {
+233 | |             next_token: 1,
+234 | |             table: LinearMap::new(),
+235 | |         }
+236 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+230 + impl<const N: usize> Default for MockCapabilityBroker<N> {
+231 +     fn default() -> Self {
+232 +         Self::new()
+233 +     }
+234 + }
+    |
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:724:1
+    |
+724 | pub unsafe fn inl(port: u16) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:736:1
+    |
+736 | pub unsafe fn outb(port: u16, val: u8) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:746:1
+    |
+746 | pub unsafe fn inb(port: u16) -> u8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:758:1
+    |
+758 | pub unsafe fn outw(port: u16, val: u16) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:768:1
+    |
+768 | pub unsafe fn inw(port: u16) -> u16 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:338:5
+    |
+338 |     pub unsafe fn reg_write(io_base: u16, index: u32, value: u32) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:347:5
+    |
+347 |     pub unsafe fn reg_read(io_base: u16, index: u32) -> u32 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:365:5
+    |
+365 |     pub unsafe fn negotiate_version(io_base: u16) -> Result<u32, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:380:5
+    |
+380 |     pub unsafe fn probe_device(pci: &VmwareSvgaPciInfo) -> Result<SvgaProbeInfo, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: could not compile `sunlight-compat-linux` (lib) due to 5 previous errors
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:458:5
+    |
+458 | /     pub unsafe fn activate(
+459 | |         pci: &VmwareSvgaPciInfo,
+460 | |         fifo_virt: u64,
+461 | |         host_w: u32,
+462 | |         host_h: u32,
+463 | |         boot_fb_phys: Option<u64>,
+464 | |     ) -> Result<Self, SvgaError> {
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual `!Range::contains` implementation
+  --> sunlight-fat/src/fat/write.rs:99:16
+   |
+99 |             if next >= FAT_EOC || next < 2 {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+   = note: `-D clippy::manual-range-contains` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_range_contains)]`
+
+error: the following explicit lifetimes could be elided: 'a
+   --> sunlight-fat/src/fat/write.rs:107:21
+    |
+107 |     fn split_parent<'a>(path: &'a [u8]) -> Result<(&'a [u8], &'a [u8]), FatError> {
+    |                     ^^         ^^                   ^^        ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `-D clippy::needless-lifetimes` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_lifetimes)]`
+help: elide the lifetimes
+    |
+107 -     fn split_parent<'a>(path: &'a [u8]) -> Result<(&'a [u8], &'a [u8]), FatError> {
+107 +     fn split_parent(path: &[u8]) -> Result<(&[u8], &[u8]), FatError> {
+    |
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:580:5
+    |
+580 | /     pub unsafe fn apply_policy_mode(
+581 | |         &mut self,
+582 | |         host_w: u32,
+583 | |         host_h: u32,
+584 | |     ) -> Result<bool, SvgaError> {
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:159:16
+    |
+159 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:718:5
+    |
+718 |     pub unsafe fn set_mode(&mut self, width: u32, height: u32, bpp: u32) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:242:16
+    |
+242 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:774:5
+    |
+774 |     pub unsafe fn set_exact_mode(&mut self, width: u32, height: u32) -> Result<bool, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:823:5
+    |
+823 | /     pub unsafe fn set_mode_with_fallbacks(
+824 | |         &mut self,
+825 | |         candidates: &[(u32, u32, &'static str)],
+826 | |     ) -> Result<&'static str, SvgaError> {
+    | |________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: the loop variable `disk_index` is used to index `slots`
+   --> sunlight-fat/src/fat/write.rs:316:27
+    |
+316 |         for disk_index in 0..lfn_count {
+    |                           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+316 -         for disk_index in 0..lfn_count {
+316 +         for (disk_index, <item>) in slots.iter().enumerate().take(lfn_count) {
+    |
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:932:5
+    |
+932 |     pub unsafe fn fifo_write(&mut self, words: &[u32]) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:360:16
+    |
+360 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+error: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:967:5
+    |
+967 |     pub unsafe fn update_rect(&mut self, x: u32, y: u32, w: u32, h: u32) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+error: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat.rs:132:12
+    |
+132 |         if val >= FAT_EOC || val < 2 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&val)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+error: could not compile `sunlight-virtio` (lib) due to 51 previous errors
+error: could not compile `sunlight-fat` (lib) due to 7 previous errors
+error: this returns a `Result<_, ()>`
+    --> ipc/src/lib.rs:5435:1
+     |
+5435 | pub fn native_poll(fds: &mut [NativePollFd], timeout_ms: i32) -> Result<usize, ()> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use a custom `Error` type instead
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_unit_err
+     = note: `-D clippy::result-unit-err` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::result_unit_err)]`
+
+error: could not compile `sunlight-ipc` (lib) due to 1 previous error

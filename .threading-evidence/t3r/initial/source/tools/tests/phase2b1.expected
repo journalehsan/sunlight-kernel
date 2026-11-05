@@ -1,0 +1,14 @@
+# Phase 2B.1: foundational process and pathname utilities through shell PATH.
+[KBD]  Key injection enabled (phase=phase2b1
+[TTY]  cmd: basename /root/projects/sunlight/kernel -> kernel\n
+[TTY]  exit: basename /root/projects/sunlight/kernel -> 0
+[TTY]  cmd: dirname /root/projects/sunlight/kernel -> /root/projects/sunlight\n
+[TTY]  exit: dirname /root/projects/sunlight/kernel -> 0
+[TTY]  cmd: true -> <empty>
+[TTY]  exit: true -> 0
+[TTY]  cmd: false -> <empty>
+[TTY]  exit: false -> 1
+[TTY]  cmd: basename /tmp/path/name.txt .txt -> name\n
+[TTY]  exit: basename /tmp/path/name.txt .txt -> 0
+[TTY]  cmd: dirname /tmp/path/name/// -> /tmp/path\n
+[TTY]  exit: dirname /tmp/path/name/// -> 0

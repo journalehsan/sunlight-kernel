@@ -1,0 +1,24 @@
+{
+  "debug": {
+    "elf": ".threading-evidence/t2/final/production-debug.elf",
+    "sha256": "cc0cf3ffc73595b0a576642b7a2dc050a5480a94230878958500c31888f76d5b",
+    "excluded": {
+      "[T2] begin": true,
+      "[T2-FAULT]": true,
+      "[T1] PASS": true,
+      "[T1-AUTH] PASS": true,
+      "T2 arm ": true
+    }
+  },
+  "release": {
+    "elf": ".threading-evidence/t2/20261104T201951.052227Z-suite-production/kernel.elf",
+    "sha256": "da6f1075a39f05544115786afb6f76e51a6dec3eac7ea15771524c53f962f38f",
+    "excluded": {
+      "[T2] begin": true,
+      "[T2-FAULT]": true,
+      "[T1] PASS": true,
+      "[T1-AUTH] PASS": true,
+      "T2 arm ": true
+    }
+  }
+}

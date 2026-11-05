@@ -1,0 +1,9 @@
+{
+  "preserved_failure": {
+    "error": "initial archive lacked kernel/build.rs baseline",
+    "phase": "packaging only; no test outcome inferred"
+  },
+  "reconstructed_and_verified": [
+    "kernel/build.rs"
+  ]
+}

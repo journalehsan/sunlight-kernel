@@ -185,13 +185,10 @@ pub extern "C" fn sl_std_yield() {
 #[no_mangle]
 pub unsafe extern "C" fn sl_std_futex(ptr: *const u32, op: u32, value: u32, deadline: u64) -> i32 {
     let result = sys::syscall4(155, ptr as u64, op as u64, value as u64, deadline);
-    if op == 0 && result == 0 && deadline != u64::MAX {
-        let mut now = [0u64; 2];
-        if sl_std_clock(1, now.as_mut_ptr()) == 0
-            && now[0].saturating_mul(1_000_000_000).saturating_add(now[1]) >= deadline
-        {
-            return 2;
-        }
+    if op == 0 && result == 0 {
+        // The scheduler records the winning completion before making us
+        // runnable. A delayed resumption must not turn a wake into a timeout.
+        return sys::syscall4(155, ptr as u64, 2, 0, 0) as i32;
     }
     result as i32
 }
@@ -210,6 +207,7 @@ pub unsafe extern "C" fn sl_std_spawn(
     )
     .cast::<crate::thread::JoinHandle>();
     if ptr.is_null() {
+        crate::errno::set_errno(crate::errno::ENOMEM);
         return core::ptr::null_mut();
     }
     match crate::thread::spawn_with_stack(entry, arg, stack, true) {
@@ -217,12 +215,18 @@ pub unsafe extern "C" fn sl_std_spawn(
             ptr.write(handle);
             ptr.cast()
         }
-        Err(_) => {
+        Err(error) => {
+            let errno = if error == sys::Errno::Again {
+                crate::errno::EAGAIN
+            } else {
+                crate::errno::ENOMEM
+            };
             sl_std_free(
                 ptr.cast(),
                 core::mem::size_of::<crate::thread::JoinHandle>(),
                 core::mem::align_of::<crate::thread::JoinHandle>(),
             );
+            crate::errno::set_errno(errno);
             core::ptr::null_mut()
         }
     }

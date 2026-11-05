@@ -1,0 +1,38 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "300e1543710fc10da033f09c89f4a181c29802aa7649dec8d4fe8589c833e86b",
+  "cpus": 12,
+  "markers": [
+    "[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK",
+    "[NATIVE-STD] native PDF parser and vector raster OK"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "12",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T151527.879198Z-suite-fp/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T151705.238508Z-fp-12cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "serial_sha256": "f7e87405ada2d6eb5c3581dfdac0640a345d75a2af6ea9ad3cac38e795a754cf",
+  "seconds": 92.82074979398749
+}

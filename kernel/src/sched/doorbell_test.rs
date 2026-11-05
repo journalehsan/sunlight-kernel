@@ -606,7 +606,10 @@ pub fn idle(cpu: usize) {
     }
     unsafe { crate::arch::x86_64::lapic::mask_timer_for_remote_wake_test() };
     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
-        assert_eq!(crate::arch::x86_64::lapic::local_apic_id() as usize, cpu);
+        assert_eq!(
+            Some(crate::arch::x86_64::lapic::local_apic_id()),
+            crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
+        );
         serial_println!(
             "[F13NA] cpu cpu={} apic={} timer=masked",
             cpu,

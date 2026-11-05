@@ -1,0 +1,1723 @@
+{
+  "diagnostics_with_primary_spans": 156,
+  "new_or_changed_line_diagnostics": [],
+  "existing_diagnostics": 156,
+  "rows": [
+    {
+      "message": "operator precedence might not be obvious",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/security.rs",
+          "line": 15,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "digits of hex, binary or octal literal not in groups of equal size",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3883,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "name `ACPIRSDP` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/acpi.rs",
+          "line": 9,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `ACPIRSDT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/acpi.rs",
+          "line": 40,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `ACPIXSDT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/acpi.rs",
+          "line": 47,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `ACPIFADT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/acpi.rs",
+          "line": 55,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `ACPIMADT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/acpi.rs",
+          "line": 104,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/interrupts.rs",
+          "line": 68,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this expression borrows a value the compiler would automatically borrow",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/interrupts.rs",
+          "line": 86,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/interrupts.rs",
+          "line": 86,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/interrupts.rs",
+          "line": 821,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/rtc.rs",
+          "line": 222,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/rtc_codec.rs",
+          "line": 71,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/rtc_codec.rs",
+          "line": 71,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/rtc_codec.rs",
+          "line": 71,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 573,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 1607,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 1608,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 1609,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 3013,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 3320,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 3930,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 5327,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 5327,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 5717,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 5946,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 5990,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 6472,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 6670,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 6695,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 6774,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 6882,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 7401,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 7561,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` has identical blocks",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 8608,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 9598,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 9599,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this pattern reimplements `Result::unwrap_or`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 9734,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is used to index `export`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10181,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10290,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10291,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10324,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10324,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10353,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10354,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10441,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10442,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10462,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10562,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10579,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10600,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10618,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 10940,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "unneeded `return` statement",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11000,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11413,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11576,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11707,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11872,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11886,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11905,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "unneeded `return` statement",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/arch/x86_64/syscall.rs",
+          "line": 11929,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `index` is used to index `x`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/entropy/conditioner.rs",
+          "line": 92,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (8/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/hardware_inventory.rs",
+          "line": 112,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "methods with the following characteristics: (`to_*` and `self` type is `Copy`) usually take `self` by value",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/ipc/message.rs",
+          "line": 94,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "use of `or_insert_with` to construct default value",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/ipc/mod.rs",
+          "line": 483,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this block may be rewritten with the `?` operator",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/ipc/mod.rs",
+          "line": 1281,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (8/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/accounting.rs",
+          "line": 331,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/pmm.rs",
+          "line": 107,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/pmm.rs",
+          "line": 267,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/pmm.rs",
+          "line": 383,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/swap.rs",
+          "line": 130,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/swap.rs",
+          "line": 134,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/swap.rs",
+          "line": 201,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/swap.rs",
+          "line": 534,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `target_cpu` is used to index `MAILBOXES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/tlb.rs",
+          "line": 295,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `target_cpu` is used to index `MAILBOXES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/tlb.rs",
+          "line": 327,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manually constructing a nul-terminated string",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/memory/user.rs",
+          "line": 697,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "using `write!()` with a format string that ends in a single newline",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 55,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is used to index `is_func`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 583,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is only used to index `is_func`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 589,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is only used to index `codewords`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 617,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "it looks like you're manually copying between slices",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 634,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 695,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `RangeInclusive::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 695,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/panic.rs",
+          "line": 704,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this `match` expression can be replaced with `?`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/address_space.rs",
+          "line": 705,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "unnecessary `if let` since only the `Some` variant of the iterator element is used",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/address_space.rs",
+          "line": 1865,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/epoll.rs",
+          "line": 226,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/epoll.rs",
+          "line": 231,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/fd_table.rs",
+          "line": 461,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/fd_table.rs",
+          "line": 509,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/fd_table.rs",
+          "line": 547,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/fd_table.rs",
+          "line": 582,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual `!Range::contains` implementation",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/fd_table.rs",
+          "line": 725,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (8/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/mmap.rs",
+          "line": 214,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (8/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/mmap.rs",
+          "line": 265,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is used to index `buf`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/pipe.rs",
+          "line": 247,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is used to index `buf`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/pipe.rs",
+          "line": 276,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGHUP` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 7,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGINT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 8,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGQUIT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 9,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGILL` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 10,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGTRAP` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 11,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGABRT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 12,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGBUS` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 13,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGFPE` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 14,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGKILL` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 15,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGSEGV` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 17,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGPIPE` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 19,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGALRM` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 20,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGTERM` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 21,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGCHLD` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 22,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGCONT` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 23,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGSTOP` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 24,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGTSTP` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 25,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGTTIN` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 26,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGTTOU` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 27,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "name `SIGWINCH` contains a capitalized acronym",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 28,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "match expression looks like `matches!` macro",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 75,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `i` is used to index `handlers`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/signal.rs",
+          "line": 191,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/spawn.rs",
+          "line": 327,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (8/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/spawn.rs",
+          "line": 612,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (9/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/spawn.rs",
+          "line": 638,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (10/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/spawn.rs",
+          "line": 663,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this function has too many arguments (12/7)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/process/mod.rs",
+          "line": 592,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 539,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 548,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `c` is used to index `in_use`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 600,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 884,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 1005,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 1393,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `victim_id` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 1396,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 1988,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 2913,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 2914,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "deref which would be done by auto-deref",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 2926,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `c` is used to index `in_use`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3133,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "using `contains()` instead of `iter().any()` is more efficient",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3169,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "you seem to use `.enumerate()` and immediately discard the index",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3506,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `c` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3557,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `oc` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3588,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 3615,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "clamp-like pattern without using clamp function",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 4615,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 4621,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `core_id` is only used to index `CORE_STATES`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/sched/mod.rs",
+          "line": 4626,
+          "classification": "unchanged-lines"
+        }
+      ]
+    },
+    {
+      "message": "the loop variable `c` is used to index `ticks_per_core`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/telemetry.rs",
+          "line": 337,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manually reimplementing `div_ceil`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/telemetry.rs",
+          "line": 392,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual implementation of `.is_multiple_of()`",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/thermal_hw.rs",
+          "line": 189,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "this `if` statement can be collapsed",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/thermal_hw.rs",
+          "line": 223,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 952,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 953,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 958,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 959,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 960,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 2106,
+          "classification": "unchanged-file"
+        }
+      ]
+    },
+    {
+      "message": "manual checked division",
+      "level": "error",
+      "spans": [
+        {
+          "file": "kernel/src/main.rs",
+          "line": 2217,
+          "classification": "unchanged-file"
+        }
+      ]
+    }
+  ]
+}

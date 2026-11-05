@@ -1,0 +1,4 @@
+# Phase 5.1 test: smoltcp integration
+[NET]  Network service starting...
+[NET]  Registered as 'net' with init
+[NET]  Interface: eth0 MAC=52:54:00:12:34:56

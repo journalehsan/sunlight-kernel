@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t3_clippy.py",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/current-clippy"
+  ],
+  "exit_code": 1,
+  "seconds": 33.80692324900883
+}

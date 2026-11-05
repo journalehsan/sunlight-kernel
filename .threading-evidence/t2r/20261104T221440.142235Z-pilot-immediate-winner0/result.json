@@ -1,0 +1,58 @@
+{
+  "pass": true,
+  "case": "immediate",
+  "winner": 0,
+  "cpus": 2,
+  "scope": "Stage 1 pilot only",
+  "commands": [
+    [
+      "env",
+      "SUNLIGHT_T2R_CASE=immediate",
+      "SUNLIGHT_T2R_WINNER=0",
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--features",
+      "thread_lifecycle_race_test",
+      "--offline"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221440.142235Z-pilot-immediate-winner0/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221440.142235Z-pilot-immediate-winner0/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221440.142235Z-pilot-immediate-winner0/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221440.142235Z-pilot-immediate-winner0/kernel.elf"
+    ],
+    [
+      "python3",
+      "tools/threading_t2r_validate.py",
+      "guest",
+      "pilot-immediate-winner0-2cpu",
+      "--iso",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221440.142235Z-pilot-immediate-winner0/boot.iso",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--marker",
+      "[T2R] PILOT PASS case=2 cpus=2"
+    ]
+  ],
+  "kernel_sha256": "10f09f43dc487ffac3fd2cecdc125ec9fc322582288a4af43dc7c72e24071336",
+  "iso_sha256": "3efc7866e1e901944390d2aaa63d84b4d10968d424f502a2f6768febd071653f"
+}

@@ -1,0 +1,16 @@
+[
+  "kernel/Cargo.toml",
+  "kernel/build.rs",
+  "kernel/src/arch/x86_64/cpu.rs",
+  "kernel/src/arch/x86_64/interrupts.rs",
+  "kernel/src/arch/x86_64/mod.rs",
+  "kernel/src/arch/x86_64/smp.rs",
+  "kernel/src/arch/x86_64/syscall.rs",
+  "kernel/src/capability/gate.rs",
+  "kernel/src/sched/doorbell_stack.rs",
+  "kernel/src/sched/mod.rs",
+  "kernel/src/sched/regression.rs",
+  "tools/helios-probes/capability-probe.S",
+  "tools/helios-probes/scheduler-probe.S",
+  "tools/native-std-probe/Cargo.lock"
+]

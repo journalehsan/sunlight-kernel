@@ -1,0 +1,17 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224111.419010Z-suite-admission
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224111.904869Z-admission-build
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224245.524072Z-admission-freeze
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224246.579150Z-admission-iso
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224248.558554Z-admission-abi
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224249.189206Z-admission-2cpu
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224325.992746Z-admission-1cpu
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224325.996216Z-admission-4cpu
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224408.800101Z-admission-12cpu
+PASS
+PASS

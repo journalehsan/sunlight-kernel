@@ -1,0 +1,21 @@
+test_complete (test_threading_t1.Verdict.test_complete) ... ok
+test_incomplete_and_failure_controls (test_threading_t1.Verdict.test_incomplete_and_failure_controls) ... ok
+test_pressure_does_not_substitute_for_named_races (test_threading_t2.AcceptanceCoverage.test_pressure_does_not_substitute_for_named_races) ... ok
+test_unforced_and_unidentified_races_are_rejected (test_threading_t2.AcceptanceCoverage.test_unforced_and_unidentified_races_are_rejected) ... ok
+test_complete (test_threading_t2.Receipt.test_complete) ... ok
+test_missing_duplicate_wrong_point_and_leak (test_threading_t2.Receipt.test_missing_duplicate_wrong_point_and_leak) ... ok
+test_missing_each_record (test_threading_t2.Receipt.test_missing_each_record) ... ok
+test_every_receipt_required_and_unique (test_threading_t2r.ReceiptTests.test_every_receipt_required_and_unique) ... ok
+test_identity_and_resource_negatives (test_threading_t2r.ReceiptTests.test_identity_and_resource_negatives) ... ok
+test_valid_synthetic (test_threading_t2r.ReceiptTests.test_valid_synthetic) ... ok
+test_wrong_cpu_case_and_panic (test_threading_t2r.ReceiptTests.test_wrong_cpu_case_and_panic) ... ok
+test_hardware_profiles (test_threading_t3.TopologyParser.test_hardware_profiles) ... ok
+test_negatives (test_threading_t3.TopologyParser.test_negatives) ... ok
+test_valid (test_threading_t3.TopologyParser.test_valid) ... ok
+test_fail_closed (test_threading_t3r.Controls.test_fail_closed) ... ok
+test_synthetic_positive (test_threading_t3r.Controls.test_synthetic_positive) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.027s
+
+OK

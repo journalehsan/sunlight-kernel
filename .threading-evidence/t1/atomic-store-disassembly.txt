@@ -1,0 +1,104 @@
+
+.threading-evidence/t1/images/atomic-controls/kernel.elf:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+ffffffff80038e70 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32>:
+ffffffff80038e70:	push   rbp
+ffffffff80038e71:	push   r15
+ffffffff80038e73:	push   r14
+ffffffff80038e75:	push   rbx
+ffffffff80038e76:	sub    rsp,0x18
+ffffffff80038e7a:	test   dl,0x3
+ffffffff80038e7d:	je     ffffffff80038e86 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x16>
+ffffffff80038e7f:	xor    eax,eax
+ffffffff80038e81:	jmp    ffffffff80038f5a <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0xea>
+ffffffff80038e86:	mov    rbx,rsi
+ffffffff80038e89:	mov    rax,rdx
+ffffffff80038e8c:	shr    rax,0x2f
+ffffffff80038e90:	je     ffffffff80038eb1 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x41>
+ffffffff80038e92:	cmp    eax,0x1fffe
+ffffffff80038e97:	jbe    ffffffff80038f65 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0xf5>
+ffffffff80038e9d:	lock inc QWORD PTR [rip+0xe9fd00b]        # ffffffff8ea35eb0 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user21KERNEL_RANGE_ATTEMPTS.llvm.481191319551637396>
+ffffffff80038ea5:	mov    sil,0x1
+ffffffff80038ea8:	mov    al,0x3
+ffffffff80038eaa:	test   sil,sil
+ffffffff80038ead:	je     ffffffff80038ebf <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x4f>
+ffffffff80038eaf:	jmp    ffffffff80038ee2 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x72>
+ffffffff80038eb1:	test   rdx,rdx
+ffffffff80038eb4:	sete   sil
+ffffffff80038eb8:	xor    eax,eax
+ffffffff80038eba:	test   sil,sil
+ffffffff80038ebd:	jne    ffffffff80038ee2 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x72>
+ffffffff80038ebf:	mov    ebp,ecx
+ffffffff80038ec1:	mov    ecx,0x4
+ffffffff80038ec6:	mov    r14,rdi
+ffffffff80038ec9:	mov    rsi,rbx
+ffffffff80038ecc:	mov    r15,rdx
+ffffffff80038ecf:	mov    r8d,0x1
+ffffffff80038ed5:	call   ffffffff80036e00 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user14validate_pages.llvm.481191319551637396>
+ffffffff80038eda:	mov    rdi,r14
+ffffffff80038edd:	mov    ecx,ebp
+ffffffff80038edf:	mov    rdx,r15
+ffffffff80038ee2:	cmp    al,0xff
+ffffffff80038ee4:	jne    ffffffff80038f5a <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0xea>
+ffffffff80038ee6:	movabs rax,0xffff7fffffffffff
+ffffffff80038ef0:	add    rax,rdx
+ffffffff80038ef3:	inc    rax
+ffffffff80038ef6:	shr    rax,0x30
+ffffffff80038efa:	cmp    eax,0xfffe
+ffffffff80038eff:	jbe    ffffffff80038f80 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x110>
+ffffffff80038f01:	mov    ebp,ecx
+ffffffff80038f03:	mov    rax,rdx
+ffffffff80038f06:	shl    rax,0x10
+ffffffff80038f0a:	sar    rax,0x10
+ffffffff80038f0e:	and    rax,0xfffffffffffff000
+ffffffff80038f14:	add    rdi,0x10
+ffffffff80038f18:	mov    rcx,rsp
+ffffffff80038f1b:	mov    rsi,rdi
+ffffffff80038f1e:	mov    rdi,rcx
+ffffffff80038f21:	mov    r14,rdx
+ffffffff80038f24:	mov    rdx,rax
+ffffffff80038f27:	mov    rcx,rbx
+ffffffff80038f2a:	call   ffffffff8002a7e0 <_RNvMs_NtNtCsfBCwI5vYyqA_15sunlight_kernel7process13address_spaceNtB4_12AddressSpace12lookup_entry>
+ffffffff80038f2f:	mov    al,0x4
+ffffffff80038f31:	cmp    DWORD PTR [rsp],0x1
+ffffffff80038f35:	jne    ffffffff80038f5a <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0xea>
+ffffffff80038f37:	add    rbx,QWORD PTR [rsp+0x8]
+ffffffff80038f3c:	jb     ffffffff80038f98 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x128>
+ffffffff80038f3e:	mov    rsi,r14
+ffffffff80038f41:	and    esi,0xffc
+ffffffff80038f47:	add    rsi,rbx
+ffffffff80038f4a:	jb     ffffffff80038fa4 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x134>
+ffffffff80038f4c:	test   bl,0x3
+ffffffff80038f4f:	jne    ffffffff80038fb0 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x140>
+ffffffff80038f51:	test   rsi,rsi
+ffffffff80038f54:	je     ffffffff80038fc1 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x151>
+ffffffff80038f56:	mov    DWORD PTR [rsi],ebp
+ffffffff80038f58:	mov    al,0xff
+ffffffff80038f5a:	add    rsp,0x18
+ffffffff80038f5e:	pop    rbx
+ffffffff80038f5f:	pop    r14
+ffffffff80038f61:	pop    r15
+ffffffff80038f63:	pop    rbp
+ffffffff80038f64:	ret
+ffffffff80038f65:	lock inc QWORD PTR [rip+0xe9fcf4b]        # ffffffff8ea35eb8 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user22NONCANONICAL_ADDRESSES.llvm.481191319551637396>
+ffffffff80038f6d:	mov    al,0x1
+ffffffff80038f6f:	mov    sil,0x1
+ffffffff80038f72:	test   sil,sil
+ffffffff80038f75:	je     ffffffff80038ebf <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x4f>
+ffffffff80038f7b:	jmp    ffffffff80038ee2 <_RNvNtNtCsfBCwI5vYyqA_15sunlight_kernel6memory4user24write_process_atomic_u32+0x72>
+ffffffff80038f80:	mov    esi,0x36
+ffffffff80038f85:	mov    rdi,0xffffffff800e4f70
+ffffffff80038f8c:	mov    rdx,0xffffffff800e4fa8
+ffffffff80038f93:	call   ffffffff800cc070 <_RNvNtCs4JqvpBgWLZb_4core9panicking5panic>
+ffffffff80038f98:	mov    rdi,0xffffffff800e5530
+ffffffff80038f9f:	call   ffffffff800ccc40 <_RNvNtNtCs4JqvpBgWLZb_4core9panicking11panic_const24panic_const_add_overflow>
+ffffffff80038fa4:	mov    rdi,0xffffffff800e5548
+ffffffff80038fab:	call   ffffffff800ccc40 <_RNvNtNtCs4JqvpBgWLZb_4core9panicking11panic_const24panic_const_add_overflow>
+ffffffff80038fb0:	mov    edi,0x4
+ffffffff80038fb5:	mov    rdx,0xffffffff800e5560
+ffffffff80038fbc:	call   ffffffff800cc024 <_RNvNtCs4JqvpBgWLZb_4core9panicking36panic_misaligned_pointer_dereference>
+ffffffff80038fc1:	mov    rdi,0xffffffff800e5560
+ffffffff80038fc8:	call   ffffffff800cc00b <_RNvNtCs4JqvpBgWLZb_4core9panicking30panic_null_pointer_dereference>

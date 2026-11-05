@@ -1,0 +1,402 @@
+compat-linux/src/affinity.rs:1://! Raw Linux sched_getaffinity mask sizing for up to 64 Helios CPUs.
+compat-linux/src/affinity.rs:16:        count => (1u64 << count) - 1,
+compat-linux/src/affinity.rs:26:    fn current_online_cpu_mask_and_raw_return_size() {
+compat-linux/src/lib.rs:15:pub mod affinity;
+kernel/src/scheduler_timer_trace.rs:59:    let cpu = crate::sched::current_cpu_id();
+kernel/src/scheduler_bench_diag.rs:234:            || p.cpu_mask & 1 == 0
+kernel/src/scheduler_bench_diag.rs:308:            if w.pid != 0 || !matches!(current.nice, 0 | 8..=10) || current.cpu_mask & 1 == 0 {
+kernel/src/scheduler_bench_diag.rs:313:            w.mask = current.cpu_mask;
+kernel/src/ipc/deferred_token.rs:5:        Some((1u64 << 63) | 1)
+kernel/src/ipc/reply_race_test.rs:26:        crate::sched::current_cpu_id()
+kernel/src/capability/gate.rs:52:        error as u64, crate::sched::current_cpu_id());
+kernel/src/capability/gate.rs:272:        attacker.cpu_mask = 1u64 << (n % cpus);
+kernel/src/ipc/mod.rs:89:        owner: sched.processes[idx].owning_core,
+kernel/src/ipc/mod.rs:194:            p.pid, p.ppid, p.name_str(), p.state, p.owning_core, p.queued_on_core,
+kernel/src/ipc/mod.rs:277:                p.pid, p.name_str(), p.state, p.owning_core, p.queued_on_core,
+kernel/src/ipc/mod.rs:2097:            crate::serial_println!("[SESSION-E3] seq={} checkpoint=peer-closed endpoint={} recipient={} recipient_inc={} request_generation={} pending=0 cpu={}", crate::capability::session_race::sequence(), endpoint_id, call.pid, call.incarnation, call.generation, crate::sched::current_cpu_id());
+kernel/src/capability/tests.rs:178:            let guess = CapabilityToken(attacker.as_u64() ^ ((1u64 << bits) - 1));
+kernel/src/sched/t2r_fixture.rs:166:    let cpu = current_cpu_id();
+kernel/src/sched/t2r_fixture.rs:187:            crate::serial_println!("[T2R] rendezvous-timeout actor={} cpu={} other_pid={} incarnation={} state={:?} owning_core={} queued_on={} affinity={} pinned={} tick={}",actor,cpu,p.pid,p.foreground.incarnation,p.state,p.owning_core,p.queued_on_core,p.cpu_mask,s.stack_is_pinned(idx),s.global_tick);
+kernel/src/sched/t2r_fixture.rs:213:/// Fixture placement is established at birth: changing affinity on a local
+kernel/src/sched/t2r_fixture.rs:222:        child.cpu_mask = 1 << target;
+kernel/src/sched/t2r_fixture.rs:286:                current_cpu_id()
+kernel/src/sched/t2r_fixture.rs:305:                current_cpu_id()
+kernel/src/sched/t2r_fixture.rs:320:                s.current_process_mut().cpu_mask = 1 << a;
+kernel/src/sched/t2r_fixture.rs:418:            p.cpu_mask = 1 << (role - 2);
+kernel/src/sched/t2_fixture.rs:128:            g.pulses |= 1u64 << current_cpu_id();
+kernel/src/arch/x86_64/cpu_identity.rs:31:            ids[slot] = cpu.lapic_id;
+kernel/src/arch/x86_64/cpu_identity.rs:33:        (cpus.len(), mp.bsp_lapic_id)
+kernel/src/arch/x86_64/cpu_identity.rs:65:        ONLINE.fetch_or(1u64 << logical, Ordering::Release) & (1u64 << logical),
+kernel/src/main.rs:716:            let bsp_lapic_id = mp_resp.bsp_lapic_id;
+kernel/src/main.rs:720:                bsp_lapic_id
+kernel/src/main.rs:722:            smp::start_aps(cpus, bsp_lapic_id);
+kernel/src/main.rs:1586:    serial_println!("[SCHED]  ✓ cpu_mask CPU affinity field");
+kernel/src/main.rs:2272:            mp.bsp_lapic_id
+kernel/src/main.rs:3247:        state.set_blocked_mask(1u64 << (Signal::SIGKILL.as_u32() - 1));
+kernel/src/main.rs:3253:    // External SIGKILL must accept a task that still has owning_core set (live
+kernel/src/main.rs:3261:        victim.owning_core = 0;
+kernel/src/main.rs:3273:        // fully reaped while owning_core is set.
+kernel/src/main.rs:3274:        ok &= sched.processes[0].owning_core == 0;
+kernel/src/main.rs:3333:        sched.processes[0].owning_core = u8::MAX;
+kernel/src/sched/thread_admission.rs:50:                    && p.owning_core == u8::MAX
+kernel/src/sched/thread_admission.rs:149:                    && p.owning_core == u8::MAX
+kernel/src/memory/tlb.rs:100:        (1u64 << count).wrapping_sub(1)
+kernel/src/memory/tlb.rs:124:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:145:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:155:pub fn active_cpu_mask(identity: AddressSpaceIdentity) -> u64 {
+kernel/src/memory/tlb.rs:215:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:216:    let local_bit = 1u64 << cpu_id;
+kernel/src/memory/tlb.rs:217:    let active = active_cpu_mask(identity);
+kernel/src/memory/tlb.rs:296:        if targets & (1u64 << target_cpu) == 0 {
+kernel/src/memory/tlb.rs:311:        if targets & (1u64 << target_cpu) == 0 {
+kernel/src/memory/tlb.rs:328:            let bit = 1u64 << target_cpu;
+kernel/src/memory/tlb.rs:345:            if targets & (1u64 << ack_cpu) != 0 {
+kernel/src/memory/tlb.rs:363:            if targets & (1u64 << ack_cpu) != 0 {
+kernel/src/memory/tlb.rs:403:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:470:        if targets & (1u64 << cpu_id) == 0 {
+kernel/src/memory/tlb.rs:491:        if targets & (1u64 << cpu_id) != 0 {
+kernel/src/memory/tlb.rs:501:            targets & (1u64 << cpu_id) == 0
+kernel/src/memory/tlb.rs:524:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:612:    let all_cpus = (1u64 << online) - 1;
+kernel/src/memory/tlb.rs:613:    let local_cpu = crate::sched::current_cpu_id();
+kernel/src/memory/tlb.rs:614:    let remote_cpus = all_cpus & !(1u64 << local_cpu);
+kernel/src/arch/x86_64/cpu_topology.rs:78:        if online & (1u64 << logical) == 0 {
+kernel/src/arch/x86_64/cpu_topology.rs:95:            assert_eq!(mask & (1u64 << logical), 0);
+kernel/src/arch/x86_64/cpu_topology.rs:96:            mask |= 1u64 << logical;
+kernel/src/memory/m31_retention_gate.rs:306:    assert_eq!(crate::memory::tlb::active_cpu_mask(identity), 0);
+kernel/src/sched/bell_trace.rs:16:            kind, n, super::current_cpu_id(), generation, pid, inc, vm, a, b);
+kernel/src/capability/hybrid_race.rs:46:        crate::sched::current_cpu_id()
+kernel/src/capability/hybrid_race.rs:73:    ACTOR_CPU.store(crate::sched::current_cpu_id() as u64, Ordering::Relaxed);
+kernel/src/capability/hybrid_race.rs:81:    crate::serial_println!("[FL-R2-RACE] mode={} channel={} event=armed caller={} ci={} cv={} service={} si={} sv={} policy={} pg={} endpoint={} call_generation={} scope=authenticated-ring3/kernel-method-retirement cpu={}", mode,h.generation,row.creator.pid,row.creator.incarnation,row.creator.vm_generation,current.pid,current.foreground.incarnation,current.address_space.identity().generation,row.contract.policy_identity.unwrap().policy_id,row.contract.policy_identity.unwrap().generation,target.endpoint_id,target.call.generation,crate::sched::current_cpu_id());
+kernel/src/capability/hybrid_race.rs:155:            crate::sched::current_cpu_id()
+kernel/src/arch/x86_64/syscall_stack.rs:33:    let slot = &ENTRIES[crate::sched::current_cpu_id()];
+kernel/src/arch/x86_64/syscall_stack.rs:56:    ENTRIES[crate::sched::current_cpu_id()]
+kernel/src/sched/doorbell_stack.rs:108:            && p.owning_core == u8::MAX
+kernel/src/sched/regression.rs:31:    assert_eq!(s.processes[idx].owning_core, u8::MAX);
+kernel/src/sched/regression.rs:230:        assert_eq!(s.processes[idx].owning_core as usize, cpu);
+kernel/src/memory/shared_authority_gate.rs:26:            let guess = CapabilityToken(attacker_token.as_u64() ^ ((1u64 << bits) - 1));
+kernel/src/arch/x86_64/measurement_clock.rs:223:    let cpu = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/measurement_clock.rs:244:    let cpu = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/measurement_clock.rs:317:    let cpu = crate::sched::current_cpu_id();
+kernel/src/memory/shared_lifetime_gate.rs:163:        let guess = CapabilityToken(attacker_token.as_u64() ^ ((1u64 << bits) - 1));
+kernel/src/memory/shared_lifetime_gate.rs:198:    let local = crate::sched::current_cpu_id();
+kernel/src/memory/shared_lifetime_gate.rs:199:    let targets = ((1u64 << cpus) - 1) & !(1u64 << local);
+kernel/src/sched/doorbell_test.rs:122:    (1 << cpus()) - 1
+kernel/src/sched/doorbell_test.rs:157:            round(), case(), current_cpu_id(), STAGE.load(Ordering::Acquire), BLOCKED.load(Ordering::Acquire), DONE.load(Ordering::Acquire));
+kernel/src/sched/doorbell_test.rs:170:    process.cpu_mask = 1 << cpu;
+kernel/src/sched/doorbell_test.rs:217:    if current_cpu_id() == 0 {
+kernel/src/sched/doorbell_test.rs:234:        row.last_source = current_cpu_id();
+kernel/src/sched/doorbell_test.rs:256:        row.sources |= 1 << current_cpu_id();
+kernel/src/sched/doorbell_test.rs:327:    record(|row| row.sources |= 1 << cpu);
+kernel/src/sched/doorbell_test.rs:333:    if PHASE.load(Ordering::Acquire) != 1 || sources() & (1 << cpu) == 0 {
+kernel/src/sched/doorbell_test.rs:342:    if CLAIMED.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) != 0 {
+kernel/src/sched/doorbell_test.rs:392:    DONE.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/doorbell_test.rs:396:    if current_cpu_id() != 0 || IDLE.load(Ordering::Acquire) != all_cpus() {
+kernel/src/sched/doorbell_test.rs:455:            if sources() & (1 << cpu) != 0 {
+kernel/src/sched/doorbell_test.rs:472:            && process.owning_core == u8::MAX
+kernel/src/sched/doorbell_test.rs:608:    if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+kernel/src/sched/doorbell_test.rs:609:        assert_eq!(Some(crate::arch::x86_64::lapic::local_apic_id()), crate::arch::x86_64::cpu_identity::topology().apic_id(cpu));
+kernel/src/sched/doorbell_test.rs:613:            crate::arch::x86_64::lapic::local_apic_id()
+kernel/src/sched/doorbell_test.rs:623:        && FINAL_ACK.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0
+kernel/src/sched/doorbell_test.rs:634:    let cpu = current_cpu_id();
+kernel/src/sched/handoff.rs:59:        let bit = 1u64 << waiter;
+kernel/src/capability/channel_mediated_accounting.rs:134:        let cpu = crate::sched::current_cpu_id();
+kernel/src/memory/swap.rs:161:        ^ crate::sched::current_cpu_id() as u64;
+kernel/src/sched/doorbell_native.rs:2:use super::{current_cpu_id, request_park_after_sysret, ProcessState, Scheduler};
+kernel/src/sched/doorbell_native.rs:38:        if self.live_owner_core(index) != Some(current_cpu_id())
+kernel/src/sched/doorbell_native.rs:81:        if self.live_owner_core(index) == Some(current_cpu_id())
+kernel/src/sched/doorbell_native.rs:82:            || self.processes[index].queued_on_core as usize == current_cpu_id()
+kernel/src/sched/accounting.rs:3:use super::{current_cpu_id, MAX_CORES};
+kernel/src/sched/accounting.rs:62:    interrupt_entry(current_cpu_id());
+kernel/src/sched/accounting.rs:104:    let cpu = current_cpu_id();
+kernel/src/capability/channel_shared_ring.rs:130:                cpu_start: crate::sched::current_cpu_id(),
+kernel/src/capability/channel_shared_ring.rs:138:            crate::serial_println!("[FL-M53-KACTOR] generation={} pid={} inc={} vm={} syscalls={} notifications={} context_switch_ins={} wake_publications={} overflow={} dropped=0 start_ms={} end_ms={} scheduler_runtime_ns={} runtime_delta_valid={} cpu={}", h.generation,who.pid,who.incarnation,who.vm_generation,m.values[0],m.values[1],m.values[2],m.values[3],u8::from(m.overflow),m.start_ms,ms,elapsed_runtime.unwrap_or(0),u8::from(elapsed_runtime.is_some()),crate::sched::current_cpu_id());
+kernel/src/capability/channel_shared_ring.rs:144:            let cpu_stop = crate::sched::current_cpu_id();
+kernel/src/memory/zram.rs:478:        ((1u64 << chunk_count) - 1) << first_chunk
+kernel/src/capability/channel_transfer.rs:170:                who.incarnation, who.vm_generation, crate::sched::current_cpu_id());
+kernel/src/memory/security.rs:733:    let local_cpu = crate::sched::current_cpu_id();
+kernel/src/memory/security.rs:734:    let remote_cpus = ((1u64 << online) - 1) & !(1u64 << local_cpu);
+kernel/src/memory/security.rs:1505:    let local_cpu = crate::sched::current_cpu_id();
+kernel/src/memory/security.rs:1513:        (1u64 << online) - 1
+kernel/src/memory/security.rs:1515:    let remote_cpus = online_mask & !(1u64 << local_cpu);
+kernel/src/process/spawn.rs:239:                crate::memory::tlb::active_cpu_mask(old_address_space.identity()),
+kernel/src/process/spawn.rs:733:        process.cpu_mask = 2;
+kernel/src/capability/bell_race.rs:24:        who.pid,who.incarnation,who.vm_generation,result,crate::sched::current_cpu_id());
+kernel/src/capability/bell_race.rs:53:                crate::sched::current_cpu_id(),
+kernel/src/capability/bell_race.rs:125:    CPUS[(actor - 1) as usize].store(crate::sched::current_cpu_id() as u64, Release);
+kernel/src/capability/bell_race.rs:175:        u8::from(row.producer_role==super::channel::RoleState::Attached),u8::from(row.consumer_role==super::channel::RoleState::Attached),crate::sched::current_cpu_id());
+kernel/src/sched/pin_release_test.rs:179:    ((1u64 << cpus()) - 1) & !1
+kernel/src/sched/pin_release_test.rs:202:        process.cpu_mask = 1;
+kernel/src/sched/pin_release_test.rs:224:    if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+kernel/src/sched/pin_release_test.rs:225:        let apic = crate::arch::x86_64::lapic::local_apic_id() as usize;
+kernel/src/sched/pin_release_test.rs:287:        current_cpu_id()
+kernel/src/sched/pin_release_test.rs:456:            sched.processes[idx].cpu_mask = remote_mask();
+kernel/src/sched/pin_release_test.rs:476:            && PASSES.load(Ordering::Acquire) & (1 << cpu) == 0
+kernel/src/sched/pin_release_test.rs:481:            PASSES.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:484:        if REJECTED.load(Ordering::Acquire) & (1 << cpu) != 0
+kernel/src/sched/pin_release_test.rs:485:            && ACK.load(Ordering::Acquire) & (1 << cpu) == 0
+kernel/src/sched/pin_release_test.rs:498:                sched.processes[idx].cpu_mask = 1 << cpu;
+kernel/src/sched/pin_release_test.rs:501:        if RELEASED.load(Ordering::Acquire) & (1 << cpu) != 0 {
+kernel/src/sched/pin_release_test.rs:502:            PASSES.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:526:    assert_ne!(mask & (1 << cpu), 0);
+kernel/src/sched/pin_release_test.rs:528:    REJECTED.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:536:        if REJECTED.load(Ordering::Acquire) & (1 << cpu) != 0 {
+kernel/src/sched/pin_release_test.rs:537:            ACK.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:614:    if active() && current_cpu_id() == 0 && PHASE.load(Ordering::Acquire) == 2 && cpus() > 1 {
+kernel/src/sched/pin_release_test.rs:649:    if active() && RELEASED.load(Ordering::Acquire) & (1 << cpu) != 0 {
+kernel/src/sched/pin_release_test.rs:651:        ACCEPTED.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:656:    if active() && RELEASED.load(Ordering::Acquire) & (1 << cpu) != 0 {
+kernel/src/sched/pin_release_test.rs:662:    let cpu = current_cpu_id();
+kernel/src/sched/pin_release_test.rs:663:    if active() && RELEASED.load(Ordering::Acquire) & (1 << cpu) != 0 {
+kernel/src/sched/pin_release_test.rs:664:        HANDLED.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/pin_release_test.rs:681:    let cpu = current_cpu_id();
+kernel/src/sched/pin_release_test.rs:688:        let bit = 1 << cpu;
+kernel/src/sched/pin_release_test.rs:694:        assert_ne!(PASSES.load(Ordering::Acquire) & (1 << cpu), 0);
+kernel/src/sched/pin_release_test.rs:717:        ROUND.load(Ordering::Acquire), idx, identity.generation, owner, current_cpu_id(),
+kernel/src/sched/pin_release_test.rs:726:            if current_cpu_id() == 0 {
+kernel/src/process/signal.rs:246:        bits &= !(1u64 << (Signal::SIGKILL.as_u32() - 1));
+kernel/src/process/signal.rs:247:        bits &= !(1u64 << (Signal::SIGSTOP.as_u32() - 1));
+kernel/src/process/signal.rs:351:        state.set_blocked_mask(1u64 << (Signal::SIGKILL.as_u32() - 1));
+kernel/src/process/signal.rs:388:        state.set_blocked_mask(1u64 << (Signal::SIGTERM.as_u32() - 1));
+kernel/src/sched/remote_wake_test.rs:31:        Some(crate::arch::x86_64::lapic::local_apic_id()),
+kernel/src/sched/remote_wake_test.rs:45:        ((1u64 << count) - 1) & !2
+kernel/src/sched/remote_wake_test.rs:73:            p.cpu_mask = 1 << target();
+kernel/src/sched/remote_wake_test.rs:84:        checked_apic_base(current_cpu_id())
+kernel/src/sched/remote_wake_test.rs:139:        || sources() & (1 << cpu) == 0
+kernel/src/sched/remote_wake_test.rs:178:    PUBLISHED.fetch_or(1 << cpu, Ordering::Release);
+kernel/src/sched/remote_wake_test.rs:196:    let source = current_cpu_id();
+kernel/src/sched/remote_wake_test.rs:240:    assert_eq!(current_cpu_id(), target());
+kernel/src/sched/remote_wake_test.rs:253:        current_cpu_id(),
+kernel/src/capability/channel_doorbell_native.rs:43:            crate::sched::current_cpu_id(), u8::from(self.processes[i].state == ProcessState::BlockedOnIo),
+kernel/src/capability/channel_doorbell_native.rs:48:            u64::from(self.processes[i].owning_core) | (u64::from(self.processes[i].queued_on_core) << 8));
+kernel/src/capability/channel_doorbell_native.rs:117:            r.handle.generation, r.who.pid, r.who.incarnation, r.who.vm_generation, crate::sched::current_cpu_id(),
+kernel/src/capability/channel_doorbell_native.rs:154:                        h.generation, consumer.pid, consumer.incarnation, consumer.vm_generation, crate::sched::current_cpu_id());
+kernel/src/capability/channel_doorbell_native.rs:203:                h.generation, who.pid, who.incarnation, who.vm_generation, crate::sched::current_cpu_id(),
+kernel/src/capability/channel_doorbell_native.rs:246:                crate::sched::current_cpu_id()
+kernel/src/arch/x86_64/interrupts.rs:209:            Some(lapic::local_apic_id()),
+kernel/src/arch/x86_64/interrupts.rs:214:            lapic::local_apic_id(),
+kernel/src/arch/x86_64/interrupts.rs:352:    let destination = lapic::local_apic_id();
+kernel/src/arch/x86_64/interrupts.rs:640:            serial_println!("[FL-PF] pid={} inc={} vm={} va={} error={} cpu={}", p.pid, p.foreground.incarnation, p.address_space.identity().generation, vaddr, error_code.bits(), crate::sched::current_cpu_id());
+kernel/src/arch/x86_64/interrupts.rs:1015:    crate::sched::remote_wake_test::handled(crate::sched::current_cpu_id());
+kernel/src/arch/x86_64/interrupts.rs:1020:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/interrupts.rs:1083:    // current_cpu_id() issues a CPUID instruction (a full pipeline serialisation
+kernel/src/arch/x86_64/interrupts.rs:1086:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/smp.rs:120:pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
+kernel/src/arch/x86_64/smp.rs:123:        Some(bsp_lapic_id)
+kernel/src/arch/x86_64/smp.rs:129:        if cpu_info.lapic_id == bsp_lapic_id {
+kernel/src/arch/x86_64/smp.rs:133:        let logical = super::cpu_identity::topology().logical_id(cpu_info.lapic_id).expect("unmapped AP");
+kernel/src/arch/x86_64/smp.rs:140:            "[SMP] Starting AP{}  proc_id={}  lapic_id={}  stack={:#x}..{:#x}",
+kernel/src/arch/x86_64/smp.rs:142:            cpu_info.processor_id,
+kernel/src/arch/x86_64/smp.rs:143:            cpu_info.lapic_id,
+kernel/src/arch/x86_64/smp.rs:176:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/smp.rs:191:    let cpu_id = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/smp.rs:265:        crate::sched::current_cpu_id(),
+kernel/src/arch/x86_64/smp.rs:325:        Some(info.lapic_id)
+kernel/src/arch/x86_64/smp.rs:356:        lapic::local_apic_id(),
+kernel/src/arch/x86_64/smp.rs:361:    assert_eq!(lapic::local_apic_id(), info.lapic_id);
+kernel/src/arch/x86_64/smp.rs:367:        info.lapic_id,
+kernel/src/arch/x86_64/lapic.rs:125:pub fn local_apic_id() -> u32 {
+kernel/src/capability/mapping_trace.rs:89:    crate::serial_println!("[FL-MAP] seq={} event=map generation={} region={} role={} pid={} inc={} vm={} va={} frame={} write={} nx=1 cpu={}", seq(), generation, region, role, p.pid, p.foreground.incarnation, p.address_space.identity().generation, va, frame, u8::from(writable), crate::sched::current_cpu_id());
+kernel/src/capability/mapping_trace.rs:108:        crate::sched::current_cpu_id()
+kernel/src/capability/mapping_trace.rs:118:        let cpu = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/rtc.rs:229:        crate::sched::current_cpu_id(),
+kernel/src/process/address_space.rs:1172:                crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1190:                    crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1208:                        crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1455:                    crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1472:                        crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1489:                            crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1515:            crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1603:                            crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1622:                        crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1641:                    crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1662:                    crate::memory::tlb::active_cpu_mask(self.identity),
+kernel/src/process/address_space.rs:1887:                        crate::memory::tlb::active_cpu_mask(identity),
+kernel/src/process/mm2b_state.rs:118:            let bit = 1u64 << cpu_id;
+kernel/src/process/mod.rs:236:    pub cpu_mask: u64,  // CPU affinity mask
+kernel/src/process/mod.rs:241:    pub owning_core: u8,
+kernel/src/process/mod.rs:520:            cpu_mask: u64::MAX,      // all CPUs
+kernel/src/process/mod.rs:521:            owning_core: u8::MAX,    // not running on any core
+kernel/src/process/mod.rs:753:            cpu_mask: u64::MAX,
+kernel/src/process/mod.rs:754:            owning_core: u8::MAX,
+kernel/src/capability/channel_race.rs:31:        who.pid,who.incarnation,who.vm_generation,result,crate::sched::current_cpu_id());
+kernel/src/capability/channel_race.rs:76:                    ENTERED.load(Acquire), CPUS[0].load(Acquire), CPUS[1].load(Acquire), crate::sched::current_cpu_id(),
+kernel/src/capability/channel_race.rs:97:    trace[2].store(crate::sched::current_cpu_id() as u64, Relaxed);
+kernel/src/capability/channel_race.rs:109:                crate::sched::current_cpu_id(), MODE.load(Relaxed), HELD.load(Acquire),
+kernel/src/capability/channel_race.rs:114:            trace[3].store(crate::sched::current_cpu_id() as u64, Relaxed);
+kernel/src/capability/channel_race.rs:128:            trace[4].store(crate::sched::current_cpu_id() as u64, Relaxed);
+kernel/src/capability/channel_race.rs:249:    CPUS[(actor - 1) as usize].store(crate::sched::current_cpu_id() as u64, Release);
+kernel/src/capability/channel_race.rs:260:            crate::sched::current_cpu_id(), u8::from(x86_64::instructions::interrupts::are_enabled()),
+kernel/src/capability/channel_race.rs:261:            peer.pid, peer.incarnation, peer.vm_generation, p.state, p.cpu_mask, p.owning_core, p.queued_on_core));
+kernel/src/capability/channel_race.rs:262:        let own_mask = sched.current_process().cpu_mask;
+kernel/src/capability/channel_race.rs:268:            !(own_mask.count_ones() == 1 && own_mask == p.cpu_mask)
+kernel/src/capability/channel_race.rs:349:        u8::from(row.producer_role==super::channel::RoleState::Attached),u8::from(row.consumer_role==super::channel::RoleState::Attached),crate::sched::current_cpu_id());
+kernel/src/capability/channel_race.rs:363:            u8::from(x86_64::instructions::interrupts::are_enabled()), crate::sched::current_cpu_id(), u8::from(qualified()));
+kernel/src/capability/channel_race.rs:421:                p.state, p.cpu_mask, p.owning_core, p.queued_on_core, s.diagnostic_ready_occurrences(idx),
+kernel/src/capability/channel_race.rs:423:                crate::sched::current_cpu_id(), u8::from(x86_64::instructions::interrupts::are_enabled()), crate::timekeeping::monotonic_ms());
+kernel/src/capability/channel_race.rs:431:        crate::sched::current_cpu_id(), u8::from(x86_64::instructions::interrupts::are_enabled()), crate::timekeeping::monotonic_ms());
+kernel/src/capability/channel_race.rs:457:        p.cpu_mask = mask;
+kernel/src/capability/session_h4.rs:122:            target.owning_core as u64,
+kernel/src/capability/session_h4.rs:160:            p.owning_core as u64,
+kernel/src/capability/session_h4.rs:171:            p.owning_core as u64,
+kernel/src/capability/reconciliation.rs:72:        crate::serial_println!("[GRANT-F] row phase={} class={} fingerprint=boot-local-{} pid={} incarnation={} vm={} issuer={} issuer_inc={} issuer_vm={} request={} state={} retiring={} cpu={}", phase, class, fingerprint(token), d.recipient.pid, d.recipient.incarnation, d.recipient.vm_generation, d.issuer_pid, d.issuer_incarnation, d.issuer_vm_generation, d.request, if published { "delivered" } else { "pending" }, u8::from(exiting), crate::sched::current_cpu_id());
+kernel/src/capability/reconciliation.rs:119:    crate::serial_println!("[GRANT-F] census phase={} broker_live={} ipc_tokens={} shm={} pending={} delivered={} legacy={} retiring_subset={} sessions={} receipts={} pending_calls={} reply_targets={} deferred_subset={} tombstones_subset={} stored_replies={} queued_calls={} waiters={} stale_queue_refs={} ipc_capacity_bytes={} history={} history_capacity={} snapshot=scheduler-broker-shards userspace_heaps=UNMEASURED global_reconciliation=INCOMPLETE cpu={}", phase, broker.active_tokens(), broker.capabilities.len(), broker.shared_regions.len(), pending, delivered, legacy, retiring, sessions[0], sessions[6], pending_calls, reply_targets, deferred, tombstones, replies, queued, waiters, stale, capacity, history, history_capacity, crate::sched::current_cpu_id());
+kernel/src/capability/sessions.rs:274:                    crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-retirement session={} epoch={} account_pid={} account_inc={} account_vm={} retiring_pid={} cpu={} account_grants={}", super::session_race::sequence(), retired.0.id, retired.0.epoch, retired.1.pid, retired.1.incarnation, retired.1.vm_generation, pid, crate::sched::current_cpu_id(), self.account_grants.len());
+kernel/src/capability/sessions.rs:521:        crate::serial_println!("[SESSION-E2] sequential case={} epoch={} session={} issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu={} scope=isolated-production-broker authentication=NOT_TESTED", case, reference.epoch, reference.id, crate::sched::current_cpu_id());
+kernel/src/capability/sessions.rs:541:    crate::serial_println!("[SESSION-E2] boundary PASS registrations=4 revoked=2 expired=1 owner_retired=1 live=0 receipts=0 grants=0 capacity={} pending_commit=0 consumption_refs=0 revocation_ops=0 ipc_completions=0 epoch_allocations=2 exhausted=denied old_epoch=denied cpu={} scope=isolated-production-broker remote_races=NOT_FORCED", counts[1], crate::sched::current_cpu_id());
+kernel/src/capability/session_h3_trace.rs:67:        .store(crate::sched::current_cpu_id() as u64, Ordering::Relaxed);
+kernel/src/capability/global_history_gate.rs:42:    MASK.store((1 << cpus) - 1, Ordering::Relaxed);
+kernel/src/capability/global_history_gate.rs:50:    let bit = 1 << cpu;
+kernel/src/capability/channel_native.rs:151:                    row.state as u64, crate::sched::current_cpu_id());
+kernel/src/capability/channel_native.rs:168:            crate::sched::current_cpu_id()
+kernel/src/capability/session_race.rs:36:    crate::serial_println!("[SESSION-E3] seq={} checkpoint=grant-observation session={} epoch={} grant_fingerprint=boot-local-{} consumed={} cpu={}", sequence(), session, epoch, position+1, u8::from(consume), crate::sched::current_cpu_id());
+kernel/src/capability/session_race.rs:172:                super::session_h3_trace::record(66, p.pid as u64, p.foreground.incarnation, session, epoch, p.owning_core as u64);
+kernel/src/capability/session_race.rs:184:                crate::serial_println!("[SESSION-E3] seq={} checkpoint=n4-execution-held pid={} incarnation={} vm={} session={} epoch={} owning_core={} exiting={} cpu={}", sequence(), p.pid, p.foreground.incarnation, p.address_space.identity().generation, session, epoch, p.owning_core, u8::from(p.is_exiting()), crate::sched::current_cpu_id());
+kernel/src/capability/session_race.rs:268:    crate::serial_println!("[SESSION-E3] checkpoint=inventory sessions={} session_capacity={} registrations={} revoked={} expired={} retired_sessions={} receipts={} account_grants={} pending_account_deliveries={} observed_mints={} observed_consumes={} token_history={} token_history_limit={} scope=session-subset allocator=UNMEASURED cpu={}", sessions, capacity, registrations, revoked, expired, retired, receipts, grants, pending, MINTED.load(Ordering::Relaxed), CONSUMED.load(Ordering::Relaxed), broker.token_history.usage().0, super::token_history::MAX_PREPARED_TOKENS, crate::sched::current_cpu_id());
+kernel/src/capability/session_race.rs:269:    crate::serial_println!("[SESSION-E3] checkpoint=metadata session_identity_bindings={} session_metadata_bytes={} grant_metadata_bytes={} delivered_unconsumed={} observed_retired_grants={} pending_commit_gauge=UNMEASURED allocator=UNMEASURED cpu={}", identity_bindings, session_metadata_bytes, grant_metadata_bytes, grants.saturating_sub(pending), minted.saturating_sub(consumed.saturating_add(grants as u64)), crate::sched::current_cpu_id());
+kernel/src/capability/session_race.rs:305:        session, epoch, result, crate::sched::current_cpu_id()
+kernel/src/capability/completion_race.rs:50:        crate::sched::current_cpu_id());
+kernel/src/capability/completion_race.rs:145:    let cpu = crate::sched::current_cpu_id() as u64;
+kernel/src/capability/completion_race.rs:195:        crate::sched::current_cpu_id());
+kernel/src/capability/history_boundary.rs:52:        MAX_PREPARED_TOKENS, broker.token_history.usage().0, crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:31:    let cpu = crate::sched::current_cpu_id();
+kernel/src/capability/exec_retirement_trace.rs:78:    crate::serial_println!("[AE-SNAPSHOT] seq={} event={} pid={} inc={} vm={} auth={} uid={} gid={} pending={} outcome={} reply={} deferred={} maps={} cpu={}", seq(), event, p.pid, p.foreground.incarnation, p.address_space.identity().generation, u8::from(p.trusted_auth_broker), p.uid, p.gid, u8::from(p.pending_call.is_some()), u8::from(p.ipc_call_outcome.is_some()), u8::from(p.ipc_reply.is_some()), p.deferred_reply_targets.len(), p.mapped_shared.len(), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:81:            crate::serial_println!("[AE-FRESH] seq={} pid={} inc={} vm={} caller={} caller_inc={} endpoint={} generation={} live={} cpu={}", seq(), p.pid, p.foreground.incarnation, p.address_space.identity().generation, target.call.pid, target.call.incarnation, target.endpoint_id, target.call.generation, u8::from(crate::ipc::reply_target_is_live(target, &sched)), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:128:    crate::serial_println!("[AE-GRANT] seq={} event=selected grant={} object={} frame={} session={} epoch={} issuer={} issuer_inc={} issuer_vm={} caller={} caller_inc={} caller_vm={} endpoint={} generation={} views={} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), OBJECT.load(Ordering::Relaxed), FRAME.load(Ordering::Relaxed), grant.grant.binding.scope.session, grant.grant.binding.scope.session_generation, p.pid, p.foreground.incarnation, p.address_space.identity().generation, target.call.pid, target.call.incarnation, grant.grant.binding.process_generation, target.endpoint_id, target.call.generation, broker.shared_region_map_count(token).unwrap_or(0), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:132:                crate::serial_println!("[AE-MAP] seq={} event=existing object={} pid={} inc={} vm={} va={} bytes={} frame={} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), owner.pid, owner.foreground.incarnation, owner.address_space.identity().generation, va.as_u64(), size, FRAME.load(Ordering::Relaxed), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:148:        crate::serial_println!("[AE-GRANT] seq={} event=retired grant={} object={} sessions={} receipts={} grants={} pending_deliveries={} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), OBJECT.load(Ordering::Relaxed), sessions, receipts, grants, broker.account_grants.iter().filter(|(_,g)| g.delivery.is_some_and(|d| !d.delivered)).count(), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:163:    crate::serial_println!("[AE-TERMINAL] seq={} grant={} caller={} inc={} endpoint={} generation={} outcome={:?} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), target.call.pid, target.call.incarnation, target.endpoint_id, target.call.generation, outcome, crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:194:        crate::sched::current_cpu_id()
+kernel/src/capability/exec_retirement_trace.rs:224:    crate::serial_println!("[AE-TLB] seq={} event={} object={} frame={} vm={} va={} request={} targets={} ack_cpu={} produced={} flushed={} cpu={}", seq(), event, OBJECT.load(Ordering::Relaxed), FRAME.load(Ordering::Relaxed), identity.generation, va, request, targets, ack_cpu, produced, flushed, crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:247:        crate::sched::current_cpu_id()
+kernel/src/capability/exec_retirement_trace.rs:300:    crate::serial_println!("[CE-STATE] seq={} object={} event={} pid={} inc={} vm={} auth={} pending={} outcome={:?} reply={} deferred={} maps={} sessions={} receipts={} grants={} deliveries={} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), event, p.pid, p.foreground.incarnation, p.address_space.identity().generation, u8::from(p.trusted_auth_broker), u8::from(p.pending_call.is_some()), p.ipc_call_outcome, u8::from(p.ipc_reply.is_some()), p.deferred_reply_targets.len(), p.mapped_shared.len(), counts[0], counts[6], counts[7], broker.account_grants.iter().filter(|(_,g)| g.delivery.is_some_and(|d| !d.delivered)).count(), crate::sched::current_cpu_id());
+kernel/src/capability/exec_retirement_trace.rs:313:    crate::serial_println!("[CE-REAP] seq={} object={} event={} pid={} inc={} vm={} maps={} pending={} outcome={} reply={} deferred={} active={} owning={} queued={} endpoints={} cpu={}", seq(), OBJECT.load(Ordering::Relaxed), event, p.pid, p.foreground.incarnation, retired_vm, p.mapped_shared.len(), u8::from(p.pending_call.is_some()), u8::from(p.ipc_call_outcome.is_some()), u8::from(p.ipc_reply.is_some()), p.deferred_reply_targets.len(), crate::memory::tlb::active_cpu_mask(p.address_space.identity()), p.owning_core, p.queued_on_core, super::CAP_BROKER.lock().endpoints_owned_by(p.pid).len(), crate::sched::current_cpu_id());
+kernel/src/capability/lifecycle.rs:58:        crate::serial_println!("[SESSION-E3] seq={} checkpoint=request-binding recipient={} recipient_inc={} recipient_vm={} binding_vm={} issuer={} issuer_inc={} issuer_vm={} request_generation={} session={} epoch={} cpu={}", super::session_race::sequence(), delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, recipient.address_space.identity().generation, delivery.issuer_pid, delivery.issuer_incarnation, delivery.issuer_vm_generation, delivery.request, session, epoch, crate::sched::current_cpu_id());
+kernel/src/capability/lifecycle.rs:398:        crate::serial_println!("[SESSION-E3] seq={} checkpoint=request-binding recipient={} recipient_inc={} recipient_vm={} binding_vm={} issuer={} issuer_inc={} issuer_vm={} request_generation={} session={} epoch={} cpu={}", super::session_race::sequence(), delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, recipient.address_space.identity().generation, delivery.issuer_pid, delivery.issuer_incarnation, delivery.issuer_vm_generation, delivery.request, scope.session, scope.session_generation, crate::sched::current_cpu_id());
+kernel/src/ipc/authenticated_reply_test.rs:29:    crate::serial_println!("[AUTH-KERNEL] round={} event={} pid={} inc={} vm={} uid={} gid={} auth={} pending={} outcome={} reply={} deferred={} cpu={}", round, event, process.pid, process.foreground.incarnation, process.address_space.identity().generation, process.uid, process.gid, u8::from(process.trusted_auth_broker), u8::from(process.pending_call.is_some()), u8::from(process.ipc_call_outcome.is_some()), u8::from(process.ipc_reply.is_some()), process.deferred_reply_targets.len(), crate::sched::current_cpu_id());
+kernel/src/ipc/authenticated_reply_test.rs:61:    crate::serial_println!("[AUTH-TERMINAL] round={} caller={} caller_inc={} caller_vm={} endpoint={} generation={} outcome={} cpu={}", round + 1, process.pid, process.foreground.incarnation, process.address_space.identity().generation, target.endpoint_id, target.call.generation, outcome, crate::sched::current_cpu_id());
+kernel/src/capability/completion_exit.rs:54:        crate::sched::current_cpu_id());
+kernel/src/capability/completion_exit.rs:132:            EXIT_SYSCALL_CPU.load(Ordering::Acquire) == crate::sched::current_cpu_id() as u64
+kernel/src/capability/completion_exit.rs:151:    let cpu = crate::sched::current_cpu_id() as u64;
+kernel/src/capability/completion_exit.rs:223:        caller.mapped_shared.len(), crate::sched::current_cpu_id());
+kernel/src/capability/completion_exit.rs:244:        EXIT_SYSCALL_CPU.store(crate::sched::current_cpu_id() as u64, Ordering::Release);
+kernel/src/sched/mod.rs:7://! lowest-priority tier queue, respecting per-process CPU affinity masks.
+kernel/src/sched/mod.rs:53://! lowest-priority non-empty queue, checking cpu_mask affinity before taking.
+kernel/src/sched/mod.rs:80://! timer IRQ will call schedule_tick(current_cpu_id(), saved_rsp) to dispatch
+kernel/src/sched/mod.rs:289:    STACK_HANDOFFS.slot(current_cpu_id())
+kernel/src/sched/mod.rs:297:    let mut waiters = STACK_HANDOFFS.take_waiters(current_cpu_id());
+kernel/src/sched/mod.rs:331:    let source = current_cpu_id();
+kernel/src/sched/mod.rs:546:        let cpu_mask = if idx < self.processes.len() {
+kernel/src/sched/mod.rs:547:            self.processes[idx].cpu_mask
+kernel/src/sched/mod.rs:555:            if cpu_mask & (1u64 << core_id) == 0 {
+kernel/src/sched/mod.rs:694:    /// Choose the least-loaded core that the process's cpu_mask permits.
+kernel/src/sched/mod.rs:701:        let cpu_mask = if idx < self.processes.len() {
+kernel/src/sched/mod.rs:702:            self.processes[idx].cpu_mask
+kernel/src/sched/mod.rs:710:            if cpu_mask & (1u64 << core_id) == 0 {
+kernel/src/sched/mod.rs:737:        if self.processes[idx].owning_core != u8::MAX
+kernel/src/sched/mod.rs:762:                let writer_cpu = current_cpu_id();
+kernel/src/sched/mod.rs:776:            if core_id == current_cpu_id() {
+kernel/src/sched/mod.rs:884:        if self.processes[idx].owning_core != u8::MAX {
+kernel/src/sched/mod.rs:892:        let cpu_mask = self.processes[idx].cpu_mask;
+kernel/src/sched/mod.rs:893:        let target_cpu = if cpu_mask & (1u64 << preferred_cpu) != 0 {
+kernel/src/sched/mod.rs:938:        idx < self.processes.len() && self.processes[idx].owning_core != u8::MAX
+kernel/src/sched/mod.rs:971:            let c = self.processes[idx].owning_core;
+kernel/src/sched/mod.rs:979:    /// Like `is_live_on_core`, but ignores `self_cpu`. O(1) via `owning_core`.
+kernel/src/sched/mod.rs:984:        let c = self.processes[idx].owning_core;
+kernel/src/sched/mod.rs:1065:        let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:1095:            let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:1116:        self.processes[idx].measurement.placement(current_cpu_id());
+kernel/src/sched/mod.rs:1119:        let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:1154:        let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:1317:    /// Search a queue (back to front) for a process whose cpu_mask permits
+kernel/src/sched/mod.rs:1328:                && processes[pidx].cpu_mask & (1u64 << thief_id) != 0
+kernel/src/sched/mod.rs:1337:    /// lowest-priority non-empty queue. Respects cpu_mask affinity.
+kernel/src/sched/mod.rs:1452:                    && self.processes[idx].cpu_mask & (1u64 << thief_id) != 0
+kernel/src/sched/mod.rs:1638:                || self.processes[idx].cpu_mask & (1u64 << cpu_id) == 0
+kernel/src/sched/mod.rs:1737:                && self.processes[idx].cpu_mask & (1u64 << cpu_id) != 0
+kernel/src/sched/mod.rs:1846:                self.processes[next].owning_core = cpu_id as u8;
+kernel/src/sched/mod.rs:1878:            && self.processes[current].cpu_mask & (1u64 << cpu_id) != 0
+kernel/src/sched/mod.rs:1935:            self.processes[current].owning_core = u8::MAX;
+kernel/src/sched/mod.rs:1945:            self.processes[current].owning_core = u8::MAX;
+kernel/src/sched/mod.rs:1973:                self.processes[prev].owning_core = u8::MAX;
+kernel/src/sched/mod.rs:1979:            self.processes[next].owning_core = cpu_id as u8;
+kernel/src/sched/mod.rs:2019:                self.processes[current].owning_core = cpu_id as u8;
+kernel/src/sched/mod.rs:2054:        let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:2059:        self.core_current_task(current_cpu_id())
+kernel/src/sched/mod.rs:2063:        let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:2184:        self.process_index_for_cpu(current_cpu_id())
+kernel/src/sched/mod.rs:2223:            let c = &mut self.cpu_events[current_cpu_id()];
+kernel/src/sched/mod.rs:2247:                    self.diagnostic_current_pid(current_cpu_id()).unwrap_or(0) as u64,
+kernel/src/sched/mod.rs:2699:            if self.processes[idx].owning_core != u8::MAX {
+kernel/src/sched/mod.rs:2700:                request_reschedule_on(self.processes[idx].owning_core as usize);
+kernel/src/sched/mod.rs:2766:        if self.processes[idx].owning_core != u8::MAX {
+kernel/src/sched/mod.rs:2769:                "[SCHED] process_reap_blocked_reason idx={} reason=owning_core cpu={}",
+kernel/src/sched/mod.rs:2771:                self.processes[idx].owning_core
+kernel/src/sched/mod.rs:2854:                crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
+kernel/src/sched/mod.rs:2979:            crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
+kernel/src/sched/mod.rs:2984:            crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-ipc-retired pid={} incarnation={} vm={} reply_target=none deferred_targets=0 pending_call=none cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+kernel/src/sched/mod.rs:3050:            crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+kernel/src/sched/mod.rs:3171:            if self.processes[idx].owning_core != u8::MAX {
+kernel/src/sched/mod.rs:3174:                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=owning_core",
+kernel/src/sched/mod.rs:3285:        // If still live on a core, leave owning_core set so the owner core's
+kernel/src/sched/mod.rs:3287:        let owning = self.processes[idx].owning_core;
+kernel/src/sched/mod.rs:3350:        let owning = self.processes[idx].owning_core;
+kernel/src/sched/mod.rs:3388:            self.processes[idx].owning_core = 0;
+kernel/src/sched/mod.rs:3530:            let oc = p.owning_core;
+kernel/src/sched/mod.rs:3595:                        serial_println!("[SCHED-INV] VIOLATION running task in queue pid={} in_core={} owning={}", p.pid, c, p.owning_core);
+kernel/src/sched/mod.rs:3605:            if p.state == ProcessState::Running && p.owning_core != u8::MAX {
+kernel/src/sched/mod.rs:3606:                let owner = p.owning_core as usize;
+kernel/src/sched/mod.rs:4148:    1u64 << cpu_id.min(63)
+kernel/src/sched/mod.rs:4184:    let source_cpu = current_cpu_id();
+kernel/src/sched/mod.rs:4238:    request_reschedule_on(current_cpu_id());
+kernel/src/sched/mod.rs:4253:    let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:4293:                current_cpu_id(),
+kernel/src/sched/mod.rs:4391:    let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:4427:        sched.processes[cur].owning_core = u8::MAX;
+kernel/src/sched/mod.rs:4474:        process.owning_core = u8::MAX;
+kernel/src/sched/mod.rs:4560:            sched.processes[idx].owning_core = 0;
+kernel/src/sched/mod.rs:4600:    let cpu_id = current_cpu_id();
+kernel/src/sched/mod.rs:4620:pub fn current_cpu_id() -> usize {
+kernel/src/capability/production_gate.rs:122:        process.cpu_mask = 1 << cpu;
+kernel/src/capability/production_gate.rs:142:        crate::serial_println!("[GRANT-G] exec-reply checkpoint=commit pid={} incarnation={} vm={} request={} count=2 cpu={}", delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:146:        crate::serial_println!("[GRANT-G] cycle-commit epoch={} pid={} incarnation={} vm={} request={} count={} cpu={}", SERVICE_EPOCH.lock().0 + 1, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, tokens.len(), crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:154:        crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=commit pid={} incarnation={} vm={} issuer={} issuer_inc={} issuer_vm={} request={} fingerprint=boot-local-{} cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, issuer.pid, issuer.foreground.incarnation, issuer.address_space.identity().generation, delivery.request, super::reconciliation::fingerprint(tokens[0]), crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:168:            issuer.pid, issuer.foreground.incarnation, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:190:        crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:194:        delivery.recipient.vm_generation, delivery.request, tokens.len(), entries[index].commits, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:230:        target.call.pid, target.call.incarnation, target.call.generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:239:        crate::serial_println!("[GRANT-G] exec-reply checkpoint=late-settlement pid={} incarnation={} request={} inventory=0 cpu={}", target.call.pid, target.call.incarnation, target.call.generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:266:            crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:280:        issuer.pid, issuer.foreground.incarnation, recipient.pid, recipient.incarnation, recipient.vm_generation, allowed, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:295:            crate::serial_println!("[GRANT-G] boundary epoch={} services=uac,vfs scope=completed-fixture-operations sessiond=UNMEASURED fixture_grants=0 cpu={}", epoch, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:324:        crate::serial_println!("[GRANT-G] exec-reply checkpoint=exec pid={} incarnation={} old_vm={} new_vm={} retired=2 exec_retired=0 retirement=ipc-cancel-before-exec cpu={}", process.pid, process.foreground.incarnation, old_vm.generation, process.address_space.identity().generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:349:        crate::serial_println!("[GRANT-F] lifecycle case=exec-consume checkpoint=exec pid={} incarnation={} old_vm={} new_vm={} retired=2 replay=denied cpu={}", process.pid, process.foreground.incarnation, old_vm.generation, process.address_space.identity().generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:367:        process.pid, process.foreground.incarnation, old_vm.generation, process.address_space.identity().generation, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:383:        crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:399:            crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:416:        crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=reaped pid={} incarnation={} exit={} pending=0 reply=0 deferred=0 cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, process.pid, process.foreground.incarnation, process.exit_code, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:435:            crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:452:        crate::sched::current_cpu_id()
+kernel/src/capability/production_gate.rs:558:    crate::serial_println!("[GRANT-F] lifecycle case={} checkpoint=consume-attempt pid={} incarnation={} old_vm={} issuer={} issuer_inc={} issuer_vm={} inventory={} recipient=retiring-or-unpublished cpu={}", if index == 0 { "exit-consume" } else { "exec-consume" }, target.call.pid, target.call.incarnation, race.identity.unwrap().vm_generation, issuer.pid, issuer.foreground.incarnation, issuer.address_space.identity().generation, inventory, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:594:        process.address_space.identity().generation, inventory, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:675:    crate::serial_println!("[GRANT-G] service-ack epoch={} service={} pid={} incarnation={} vm={} caller={} caller_inc={} request={} records={} active_or_boot_handles={} heap_used={} boundary=handler-returned cpu={}", epoch, if bit == 1 { "uac" } else { "vfs" }, server.pid, server.foreground.incarnation, server.address_space.identity().generation, target.call.pid, target.call.incarnation, target.call.generation, reply.words[1], reply.words[2], reply.words[3], crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:697:        crate::serial_println!("[HISTORY-GT] prefill history={} capacity={} authority_added=0 entropy=production cpu={}", broker.token_history.usage().0, super::token_history::MAX_PREPARED_TOKENS, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:725:    crate::serial_println!("[HISTORY-GT] rollback attempt={} pid={} incarnation={} vm={} request={} history={} vfs_partial=0 proof=retained error=TokenHistoryFull cpu={}", attempt, delivery.recipient.pid, delivery.recipient.incarnation, delivery.recipient.vm_generation, delivery.request, broker.token_history.usage().0, crate::sched::current_cpu_id());
+kernel/src/capability/production_gate.rs:745:        crate::serial_println!("[GRANT-G] exec-reply checkpoint=cancel pid={} incarnation={} vm={} request={} retired=2 terminal=deadline inventory=0 cpu={}", target.call.pid, target.call.incarnation, identity.vm_generation, target.call.generation, crate::sched::current_cpu_id());
+kernel/src/arch/x86_64/syscall.rs:462:        crate::serial_println!("[SESSION-E3] seq={} checkpoint=n4-manager-signal issuer={} issuer_inc={} issuer_vm={} manager={} manager_inc={} manager_vm={} signal={} cpu={}", crate::capability::session_race::sequence(), sched.processes[idx].pid, sched.processes[idx].foreground.incarnation, sched.processes[idx].address_space.identity().generation, sched.processes[sender].pid, sched.processes[sender].foreground.incarnation, sched.processes[sender].address_space.identity().generation, signal as u64, crate::sched::current_cpu_id());
+kernel/src/arch/x86_64/syscall.rs:977:                p.cpu_mask = 1 << frame.rdi;
+kernel/src/arch/x86_64/syscall.rs:979:                if frame.rdi == 0 { p.cpu_mask = u64::MAX; }
+kernel/src/arch/x86_64/syscall.rs:1157:        1039 => sys_linux_sched_getaffinity(frame),
+kernel/src/arch/x86_64/syscall.rs:1634:                    { child.cpu_mask = 1; }
+kernel/src/arch/x86_64/syscall.rs:1638:                    child.cpu_mask = 1;
+kernel/src/arch/x86_64/syscall.rs:1646:                        child.cpu_mask = if n4_on_ap { 2 } else { 1 };
+kernel/src/arch/x86_64/syscall.rs:2649:    let current_cpu = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/syscall.rs:3081:    child.cpu_mask = parent.cpu_mask;
+kernel/src/arch/x86_64/syscall.rs:3114:    let idx = sched.publish_thread(slot, child, crate::sched::current_cpu_id());
+kernel/src/arch/x86_64/syscall.rs:3573:    let current_cpu = crate::sched::current_cpu_id();
+kernel/src/arch/x86_64/syscall.rs:3764:        child.cpu_mask = if option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") {
+kernel/src/arch/x86_64/syscall.rs:3811:                child.cpu_mask = 1;
+kernel/src/arch/x86_64/syscall.rs:5549:fn sys_linux_sched_getaffinity(frame: &mut SyscallFrame) -> u64 {
+kernel/src/arch/x86_64/syscall.rs:5550:    use sunlight_compat_linux::{abi, affinity};
+kernel/src/arch/x86_64/syscall.rs:5572:        match affinity::mask_for_online_cores(sched.online_cores, cpusetsize) {
+kernel/src/arch/x86_64/syscall.rs:5585:                "[HELIOS-ABI-TRACE] sched_getaffinity pid={} cpusetsize={} online={} mask={:#x} ret={}",

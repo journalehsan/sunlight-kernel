@@ -1,0 +1,7 @@
+{
+  "pass": true,
+  "forward_initial_snapshot": true,
+  "reverse_current_tree": true,
+  "original_t2_ledger_unchanged": true,
+  "patch_sha256": "58c98fa1c345a236145047bac248a86c5c8cd7b57d04ec29b58e9929dfd0370f"
+}

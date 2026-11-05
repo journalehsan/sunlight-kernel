@@ -1,0 +1,44 @@
+{
+  "argv": [
+    "qemu-system-x86_64",
+    "-machine",
+    "pc",
+    "-accel",
+    "tcg",
+    "-m",
+    "128",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-S",
+    "-qmp",
+    "stdio",
+    "-cpu",
+    "max",
+    "-smp",
+    "0,maxcpus=2",
+    "-device",
+    "max-x86_64-cpu,apic-id=1"
+  ],
+  "requests": [
+    {
+      "execute": "qmp_capabilities"
+    },
+    {
+      "execute": "query-cpus-fast"
+    },
+    {
+      "execute": "qom-get",
+      "arguments": {
+        "path": "/machine/unattached/device[0]",
+        "property": "apic-id"
+      }
+    },
+    {
+      "execute": "quit"
+    }
+  ],
+  "exit_code": 1,
+  "output": "qemu-system-x86_64: Invalid CPU topology: CPU topology parameters must be greater than zero\n"
+}

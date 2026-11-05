@@ -1,0 +1,9 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "target/t3r-handoff-host"
+  ],
+  "exit_code": 0,
+  "seconds": 1.2508220220042858
+}

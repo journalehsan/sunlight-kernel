@@ -351,8 +351,24 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
     assert!(count >= 2, "case required");
     let case = args[1];
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-R2E-P1" { channel_fixture::shared_ring::operation::lifecycle::caller_exec::supervisor(); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-P1-replaced" { channel_fixture::shared_ring::operation::lifecycle::caller_exec::replaced(&args[..count]); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-M61R2" { channel_fixture::shared_ring::operation::lifecycle::supervisor(); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-R2-replaced" { channel_fixture::shared_ring::operation::lifecycle::replaced(&args[..count]); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-R2-caller" { channel_fixture::shared_ring::operation::lifecycle::caller(&args[..count]); }
     #[cfg(feature = "fastlane-benchmark-test")]
     if case == "FL-M60" { channel_fixture::shared_ring::benchmark::supervisor(); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-M61E" { channel_fixture::shared_ring::operation::supervisor(); }
+    #[cfg(feature = "fastlane-contract-test")]
+    if case == "FL-M61B" { channel_fixture::operation::supervisor(); }
+    #[cfg(feature = "fastlane-mediated-accounting-test")]
+    if case == "FL-M61A" { channel_fixture::shared_ring::mediated_accounting::supervisor(); }
     #[cfg(feature = "fastlane-benchmark-test")]
     if case == "FL-M60R" { channel_fixture::shared_ring::fair_benchmark::supervisor(); }
     #[cfg(feature = "fastlane-doorbell-test")]

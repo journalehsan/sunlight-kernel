@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t2_allocation_host.py"
+  ],
+  "exit_code": 0,
+  "seconds": 0.5006540380127262
+}

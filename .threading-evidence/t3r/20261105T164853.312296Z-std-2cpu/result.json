@@ -1,0 +1,48 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "dd74b4359934884159aeff01a8febf59648d667b256b216dbb332191d4ad68bb",
+  "cpus": 2,
+  "markers": [
+    "[NATIVE-STD] T2 Hayro workers=4 concurrent render/join OK",
+    "[NATIVE-STD] T2 full-ledger TLS failure rollback cycles=3 cleanup=allocation-free OK",
+    "[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK",
+    "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+    "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+    "[DOCSERV] native Hayro IPC open/render/close OK"
+  ],
+  "topology": "standard",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "2",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164832.313795Z-suite-std/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164853.312296Z-std-2cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "observed_apic_ids": [
+    0,
+    1
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "3c9e46ba77ba68dcbb1bcb2871c8864089e61fa068ee36e05aaeceaae05e3278",
+  "seconds": 45.36289609898813
+}

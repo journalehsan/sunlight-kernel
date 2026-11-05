@@ -1,0 +1,74 @@
+kernel/src/memory/tlb.rs:42:    sequence: AtomicU64,
+kernel/src/memory/tlb.rs:43:    acknowledgement: AtomicU64,
+kernel/src/memory/tlb.rs:55:            sequence: AtomicU64::new(0),
+kernel/src/memory/tlb.rs:56:            acknowledgement: AtomicU64::new(0),
+kernel/src/memory/tlb.rs:142:/// Put an idle CPU back on the permanent boot/kernel root so a dead process's
+kernel/src/memory/tlb.rs:155:pub fn active_cpu_mask(identity: AddressSpaceIdentity) -> u64 {
+kernel/src/memory/tlb.rs:202:    let sequence = NEXT_SEQUENCE
+kernel/src/memory/tlb.rs:206:        .expect("TLB shootdown sequence exhausted");
+kernel/src/memory/tlb.rs:207:    assert_ne!(sequence, 0, "TLB sequence zero is reserved");
+kernel/src/memory/tlb.rs:217:    let active = active_cpu_mask(identity);
+kernel/src/memory/tlb.rs:228:            sequence,
+kernel/src/memory/tlb.rs:243:        sequence,
+kernel/src/memory/tlb.rs:252:        sequence,
+kernel/src/memory/tlb.rs:263:            sequence,
+kernel/src/memory/tlb.rs:272:            sequence,
+kernel/src/memory/tlb.rs:280:                sequence,
+kernel/src/memory/tlb.rs:300:            sequence,
+kernel/src/memory/tlb.rs:306:            invariant_failure("attempted to overwrite an unacknowledged TLB mailbox");
+kernel/src/memory/tlb.rs:319:            // remains the normal, dedicated, EOI-tracked delivery path.
+kernel/src/memory/tlb.rs:320:            crate::arch::x86_64::lapic::send_nmi(target_cpu);
+kernel/src/memory/tlb.rs:329:            if targets & bit != 0 && !MAILBOXES[target_cpu].acknowledged(sequence) {
+kernel/src/memory/tlb.rs:338:            invariant_failure("timed out waiting for TLB shootdown acknowledgement");
+kernel/src/memory/tlb.rs:344:        for ack_cpu in 0..MAX_TRACKED_CPUS {
+kernel/src/memory/tlb.rs:345:            if targets & (1u64 << ack_cpu) != 0 {
+kernel/src/memory/tlb.rs:349:                    "ack-observed",
+kernel/src/memory/tlb.rs:350:                    sequence,
+kernel/src/memory/tlb.rs:352:                    ack_cpu,
+kernel/src/memory/tlb.rs:357:            identity, start, "complete", sequence, targets, cpu_id,
+kernel/src/memory/tlb.rs:362:        for ack_cpu in 0..MAX_TRACKED_CPUS {
+kernel/src/memory/tlb.rs:363:            if targets & (1u64 << ack_cpu) != 0 {
+kernel/src/memory/tlb.rs:365:                    identity, start, "ack", sequence, targets, ack_cpu,
+kernel/src/memory/tlb.rs:370:            identity, start, "complete", sequence, targets, cpu_id,
+kernel/src/memory/tlb.rs:377:            sequence,
+kernel/src/memory/tlb.rs:401:/// and its NMI doorbell; `try_claim` guarantees one flush and one ack.
+kernel/src/memory/tlb.rs:408:    if !mailbox.try_claim(request.sequence) {
+kernel/src/memory/tlb.rs:419:    crate::capability::exec_retirement_trace::ack_produced(
+kernel/src/memory/tlb.rs:424:    crate::capability::mapping_trace::ack(request, current == Some(request.target));
+kernel/src/memory/tlb.rs:429:            request.sequence,
+kernel/src/memory/tlb.rs:439:    mailbox.acknowledge(request.sequence);
+kernel/src/memory/tlb.rs:468:    let sequence = NEXT_TEST_SEQUENCE.fetch_add(1, Ordering::AcqRel);
+kernel/src/memory/tlb.rs:474:        let previous = mailbox.sequence.load(Ordering::Acquire);
+kernel/src/memory/tlb.rs:476:            mailbox.acknowledgement.load(Ordering::Acquire),
+kernel/src/memory/tlb.rs:488:        mailbox.sequence.store(sequence, Ordering::Release);
+kernel/src/memory/tlb.rs:503:                    .acknowledgement
+kernel/src/memory/tlb.rs:505:                    == sequence
+kernel/src/memory/tlb.rs:508:            return sequence;
+kernel/src/memory/tlb.rs:526:    let sequence = mailbox.sequence.load(Ordering::Acquire);
+kernel/src/memory/tlb.rs:527:    if sequence == 0 || mailbox.acknowledgement.load(Ordering::Acquire) == sequence {
+kernel/src/memory/tlb.rs:551:    mailbox.acknowledgement.store(sequence, Ordering::Release);
+kernel/src/memory/tlb.rs:705:            .rollback_mapped_page(page, new_frame, &mut pmm, hhdm)
+kernel/src/memory/tlb.rs:716:        "[MM-2B] 12 CPUs pre-touched, replaced, acknowledged, and observed new content: OK"
+kernel/src/memory/tlb.rs:723:        "[MM-2B-DIAG] requests={} targets={} local={} remote={} range={} full={} acks={} switch_retries={} no_remote={} failures={}",
+kernel/src/arch/x86_64/lapic.rs:6://! - EOI acknowledgement for local interrupt delivery
+kernel/src/arch/x86_64/lapic.rs:12://! ## Initialization sequence (per core)
+kernel/src/arch/x86_64/lapic.rs:71:        // Fallback: read IA32_APIC_BASE MSR (bits [51:12] = physical base).
+kernel/src/arch/x86_64/lapic.rs:125:pub fn local_apic_id() -> u32 {
+kernel/src/arch/x86_64/lapic.rs:133:/// Writing 0 to the EOI register acknowledges the current interrupt and
+kernel/src/arch/x86_64/lapic.rs:152:/// Translate to a unicast xAPIC hardware destination before touching the ICR.
+kernel/src/arch/x86_64/lapic.rs:158:    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+kernel/src/arch/x86_64/lapic.rs:160:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/arch/x86_64/lapic.rs:173:    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+kernel/src/arch/x86_64/lapic.rs:187:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/arch/x86_64/lapic.rs:240:pub unsafe fn send_nmi(cpu_id: usize) {
+kernel/src/arch/x86_64/lapic.rs:245:    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+kernel/src/arch/x86_64/lapic.rs:247:    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+kernel/src/arch/x86_64/lapic.rs:261:/// Falls back to a conservative fixed count (62 500 ≈ 100 Hz with a
+kernel/src/arch/x86_64/lapic.rs:271:        let fallback = 62_500u32;
+kernel/src/arch/x86_64/lapic.rs:272:        LAPIC_TIMER_INIT_COUNT.store(fallback, Ordering::Release);
+kernel/src/arch/x86_64/lapic.rs:273:        LAPIC_TIMER_HZ.store(fallback as u64 * target_hz as u64, Ordering::Release);
+kernel/src/arch/x86_64/lapic.rs:274:        return fallback;
+kernel/src/arch/x86_64/lapic.rs:287:    core::arch::asm!("rdtsc", out("eax") lo0, out("edx") hi0, options(nostack, nomem));
+kernel/src/arch/x86_64/lapic.rs:291:        core::arch::asm!("rdtsc", out("eax") lo1, out("edx") hi1, options(nostack, nomem));
+kernel/src/arch/x86_64/lapic.rs:305:        62_500u32 // fallback
+kernel/src/arch/x86_64/lapic.rs:327:/// calibration (count is 0), falls back to a fixed 62 500 count.

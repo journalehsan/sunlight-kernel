@@ -3,6 +3,9 @@
 .global _start
 .section .text
 _start:
+.ifdef T1
+.include "tools/helios-probes/syscall-stack-control.inc"
+.endif
     movabs $0x123456789abcdef0, %r12
     movq %r12, %xmm0
     xor %ebp, %ebp

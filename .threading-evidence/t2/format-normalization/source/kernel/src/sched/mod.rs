@@ -1,0 +1,4644 @@
+//! SunBrust Distributed Work-Stealing Scheduler (SunlightOS)
+//!
+//! This module implements the "SunBrust" per-core distributed scheduler with
+//! work-stealing. Each logical CPU owns a `CoreState` holding its local run
+//! queues and currently-executing task; when a core's local queues are empty
+//! it calls `steal_work()` to pop a task from the tail of another core's
+//! lowest-priority tier queue, respecting per-process CPU affinity masks.
+//!
+//! ## Scheduling Model
+//!
+//! ### Burst Score (0..=1024)
+//! - Low score (0-256)   => HIGH tier queue (favors interactive / short-running tasks)
+//! - Mid score (257-768) => MEDIUM tier
+//! - High score (769-1024)=> LOW tier (CPU-bound tasks get longer quanta but lower dispatch freq)
+//!
+//! Burst score is adjusted by:
+//! - Early block / short run (< ~3 ticks or <2ms) => decrease burst (more interactive credit)
+//! - Full quantum consumption => increase burst (CPU-bound behavior)
+//! - Periodic aging for tasks waiting >100 ticks => mild decrease (anti-starvation)
+//! - Short-burst churn penalty (Phase 4) => increase burst temporarily when a task
+//!   runs for extremely short periods and blocks/yields immediately. This prevents
+//!   thrashing tasks from causing excessive idle churn.
+//!
+//! Burst score is always clamped to [BURST_SCORE_MIN, BURST_SCORE_MAX].
+//!
+//! ### Nice Value (i8)
+//! - Negative nice => higher priority. Tasks gain "credit" faster and may be
+//!   promoted with a small quantum bonus.
+//! - Positive nice => lower priority. Tasks accumulate "debt" and may be skipped
+//!   for a cycle.
+//! - nice==0 => pure round-robin (counter system bypassed).
+//!
+//! The effective quantum is:
+//!   quantum = calculate_quantum_with_nice(burst_score, nice)
+//!   where positive nice inflates the score (longer slice) and negative deflates it.
+//!
+//! ### Quantum
+//! - Base range: [QUANTUM_MIN, QUANTUM_MAX] ticks (~5..50 at 100 Hz).
+//! - Interactive tasks (low burst) receive shorter quanta for responsiveness.
+//! - CPU-bound (high burst) receive longer quanta to reduce switch overhead.
+//!
+//! quantum_override may be set by the nice promotion logic for one shot bonuses.
+//!
+//! In RR, an equal/lower-priority wake leaves the current unexpired turn intact.
+//! A queued task with lower nice may interrupt it; the interrupted task retains
+//! its frozen residual budget and resumes ahead of peers. Forced interruptions
+//! do not produce voluntary short-burst feedback. Yield/block/exit retire a turn.
+//!
+//! ### Per-Core Tiered Queues (BORE mode)
+//! Each `CoreState` maintains three ready queues (high/med/low). pick_next_bore
+//! prefers high then medium then low. When all local queues are empty,
+//! steal_work() attempts a try_lock-style steal from the tail of another core's
+//! lowest-priority non-empty queue, checking cpu_mask affinity before taking.
+//!
+//! ### Aging & Starvation Prevention
+//! - Every AGING_INTERVAL_TICKS, tasks that have waited > AGING_THRESHOLD_TICKS
+//!   without running receive a small burst reduction (but never below
+//!   MINIMUM_AGED_BURST_SCORE) and a starvation boost in the RR counter system.
+//! - This guarantees forward progress for all ready tasks.
+//!
+//! ### CPU accounting
+//! `cpu_runtime_ns` plus the open `cpu_charge_since: Option<u64>` interval
+//! measure execution with the calibrated monotonic TSC (tick fallback).
+//! Checkpointing at an IPC block/yield does not close the execution interval:
+//! only actual descheduling/exit does. Samples include open intervals at one
+//! publication timestamp, irrespective of a pending Ready/Blocked transition.
+//! `last_start_ns` remains a separate clock for the existing burst/churn policy.
+//!
+//! `accounting` independently measures each CPU's halt intervals. Interrupt
+//! entry closes idle before kernel work; all idle and exit trampolines use the
+//! same loop. Busy = elapsed capacity - halt time, including interrupt and
+//! scheduler work not attributed to a task. No allocation/floating point.
+//! See `docs/CPU_ACCOUNTING_AUDIT.md` for ABI, normalization, and validation.
+//!
+//! ### SMP Phase 0 → Phase 1 Transition
+//! BSP brings APs online via smp::start_aps(); main.rs then calls
+//! sched::init_cores(total_cpu_count) which stores ONLINE_CORES and seeds the
+//! online_cores field of the global Scheduler. Until then only CORES[0] (BSP)
+//! is used. When per-core LAPIC timers are wired (phase 1 SMP), each AP's
+//! timer IRQ will call schedule_tick(current_cpu_id(), saved_rsp) to dispatch
+//! tasks from its own per-core queue or steal from neighbours.
+//!
+//! ## Invariants (Phase 2)
+//! - Only Ready or Running processes may reside in the tiered ready queues.
+//! - Blocking (IPC, timer, IO, waitpid, yield-to-block, exit, suspend) removes
+//!   the task from ready queues before it stops being current.
+//! - pick_next_* only returns Ready tasks (or falls back safely).
+
+pub mod accounting;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+mod doorbell_native;
+#[cfg(all(debug_assertions, any(feature = "native_doorbell_test", feature = "fastlane_doorbell_test")))]
+mod doorbell_stack;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+pub(crate) mod bell_trace;
+#[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+pub(crate) use doorbell_stack::on_kernel_stack as fastlane_bell_on_kernel_stack;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) use doorbell_stack::on_kernel_stack as doorbell_fixture_on_kernel_stack;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) mod doorbell_state;
+#[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+pub(crate) mod doorbell_test;
+mod handoff;
+#[cfg(feature = "scheduler_perf_diag")]
+pub mod perf;
+pub(crate) mod quantum;
+mod requests;
+#[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+pub(crate) mod t2_fixture;
+mod thread_admission;
+const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+#[cfg(all(debug_assertions, feature = "pin_release_test"))]
+pub mod pin_release_test;
+#[cfg(feature = "scheduler_b_test")]
+pub mod regression;
+#[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+pub mod remote_wake_test;
+use crate::arch::x86_64::interrupts::now_ns;
+use crate::process::{Process, ProcessState, QueueTier};
+use crate::serial_println;
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+
+pub const TIME_SLICE_TICKS: u64 = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SchedulerMode {
+    RoundRobin,
+    Bore,
+}
+
+pub const SCHEDULER_MODE: SchedulerMode = SchedulerMode::RoundRobin;
+
+// === Phase 3 BORE Scheduler Constants ===
+pub const BURST_SCORE_MIN: u32 = 0;
+pub const BURST_SCORE_MAX: u32 = 1024;
+pub const BURST_SCORE_DEFAULT: u32 = 256;
+pub const BURST_SCORE_HIGH: u32 = 256; // Interactive threshold
+pub const BURST_SCORE_LOW: u32 = 768; // CPU-bound threshold
+
+pub const BURST_REDUCTION_EARLY_BLOCK: u32 = 64; // ~6% reduction
+pub const BURST_INCREASE_FULL_QUANTUM: u32 = 32; // ~3% increase
+pub const BURST_REDUCTION_AGING: u32 = 20; // ~2% per aging tick
+
+pub const AGING_INTERVAL_TICKS: u64 = 10;
+pub const AGING_THRESHOLD_TICKS: u64 = 100; // Age after 100ms
+pub const MINIMUM_AGED_BURST_SCORE: u32 = 256; // Don't starve below HIGH
+pub const INTERACTIVE_DETECTION_THRESHOLD: u32 = 3; // Block < 3 ticks = interactive
+
+// === Phase 4: short-burst / churn detection ===
+const SHORT_BURST_NS: u64 = 2_000_000; // < 2 ms run is "extremely short"
+const SHORT_BURST_PENALTY: u32 = 48; // temporary de-prio by bumping burst (lower prio)
+
+// === Feature 3: Nice-weighted counter system (RoundRobin mode only) ===
+pub const MAX_CREDIT: i32 = 6;
+pub const MAX_DEBT: i32 = -8; // asymmetric: easier to be demoted
+pub const PROMOTE_LIMIT: i32 = 3;
+pub const SKIP_LIMIT: i32 = -3;
+pub const DECAY_RATE: i32 = 1;
+pub const STARVATION_BOOST: i32 = 2;
+
+#[derive(Debug, Clone, Copy)]
+pub enum BurstReason {
+    EarlyBlock,  // Task blocked early (< 3 ticks)
+    FullQuantum, // Task used full 10-tick quantum
+    Aged,        // Task hasn't run in 100+ ticks
+}
+
+/// Update burst score based on why the task yielded
+pub fn update_burst_score(process: &mut Process, reason: BurstReason) {
+    match reason {
+        BurstReason::EarlyBlock => {
+            process.burst_score = process
+                .burst_score
+                .saturating_sub(BURST_REDUCTION_EARLY_BLOCK);
+            process.interactive_bonus = 20;
+        }
+        BurstReason::FullQuantum => {
+            process.burst_score = process
+                .burst_score
+                .saturating_add(BURST_INCREASE_FULL_QUANTUM)
+                .min(BURST_SCORE_MAX);
+            process.interactive_bonus = 0;
+        }
+        BurstReason::Aged => {
+            process.burst_score = process
+                .burst_score
+                .saturating_sub(BURST_REDUCTION_AGING)
+                .max(MINIMUM_AGED_BURST_SCORE);
+            process.aging_counter += 1;
+        }
+    }
+}
+
+/// Per-core reschedule request mask.
+///
+/// A single global bit is not sufficient with per-core LAPIC timers: a timer
+/// on one CPU can consume another CPU's block/yield wakeup request, leaving the
+/// target CPU running a task that just transitioned to `BlockedOnIpc` or
+/// leaving a woken live task `Ready` but not enqueued. Each CPU consumes only
+/// its own bit; cross-core wakeups set the owner CPU's bit.
+static RESCHEDULE_MASK: requests::RescheduleRequests = requests::RescheduleRequests::new();
+static DISPATCH_NOTIFICATION_MASK: AtomicU64 = AtomicU64::new(0);
+static DISPATCH_NOTIFICATIONS_SENT: AtomicU64 = AtomicU64::new(0);
+static DISPATCH_NOTIFICATIONS_BUSY: AtomicU64 = AtomicU64::new(0);
+
+/// Diagnostic: track first time sunlightd (pid 6) is picked by scheduler.
+static SUNLIGHTD_FIRST_SCHED: AtomicBool = AtomicBool::new(false);
+
+/// === Diagnostic counters for process leak detection ===
+static PROCESS_CREATED: AtomicUsize = AtomicUsize::new(0);
+static PROCESS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_CREATED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_FINISHED: AtomicUsize = AtomicUsize::new(0);
+static NATIVE_BORROWERS_REAPED: AtomicUsize = AtomicUsize::new(0);
+static BORROWER_USER_RECLAIM_SKIPPED: AtomicUsize = AtomicUsize::new(0);
+static STALE_TERMINAL_WAKEUPS_REJECTED: AtomicUsize = AtomicUsize::new(0);
+static BORROWER_SLOTS_REUSED: AtomicUsize = AtomicUsize::new(0);
+static LIVE_NATIVE_BORROWERS: AtomicUsize = AtomicUsize::new(0);
+static MAX_LIVE_NATIVE_BORROWERS: AtomicUsize = AtomicUsize::new(0);
+
+pub const QUANTUM_MIN: u32 = 5;
+pub const QUANTUM_MAX: u32 = 50;
+
+fn calculate_quantum_with_nice(burst_score: u32, nice: i8) -> u32 {
+    let nice_modifier = (nice as i32) * 16;
+    let effective_score =
+        (burst_score as i32 + nice_modifier).clamp(0, BURST_SCORE_MAX as i32) as u32;
+    let bonus_quantum = (effective_score * (QUANTUM_MAX - QUANTUM_MIN)) / BURST_SCORE_MAX;
+    QUANTUM_MIN + bonus_quantum
+}
+
+/// Returns the quantum (in ticks) a process should run for, honoring any
+/// promotion override set by the RoundRobin counter system. [FEAT-3]
+fn quantum_ticks(process: &Process) -> u32 {
+    process
+        .quantum_override
+        .unwrap_or_else(|| calculate_quantum_with_nice(process.burst_score, process.nice))
+}
+
+/// Accumulate the nice-weighted counter for a candidate process. [FEAT-3]
+fn accumulate_counter(process: &mut Process) {
+    if process.nice == 0 {
+        return;
+    }
+    let factor: i32 = if process.burst_score > BURST_SCORE_LOW {
+        2
+    } else {
+        1
+    };
+    if process.nice < 0 {
+        let gain = ((-process.nice as i32) / 4 + 1) * factor;
+        process.counter = (process.counter + gain).min(MAX_CREDIT);
+    } else {
+        let loss = (process.nice as i32 / 4 + 1) * factor;
+        process.counter = (process.counter - loss).max(MAX_DEBT);
+    }
+}
+
+/// Post-run housekeeping for the RoundRobin counter system. [FEAT-3]
+fn on_task_ran(process: &mut Process, ticks_used: u64, q: u32) {
+    process.aging_boosted_this_pick = false;
+    process.quantum_override = None;
+    if ticks_used < (q / 2) as u64 {
+        process.counter /= 2;
+    } else {
+        if process.counter > 0 {
+            process.counter -= DECAY_RATE;
+        } else if process.counter < 0 {
+            process.counter += DECAY_RATE;
+        }
+    }
+}
+
+// ─── Per-Core Work-Stealing Infrastructure ───────────────────────────────────
+
+/// Maximum number of logical CPUs supported by the per-core scheduler.
+pub const MAX_CORES: usize = 64;
+static STACK_HANDOFFS: handoff::Handoffs<MAX_CORES> = handoff::Handoffs::new();
+
+/// Called before a naked IRQ stub publishes its outgoing context. The returned
+/// slot is stable even if another CPU grows/reuses the process table.
+pub(crate) extern "C" fn stack_handoff_slot() -> *const AtomicUsize {
+    STACK_HANDOFFS.slot(current_cpu_id())
+}
+
+/// Called by every naked epilogue after the physical pin release, on the new
+/// stack with IF clear and no locks held. Converts CPUs that rejected the
+/// just-released task into a fresh coalesced request plus bounded dispatch.
+/// Only reached when `waiters` was non-zero, so an ordinary unpin is free.
+pub(crate) extern "C" fn pin_release_wake() {
+    let mut waiters = STACK_HANDOFFS.take_waiters(current_cpu_id());
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    pin_release_test::released(waiters);
+    while waiters != 0 {
+        let cpu = waiters.trailing_zeros() as usize;
+        waiters &= waiters - 1;
+        if cpu < ONLINE_CORES.load(Ordering::Acquire) {
+            request_reschedule_on(cpu);
+        }
+    }
+    flush_dispatch_notifications();
+}
+
+/// Number of cores that have completed phase-0 init and can receive tasks.
+/// Initialised to 1 (BSP only); updated by init_cores() after SMP bring-up.
+pub static ONLINE_CORES: AtomicUsize = AtomicUsize::new(1);
+
+/// Gate that allows AP cores to begin dispatching tasks.
+///
+/// APs `sti` and arm their LAPIC timers during `smp::start_aps`, but the BSP
+/// then continues single-threaded boot (spawning init/vfs/tty, seeding the
+/// run queues) with interrupts disabled. Until the BSP finishes and calls
+/// `mark_scheduler_ready()` just before entering the first process, an AP timer
+/// tick must NOT pull a task — the run queues are not seeded yet and the BSP is
+/// still mutating process state. AP `schedule_tick` returns early until this is
+/// set. The BSP (core 0) is never gated: it runs with IF=0 during boot so its
+/// own timer cannot preempt it anyway.
+pub static SCHEDULER_READY: AtomicBool = AtomicBool::new(false);
+
+/// Release seeded queues and convert pre-bootstrap remote intent into dispatch
+/// obligations. The caller must flush outside SCHEDULER before entering user
+/// mode/idle; initial remote work must not rely on an AP's periodic timer.
+pub fn mark_scheduler_ready() {
+    SCHEDULER_READY.store(true, Ordering::Release);
+    let source = current_cpu_id();
+    for cpu in 0..ONLINE_CORES.load(Ordering::Acquire) {
+        if cpu != source && RESCHEDULE_MASK.pending(cpu) {
+            request_reschedule_on(cpu);
+        }
+    }
+}
+
+const RR_STEAL_BATCH_MAX: usize = 32;
+
+/// Per-core scheduling state: local RoundRobin FIFO, BORE-tiered run queues,
+/// and current task. The type is cache-line aligned so adjacent core locks do
+/// not share a line and bounce between CPUs on every LAPIC tick.
+#[repr(align(64))]
+pub struct CoreState {
+    /// RoundRobin ready FIFO. A task in this queue has
+    /// `Process::queued_on_core == this_cpu`; the current task is never queued.
+    pub rr_queue: VecDeque<usize>,
+    /// Highest-priority ready tasks (burst_score 0–256, interactive).
+    pub run_queue_high: VecDeque<usize>,
+    /// Medium-priority ready tasks (burst_score 257–768).
+    pub run_queue_medium: VecDeque<usize>,
+    /// Lowest-priority ready tasks (burst_score 769–1024, CPU-bound).
+    /// Work-stealing steals from the *back* of this queue first, so the
+    /// longest-waiting, least-urgent tasks migrate preferentially.
+    pub run_queue_low: VecDeque<usize>,
+    /// Index into Scheduler::processes for the task currently running on this
+    /// core. None when the core is idle.
+    pub current_task: Option<usize>,
+    /// Current dispatch's elapsed 10 ms units (delivered IRQs only without TSC).
+    pub current_ticks: u64,
+    slice: quantum::Slice,
+    /// Total timer IRQ ticks handled on this core.
+    pub timer_ticks: u64,
+    /// Lifetime context transitions, including task/idle; excludes same-task selection.
+    pub context_switches: u64,
+    /// Number of successful work-steal batches performed by this core.
+    pub steal_count: u64,
+    /// Number of stale queue entries dropped by this core.
+    pub stale_pops: u64,
+    /// Number of times this core found its RR FIFO empty.
+    pub empty_pops: u64,
+    /// Saved interrupt-frame RSP for this core's idle hlt loop.
+    pub idle_context_rsp: u64,
+}
+
+impl CoreState {
+    pub const fn new() -> Self {
+        Self {
+            rr_queue: VecDeque::new(),
+            run_queue_high: VecDeque::new(),
+            run_queue_medium: VecDeque::new(),
+            run_queue_low: VecDeque::new(),
+            current_task: None,
+            current_ticks: 0,
+            slice: quantum::Slice::new(),
+            timer_ticks: 0,
+            context_switches: 0,
+            steal_count: 0,
+            stale_pops: 0,
+            empty_pops: 0,
+            idle_context_rsp: 0,
+        }
+    }
+
+    fn total_ready(&self) -> usize {
+        self.rr_queue.len()
+            + self.run_queue_high.len()
+            + self.run_queue_medium.len()
+            + self.run_queue_low.len()
+    }
+}
+
+/// Per-core scheduler state. RoundRobin uses this array for its hot FIFO and
+/// current-task metadata; Bore keeps using `Scheduler::cores` so the existing
+/// tiered code paths continue compiling.
+///
+/// Lock ordering: normal enqueue/dequeue takes the process-table lock
+/// (`SCHEDULER`) before a single core lock. Work stealing never blocks on a
+/// victim: it uses `try_lock()`, drops the victim lock, then updates process
+/// queue ownership and pushes leftovers to the thief. No path holds two core
+/// locks at once.
+pub static CORE_STATES: [spin::Mutex<CoreState>; MAX_CORES] =
+    [const { spin::Mutex::new(CoreState::new()) }; MAX_CORES];
+
+// ─── Scheduler ───────────────────────────────────────────────────────────────
+
+pub struct Scheduler {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    pub(crate) doorbells: doorbell_state::Table,
+    pub supervision: sunlight_ipc::supervision::Supervisor,
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub cpu_events: [[u64; 3]; MAX_CORES],
+    pub processes: Vec<Process>,
+
+    /// Per-core scheduling state. Only indices 0..online_cores are active.
+    pub cores: [CoreState; MAX_CORES],
+    /// Number of online cores (1 until init_cores() is called).
+    pub online_cores: usize,
+
+    /// Legacy scheduler-visible global tick counter.
+    /// Kept intentionally for backward compatibility; the canonical source of
+    /// truth now lives in `crate::timekeeping` and this field mirrors it.
+    pub global_tick: u64,
+    pub idle_context_rsp: u64,
+    last_reap_tick: u64,
+}
+
+impl Scheduler {
+    pub fn supervision_identity(process: &Process) -> sunlight_ipc::supervision::Identity {
+        sunlight_ipc::supervision::Identity {
+            pid: process.pid as u64,
+            generation: process.address_space.identity().generation,
+        }
+    }
+    pub fn active_manager(&self, process: &Process) -> bool {
+        process.trusted_service_manager
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+            && self.supervision.active(Self::supervision_identity(process))
+    }
+    pub const fn new() -> Self {
+        Self {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbells: doorbell_state::Table::new(),
+            #[cfg(feature = "cpu_accounting_diag")]
+            cpu_events: [[0; 3]; MAX_CORES],
+            supervision: sunlight_ipc::supervision::Supervisor::new(),
+            processes: Vec::new(),
+            cores: [const { CoreState::new() }; MAX_CORES],
+            online_cores: 1,
+            global_tick: 0,
+            idle_context_rsp: 0,
+            last_reap_tick: 0,
+        }
+    }
+
+    // ── Process management ───────────────────────────────────────────────────
+
+    #[inline]
+    fn core_current_task(&self, cpu_id: usize) -> Option<usize> {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().current_task,
+            SchedulerMode::Bore => self.cores[cpu_id].current_task,
+        }
+    }
+
+    #[inline]
+    fn set_core_current_task(&mut self, cpu_id: usize, task: Option<usize>) {
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        let previous;
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+                { previous = core.current_task; }
+                core.current_task = task;
+            }
+            SchedulerMode::Bore => {
+                #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+                { previous = self.cores[cpu_id].current_task; }
+                self.cores[cpu_id].current_task = task;
+            }
+        }
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        if previous != task {
+            if let Some(next) = task { self.processes[next].measurement.dispatch(); }
+        }
+    }
+
+    #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
+    pub(crate) fn fastlane_context_switches(&self) -> u64 {
+        (0..self.online_cores).map(|cpu| match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu].lock().context_switches,
+            SchedulerMode::Bore => self.cores[cpu].context_switches,
+        }).sum()
+    }
+
+    #[inline]
+    fn increment_context_switches(&mut self, cpu_id: usize) {
+        #[cfg(feature = "scheduler_perf_diag")]
+        perf::add(&perf::CPU[cpu_id].switches, 1);
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.context_switches = core.context_switches.saturating_add(1);
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].context_switches =
+                    self.cores[cpu_id].context_switches.saturating_add(1);
+            }
+        }
+    }
+
+    #[inline]
+    fn core_idle_context_rsp(&self, cpu_id: usize) -> u64 {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => CORE_STATES[cpu_id].lock().idle_context_rsp,
+            SchedulerMode::Bore => self.cores[cpu_id].idle_context_rsp,
+        }
+    }
+
+    #[inline]
+    fn set_core_idle_context_rsp(&mut self, cpu_id: usize, rsp: u64) {
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                CORE_STATES[cpu_id].lock().idle_context_rsp = rsp;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].idle_context_rsp = rsp;
+            }
+        }
+    }
+
+    fn choose_rr_core(&self, idx: usize) -> usize {
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let cpu_mask = if idx < self.processes.len() {
+            self.processes[idx].cpu_mask
+        } else {
+            u64::MAX
+        };
+
+        let mut best_core = 0usize;
+        let mut best_load = usize::MAX;
+        for core_id in 0..online {
+            if cpu_mask & (1u64 << core_id) == 0 {
+                continue;
+            }
+            let core = CORE_STATES[core_id].lock();
+            let load = core.rr_queue.len() + usize::from(core.current_task.is_some());
+            if load < best_load {
+                best_load = load;
+                best_core = core_id;
+            }
+        }
+        best_core
+    }
+
+    pub fn add_process(&mut self, process: Process) -> usize {
+        self.reap_finished_processes();
+        self.add_process_after_reaping(process)
+    }
+
+    pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
+        process.foreground.incarnation =
+            crate::process::foreground::Foreground::allocate_incarnation().unwrap_or(0);
+        if process.foreground.incarnation == 0 {
+            process.foreground.forced_exit = Some(129);
+        }
+        if let Some(parent) = self.processes.iter().find(|p| p.pid == process.ppid) {
+            process.foreground.parent_generation = parent.foreground.incarnation;
+            process.foreground.session_broker = parent.foreground.session_broker;
+            process.foreground.session = parent.foreground.session;
+            process.foreground.generation = parent.foreground.generation;
+            process.foreground.member = parent.foreground.execution();
+            process.foreground.forced_exit = parent.foreground.forced_exit;
+            if parent.is_exiting() {
+                process.foreground.forced_exit = Some(129);
+            }
+            if parent.foreground.cancel != 0 {
+                process.foreground.forced_exit = Some(if parent.foreground.cancel == 126 {
+                    2
+                } else {
+                    128 + i32::from(parent.foreground.cancel)
+                });
+            }
+        }
+        if process.foreground.incarnation == 0 {
+            process.foreground.forced_exit = Some(129);
+        }
+        let created_count = PROCESS_CREATED.fetch_add(1, Ordering::Relaxed);
+        let online = self.online_cores;
+
+        // Collect which process slots are currently running on any core so we
+        // don't reclaim them while a core still has a reference.
+        let mut in_use = [usize::MAX; MAX_CORES];
+        for c in 0..online {
+            in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
+        }
+
+        // Only reuse slots that are fully Reaped (or Finished that became reaped above).
+        // Never overwrite a still-Finished slot until its resources are cleaned.
+        if let Some(id) = self
+            .processes
+            .iter()
+            .enumerate()
+            .find(|(idx, p)| {
+                (p.state == ProcessState::Reaped
+                    || (p.state == ProcessState::Finished && !p.exit_cleanup_pending))
+                    && p.service_reap_watcher.is_none()
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
+                    && !self.stack_is_pinned(*idx)
+            })
+            .map(|(idx, _)| idx)
+        {
+            let reused_borrower = self.processes[id].native_thread
+                && self.processes[id].state == ProcessState::Reaped;
+            self.remove_from_ready_queues(id);
+            serial_println!(
+                "[SCHED] process_slot_reused idx={} pid={} (reused reaped slot)",
+                id,
+                process.pid
+            );
+            // Drop old (reaped) contents by overwrite; new process owns fresh resources.
+            self.processes[id] = process;
+            if reused_borrower {
+                BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
+            }
+            serial_println!(
+                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped slot)",
+                created_count + 1,
+                self.processes[id].name_str(),
+                id,
+                self.processes[id].burst_score,
+                self.processes[id].get_queue_tier()
+            );
+            return id;
+        }
+
+        // Fallback: if there are stale Finished (not safe to reap yet), do not overwrite them.
+        // Search only for Reaped again (after the reap attempt above).
+        if let Some(id) = self
+            .processes
+            .iter()
+            .enumerate()
+            .find(|(idx, p)| {
+                p.state == ProcessState::Reaped
+                    && p.service_reap_watcher.is_none()
+                    && in_use[..online].iter().all(|&cur| cur != *idx)
+                    && !self.stack_is_pinned(*idx)
+            })
+            .map(|(idx, _)| idx)
+        {
+            let reused_borrower = self.processes[id].native_thread;
+            self.remove_from_ready_queues(id);
+            serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
+            self.processes[id] = process;
+            if reused_borrower {
+                BORROWER_SLOTS_REUSED.fetch_add(1, Ordering::Relaxed);
+            }
+            serial_println!(
+                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped)",
+                created_count + 1,
+                self.processes[id].name_str(),
+                id,
+                self.processes[id].burst_score,
+                self.processes[id].get_queue_tier()
+            );
+            return id;
+        }
+
+        let id = self.processes.len();
+        serial_println!(
+            "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?}",
+            created_count + 1,
+            process.name_str(),
+            id,
+            process.burst_score,
+            process.get_queue_tier()
+        );
+        self.processes.push(process);
+        id
+    }
+
+    /// Choose the least-loaded core that the process's cpu_mask permits.
+    fn target_core_for_process(&self, idx: usize) -> usize {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return self.choose_rr_core(idx);
+        }
+
+        let online = self.online_cores;
+        let cpu_mask = if idx < self.processes.len() {
+            self.processes[idx].cpu_mask
+        } else {
+            u64::MAX
+        };
+
+        let mut best_core = 0;
+        let mut best_len = usize::MAX;
+        for core_id in 0..online {
+            if cpu_mask & (1u64 << core_id) == 0 {
+                continue;
+            }
+            let len = self.cores[core_id].total_ready();
+            if len < best_len {
+                best_len = len;
+                best_core = core_id;
+            }
+        }
+        best_core
+    }
+
+    /// Enqueue a Ready process onto a specific core's tier queue.
+    fn enqueue_process_to_core(&mut self, idx: usize, core_id: usize) {
+        self.queue_process_to_core(idx, core_id, true);
+    }
+
+    // Internal rotation must not request another dispatch of the CPU already
+    // selecting a task. External wakes/publications still request dispatch.
+    fn queue_process_to_core(&mut self, idx: usize, core_id: usize, notify: bool) {
+        if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
+        {
+            return;
+        }
+        if notify {
+            self.processes[idx].priority_wake_pending = true;
+        }
+        if self.processes[idx].owning_core != u8::MAX
+            || self.processes[idx].queued_on_core != u8::MAX
+        {
+            return;
+        }
+        #[cfg(feature = "scheduler_guest_bench")]
+        crate::scheduler_bench_diag::service_ready(self.processes[idx].name_str(), now_ns());
+        #[cfg(feature = "scheduler_timer_trace")]
+        if matches!(
+            self.processes[idx].name_str(),
+            "timer_server" | "tty_server"
+        ) {
+            crate::scheduler_timer_trace::event(
+                self,
+                3,
+                self.processes[idx].pid,
+                notify as u64,
+                (self.processes[idx].nice as i64 + 20) as u64,
+                self.diagnostic_current_pid(core_id).unwrap_or(0) as u64,
+            );
+        }
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            self.processes[idx].queued_on_core = core_id as u8;
+            #[cfg(feature = "scheduler_perf_diag")]
+            {
+                let writer_cpu = current_cpu_id();
+                let timestamp = now_ns();
+                let _ = perf::observe_clock(writer_cpu, timestamp);
+                self.processes[idx].perf_ready_since_ns = timestamp;
+                self.processes[idx].perf_ready_cpu = writer_cpu as u8;
+            }
+            let depth = {
+                let mut core = CORE_STATES[core_id].lock();
+                core.rr_queue.push_back(idx);
+                core.rr_queue.len() as u64
+            };
+            #[cfg(not(feature = "scheduler_perf_diag"))]
+            let _ = depth;
+            #[cfg(feature = "scheduler_perf_diag")]
+            if core_id == current_cpu_id() {
+                let rec = &perf::CPU[core_id];
+                perf::add(&rec.enqueues, 1);
+                rec.queue_depth.store(depth, Ordering::Relaxed);
+                let mut old = rec.queue_high_water.load(Ordering::Relaxed);
+                while depth > old {
+                    match rec.queue_high_water.compare_exchange_weak(
+                        old,
+                        depth,
+                        Ordering::Relaxed,
+                        Ordering::Relaxed,
+                    ) {
+                        Ok(_) => break,
+                        Err(v) => old = v,
+                    }
+                }
+            }
+            if notify {
+                request_reschedule_on(core_id);
+            }
+            return;
+        }
+        let tier = self.processes[idx].get_queue_tier();
+        self.processes[idx].queued_on_core = core_id as u8;
+        let core = &mut self.cores[core_id];
+        match tier {
+            QueueTier::High => core.run_queue_high.push_back(idx),
+            QueueTier::Medium => core.run_queue_medium.push_back(idx),
+            QueueTier::Low => core.run_queue_low.push_back(idx),
+        }
+        // Publish the queue before requesting dispatch. BORE previously left
+        // a detached consumer on an idle CPU until its next periodic tick.
+        if notify {
+            request_reschedule_on(core_id);
+        }
+    }
+
+    /// Enqueue a Ready process to the least-loaded eligible core.
+    pub fn enqueue_process(&mut self, idx: usize) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        if !matches!(self.processes[idx].state, ProcessState::Ready) {
+            return;
+        }
+        self.remove_from_ready_queues(idx);
+        let core_id = self.target_core_for_process(idx);
+        self.enqueue_process_to_core(idx, core_id);
+    }
+
+    /// Enqueue once, skipping if already present in any core's queue.
+    pub fn enqueue_process_once(&mut self, idx: usize) {
+        if idx >= self.processes.len()
+            || !matches!(self.processes[idx].state, ProcessState::Ready)
+            || self.is_queued(idx)
+        {
+            return;
+        }
+        self.enqueue_process(idx);
+    }
+
+    /// Public Ready-transition helper. Call this exactly once after changing a
+    /// non-running task to `ProcessState::Ready`; it is idempotent via
+    /// `queued_on_core` and refuses to queue a task still owned by a CPU.
+    pub fn enqueue_ready(&mut self, idx: usize) {
+        self.enqueue_process_once(idx);
+    }
+
+    pub(crate) fn diagnostic_ready_occurrences(&self, idx: usize) -> usize {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return (0..self.online_cores.min(MAX_CORES))
+                .map(|core_id| {
+                    CORE_STATES[core_id]
+                        .lock()
+                        .rr_queue
+                        .iter()
+                        .filter(|&&queued| queued == idx)
+                        .count()
+                })
+                .sum();
+        }
+        self.cores[..self.online_cores.min(MAX_CORES)]
+            .iter()
+            .map(|core| {
+                core.run_queue_high
+                    .iter()
+                    .chain(core.run_queue_medium.iter())
+                    .chain(core.run_queue_low.iter())
+                    .filter(|&&queued| queued == idx)
+                    .count()
+            })
+            .sum()
+    }
+
+    pub(crate) fn diagnostic_current_pid(&self, cpu_id: usize) -> Option<usize> {
+        self.core_current_task(cpu_id)
+            .and_then(|idx| self.processes.get(idx))
+            .map(|process| process.pid)
+    }
+
+    /// Enqueue a freshly created Ready task onto a preferred CPU for its first
+    /// dispatch. Once it has run and been preempted, normal scheduler paths
+    /// are free to rebalance it across cores.
+    pub fn enqueue_ready_on_cpu(&mut self, idx: usize, preferred_cpu: usize) {
+        if idx >= self.processes.len() || !matches!(self.processes[idx].state, ProcessState::Ready)
+        {
+            return;
+        }
+        if self.processes[idx].owning_core != u8::MAX {
+            return;
+        }
+
+        self.remove_from_ready_queues(idx);
+
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let preferred_cpu = preferred_cpu.min(online - 1);
+        let cpu_mask = self.processes[idx].cpu_mask;
+        let target_cpu = if cpu_mask & (1u64 << preferred_cpu) != 0 {
+            preferred_cpu
+        } else {
+            self.target_core_for_process(idx)
+        };
+
+        self.enqueue_process_to_core(idx, target_cpu);
+    }
+
+    /// Remove a process index from ready queues.
+    ///
+    /// Uses `queued_on_core` to target the single core that owns this entry
+    /// (O(queue_len / online_cores) instead of O(cores × queue_len)).
+    pub fn remove_from_ready_queues(&mut self, idx: usize) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        let qcore = self.processes[idx].queued_on_core;
+        if qcore == u8::MAX {
+            return;
+        }
+        let core_id = qcore as usize;
+        if core_id < self.online_cores.min(MAX_CORES) {
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                CORE_STATES[core_id].lock().rr_queue.retain(|&q| q != idx);
+            } else {
+                let core = &mut self.cores[core_id];
+                core.run_queue_high.retain(|&q| q != idx);
+                core.run_queue_medium.retain(|&q| q != idx);
+                core.run_queue_low.retain(|&q| q != idx);
+            }
+        }
+        self.processes[idx].queued_on_core = u8::MAX;
+    }
+
+    /// True if `idx` is the live `current_task` of any online core.
+    ///
+    /// Such a task is still physically executing (or about to be descheduled)
+    /// on that core, even if its bookkeeping `state` has already flipped to
+    /// `Ready` (e.g. a cross-core wake landed between `block_on_recv` setting
+    /// `BlockedOnIpc` and the owning core's next timer tick). It must NOT be
+    /// enqueued by another core's wake path, or a second core could pick it up
+    /// and run the same context concurrently — corrupting its saved RSP. The
+    /// owning core re-enqueues it on its next `schedule_tick` deschedule.
+    pub(crate) fn is_live_on_core(&self, idx: usize) -> bool {
+        idx < self.processes.len() && self.processes[idx].owning_core != u8::MAX
+    }
+
+    fn stack_is_pinned(&self, idx: usize) -> bool {
+        let cpu = self.processes[idx].stack_handoff_core as usize;
+        cpu < MAX_CORES && STACK_HANDOFFS.is_pinned(cpu, idx)
+    }
+
+    fn stack_is_pinned_remotely(&self, idx: usize, cpu_id: usize) -> bool {
+        self.processes[idx].stack_handoff_core as usize != cpu_id && self.stack_is_pinned(idx)
+    }
+
+    /// Register `cpu_id` for the physical release of `idx`'s outgoing stack.
+    /// Atomic-only (safe under SCHEDULER). True: the pin is still held and the
+    /// releasing CPU will request a scheduling pass on `cpu_id` after its
+    /// release; the caller must leave the task queued. False: already
+    /// released, so the caller may dispatch the task now.
+    fn wait_for_pin_release(&self, idx: usize, cpu_id: usize) -> bool {
+        let owner = self.processes[idx].stack_handoff_core as usize;
+        let held = owner < MAX_CORES && STACK_HANDOFFS.wait_release(owner, cpu_id, idx);
+        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+        pin_release_test::registered(owner, cpu_id, idx, held);
+        held
+    }
+
+    fn pin_outgoing_stack(&mut self, cpu_id: usize, idx: usize) {
+        STACK_HANDOFFS.pin(cpu_id, idx);
+        self.processes[idx].stack_handoff_core = cpu_id as u8;
+    }
+
+    /// Return the CPU that still owns `idx` as its current task, if any.
+    pub(crate) fn live_owner_core(&self, idx: usize) -> Option<usize> {
+        if idx < self.processes.len() {
+            let c = self.processes[idx].owning_core;
+            if c != u8::MAX {
+                return Some(c as usize);
+            }
+        }
+        None
+    }
+
+    /// Like `is_live_on_core`, but ignores `self_cpu`. O(1) via `owning_core`.
+    pub(crate) fn is_live_on_other_core(&self, idx: usize, self_cpu: usize) -> bool {
+        if idx >= self.processes.len() {
+            return false;
+        }
+        let c = self.processes[idx].owning_core;
+        c != u8::MAX && c as usize != self_cpu
+    }
+
+    fn is_queued(&self, idx: usize) -> bool {
+        idx < self.processes.len() && self.processes[idx].queued_on_core != u8::MAX
+    }
+
+    fn context_is_dispatchable(&self, idx: usize) -> bool {
+        if idx >= self.processes.len() {
+            return false;
+        }
+
+        let rsp = self.processes[idx].context_rsp;
+        let stack_top = self.processes[idx].kernel_stack_top;
+        let stack_bottom = stack_top.saturating_sub(crate::process::KERNEL_STACK_SIZE as u64);
+        if rsp < stack_bottom || rsp.saturating_add(160) > stack_top {
+            return false;
+        }
+
+        unsafe { ((rsp + 120) as *const u64).read_volatile() != 0 }
+    }
+
+    /// Clear all core queues, then distribute all Ready processes (except
+    /// `running_idx`) across the online cores.
+    pub fn seed_ready_queues_except(&mut self, running_idx: usize) {
+        let online = self.online_cores;
+        for core_id in 0..online {
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                CORE_STATES[core_id].lock().rr_queue.clear();
+            } else {
+                let core = &mut self.cores[core_id];
+                core.run_queue_high.clear();
+                core.run_queue_medium.clear();
+                core.run_queue_low.clear();
+            }
+        }
+        for idx in 0..self.processes.len() {
+            if idx != running_idx && matches!(self.processes[idx].state, ProcessState::Ready) {
+                self.enqueue_process(idx);
+            }
+        }
+    }
+
+    /// Set the idle thread's context RSP.
+    pub fn set_idle_context(&mut self, rsp: u64) {
+        self.idle_context_rsp = rsp;
+    }
+
+    /// Set a per-process watchdog period. [FEAT-1]
+    pub fn set_process_watchdog(&mut self, pid: usize, period_ticks: u64) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.wd_period_ticks = Some(period_ticks);
+        }
+    }
+
+    /// Disable the per-process watchdog. [FEAT-1]
+    pub fn clear_process_watchdog(&mut self, pid: usize) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.wd_period_ticks = None;
+        }
+    }
+
+    /// Reset a process's nice-weighted counter. [FEAT-3]
+    pub fn reset_counter(&mut self, pid: usize) {
+        if let Some(p) = self.process_mut_by_pid(pid) {
+            p.counter = 0;
+        }
+    }
+
+    #[inline]
+    pub fn now_ns(&self) -> u64 {
+        now_ns()
+    }
+
+    // ── CPU accounting ───────────────────────────────────────────────────────
+
+    /// Checkpoint runtime of the currently running process on this CPU. Returns burst nanoseconds (0 if none).
+    /// The execution clock remains open until the actual context switch;
+    /// last_start_ns retains the original churn-policy semantics.
+    pub fn account_current_runtime(&mut self) -> u64 {
+        let cpu_id = current_cpu_id();
+        let current = match self.core_current_task(cpu_id) {
+            Some(idx) => idx,
+            None => return 0,
+        };
+        if current >= self.processes.len() {
+            return 0;
+        }
+        let now = now_ns();
+        let p = &mut self.processes[current];
+        let mut delta: u64 = 0;
+        if p.last_start_ns != 0 {
+            delta = now.saturating_sub(p.last_start_ns);
+        }
+        p.last_start_ns = 0;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        p.measurement.charge_probe(p.cpu_runtime_ns, p.cpu_charge_since, now);
+        sunlight_ipc::cpu_accounting::checkpoint(
+            &mut p.cpu_runtime_ns,
+            &mut p.cpu_charge_since,
+            now,
+            false,
+        );
+        delta
+    }
+
+    /// Account runtime and apply the Phase 4 short-burst churn penalty.
+    pub fn account_and_apply_churn_penalty(&mut self) -> u64 {
+        let delta = self.account_current_runtime();
+        if delta > 0 && delta < SHORT_BURST_NS {
+            let cpu_id = current_cpu_id();
+            if let Some(current) = self.core_current_task(cpu_id) {
+                if current < self.processes.len() {
+                    let p = &mut self.processes[current];
+                    p.burst_score = p
+                        .burst_score
+                        .saturating_add(SHORT_BURST_PENALTY)
+                        .min(BURST_SCORE_MAX);
+                }
+            }
+        }
+        delta
+    }
+
+    /// Begin charging CPU time to the given process.
+    pub fn start_charging_runtime(&mut self, idx: usize) {
+        if idx >= self.processes.len() {
+            return;
+        }
+        let now = now_ns();
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.placement(current_cpu_id());
+        self.processes[idx].last_start_ns = now;
+        self.processes[idx].cpu_charge_since = Some(now);
+        let cpu_id = current_cpu_id();
+        let budget = quantum_ticks(&self.processes[idx]);
+        let credit = self.processes[idx].slice_credit.take();
+        match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.slice.resume(now, budget, credit);
+                core.current_ticks = 0;
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].slice.start(now, budget);
+                self.cores[cpu_id].current_ticks = 0;
+            }
+        }
+    }
+
+    /// Snapshot all task clocks at the publication timestamp under SCHEDULER.
+    pub fn effective_runtime_at(&self, idx: usize, now: u64) -> u64 {
+        let Some(p) = self.processes.get(idx) else {
+            return 0;
+        };
+        sunlight_ipc::cpu_accounting::runtime_at(p.cpu_runtime_ns, p.cpu_charge_since, now)
+    }
+
+    fn stop_execution_clock(&mut self, idx: usize, preserve_turn: bool) {
+        let now = now_ns();
+        let p = &mut self.processes[idx];
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        p.measurement.charge_probe(p.cpu_runtime_ns, p.cpu_charge_since, now);
+        sunlight_ipc::cpu_accounting::checkpoint(
+            &mut p.cpu_runtime_ns,
+            &mut p.cpu_charge_since,
+            now,
+            true,
+        );
+        let cpu_id = current_cpu_id();
+        let calibrated = crate::arch::x86_64::interrupts::tsc_hz() != 0;
+        let usage = match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => {
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.current_ticks = 0;
+                core.slice.interrupt(now, calibrated)
+            }
+            SchedulerMode::Bore => {
+                self.cores[cpu_id].current_ticks = 0;
+                self.cores[cpu_id].slice.interrupt(now, calibrated)
+            }
+        };
+        self.processes[idx].slice_credit = None;
+        if let Some((usage, credit)) = usage {
+            let p = &mut self.processes[idx];
+            p.timeslice_used = usage.ticks.min(u32::MAX as u64) as u32;
+            if preserve_turn && credit.is_some() {
+                p.slice_credit = credit;
+                return; // Policy feedback belongs to the whole turn, once.
+            }
+            // Retire the old override before modifying burst/quantum policy.
+            if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                on_task_ran(p, usage.ticks, usage.budget_ticks);
+            } else {
+                p.quantum_override = None;
+                p.aging_boosted_this_pick = false;
+            }
+            if usage.expired {
+                update_burst_score(p, BurstReason::FullQuantum);
+            }
+        }
+    }
+
+    // ── State management ─────────────────────────────────────────────────────
+
+    pub fn set_state(&mut self, idx: usize, new_state: ProcessState) {
+        if idx >= self.processes.len() || self.processes[idx].is_exiting() {
+            return;
+        }
+        self.processes[idx].state = new_state;
+        let runnable = matches!(new_state, ProcessState::Ready | ProcessState::Running);
+        if !runnable {
+            self.processes[idx].slice_credit = None;
+            self.remove_from_ready_queues(idx);
+        }
+    }
+
+    // ── Timer tick ───────────────────────────────────────────────────────────
+
+    /// Called from the timer IRQ on each tick. Updates quantum tracking and
+    /// requests a local reschedule when the current task's quantum expires.
+    pub fn tick(&mut self, cpu_id: usize, global_tick: u64) {
+        // Compatibility mirror: all legacy scheduler logic still reads
+        // `self.global_tick`, but only the centralized timekeeper advances it.
+        self.global_tick = self.global_tick.max(global_tick);
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID { self.fastlane_mapping_sweep(); }
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID {
+            crate::ipc::expire_deadlines(self, self.global_tick);
+            self.expire_linux_poll_timeouts();
+            self.expire_native_futex_timeouts();
+            crate::ipc::trace_pty_stall(self);
+        }
+        // Reaping must also progress when the final task left a CPU idle.
+        // Use an elapsed deadline, once globally, rather than a modulo per CPU.
+        if cpu_id == crate::timekeeping::TIMEKEEPER_CORE_ID
+            && self.global_tick.saturating_sub(self.last_reap_tick) >= 50
+        {
+            self.last_reap_tick = self.global_tick;
+            self.reap_finished_processes();
+        }
+        let now = now_ns();
+        let calibrated = crate::arch::x86_64::interrupts::tsc_hz() != 0;
+        let usage = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            let mut core = CORE_STATES[cpu_id].lock();
+            core.timer_ticks += 1;
+            let usage = core.slice.timer(now, calibrated);
+            core.current_ticks = usage.ticks;
+            usage
+        } else {
+            let core = &mut self.cores[cpu_id];
+            core.timer_ticks += 1;
+            let usage = core.slice.timer(now, calibrated);
+            core.current_ticks = usage.ticks;
+            usage
+        };
+
+        let current = match self.core_current_task(cpu_id) {
+            Some(idx) => idx,
+            None => {
+                request_reschedule_on(cpu_id);
+                return;
+            }
+        };
+
+        if current >= self.processes.len() {
+            return;
+        }
+
+        if !matches!(self.processes[current].state, ProcessState::Running) {
+            request_reschedule_on(cpu_id);
+            return;
+        }
+
+        // Fatal pending signals (SIGKILL always; Default SIGTERM/SIGINT/…)
+        // must be noticed even when the task never enters a syscall. Timer
+        // preemption is a safe kernel/user return point for that check.
+        if self.apply_pending_fatal_signal(current) {
+            request_reschedule_on(cpu_id);
+            return;
+        }
+
+        if usage.expired {
+            let ticks_used = usage.ticks;
+            let current_proc = &mut self.processes[current];
+
+            // [FEAT-1] Per-process watchdog.
+            if let Some(wd) = current_proc.wd_period_ticks {
+                if ticks_used > wd {
+                    self.account_current_runtime();
+                    self.processes[current].state = ProcessState::Suspended;
+                    self.remove_from_ready_queues(current);
+                    serial_println!(
+                        "[WD] pid={} '{}' exceeded watchdog: ran={} limit={} ticks — suspended",
+                        self.processes[current].pid,
+                        self.processes[current].name_str(),
+                        ticks_used,
+                        wd
+                    );
+                }
+            }
+
+            self.age_ready_tasks();
+            request_reschedule_on(cpu_id);
+        }
+
+        // The diagnostic dump writes per-core + per-process state over the slow
+        // UART while the global scheduler lock is held — every other core spins
+        // on the lock for the duration. Compile it out unless explicitly enabled.
+        if cfg!(feature = "verbose_diag") && self.global_tick.is_multiple_of(100) {
+            self.diagnostic_report();
+        }
+    }
+
+    fn age_ready_tasks(&mut self) {
+        if !self.global_tick.is_multiple_of(AGING_INTERVAL_TICKS) {
+            return;
+        }
+        for idx in 0..self.processes.len() {
+            let p = &mut self.processes[idx];
+            if !matches!(p.state, ProcessState::Ready) {
+                continue;
+            }
+            let ticks_since_run = self.global_tick.saturating_sub(p.last_run_tick);
+            if ticks_since_run > AGING_THRESHOLD_TICKS {
+                update_burst_score(p, BurstReason::Aged);
+            }
+        }
+    }
+
+    // ── Work stealing ────────────────────────────────────────────────────────
+
+    /// Search a queue (back to front) for a process whose cpu_mask permits
+    /// `thief_id`. Returns the queue index (not process index) if found.
+    fn find_stealable(
+        queue: &VecDeque<usize>,
+        processes: &[Process],
+        thief_id: usize,
+    ) -> Option<usize> {
+        for i in (0..queue.len()).rev() {
+            let pidx = queue[i];
+            if pidx < processes.len()
+                && matches!(processes[pidx].state, ProcessState::Ready)
+                && processes[pidx].cpu_mask & (1u64 << thief_id) != 0
+            {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    /// Iterate all other online cores and steal one task from the tail of their
+    /// lowest-priority non-empty queue. Respects cpu_mask affinity.
+    ///
+    /// In a future SMP Phase 1 design each CoreState will have its own
+    /// `spin::Mutex`; stealing will use `try_lock()` to skip busy victims
+    /// without blocking the thief's timer handler. Under the current
+    /// single-lock design (all CoreState under SCHEDULER's lock) the
+    /// "skip if empty or insufficient" check plays the same role.
+    pub fn steal_work(&mut self, thief_id: usize) -> Option<usize> {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            return self.steal_work_round_robin(thief_id);
+        }
+
+        let online = self.online_cores;
+        for victim_id in 0..online {
+            if victim_id == thief_id {
+                continue;
+            }
+            // Phase 1: inspect victim's queues under shared SCHEDULER lock.
+            // We need separate borrows of cores[victim_id] and processes.
+            let low_pos = {
+                let core = &self.cores[victim_id];
+                // Only steal if victim has more than one task (leave them work).
+                if core.total_ready() <= 1 {
+                    None
+                } else {
+                    Self::find_stealable(&core.run_queue_low, &self.processes, thief_id)
+                        .map(|p| (2u8, p))
+                        .or_else(|| {
+                            Self::find_stealable(&core.run_queue_medium, &self.processes, thief_id)
+                                .map(|p| (1u8, p))
+                        })
+                        .or_else(|| {
+                            Self::find_stealable(&core.run_queue_high, &self.processes, thief_id)
+                                .map(|p| (0u8, p))
+                        })
+                }
+            };
+
+            // Phase 2: perform the steal.
+            if let Some((tier, pos)) = low_pos {
+                let core = &mut self.cores[victim_id];
+                let stolen = match tier {
+                    2 => core.run_queue_low.remove(pos),
+                    1 => core.run_queue_medium.remove(pos),
+                    _ => core.run_queue_high.remove(pos),
+                };
+                if let Some(pidx) = stolen {
+                    if let Some(p) = self.processes.get_mut(pidx) {
+                        p.queued_on_core = u8::MAX;
+                    }
+                    return Some(pidx);
+                }
+            }
+        }
+        None
+    }
+
+    /// RoundRobin work stealing: take up to half of a victim FIFO, bounded by a
+    /// small fixed stack batch, using try_lock so a timer interrupt never blocks
+    /// behind another core's queue lock. One valid task is returned immediately;
+    /// the rest are moved to the thief's FIFO to amortize future steals.
+    pub fn steal_work_round_robin(&mut self, thief_id: usize) -> Option<usize> {
+        let online = self.online_cores.min(MAX_CORES).max(1);
+        let mut batch = [usize::MAX; RR_STEAL_BATCH_MAX];
+
+        for victim_id in 0..online {
+            if victim_id == thief_id {
+                continue;
+            }
+
+            let mut count = 0usize;
+            if let Some(mut victim) = CORE_STATES[victim_id].try_lock() {
+                let available = victim.rr_queue.len();
+                if available <= 1 {
+                    continue;
+                }
+                let to_take = (available / 2).min(RR_STEAL_BATCH_MAX);
+                while count < to_take {
+                    let Some(idx) = victim.rr_queue.pop_back() else {
+                        break;
+                    };
+                    batch[count] = idx;
+                    count += 1;
+                }
+            } else {
+                continue;
+            }
+
+            if count == 0 {
+                continue;
+            }
+
+            let mut picked = None;
+            let mut moved = 0usize;
+            for &idx in batch[..count].iter() {
+                if idx >= self.processes.len() {
+                    continue;
+                }
+
+                if self.processes[idx].queued_on_core == victim_id as u8 {
+                    self.processes[idx].queued_on_core = u8::MAX;
+                }
+
+                // Publication may precede the old CPU's RSP pivot. Keep the
+                // entry reachable, but do not restore its stack remotely yet.
+                if self.stack_is_pinned_remotely(idx, thief_id)
+                    && self.wait_for_pin_release(idx, thief_id)
+                {
+                    self.processes[idx].queued_on_core = victim_id as u8;
+                    CORE_STATES[victim_id].lock().rr_queue.push_back(idx);
+                    continue;
+                }
+
+                let eligible = matches!(self.processes[idx].state, ProcessState::Ready)
+                    && !self.is_live_on_other_core(idx, thief_id)
+                    && self.processes[idx].cpu_mask & (1u64 << thief_id) != 0
+                    && self.context_is_dispatchable(idx);
+
+                if !eligible {
+                    CORE_STATES[thief_id].lock().stale_pops += 1;
+                    if matches!(self.processes[idx].state, ProcessState::Ready)
+                        && !self.is_live_on_other_core(idx, thief_id)
+                    {
+                        self.processes[idx].queued_on_core = victim_id as u8;
+                        CORE_STATES[victim_id].lock().rr_queue.push_back(idx);
+                    }
+                    continue;
+                }
+
+                if picked.is_none() {
+                    picked = Some(idx);
+                } else {
+                    self.processes[idx].queued_on_core = thief_id as u8;
+                    CORE_STATES[thief_id].lock().rr_queue.push_back(idx);
+                    moved += 1;
+                }
+            }
+
+            if picked.is_some() || moved > 0 {
+                CORE_STATES[thief_id].lock().steal_count += 1;
+                #[cfg(feature = "scheduler_perf_diag")]
+                {
+                    perf::add(&perf::CPU[thief_id].steals, 1);
+                    perf::add(
+                        &perf::CPU[thief_id].migrations,
+                        moved.saturating_add(usize::from(picked.is_some())) as u64,
+                    );
+                }
+            }
+            if picked.is_some() {
+                return picked;
+            }
+        }
+
+        None
+    }
+
+    // ── Pick-next ────────────────────────────────────────────────────────────
+
+    /// Pick the next Ready process using BORE tiered queues for `cpu_id`.
+    /// Falls back to work-stealing if local queues are empty.
+    pub fn pick_next_bore(&mut self, cpu_id: usize) -> Option<usize> {
+        let current = self.cores[cpu_id].current_task.unwrap_or(usize::MAX);
+        let mut skipped_high: Option<usize> = None;
+        let mut skipped_medium: Option<usize> = None;
+        let mut skipped_low: Option<usize> = None;
+
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.cores[cpu_id].run_queue_high,
+            &self.processes,
+            current,
+            &mut skipped_high,
+        ) {
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
+            }
+            self.processes[idx].queued_on_core = u8::MAX;
+            return Some(idx);
+        }
+
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.cores[cpu_id].run_queue_medium,
+            &self.processes,
+            current,
+            &mut skipped_medium,
+        ) {
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
+            }
+            if let Some(c) = skipped_medium {
+                self.enqueue_process_once(c);
+            }
+            self.processes[idx].queued_on_core = u8::MAX;
+            return Some(idx);
+        }
+
+        if let Some(idx) = pop_ready_excluding_current(
+            &mut self.cores[cpu_id].run_queue_low,
+            &self.processes,
+            current,
+            &mut skipped_low,
+        ) {
+            if let Some(c) = skipped_high {
+                self.enqueue_process_once(c);
+            }
+            if let Some(c) = skipped_medium {
+                self.enqueue_process_once(c);
+            }
+            if let Some(c) = skipped_low {
+                self.enqueue_process_once(c);
+            }
+            self.processes[idx].queued_on_core = u8::MAX;
+            return Some(idx);
+        }
+
+        if let Some(c) = skipped_high.or(skipped_medium).or(skipped_low) {
+            // This item was popped from the queue (skipped because it's `current`),
+            // then immediately re-enqueued — queued_on_core is already set by re-enqueue.
+            return Some(c);
+        }
+
+        // Local queues empty — attempt work stealing.
+        if let Some(stolen) = self.steal_work(cpu_id) {
+            return Some(stolen);
+        }
+
+        // Last-resort linear scan (safety net for races during queue migration).
+        let len = self.processes.len();
+        if len == 0 {
+            return None;
+        }
+        let start = (current.wrapping_add(1)) % len;
+        let mut idx = start;
+        loop {
+            // Skip any process that is the live `current_task` of another core.
+            // A woken-while-live task is Ready but deliberately not enqueued (it
+            // is still executing/owned by its core); the run queues won't offer
+            // it, but this raw state scan would — and dispatching it here would
+            // run the same context on two cores at once. Let its owning core
+            // re-dispatch it.
+            if matches!(self.processes[idx].state, ProcessState::Ready)
+                && !self.is_live_on_other_core(idx, cpu_id)
+            {
+                serial_println!(
+                    "[SCHED] WARNING: pick_next_bore fallback linear search idx={}",
+                    idx
+                );
+                return Some(idx);
+            }
+            idx = (idx + 1) % len;
+            if idx == start {
+                break;
+            }
+        }
+        None
+    }
+
+    /// Pick the next Ready process for RoundRobin mode for `cpu_id`. [FEAT-3]
+    pub fn pick_next_round_robin(&mut self, cpu_id: usize) -> Option<usize> {
+        let mut remaining = CORE_STATES[cpu_id].lock().rr_queue.len();
+        while remaining > 0 {
+            let idx = {
+                let mut core = CORE_STATES[cpu_id].lock();
+                match core.rr_queue.pop_front() {
+                    Some(idx) => {
+                        #[cfg(feature = "scheduler_perf_diag")]
+                        {
+                            let rec = &perf::CPU[cpu_id];
+                            perf::add(&rec.dequeues, 1);
+                            rec.queue_depth
+                                .store(core.rr_queue.len() as u64, Ordering::Relaxed);
+                        }
+                        idx
+                    }
+                    None => {
+                        core.empty_pops += 1;
+                        drop(core);
+                        return self.steal_work(cpu_id);
+                    }
+                }
+            };
+            remaining -= 1;
+
+            if idx >= self.processes.len() {
+                CORE_STATES[cpu_id].lock().stale_pops += 1;
+                continue;
+            }
+
+            if self.processes[idx].queued_on_core == cpu_id as u8 {
+                self.processes[idx].queued_on_core = u8::MAX;
+            }
+
+            if self.stack_is_pinned_remotely(idx, cpu_id) && self.wait_for_pin_release(idx, cpu_id)
+            {
+                self.processes[idx].queued_on_core = cpu_id as u8;
+                CORE_STATES[cpu_id].lock().rr_queue.push_back(idx);
+                continue;
+            }
+
+            if !matches!(self.processes[idx].state, ProcessState::Ready)
+                || self.is_live_on_other_core(idx, cpu_id)
+                || self.processes[idx].cpu_mask & (1u64 << cpu_id) == 0
+                || !self.context_is_dispatchable(idx)
+            {
+                CORE_STATES[cpu_id].lock().stale_pops += 1;
+                if matches!(self.processes[idx].state, ProcessState::Ready)
+                    && !self.is_live_on_other_core(idx, cpu_id)
+                {
+                    self.enqueue_process_once(idx);
+                }
+                continue;
+            }
+
+            // A forced interruption resumes the same admitted turn. Do not
+            // accumulate nice debt/credit or skip it again on each fragment.
+            if self.processes[idx].slice_credit.is_some() {
+                return Some(idx);
+            }
+
+            // Starvation rescue BEFORE accumulate_counter.
+            let ticks_waiting = self
+                .global_tick
+                .saturating_sub(self.processes[idx].last_run_tick);
+            // Aging must guarantee admission, not just add credit that the
+            // same visit's nice debt can immediately cancel (nice +8..+10).
+            let starvation_rescue = ticks_waiting > AGING_THRESHOLD_TICKS;
+            if ticks_waiting > AGING_THRESHOLD_TICKS && !self.processes[idx].aging_boosted_this_pick
+            {
+                self.processes[idx].counter =
+                    (self.processes[idx].counter + STARVATION_BOOST).min(MAX_CREDIT);
+                self.processes[idx].aging_boosted_this_pick = true;
+                update_burst_score(&mut self.processes[idx], BurstReason::Aged);
+            }
+
+            accumulate_counter(&mut self.processes[idx]);
+
+            // High priority promotion.
+            if self.processes[idx].nice < 0
+                && self.processes[idx].counter >= PROMOTE_LIMIT
+                && self.processes[idx].quantum_override.is_none()
+            {
+                self.processes[idx].counter =
+                    0_i32.max(self.processes[idx].counter - PROMOTE_LIMIT);
+                let base_q = calculate_quantum_with_nice(
+                    self.processes[idx].burst_score,
+                    self.processes[idx].nice,
+                );
+                let quantum_override_value = ((base_q * 110) / 100).min(QUANTUM_MAX);
+                self.processes[idx].quantum_override = Some(quantum_override_value);
+                self.processes[idx].aging_boosted_this_pick = false;
+                return Some(idx);
+            }
+
+            // Low priority skip.
+            if self.processes[idx].nice > 0
+                && self.processes[idx].counter <= SKIP_LIMIT
+                && !starvation_rescue
+            {
+                self.processes[idx].counter += DECAY_RATE;
+                self.processes[idx].aging_boosted_this_pick = false;
+                self.processes[idx].queued_on_core = cpu_id as u8;
+                CORE_STATES[cpu_id].lock().rr_queue.push_back(idx);
+                continue;
+            }
+
+            self.processes[idx].aging_boosted_this_pick = false;
+            return Some(idx);
+        }
+
+        self.steal_work(cpu_id)
+    }
+
+    pub fn pick_next(&mut self, cpu_id: usize) -> Option<usize> {
+        let next = match SCHEDULER_MODE {
+            SchedulerMode::RoundRobin => self.pick_next_round_robin(cpu_id),
+            SchedulerMode::Bore => self.pick_next_bore(cpu_id),
+        };
+        if let Some(idx) = next {
+            let next_pid = self.processes[idx].pid;
+            if next_pid == 6 && !SUNLIGHTD_FIRST_SCHED.swap(true, Ordering::SeqCst) {
+                serial_println!(
+                    "[SUNLIGHTD-SCHED] First time scheduled, rip=0x{:x} idx={}",
+                    self.processes[idx].entry_point,
+                    idx
+                );
+            }
+        }
+        next
+    }
+
+    /// Lower nice is the only wake-preemption priority in RR. Burst score
+    /// controls quantum length, never permission to interrupt an equal peer.
+    /// Search the local FIFO without changing peers' order or stealing.
+    fn priority_preemption_candidate(&self, cpu_id: usize, current: usize) -> Option<usize> {
+        let core = CORE_STATES[cpu_id].lock();
+        core.rr_queue.iter().copied().find(|&idx| {
+            idx < self.processes.len()
+                && self.processes[idx].priority_wake_pending
+                && self.processes[idx].nice < self.processes[current].nice
+                && self.processes[idx].state == ProcessState::Ready
+                && self.processes[idx].cpu_mask & (1u64 << cpu_id) != 0
+                && !self.is_live_on_other_core(idx, cpu_id)
+                && !self.stack_is_pinned_remotely(idx, cpu_id)
+                && self.context_is_dispatchable(idx)
+        })
+    }
+
+    /// A wake request can select one service while another remains Ready.
+    /// If FIFO later resumes a lower-priority turn, keep re-evaluation pending
+    /// for the next safe dispatch opportunity; the already-Ready task may not
+    /// publish another wake. Equal/lower peers never rearm a rotation.
+    fn retain_priority_request(&self, cpu_id: usize, selected: usize) {
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin
+            && self
+                .priority_preemption_candidate(cpu_id, selected)
+                .is_some()
+        {
+            request_reschedule_on(cpu_id);
+            // The request must have a safe delivery opportunity even if the
+            // selected worker makes no blocking syscall. The IRQ handlers
+            // flush this coalesced notification after dropping all guards;
+            // IF stays clear until the naked epilogue completes IRET.
+            if SCHEDULER_READY.load(Ordering::Acquire) && RESCHEDULE_MASK.request_delivery(cpu_id) {
+                DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+            }
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::event(
+                self,
+                14,
+                self.processes[selected].pid,
+                self.priority_preemption_candidate(cpu_id, selected)
+                    .map_or(0, |idx| self.processes[idx].pid) as u64,
+                0,
+                0,
+            );
+        }
+    }
+
+    // ── Per-core dispatch ────────────────────────────────────────────────────
+
+    /// Central per-core scheduling dispatch.
+    ///
+    /// Called from the timer handler with the ID of the CPU whose timer fired
+    /// and the kernel RSP saved by the naked interrupt entry stub. Returns the
+    /// RSP of the next process to resume (0 = stay on current context).
+    pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
+        #[cfg(feature = "scheduler_perf_diag")]
+        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].invocations, 1);
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            self.cpu_events[cpu_id][0] = self.cpu_events[cpu_id][0].saturating_add(1);
+        }
+        // AP cores stay idle until the BSP has finished boot and seeded the run
+        // queues. Without this, an AP timer tick during boot would dispatch a
+        // not-yet-seeded task (and contend with the BSP's PMM-heavy boot).
+        // Core 0 (BSP) is never gated.
+        if cpu_id != 0 && !SCHEDULER_READY.load(Ordering::Acquire) {
+            return 0;
+        }
+
+        #[cfg(feature = "scheduler_timer_trace")]
+        if let Some(timer) = self
+            .processes
+            .iter()
+            .find(|p| p.name_str() == "timer_server" && p.state == ProcessState::Ready)
+        {
+            let current = self.core_current_task(cpu_id);
+            let expired = CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0);
+            let running =
+                current.is_some_and(|idx| self.processes[idx].state == ProcessState::Running);
+            crate::scheduler_timer_trace::event(
+                self,
+                9,
+                timer.pid,
+                current.map_or(0, |idx| self.processes[idx].pid) as u64,
+                current.map_or(20, |idx| (self.processes[idx].nice as i64 + 20) as u64),
+                peek_reschedule_on(cpu_id) as u64
+                    | ((expired as u64) << 1)
+                    | ((running as u64) << 2),
+            );
+        }
+        if !check_reschedule_on(cpu_id) {
+            return 0;
+        }
+
+        // ── Idle-AP fast path ─────────────────────────────────────────────────
+        // When an AP has no current task (it was in its idle hlt loop), try to
+        // pick a task immediately.  There is nothing to save or re-queue.
+        if self.core_current_task(cpu_id).is_none() {
+            self.set_core_idle_context_rsp(cpu_id, saved_rsp);
+            if let Some(next) = self.pick_next(cpu_id) {
+                #[cfg(feature = "scheduler_perf_diag")]
+                record_perf_dispatch(&self.processes[next], cpu_id);
+                #[cfg(all(debug_assertions, feature = "fastlane_coord_diag"))]
+                crate::capability::channel_race::diagnostic_dispatch(self.processes[next].pid, cpu_id);
+                let next_rsp = self.processes[next].context_rsp;
+                #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+                self.trace_bell_process("dispatch-idle", next, next_rsp, cpu_id as u64);
+                crate::arch::x86_64::syscall_stack::validate(&self.processes[next]);
+                let next_stack_top = self.processes[next].kernel_stack_top;
+                let next_fs_base = self.processes[next].fs_base;
+                self.set_core_current_task(cpu_id, Some(next));
+                self.increment_context_switches(cpu_id);
+                self.processes[next].state = ProcessState::Running;
+                self.processes[next].priority_wake_pending = false;
+                self.processes[next].last_run_tick = self.global_tick;
+                self.processes[next].owning_core = cpu_id as u8;
+                self.processes[next].queued_on_core = u8::MAX;
+                unsafe {
+                    self.processes[next].address_space.activate();
+                    self.processes[next].fx_state.restore();
+                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+                }
+                crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+                self.start_charging_runtime(next);
+                self.retain_priority_request(cpu_id, next);
+                return next_rsp;
+            }
+            unsafe {
+                crate::memory::tlb::activate_kernel_root();
+            }
+            return 0;
+        }
+
+        let current = self.core_current_task(cpu_id).unwrap();
+
+        if current >= self.processes.len() {
+            return 0;
+        }
+
+        // A request means re-evaluate, not necessarily rotate. Equal/lower
+        // priority Ready publications leave an eligible unexpired RR turn open.
+        // Ready (explicit yield or raced wake), blocked and terminal tasks must
+        // still leave the CPU. BORE retains its existing dispatch behavior.
+        let mut priority_next = None;
+        let mut preserve_turn = false;
+        if SCHEDULER_MODE == SchedulerMode::RoundRobin
+            && self.processes[current].state == ProcessState::Running
+            && self.processes[current].cpu_mask & (1u64 << cpu_id) != 0
+        {
+            let slice_expired = CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .expired(now_ns(), crate::arch::x86_64::interrupts::tsc_hz() != 0);
+            priority_next = self.priority_preemption_candidate(cpu_id, current);
+            if priority_next.is_none() && !slice_expired {
+                return 0;
+            }
+            // An unexpired turn keeps its residual entitlement.  If the
+            // wake coincides with expiration, retire the old turn normally
+            // but still dispatch the higher-priority Ready service now; the
+            // consumed request must not strand an already-runnable service.
+            preserve_turn = priority_next.is_some() && !slice_expired;
+        }
+        // Ownership can be published before Rust returns, but this physical
+        // stack remains in use until the naked epilogue releases the pin.
+        self.pin_outgoing_stack(cpu_id, current);
+        // Some block/yield callers already checkpoint; their last_start_ns is
+        // zero, so this cannot penalize twice. Other I/O/futex waits rely on
+        // dispatch to account voluntary churn. Forced preemption and teardown
+        // must never be classified as voluntary short-burst behavior.
+        if matches!(
+            self.processes[current].state,
+            ProcessState::Ready
+                | ProcessState::BlockedOnIpc
+                | ProcessState::BlockedOnTimer
+                | ProcessState::BlockedOnIo
+        ) {
+            self.account_and_apply_churn_penalty();
+        } else {
+            self.account_current_runtime();
+        }
+        self.stop_execution_clock(current, preserve_turn);
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 1, self.processes[current].pid);
+
+        // Save interrupted context.
+        unsafe { self.processes[current].fx_state.save() };
+        self.processes[current].context_rsp = saved_rsp;
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+        self.trace_bell_process("save", current, saved_rsp, self.processes[current].state as u64);
+        self.processes[current].fs_base =
+            unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 2, self.processes[current].pid);
+
+        // Maintain runnable-only queue invariant.
+        let was_runnable = matches!(
+            self.processes[current].state,
+            ProcessState::Ready | ProcessState::Running
+        );
+        if self.processes[current].state == ProcessState::Running {
+            self.processes[current].state = ProcessState::Ready;
+        }
+        if matches!(self.processes[current].state, ProcessState::Ready) {
+            self.processes[current].owning_core = u8::MAX;
+            self.set_core_current_task(cpu_id, None);
+            self.queue_process_to_core(current, cpu_id, false);
+            if self.processes[current].slice_credit.is_some() {
+                // Resume ahead of peers after the priority task relinquishes.
+                let mut core = CORE_STATES[cpu_id].lock();
+                core.rr_queue.retain(|&idx| idx != current);
+                core.rr_queue.push_front(current);
+            }
+        } else if !was_runnable || !matches!(self.processes[current].state, ProcessState::Ready) {
+            self.processes[current].owning_core = u8::MAX;
+            self.set_core_current_task(cpu_id, None);
+            self.remove_from_ready_queues(current);
+        }
+
+        let next = if let Some(next) = priority_next {
+            self.remove_from_ready_queues(next);
+            Some(next)
+        } else {
+            self.pick_next(cpu_id)
+        };
+        if let Some(next) = next {
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 3, self.processes[next].pid);
+            #[cfg(feature = "scheduler_perf_diag")]
+            record_perf_dispatch(&self.processes[next], cpu_id);
+            let next_rsp = self.processes[next].context_rsp;
+            #[cfg(all(debug_assertions, feature = "fastlane_coord_diag"))]
+            crate::capability::channel_race::diagnostic_dispatch(self.processes[next].pid, cpu_id);
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+            self.trace_bell_process("dispatch", next, next_rsp, cpu_id as u64);
+            crate::arch::x86_64::syscall_stack::validate(&self.processes[next]);
+            let next_stack_top = self.processes[next].kernel_stack_top;
+            let next_fs_base = self.processes[next].fs_base;
+            let prev = current;
+
+            if next != prev {
+                self.increment_context_switches(cpu_id);
+                self.processes[prev].owning_core = u8::MAX;
+            }
+            self.set_core_current_task(cpu_id, Some(next));
+            self.processes[next].state = ProcessState::Running;
+            self.processes[next].priority_wake_pending = false;
+            self.processes[next].last_run_tick = self.global_tick;
+            self.processes[next].owning_core = cpu_id as u8;
+            self.processes[next].queued_on_core = u8::MAX;
+            unsafe {
+                self.processes[next].address_space.activate();
+                self.processes[next].fx_state.restore();
+                x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+            }
+            // Update this core's TSS RSP0 so the next interrupt from ring-3
+            // delivers to the correct kernel stack.  Uses the per-core TSS
+            // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
+            crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
+
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 4, self.processes[next].pid);
+
+            if matches!(
+                self.processes[prev].state,
+                ProcessState::Finished | ProcessState::Reaped
+            ) {
+                if self.processes[prev].state == ProcessState::Finished {
+                    self.reap_process_resources(prev);
+                }
+            }
+
+            // Opportunistic global reaping of any other safe Finished processes.
+            self.reap_finished_processes();
+
+            #[cfg(feature = "scheduler_timer_trace")]
+            crate::scheduler_timer_trace::checkpoint(self, 5, self.processes[next].pid);
+
+            self.start_charging_runtime(next);
+            self.retain_priority_request(cpu_id, next);
+            next_rsp
+        } else {
+            if current < self.processes.len()
+                && matches!(self.processes[current].state, ProcessState::Ready)
+            {
+                self.remove_from_ready_queues(current);
+                self.set_core_current_task(cpu_id, Some(current));
+                self.processes[current].state = ProcessState::Running;
+                self.processes[current].owning_core = cpu_id as u8;
+                self.processes[current].queued_on_core = u8::MAX;
+                self.start_charging_runtime(current);
+                return 0;
+            }
+
+            self.increment_context_switches(cpu_id); // task -> idle
+            let idle_rsp = self.core_idle_context_rsp(cpu_id);
+            if idle_rsp != 0 {
+                unsafe {
+                    crate::memory::tlb::activate_kernel_root();
+                }
+                return idle_rsp;
+            }
+            let stack_top = unsafe {
+                core::ptr::addr_of!(CORE_IDLE_STACKS[cpu_id][crate::process::KERNEL_STACK_SIZE - 1])
+                    as u64
+                    + 1
+            };
+            let rsp = build_kernel_idle_frame(stack_top);
+            self.set_core_idle_context_rsp(cpu_id, rsp);
+            unsafe {
+                crate::memory::tlb::activate_kernel_root();
+            }
+            serial_println!(
+                "[SCHED] WARN: cpu={} lazily initialized idle context",
+                cpu_id
+            );
+            rsp
+        }
+    }
+
+    // ── Current process accessors ────────────────────────────────────────────
+
+    pub fn current_process(&self) -> &Process {
+        let cpu_id = current_cpu_id();
+        &self.processes[self.core_current_task(cpu_id).unwrap_or(0)]
+    }
+
+    pub fn current_process_index(&self) -> Option<usize> {
+        self.core_current_task(current_cpu_id())
+    }
+
+    pub fn current_process_mut(&mut self) -> &mut Process {
+        let cpu_id = current_cpu_id();
+        let idx = self.core_current_task(cpu_id).unwrap_or(0);
+        &mut self.processes[idx]
+    }
+
+    /// Linux leaders and opt-in native std owners hold group-wide resources
+    /// until all their workers are reaped. Existing native tasks remain private.
+    fn shared_process_index(&self, idx: usize) -> usize {
+        let Some(tgid) = self.processes[idx]
+            .linux_tgid
+            .or(self.processes[idx].native_shared_owner)
+        else {
+            return idx;
+        };
+        self.process_index_by_pid(tgid).unwrap_or(idx)
+    }
+
+    pub fn current_shared_process(&self) -> &Process {
+        let idx = self.current_process_index().unwrap_or(0);
+        &self.processes[self.shared_process_index(idx)]
+    }
+
+    pub fn current_shared_process_mut(&mut self) -> &mut Process {
+        let idx = self.current_process_index().unwrap_or(0);
+        let shared = self.shared_process_index(idx);
+        &mut self.processes[shared]
+    }
+
+    pub fn wake_native_futex(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        address: u64,
+        limit: usize,
+    ) -> usize {
+        let mut woken = 0;
+        for idx in 0..self.processes.len() {
+            if woken == limit {
+                break;
+            }
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx].address_space.identity() == identity
+                && self.processes[idx].native_futex_wait == Some(address)
+            {
+                self.wake_native_futex_index(idx);
+                woken += 1;
+            }
+        }
+        woken
+    }
+
+    fn wake_native_futex_index(&mut self, idx: usize) {
+        self.processes[idx].native_futex_wait = None;
+        self.processes[idx].native_futex_deadline = None;
+        self.record_wakeup(idx, false);
+        self.processes[idx].state = ProcessState::Ready;
+        self.processes[idx].priority_wake_pending = true;
+        self.remove_from_ready_queues(idx);
+        if let Some(cpu) = self.live_owner_core(idx) {
+            request_reschedule_on(cpu);
+        } else {
+            self.enqueue_ready(idx);
+        }
+    }
+
+    pub fn cancel_native_futex_range(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        start: u64,
+        end: u64,
+    ) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx].address_space.identity() == identity
+                && self.processes[idx]
+                    .native_futex_wait
+                    .is_some_and(|address| address >= start && address < end)
+            {
+                self.wake_native_futex_index(idx);
+            }
+        }
+    }
+
+    fn expire_native_futex_timeouts(&mut self) {
+        let now = crate::arch::x86_64::interrupts::now_ns();
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnIo
+                && self.processes[idx]
+                    .native_futex_deadline
+                    .is_some_and(|deadline| deadline <= now)
+            {
+                self.wake_native_futex_index(idx);
+            }
+        }
+    }
+
+    // Mapping placement/accounting belongs to the address space, including
+    // native borrowers whose file-descriptor tables intentionally stay private.
+    fn current_memory_owner_index(&self) -> usize {
+        let current = self.current_process_index().unwrap_or(0);
+        let identity = self.processes[current].address_space.identity();
+        self.processes
+            .iter()
+            .position(|process| {
+                process.owns_address_space && process.address_space.identity() == identity
+            })
+            .unwrap_or(current)
+    }
+
+    pub fn current_memory_owner(&self) -> &Process {
+        &self.processes[self.current_memory_owner_index()]
+    }
+
+    pub fn current_memory_owner_mut(&mut self) -> &mut Process {
+        let owner = self.current_memory_owner_index();
+        &mut self.processes[owner]
+    }
+
+    // ── Wake / unblock ───────────────────────────────────────────────────────
+
+    /// Return the PID of the process currently running on this CPU (0 if none).
+    pub fn current_pid(&self) -> usize {
+        self.process_index_for_cpu(current_cpu_id())
+            .and_then(|idx| self.processes.get(idx))
+            .map(|p| p.pid)
+            .unwrap_or(0)
+    }
+
+    /// Resolve the live process on `cpu_id` from per-core bookkeeping, falling
+    /// back to the active page table when a user context is running without a
+    /// `current_task` entry (SMP bookkeeping bug recovery).
+    pub(crate) fn process_index_for_cpu(&self, cpu_id: usize) -> Option<usize> {
+        if let Some(idx) = self.core_current_task(cpu_id) {
+            return Some(idx);
+        }
+        let cr3 = x86_64::registers::control::Cr3::read()
+            .0
+            .start_address()
+            .as_u64();
+        self.processes.iter().position(|p| {
+            !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+                && p.address_space.pml4_phys.as_u64() == cr3
+        })
+    }
+
+    pub fn is_blocked_on_recv(&self, pid: usize) -> bool {
+        self.processes
+            .iter()
+            .any(|p| p.pid == pid && p.state == ProcessState::BlockedOnIpc)
+    }
+
+    pub(crate) fn record_wakeup(&mut self, idx: usize, ipc: bool) {
+        #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+        self.processes[idx].measurement.wakeup();
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            let audit = &mut self.processes[idx].wake_audit;
+            audit[0] = audit[0].saturating_add(1);
+            if ipc {
+                audit[1] = audit[1].saturating_add(1);
+            }
+            let c = &mut self.cpu_events[current_cpu_id()];
+            c[1] = c[1].saturating_add(1);
+            if ipc {
+                c[2] = c[2].saturating_add(1);
+            }
+        }
+        #[cfg(not(feature = "cpu_accounting_diag"))]
+        let _ = (idx, ipc);
+    }
+
+    pub fn wake_pid(&mut self, pid: usize) {
+        let idx = match self.processes.iter().position(|p| p.pid == pid) {
+            Some(i) => i,
+            None => return,
+        };
+
+        if self.processes[idx].state == ProcessState::BlockedOnIpc {
+            #[cfg(feature = "scheduler_timer_trace")]
+            if self.processes[idx].name_str() == "timer_server" {
+                crate::scheduler_timer_trace::event(
+                    self,
+                    11,
+                    pid,
+                    (self.processes[idx].nice as i64 + 20) as u64,
+                    self.diagnostic_current_pid(current_cpu_id()).unwrap_or(0) as u64,
+                    self.processes[idx].pending_call.is_some() as u64,
+                );
+            }
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
+            if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
+                update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
+            }
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
+            self.remove_from_ready_queues(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_ready(idx);
+            }
+        } else if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            STALE_TERMINAL_WAKEUPS_REJECTED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn wake_timer_pid(&mut self, pid: usize) {
+        let idx = match self.processes.iter().position(|p| p.pid == pid) {
+            Some(i) => i,
+            None => return,
+        };
+        if self.processes[idx].state == ProcessState::BlockedOnTimer {
+            self.processes[idx].tty_write_wait = None;
+            self.processes[idx].tty_read_wait = None;
+            self.processes[idx].native_poll_wake_tick = None;
+            if let Some(state) = self.processes[idx].linux_state_mut() {
+                state.poll_wake_tick = None;
+            }
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
+            if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
+                update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
+            }
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
+            self.remove_from_ready_queues(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_ready(idx);
+            }
+        }
+    }
+
+    /// Wake at most `limit` Linux waiters on a 32-bit word in this exact VM.
+    /// The global scheduler lock serializes registration and wakeup.
+    pub fn wake_linux_futex(
+        &mut self,
+        identity: crate::process::mm2b_state::AddressSpaceIdentity,
+        address: u64,
+        limit: usize,
+    ) -> usize {
+        let mut woken = 0;
+        for idx in 0..self.processes.len() {
+            if woken == limit {
+                break;
+            }
+            if self.processes[idx].state != ProcessState::BlockedOnIo
+                || self.processes[idx].address_space.identity() != identity
+                || self.processes[idx].linux_state().and_then(|s| s.futex_wait) != Some(address)
+            {
+                continue;
+            }
+            if let Some(state) = self.processes[idx].linux_state_mut() {
+                state.futex_wait = None;
+            }
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.processes[idx].state = ProcessState::Ready;
+            self.processes[idx].priority_wake_pending = true;
+            self.remove_from_ready_queues(idx);
+            if let Some(cpu) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu);
+            } else {
+                self.enqueue_ready(idx);
+            }
+            woken += 1;
+        }
+        woken
+    }
+
+    /// Block the current Linux task until a poll timeout expires. Syscall
+    /// entry runs with interrupts disabled, so the task cannot wait in-place;
+    /// the next timer interrupt deschedules it and this deadline makes it
+    /// runnable again without spinning in userspace.
+    pub fn block_current_linux_poll(&mut self, timeout_ticks: u64) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        let ticks = timeout_ticks.max(1);
+        let Some(state) = self.processes[idx].linux_state_mut() else {
+            return;
+        };
+        state.poll_wake_tick = Some(self.global_tick.saturating_add(ticks));
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+    }
+
+    /// Park a native reader/writer until a pipe transition changes its state.
+    /// Callers hold the scheduler lock from the failed ring operation through
+    /// registration, so a producer cannot notify before the wait is visible.
+    pub fn block_current_native_pipe(&mut self, ring: u32, writing: bool) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].native_pipe_wait = Some((ring, writing));
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    pub fn block_current_native_pipe_poll(&mut self) {
+        self.block_current_native_poll(None, u64::MAX);
+    }
+
+    /// Park a native readiness wait until input/output becomes ready or its
+    /// relative timeout expires. The producer wake paths and this registration
+    /// share the scheduler lock, so an event cannot race the empty check.
+    pub fn block_current_native_poll(&mut self, tty_tab: Option<usize>, timeout_ticks: u64) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].native_pipe_poll_wait = true;
+        self.processes[idx].tty_read_wait = tty_tab;
+        self.processes[idx].native_poll_wake_tick = (timeout_ticks != u64::MAX)
+            .then_some(self.global_tick.saturating_add(timeout_ticks.max(1)));
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    /// Serialize the empty input check and waiter registration with input wakes.
+    pub fn block_current_tty_read(&mut self, tab: usize) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].tty_read_wait = Some(tab);
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    /// The failed write and registration are serialized under SCHEDULER.
+    pub fn block_current_tty_write(&mut self, tab: usize) {
+        let Some(idx) = self.current_process_index() else {
+            return;
+        };
+        self.processes[idx].tty_write_wait = Some(tab);
+        self.processes[idx].block_start_tick = self.global_tick;
+        self.set_state(idx, ProcessState::BlockedOnTimer);
+        request_park_after_sysret();
+    }
+
+    /// TtyStdoutPull releases the ring guard before acquiring SCHEDULER.
+    /// Thus a drain overlapping registration must observe the registered wait.
+    pub fn wake_tty_writers(&mut self, tab: usize) {
+        if !crate::process::tty_io::stdout_has_space(tab) {
+            return;
+        }
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx].tty_write_wait == Some(tab)
+            {
+                self.processes[idx].tty_write_wait = None;
+                self.processes[idx].tty_read_wait = None;
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// Wake poll waiters attached to the TTY tab which just received input.
+    pub fn wake_linux_poll_tty(&mut self, tab: usize) {
+        for idx in 0..self.processes.len() {
+            let native_wait = self.processes[idx].tty_read_wait == Some(tab);
+            let linux_wait = self.processes[idx]
+                .linux_state()
+                .is_some_and(|state| state.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_tty_stdin_tab(tab);
+            let waiting_on_tab = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && (native_wait || linux_wait);
+            if waiting_on_tab {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// An eventfd transition may wake readers or writers blocked in a Linux
+    /// syscall. Test the condition while holding the scheduler lock so
+    /// registration and notification cannot pass each other.
+    pub fn wake_linux_eventfd(&mut self, event_idx: u32) {
+        for idx in 0..self.processes.len() {
+            let wait = self.processes[idx]
+                .linux_state()
+                .and_then(|s| s.eventfd_wait);
+            let waiting_on_poll = wait.is_none()
+                && self.processes[idx]
+                    .linux_state()
+                    .is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_eventfd(event_idx);
+            let should_wake = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && (waiting_on_poll
+                    || wait.is_some_and(|(key, value, writing)| {
+                        key == event_idx
+                            && if writing {
+                                crate::process::eventfd::can_write(key, value)
+                            } else {
+                                crate::process::eventfd::readiness(key).0
+                            }
+                    }));
+            if should_wake {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// Registration, readiness and notification all run under the scheduler
+    /// lock; a producer cannot slip between the failed I/O and registration.
+    pub fn wake_linux_pipe(&mut self, ring: u32) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::BlockedOnTimer {
+                continue;
+            }
+            let wait = self.processes[idx].linux_state().and_then(|s| s.pipe_wait);
+            let native_wait = self.processes[idx].native_pipe_wait;
+            let poll = wait.is_none()
+                && self.processes[idx]
+                    .linux_state()
+                    .is_some_and(|s| s.poll_wake_tick.is_some())
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_pipe_ring(ring);
+            let ready = wait.is_some_and(|(key, writing)| {
+                key == ring
+                    && if writing {
+                        crate::process::pipe::pipe_has_space_or_broken(key)
+                    } else {
+                        crate::process::pipe::pipe_has_data_or_eof(key)
+                    }
+            });
+            let native_ready = native_wait.is_some_and(|(key, writing)| {
+                key == ring
+                    && if writing {
+                        crate::process::pipe::pipe_has_space_or_broken(key)
+                    } else {
+                        crate::process::pipe::pipe_has_data_or_eof(key)
+                    }
+            });
+            let native_poll = self.processes[idx].native_pipe_poll_wait
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_pipe_ring(ring);
+            if poll || ready || native_ready || native_poll {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    /// A `connect(2)` queued a connection for a listening AF_UNIX socket.
+    /// Wake poll/epoll waiters that hold that listener's descriptor.
+    pub fn wake_linux_unix_socket(&mut self, listener: u32) {
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::BlockedOnTimer {
+                continue;
+            }
+            let waiting_on_poll = self.processes[idx]
+                .linux_state()
+                .is_some_and(|s| s.poll_wake_tick.is_some());
+            if waiting_on_poll
+                && self.processes[self.shared_process_index(idx)]
+                    .fd_table
+                    .contains_unix_socket(listener)
+            {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    fn expire_linux_poll_timeouts(&mut self) {
+        let now = self.global_tick;
+        for idx in 0..self.processes.len() {
+            let expired = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx]
+                    .linux_state()
+                    .and_then(|state| state.poll_wake_tick)
+                    .is_some_and(|deadline| deadline <= now);
+            let native_expired = self.processes[idx].state == ProcessState::BlockedOnTimer
+                && self.processes[idx]
+                    .native_poll_wake_tick
+                    .is_some_and(|deadline| deadline <= now);
+            if expired || native_expired {
+                self.wake_linux_poll_index(idx);
+            }
+        }
+    }
+
+    fn wake_linux_poll_index(&mut self, idx: usize) {
+        self.processes[idx].native_pipe_wait = None;
+        self.processes[idx].native_pipe_poll_wait = false;
+        self.processes[idx].native_poll_wake_tick = None;
+        self.processes[idx].tty_write_wait = None;
+        self.processes[idx].tty_read_wait = None;
+        if let Some(state) = self.processes[idx].linux_state_mut() {
+            state.poll_wake_tick = None;
+            state.eventfd_wait = None;
+            state.pipe_wait = None;
+        }
+        self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+        self.processes[idx].state = ProcessState::Ready;
+        self.processes[idx].priority_wake_pending = true;
+        self.remove_from_ready_queues(idx);
+        if let Some(cpu_id) = self.live_owner_core(idx) {
+            request_reschedule_on(cpu_id);
+        } else {
+            self.enqueue_ready(idx);
+        }
+    }
+
+    pub fn wake_io_pid(&mut self, pid: usize) {
+        let idx = match self.processes.iter().position(|p| p.pid == pid) {
+            Some(i) => i,
+            None => return,
+        };
+        if self.processes[idx].state == ProcessState::BlockedOnIo {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            self.doorbell_spurious_wake(idx);
+            #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+            self.fastlane_bell_spurious(idx);
+            let ticks_blocked = self
+                .global_tick
+                .saturating_sub(self.processes[idx].block_start_tick);
+            if ticks_blocked < INTERACTIVE_DETECTION_THRESHOLD as u64 {
+                update_burst_score(&mut self.processes[idx], BurstReason::EarlyBlock);
+            }
+            self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+            self.processes[idx].state = ProcessState::Ready;
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            if self.processes[idx].doorbell_wait.is_some() {
+                doorbell_test::runnable(idx);
+            }
+            self.processes[idx].priority_wake_pending = true;
+            self.remove_from_ready_queues(idx);
+            if let Some(cpu_id) = self.live_owner_core(idx) {
+                request_reschedule_on(cpu_id);
+            } else {
+                self.enqueue_ready(idx);
+            }
+        }
+    }
+
+    pub fn process_mut_by_pid(&mut self, pid: usize) -> Option<&mut Process> {
+        self.processes.iter_mut().find(|p| p.pid == pid)
+    }
+
+    pub fn process_index_by_pid(&self, pid: usize) -> Option<usize> {
+        self.processes.iter().position(|p| p.pid == pid)
+    }
+
+    pub fn wake_for_signal(&mut self, pid: usize) {
+        let Some(idx) = self.process_index_by_pid(pid) else {
+            return;
+        };
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_spurious_wake(idx);
+        #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+        self.fastlane_bell_spurious(idx);
+        match self.processes[idx].state {
+            ProcessState::BlockedOnIpc
+            | ProcessState::BlockedOnTimer
+            | ProcessState::BlockedOnIo
+            | ProcessState::Suspended => {
+                self.processes[idx].tty_write_wait = None;
+                self.processes[idx].tty_read_wait = None;
+                if let Some(state) = self.processes[idx].linux_state_mut() {
+                    state.poll_wake_tick = None;
+                }
+                self.record_wakeup(idx, self.processes[idx].state == ProcessState::BlockedOnIpc);
+                self.processes[idx].state = ProcessState::Ready;
+                self.processes[idx].priority_wake_pending = true;
+                self.processes[idx].block_start_tick = self.global_tick;
+                self.remove_from_ready_queues(idx);
+                if let Some(cpu_id) = self.live_owner_core(idx) {
+                    request_reschedule_on(cpu_id);
+                } else {
+                    self.enqueue_ready(idx);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // ── Process lifecycle ────────────────────────────────────────────────────
+
+    fn live_address_space_borrowers(&self, idx: usize) -> usize {
+        let identity = self.processes[idx].address_space.identity();
+        self.processes
+            .iter()
+            .enumerate()
+            .filter(|(other_idx, proc)| {
+                *other_idx != idx
+                    && !proc.owns_address_space
+                    && proc.state != ProcessState::Reaped
+                    && proc.address_space.identity() == identity
+            })
+            .count()
+    }
+
+    pub fn current_address_space_has_borrowers(&self) -> bool {
+        self.current_process_index()
+            .is_some_and(|idx| self.live_address_space_borrowers(idx) != 0)
+    }
+
+    fn terminate_address_space_borrowers(&mut self, owner_idx: usize, reason: &str) {
+        let identity = self.processes[owner_idx].address_space.identity();
+        for idx in 0..self.processes.len() {
+            if idx == owner_idx
+                || self.processes[idx].owns_address_space
+                || self.processes[idx].address_space.identity() != identity
+                || matches!(
+                    self.processes[idx].state,
+                    ProcessState::Finished | ProcessState::Reaped
+                )
+            {
+                continue;
+            }
+            self.processes[idx].exit_code = 128 + 9;
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            self.doorbell_peer_exit(idx);
+            #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+            self.processes[idx].measurement.abort();
+            self.processes[idx].state = ProcessState::Finished;
+            self.processes[idx].slice_credit = None;
+            self.processes[idx].exit_cleanup_pending = true;
+            if self.processes[idx].native_thread {
+                note_native_borrower_finished();
+            }
+            self.remove_from_ready_queues(idx);
+            if self.processes[idx].owning_core != u8::MAX {
+                request_reschedule_on(self.processes[idx].owning_core as usize);
+            }
+            serial_println!(
+                "[SCHED] shared-address-space borrower pid={} terminated reason={}",
+                self.processes[idx].pid,
+                reason
+            );
+        }
+    }
+
+    fn close_owned_ipc_endpoints(&mut self, pid: usize) {
+        #[cfg(feature = "native_session_race_test")]
+        if let Some(p) = self.processes.iter().find(|p| p.pid == pid && (p.trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && p.name_str() == "sunlight-sessiond"))) {
+            crate::capability::session_h3_trace::record(10, pid as u64, p.foreground.incarnation, 1, p.address_space.identity().generation, 0);
+        }
+        let endpoint_ids = {
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            let endpoint_ids = caps.endpoints_owned_by(pid);
+            caps.revoke_endpoints_owned_by(pid);
+            endpoint_ids
+        };
+        for endpoint_id in endpoint_ids {
+            crate::arch::x86_64::keyboard::unregister_kbd_endpoint(endpoint_id);
+            crate::arch::x86_64::mouse::unregister_mouse_endpoint(endpoint_id);
+            let calls = crate::ipc::with_shard(endpoint_id, |bus| bus.remove_endpoint(endpoint_id));
+            #[cfg(feature = "native_session_race_test")]
+            if let Some(p) = self.processes.iter().find(|p| p.pid == pid && (p.trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && p.name_str() == "sunlight-sessiond"))) {
+                crate::capability::session_h3_trace::record(11, pid as u64, p.foreground.incarnation, endpoint_id as u64, 1, calls.len() as u64);
+            }
+            crate::ipc::finish_peer_closed_calls(endpoint_id, calls, self);
+        }
+    }
+
+    pub fn reap_process_resources(&mut self, idx: usize) {
+        if idx >= self.processes.len() || self.stack_is_pinned(idx) {
+            #[cfg(feature = "scheduler_b_test")]
+            regression::note_deferred_reap();
+            return;
+        }
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            self.processes[idx].slice_credit = None;
+        }
+        if !self.processes[idx].exit_cleanup_pending {
+            // Already reaped or never marked for cleanup. Ensure state reflects it.
+            if self.processes[idx].state == ProcessState::Finished {
+                // If no pending work was recorded, treat as reaped to allow reuse.
+                self.processes[idx].state = ProcessState::Reaped;
+            }
+            return;
+        }
+
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
+
+        #[cfg(feature = "verbose_diag")]
+        serial_println!(
+            "[SCHED] process_reap_attempt idx={} pid={} name='{}'",
+            idx,
+            self.processes[idx].pid,
+            self.processes[idx].name_str()
+        );
+
+        // Safety: never reap while still current on a core or queued.
+        if self.processes[idx].owning_core != u8::MAX {
+            #[cfg(feature = "verbose_diag")]
+            serial_println!(
+                "[SCHED] process_reap_blocked_reason idx={} reason=owning_core cpu={}",
+                idx,
+                self.processes[idx].owning_core
+            );
+            return;
+        }
+        if self.processes[idx].queued_on_core != u8::MAX {
+            #[cfg(feature = "verbose_diag")]
+            serial_println!(
+                "[SCHED] process_reap_blocked_reason idx={} reason=queued_on_core",
+                idx
+            );
+            return;
+        }
+
+        // External group termination finishes a sibling from another CPU.
+        // Clear its TID only after it is no longer executing on any CPU.
+        // Self-exit follows the same path. The retained Process (and its exact
+        // VM identity) is the bounded completion record; slot reuse follows
+        // Reaped, and the physical pin was checked before reaching here.
+        self.clear_linux_child_tid(idx);
+
+        let pid = self.processes[idx].pid;
+        #[cfg(feature = "native_session_race_test")]
+        if self.processes[idx].trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlight-sessiond") {
+            crate::capability::session_h3_trace::record(10, pid as u64, self.processes[idx].foreground.incarnation, 2, self.processes[idx].address_space.identity().generation, 0);
+        }
+        let name_bytes = self.processes[idx].name;
+        let name_len = name_bytes.iter().position(|b| *b == 0).unwrap_or(32);
+        let name = core::str::from_utf8(&name_bytes[..name_len]).unwrap_or("?");
+        let is_native_borrower = self.processes[idx].native_thread;
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 20, pid);
+        if self.processes[idx].owns_address_space {
+            let borrowers = self.live_address_space_borrowers(idx);
+            if borrowers != 0 {
+                if self.processes[idx].linux_tgid.is_none() {
+                    self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
+                }
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                        "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
+                        idx,
+                        borrowers
+                    );
+                return;
+            }
+        }
+        let hhdm_offset = match crate::HHDM_REQ.response() {
+            Some(resp) => x86_64::VirtAddr::new(resp.offset),
+            None => {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm",
+                    idx
+                );
+                return;
+            }
+        };
+
+        // Additional safety: do not reap the live current on this or other cores (double-check).
+        for c in 0..self.online_cores {
+            if self.core_current_task(c) == Some(idx) {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=current_on_cpu={}",
+                    idx,
+                    c
+                );
+                return;
+            }
+        }
+
+        if self.processes[idx].owns_address_space {
+            let active_mask =
+                crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
+            if active_mask != 0 {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
+                    idx,
+                    active_mask
+                );
+                return;
+            }
+        }
+
+        let leaked_fds = self.processes[idx].fd_table.take_all_handles();
+        #[cfg(feature = "authenticated_cancel_test")]
+        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
+        for handle in leaked_fds.into_iter().flatten() {
+            if handle.is_pipe() {
+                crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
+                self.wake_linux_pipe(handle.pipe_index());
+            } else if handle.is_socket() {
+                let (read, write) =
+                    crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
+                self.wake_linux_pipe(read);
+                self.wake_linux_pipe(write);
+            } else if handle.is_unix_socket() {
+                crate::process::unix_socket::release(handle.unix_socket_index());
+            } else if handle.is_epoll() {
+                crate::process::epoll::free_instance(handle.epoll_index());
+            } else if handle.is_vfs() {
+                if let Some(vfs) = crate::KERNEL_VFS.lock().as_mut() {
+                    let _ = vfs.close(sunlight_fs::vfs::FileHandle(handle.vfs_handle()));
+                }
+            }
+        }
+
+        crate::memory::swap::untrack_process(pid);
+        let swap_admin_identity = self.processes[idx].address_space.identity();
+        crate::memory::zram::revoke_admin(pid, swap_admin_identity.generation);
+
+        let endpoint_ids = {
+            let caps = crate::capability::CAP_BROKER.lock();
+            caps.endpoints_owned_by(pid)
+        };
+
+        let ipc_pending_before = {
+            let mut n = 0usize;
+            crate::ipc::for_all_shards(|bus| {
+                n += bus.pending_count_for_pid(pid);
+            });
+            n
+        };
+
+        {
+            crate::ipc::for_all_shards(|bus| {
+                bus.remove_pid_references(pid);
+            });
+            for endpoint_id in &endpoint_ids {
+                crate::arch::x86_64::keyboard::unregister_kbd_endpoint(*endpoint_id);
+                crate::arch::x86_64::mouse::unregister_mouse_endpoint(*endpoint_id);
+                let calls =
+                    crate::ipc::with_shard(*endpoint_id, |bus| bus.remove_endpoint(*endpoint_id));
+                #[cfg(feature = "native_session_race_test")]
+                if self.processes[idx].trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlight-sessiond") {
+                    crate::capability::session_h3_trace::record(11, pid as u64, self.processes[idx].foreground.incarnation, *endpoint_id as u64, 2, calls.len() as u64);
+                }
+                crate::ipc::finish_peer_closed_calls(*endpoint_id, calls, self);
+            }
+        }
+
+        {
+            let mut pmm = crate::PMM.lock();
+            let mut caps = crate::capability::CAP_BROKER.lock();
+            caps.revoke_endpoints_owned_by(pid);
+            #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+            self.fastlane_drain_mappings(&mut pmm, &mut caps);
+            crate::memory::shared::cleanup_shared_pages(
+                &mut self.processes[idx],
+                &mut *pmm,
+                &mut *caps,
+            );
+        }
+
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 21, pid);
+        let reaped_generation = self.processes[idx].address_space.identity().generation;
+        let reclaim = if self.processes[idx].owns_address_space {
+            let mut pmm = crate::PMM.lock();
+            unsafe {
+                self.processes[idx]
+                    .address_space
+                    .reclaim_user_space(&mut *pmm, hhdm_offset, true)
+            }
+        } else {
+            if is_native_borrower {
+                BORROWER_USER_RECLAIM_SKIPPED.fetch_add(1, Ordering::Relaxed);
+            }
+            crate::process::address_space::ReclaimStats::default()
+        };
+
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 22, pid);
+        // Clear per-process kernel structures (idempotent clears).
+        let ipc_q_len = self.processes[idx].ipc_queue.len();
+        self.processes[idx].ipc_queue.clear();
+        self.processes[idx].ipc_reply = None;
+        self.processes[idx].ipc_endpoint = None;
+        self.processes[idx].pending_call = None;
+        self.processes[idx].ipc_call_outcome = None;
+        self.processes[idx].ipc_next_deadline_tick = None;
+        self.processes[idx].ipc_deadline = None;
+        self.processes[idx].ipc_recv_deadline = None;
+        self.processes[idx].ipc_recv_timeout = None;
+        self.processes[idx].pending_reply_wait = None;
+        self.processes[idx].ipc_reply_target = None;
+        self.processes[idx].deferred_reply_targets.clear();
+        self.processes[idx].next_deferred_reply_token = 0;
+        #[cfg(feature = "authenticated_cancel_test")]
+        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-clean", reaped_generation);
+        #[cfg(feature = "native_session_race_test")]
+        if matches!(
+            self.processes[idx].name_str(),
+            "session-race-probe" | "session-racer"
+        ) || (cfg!(feature = "native_session_h4_test") && self.processes[idx].name_str() == "sunlightctl"
+        ) || (cfg!(feature = "authenticated_reply_test") && self.processes[idx].name_str() == "reply-peer") {
+            let broker = crate::capability::CAP_BROKER.lock();
+            crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
+            crate::capability::session_race::inventory(&broker);
+        }
+        #[cfg(feature = "native_session_race_test")]
+        if self.processes[idx].name_str() == "uac_service" {
+            crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-ipc-retired pid={} incarnation={} vm={} reply_target=none deferred_targets=0 pending_call=none cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+        }
+        let dead_pid = self.processes[idx].pid;
+        for process in &mut self.processes {
+            process
+                .deferred_reply_targets
+                .retain(|entry| entry.target.call.pid != dead_pid);
+        }
+        self.processes[idx].capabilities = Vec::new();
+        self.processes[idx].env = crate::process::env::EnvMap::new();
+        self.processes[idx].cwd = alloc::string::String::new();
+        // Only the group owner holds the (currently empty) SEM_UNDO table.
+        // Reaping this owner was deferred until every Linux worker reaped.
+        self.processes[idx].linux_sysv_semadj = None;
+        // The dying context has already pivoted to its per-core static idle
+        // stack. Drop the task-local kernel stack before exposing Reaped.
+        self.processes[idx].kernel_stack = None;
+        self.processes[idx].kernel_stack_top = 0;
+        self.processes[idx].context_rsp = 0;
+        self.processes[idx].fs_base = 0;
+        self.processes[idx].fx_state = crate::arch::x86_64::cpu::FxState::initial();
+        self.processes[idx].exit_cleanup_pending = false;
+
+        // A dead manager cannot retain lifecycle receipts indefinitely.
+        for process in &mut self.processes {
+            if process
+                .service_reap_watcher
+                .is_some_and(|(owner, _)| owner == pid)
+            {
+                process.service_reap_watcher = None;
+            }
+        }
+
+        self.processes[idx].service_reap_receipt = [
+            reaped_generation,
+            reclaim.user_frames as u64,
+            reclaim.page_tables as u64,
+            crate::PMM.lock().free_page_count() as u64,
+        ];
+
+        // Ownership evidence outlives both the old manager and reusable process slots.
+        let identity = sunlight_ipc::supervision::Identity {
+            pid: pid as u64,
+            generation: reaped_generation,
+        };
+        let owner_live = self.supervision.manager().is_some_and(|owner| {
+            self.processes.iter().any(|p| {
+                Self::supervision_identity(p) == owner
+                    && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            })
+        });
+        self.supervision.reaped(
+            identity,
+            [
+                reclaim.user_frames as u64,
+                reclaim.page_tables as u64,
+                self.processes[idx].service_reap_receipt[3],
+            ],
+            owner_live,
+        );
+        self.supervision.manager_reaped(identity);
+
+        // Mark as fully reaped: slot is now safe for add_process reuse.
+        self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(feature = "production_grant_test")]
+        if self.processes[idx].ppid == 0xF4F0 {
+            crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+        }
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::reaped(&self.processes[idx]);
+        if is_native_borrower {
+            NATIVE_BORROWERS_REAPED.fetch_add(1, Ordering::Relaxed);
+        }
+
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 23, pid);
+        serial_println!(
+                "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
+                pid,
+                name,
+                reclaim.user_frames,
+                reclaim.page_tables,
+                reclaim.swap_blocks,
+                ipc_q_len
+            );
+        serial_println!(
+                "[SCHED] process_resource_cleanup_summary pid={} frames={} pts={} swap={} ipc_entries_cleared={}",
+                pid, reclaim.user_frames, reclaim.page_tables, reclaim.swap_blocks, ipc_pending_before
+            );
+        serial_println!(
+            "[SCHED] ipc_entries_reaped_for_process pid={} cleared_msgs={}",
+            pid,
+            ipc_pending_before
+        );
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 24, pid);
+        // This diagnostic scans the entire 16 GiB owner table, including for
+        // borrower threads that own no user frames. Keep the opt-in audit,
+        // but do not delay IRQ return for an O(MAX_FRAMES) report in normal use.
+        #[cfg(any(feature = "verbose_diag", feature = "scheduler_b_test"))]
+        crate::PMM.lock().diagnostic_report_pid(pid as u32);
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::checkpoint(self, 25, pid);
+        if is_native_borrower {
+            let (created, finished, reaped, skipped, stale_wakes, reused, max_live) =
+                native_borrower_lifecycle_counts();
+            // One aggregate marker when the current borrower population has
+            // drained is enough to prove the lifecycle without logging an
+            // additional diagnostic for every reaped worker.
+            if reaped == created {
+                serial_println!(
+                        "[THREAD-LIFECYCLE] created={} finished={} reaped={} borrower_reclaim_skipped={} stale_wake_rejected={} borrower_slots_reused={} max_live={}",
+                        created,
+                        finished,
+                        reaped,
+                        skipped,
+                        stale_wakes,
+                        reused,
+                        max_live
+                    );
+            }
+        }
+    }
+
+    fn clear_linux_child_tid(&mut self, idx: usize) {
+        let address = self.processes[idx]
+            .linux_state()
+            .map(|state| state.tid_address)
+            .unwrap_or(0);
+        if address == 0 {
+            return;
+        }
+        if let Some(state) = self.processes[idx].linux_state_mut() {
+            state.tid_address = 0;
+        }
+        let Some(hhdm) = crate::HHDM_REQ
+            .response()
+            .map(|resp| x86_64::VirtAddr::new(resp.offset))
+        else {
+            return;
+        };
+        let identity = self.processes[idx].address_space.identity();
+        if crate::memory::user::write_process_atomic_u32(
+            &self.processes[idx],
+            hhdm,
+            address,
+            0,
+        )
+        .is_ok()
+        {
+            #[cfg(all(debug_assertions, feature = "syscall_stack_test"))]
+            regression::completion(self, idx);
+            let woken = self.wake_linux_futex(identity, address, 1);
+            serial_println!(
+                "[HELIOS-THREAD] clear_child_tid tid={} addr={:#x} woken={}",
+                self.processes[idx].pid,
+                address,
+                woken
+            );
+        }
+    }
+
+    /// Centralized reaper. Walks Finished processes and reaps those that are
+    /// safe (not current on any core, not queued, not mid-transition).
+    /// A reaped slot transitions to ProcessState::Reaped and may be reused by
+    /// add_process. Never reaps the current task of any CPU.
+    pub fn reap_finished_processes(&mut self) {
+        let online = self.online_cores;
+        let mut in_use = [usize::MAX; MAX_CORES];
+        for c in 0..online.min(MAX_CORES) {
+            in_use[c] = self.core_current_task(c).unwrap_or(usize::MAX);
+        }
+
+        for idx in 0..self.processes.len() {
+            if self.processes[idx].state != ProcessState::Finished {
+                continue;
+            }
+            if self.stack_is_pinned(idx) {
+                continue;
+            }
+            self.processes[idx].slice_credit = None;
+            if !self.processes[idx].exit_cleanup_pending {
+                // Stale Finished without pending flag: promote to Reaped for reuse safety.
+                self.processes[idx].state = ProcessState::Reaped;
+                continue;
+            }
+            // Safety checks per requirements
+            if self.processes[idx].owning_core != u8::MAX {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=owning_core",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            if self.processes[idx].queued_on_core != u8::MAX {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=queued",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            if in_use[..online].iter().any(|&cur| cur == idx) {
+                #[cfg(feature = "verbose_diag")]
+                serial_println!(
+                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=in_use_on_core",
+                    self.processes[idx].pid,
+                    idx
+                );
+                continue;
+            }
+            // Do not reap if this idx is still the current on its last known owner (paranoia).
+            if let Some(c) = self.live_owner_core(idx) {
+                if c < online {
+                    #[cfg(feature = "verbose_diag")]
+                    serial_println!(
+                        "[SCHED] process_reap_blocked_reason pid={} idx={} reason=live_owner",
+                        self.processes[idx].pid,
+                        idx
+                    );
+                    continue;
+                }
+            }
+
+            #[cfg(feature = "verbose_diag")]
+            serial_println!(
+                "[SCHED] process_reap_attempt pid={} idx={} name='{}'",
+                self.processes[idx].pid,
+                idx,
+                self.processes[idx].name_str()
+            );
+            // Perform the resource cleanup; it will set Reaped on success.
+            self.reap_process_resources(idx);
+        }
+    }
+
+    /// Force-terminate a process by pid (SIGKILL / external kill path).
+    ///
+    /// Idempotent: returns `false` only when the pid is unknown or already
+    /// Finished/Reaped. A task that is currently executing on a core is marked
+    /// Finished and that core is asked to reschedule; reaping waits until the
+    /// owner core has dropped the task (same pattern as address-space borrower
+    /// teardown). Returns `true` once termination has been accepted.
+    pub fn terminate_process_by_pid(&mut self, pid: usize, code: i32, reason: &str) -> bool {
+        serial_println!(
+            "[SCHED] process_exit_begin external pid={} reason={}",
+            pid,
+            reason
+        );
+        let Some(idx) = self.process_index_by_pid(pid) else {
+            return false;
+        };
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            return false;
+        }
+
+        serial_println!(
+            "[SCHED] process_mark_finished pid={} name='{}' reason={} code={} (external)",
+            pid,
+            self.processes[idx].name_str(),
+            reason,
+            code
+        );
+
+        self.cancel_foreground(idx, 1);
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
+        self.processes[idx].exit_code = code;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.abort();
+        self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].slice_credit = None;
+        self.processes[idx].exit_cleanup_pending = true;
+        if self.processes[idx].native_thread {
+            note_native_borrower_finished();
+        }
+        self.remove_from_ready_queues(idx);
+        note_process_finished(pid, self.processes[idx].name_str());
+        serial_println!(
+            "[SCHED] terminating pid={} name='{}' reason={}",
+            pid,
+            self.processes[idx].name_str(),
+            reason
+        );
+
+        let parent_pid = self.processes[idx].ppid;
+        let parent_waiting = self
+            .process_mut_by_pid(parent_pid)
+            .is_some_and(|parent| parent.wait_child == Some(pid));
+        if parent_waiting {
+            self.wake_pid(parent_pid);
+        }
+
+        #[cfg(feature = "native_session_h4_test")]
+        crate::capability::session_h4::forced_exit(&self.processes[idx]);
+        // If still live on a core, leave owning_core set so the owner core's
+        // schedule_tick deschedules it safely; request a preemption.
+        let owning = self.processes[idx].owning_core;
+        if owning != u8::MAX {
+            request_reschedule_on(owning as usize);
+            return true;
+        }
+
+        self.reap_process_resources(idx);
+        true
+    }
+
+    /// Apply a fatal pending signal on a live process slot without requiring a
+    /// syscall return. Used from the timer tick so CPU-bound userspace loops
+    /// cannot dodge Default-disposition termination forever.
+    ///
+    /// Returns true if the process was marked Finished.
+    pub fn apply_pending_fatal_signal(&mut self, idx: usize) -> bool {
+        if idx >= self.processes.len() {
+            return false;
+        }
+        if matches!(
+            self.processes[idx].state,
+            ProcessState::Finished | ProcessState::Reaped
+        ) {
+            return false;
+        }
+        let Some(code) = self.processes[idx]
+            .foreground
+            .forced_exit
+            .take()
+            .or_else(|| self.processes[idx].signal_state.take_fatal_exit_code())
+        else {
+            return false;
+        };
+        let pid = self.processes[idx].pid;
+        serial_println!(
+            "[SCHED] process_mark_finished pid={} name='{}' reason=pending-fatal-signal code={}",
+            pid,
+            self.processes[idx].name_str(),
+            code
+        );
+        self.cancel_foreground(idx, 1);
+        #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+        self.doorbell_peer_exit(idx);
+        self.processes[idx].exit_code = code;
+        #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+        self.processes[idx].measurement.abort();
+        self.processes[idx].state = ProcessState::Finished;
+        self.processes[idx].slice_credit = None;
+        self.processes[idx].exit_cleanup_pending = true;
+        if self.processes[idx].native_thread {
+            note_native_borrower_finished();
+        }
+        self.remove_from_ready_queues(idx);
+        note_process_finished(pid, self.processes[idx].name_str());
+
+        let parent_pid = self.processes[idx].ppid;
+        let parent_waiting = self
+            .process_mut_by_pid(parent_pid)
+            .is_some_and(|parent| parent.wait_child == Some(pid));
+        if parent_waiting {
+            self.wake_pid(parent_pid);
+        }
+
+        let owning = self.processes[idx].owning_core;
+        if owning != u8::MAX {
+            request_reschedule_on(owning as usize);
+        } else {
+            self.reap_process_resources(idx);
+        }
+        true
+    }
+
+    pub fn get_process_burst_info(&self, pid: usize) -> Option<(u32, ProcessState)> {
+        self.processes
+            .iter()
+            .find(|p| p.pid == pid)
+            .map(|p| (p.burst_score, p.state))
+    }
+
+    // ── Entry point ──────────────────────────────────────────────────────────
+
+    /// Enter the first ready process; never returns.
+    pub fn run_forever(&mut self) -> ! {
+        let mut first = None;
+        for (i, p) in self.processes.iter().enumerate() {
+            serial_println!(
+                "[SCHED] process {} '{}' state={:?}",
+                i,
+                p.name_str(),
+                p.state
+            );
+            if matches!(p.state, ProcessState::Ready) {
+                first = Some(i);
+                break;
+            }
+        }
+
+        if let Some(idx) = first {
+            self.set_core_current_task(0, Some(idx));
+            self.processes[idx].state = ProcessState::Running;
+            self.processes[idx].last_run_tick = self.global_tick;
+            self.processes[idx].owning_core = 0;
+            self.processes[idx].queued_on_core = u8::MAX;
+            self.start_charging_runtime(idx);
+
+            for i in 0..self.processes.len() {
+                if i != idx && matches!(self.processes[i].state, ProcessState::Ready) {
+                    self.enqueue_process_once(i);
+                }
+            }
+
+            let rsp = self.processes[idx].context_rsp;
+            serial_println!(
+                "[SCHED] Entering process {} '{}' at rsp={:#x}",
+                idx,
+                self.processes[idx].name_str(),
+                rsp
+            );
+            unsafe {
+                self.processes[idx].address_space.activate();
+                self.processes[idx].fx_state.restore();
+            }
+            unsafe {
+                context::iretq_to_context(rsp);
+            }
+        }
+
+        serial_println!("[SCHED] No user processes, entering idle");
+        idle_loop();
+    }
+
+    // ── Diagnostics ──────────────────────────────────────────────────────────
+
+    pub fn diagnostic_report(&self) {
+        if option_env!("SUNLIGHT_UI_AUDIO_DIAGNOSTICS").is_some() {
+            let caps = crate::capability::CAP_BROKER.lock();
+            for (ep, owner) in caps.debug_endpoints() {
+                if let Some(process) = self.processes.iter().find(|p| p.pid == owner) {
+                    let name = process.name_str();
+                    if name.contains("audio")
+                        || name.contains("media")
+                        || name.contains("display")
+                        || name.contains("melody")
+                    {
+                        let (depth, callers) = crate::ipc::with_shard(ep, |bus| {
+                            (bus.pending_count(ep), bus.pending_callers_count(ep))
+                        });
+                        serial_println!(
+                            "[IPC-AUDIO] name={} owner={} ep={} depth={} callers={}",
+                            name,
+                            owner,
+                            ep,
+                            depth,
+                            callers
+                        );
+                    }
+                }
+            }
+        }
+        let ipc = crate::ipc::diagnostic_snapshot();
+        let caps = crate::capability::diagnostic_snapshot();
+        crate::memory::security::diagnostic_report();
+        serial_println!(
+            "[IPC-DIAG] depth={} high_water={} enqueue={} dequeue={} full={} coalesced={} deadline={} cancel={} late_reply={} peer_closed={} public_send={} rights_escalation={} unauthorized_register={} live_conflict={} stale_remove={} dead_replace={} stale_lookup={} registry_full={} send_only_reject={}",
+            ipc.current_queue_depth,
+            ipc.high_watermark,
+            ipc.enqueue_count,
+            ipc.dequeue_count,
+            ipc.queue_full_count,
+            ipc.coalesced_notification_count,
+            ipc.deadline_expired_count,
+            ipc.explicit_cancel_count,
+            ipc.late_reply_drop_count,
+            ipc.peer_closed_wake_count,
+            caps.public_send_derivations,
+            caps.rejected_rights_escalations,
+            ipc.unauthorized_register_count,
+            ipc.conflicting_live_registration_count,
+            ipc.stale_registration_removal_count,
+            ipc.successful_dead_replacement_count,
+            ipc.stale_lookup_count,
+            ipc.registry_full_rejection_count,
+            ipc.send_only_management_reject_count
+        );
+        let created = PROCESS_CREATED.load(Ordering::Relaxed);
+        let finished = PROCESS_FINISHED.load(Ordering::Relaxed);
+        let alive = self
+            .processes
+            .iter()
+            .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+            .count();
+        let finished_slots = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Finished)
+            .count();
+        let _reaped_slots = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Reaped)
+            .count();
+
+        let (ready_high, ready_mid, ready_low) = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+            let rr_ready: usize = (0..self.online_cores)
+                .map(|c| CORE_STATES[c].lock().rr_queue.len())
+                .sum();
+            (0, rr_ready, 0)
+        } else {
+            (
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_high.len())
+                    .sum(),
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_medium.len())
+                    .sum(),
+                (0..self.online_cores)
+                    .map(|c| self.cores[c].run_queue_low.len())
+                    .sum(),
+            )
+        };
+
+        let blocked_ipc = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnIpc)
+            .count();
+        let blocked_timer = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnTimer)
+            .count();
+        let blocked_io = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::BlockedOnIo)
+            .count();
+
+        // Minimal post-fix ownership invariant validation (diagnostics only).
+        // Reports on the five listed bad states.
+        for (_idx, p) in self.processes.iter().enumerate() {
+            if matches!(p.state, ProcessState::Finished | ProcessState::Reaped) {
+                continue;
+            }
+            let oc = p.owning_core;
+            let qc = p.queued_on_core;
+            let is_running = p.state == ProcessState::Running;
+            let is_ready = p.state == ProcessState::Ready;
+            if is_running && qc != u8::MAX {
+                serial_println!(
+                    "[SCHED-INV] VIOLATION running task queued pid={} qc={}",
+                    p.pid,
+                    qc
+                );
+            }
+            if oc != u8::MAX && qc != u8::MAX && oc != qc {
+                serial_println!(
+                    "[SCHED-INV] VIOLATION owning!=queued pid={} oc={} qc={} state={:?}",
+                    p.pid,
+                    oc,
+                    qc,
+                    p.state
+                );
+            }
+            if is_running && oc == u8::MAX {
+                serial_println!("[SCHED-INV] VIOLATION running no owner pid={}", p.pid);
+            }
+            if is_ready && qc != u8::MAX {
+                // Verify presence would require full queue scan; flag flag vs core only here.
+            }
+            if oc != u8::MAX && is_ready {
+                // A Ready with owner set means live window (pre-desched wakeup); ok if not enqueued elsewhere.
+            }
+        }
+        // Also verify no duplicates across queues by counting presence vs flag (lightweight).
+        let mut queued_flag_count = 0usize;
+        for p in self.processes.iter() {
+            if p.queued_on_core != u8::MAX {
+                queued_flag_count += 1;
+            }
+        }
+        let total_in_queues = ready_high + ready_mid + ready_low;
+        if queued_flag_count != total_in_queues {
+            serial_println!(
+                "[SCHED-INV] VIOLATION queued_flag_count={} != queues_len={}",
+                queued_flag_count,
+                total_in_queues
+            );
+        }
+
+        // Cross check: any running task present in any queue, or queued flag pointing to wrong core's queues.
+        for c in 0..self.online_cores {
+            let queue_iter: alloc::vec::Vec<usize> = if SCHEDULER_MODE == SchedulerMode::RoundRobin
+            {
+                let core = CORE_STATES[c].lock();
+                core.rr_queue.iter().copied().collect()
+            } else {
+                let core = &self.cores[c];
+                core.run_queue_high
+                    .iter()
+                    .chain(core.run_queue_medium.iter())
+                    .chain(core.run_queue_low.iter())
+                    .copied()
+                    .collect()
+            };
+            for q in queue_iter {
+                if q < self.processes.len() {
+                    let p = &self.processes[q];
+                    if p.state == ProcessState::Running {
+                        serial_println!("[SCHED-INV] VIOLATION running task in queue pid={} in_core={} owning={}", p.pid, c, p.owning_core);
+                    }
+                    if p.queued_on_core as usize != c {
+                        serial_println!("[SCHED-INV] VIOLATION queued flag mismatch pid={} flag={} actual_queue_core={}", p.pid, p.queued_on_core, c);
+                    }
+                }
+            }
+        }
+        // Check running tasks are not duplicated in foreign queues
+        for (idx, p) in self.processes.iter().enumerate() {
+            if p.state == ProcessState::Running && p.owning_core != u8::MAX {
+                let owner = p.owning_core as usize;
+                // scan other cores queues
+                for oc in 0..self.online_cores {
+                    if oc == owner {
+                        continue;
+                    }
+                    let present = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                        CORE_STATES[oc].lock().rr_queue.iter().any(|&x| x == idx)
+                    } else {
+                        let co = &self.cores[oc];
+                        co.run_queue_high
+                            .iter()
+                            .chain(&co.run_queue_medium)
+                            .chain(&co.run_queue_low)
+                            .any(|&x| x == idx)
+                    };
+                    if present {
+                        serial_println!("[SCHED-INV] VIOLATION running on {} present in foreign queue {} pid={}", owner, oc, p.pid);
+                    }
+                }
+            }
+        }
+
+        serial_println!(
+            "[SCHED-DIAG] created={} finished={} alive={} finished_slots={} ready_queues=({},{},{}) delta_created-finished={} blocked_ipc={} blocked_timer={} blocked_io={} online_cores={}",
+            created, finished, alive, finished_slots, ready_high, ready_mid, ready_low,
+            created.saturating_sub(finished),
+            blocked_ipc, blocked_timer, blocked_io, self.online_cores
+        );
+        for core_id in 0..self.online_cores {
+            let (
+                current_task,
+                current_ticks,
+                q_high,
+                q_mid,
+                q_low,
+                timer_ticks,
+                context_switches,
+                steal_count,
+                stale_pops,
+                empty_pops,
+            ) = if SCHEDULER_MODE == SchedulerMode::RoundRobin {
+                let core = CORE_STATES[core_id].lock();
+                (
+                    core.current_task,
+                    core.current_ticks,
+                    0,
+                    core.rr_queue.len(),
+                    0,
+                    core.timer_ticks,
+                    core.context_switches,
+                    core.steal_count,
+                    core.stale_pops,
+                    core.empty_pops,
+                )
+            } else {
+                let core = &self.cores[core_id];
+                (
+                    core.current_task,
+                    core.current_ticks,
+                    core.run_queue_high.len(),
+                    core.run_queue_medium.len(),
+                    core.run_queue_low.len(),
+                    core.timer_ticks,
+                    core.context_switches,
+                    core.steal_count,
+                    core.stale_pops,
+                    core.empty_pops,
+                )
+            };
+
+            match current_task {
+                Some(idx) if idx < self.processes.len() => {
+                    let process = &self.processes[idx];
+                    serial_println!(
+                        "[SCHED-DIAG] core={} current_idx={} pid={} name='{}' state={:?} ticks={} queues=({},{},{})",
+                        core_id,
+                        idx,
+                        process.pid,
+                        process.name_str(),
+                        process.state,
+                        current_ticks,
+                        q_high,
+                        q_mid,
+                        q_low
+                    );
+                }
+                _ => {
+                    serial_println!(
+                        "[SCHED-DIAG] core={} current_idx=none ticks={} queues=({},{},{})",
+                        core_id,
+                        current_ticks,
+                        q_high,
+                        q_mid,
+                        q_low
+                    );
+                }
+            }
+            // Minimal extra for runtime matrix: expose ticks/switches per core.
+            serial_println!(
+                "[SCHED-DIAG] core={} timer_ticks={} ctx_switches={} steals={} stale_pops={} empty_pops={}",
+                core_id,
+                timer_ticks,
+                context_switches,
+                steal_count,
+                stale_pops,
+                empty_pops
+            );
+        }
+
+        if alive > 0 && blocked_ipc == alive
+            || (ready_high + ready_mid + ready_low == 0 && blocked_ipc > 0)
+        {
+            serial_println!("[SCHED-DIAG] IPC wait dump:");
+            let caps = crate::capability::CAP_BROKER.lock();
+            for p in self
+                .processes
+                .iter()
+                .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+            {
+                let (pending_call_cap, pending_call_label, resolved_ep, resolved_owner) =
+                    match p.pending_call {
+                        Some(pending) => {
+                            let cap = pending.target_cap;
+                            let msg = pending.msg;
+                            let resolved = caps.debug_resolve_ipc(
+                                crate::capability::CapabilityToken(cap),
+                                crate::capability::CapabilityRights::SEND,
+                            );
+                            match resolved {
+                                Some((ep, owner, _rights)) => (cap, msg.label, ep, owner),
+                                None => (cap, msg.label, u32::MAX, usize::MAX),
+                            }
+                        }
+                        None => (0, 0, u32::MAX, usize::MAX),
+                    };
+                let (receiver_waiting_ep, endpoint_queue_len, waiting_receiver, pending_callers) =
+                    if resolved_ep != u32::MAX {
+                        crate::ipc::with_shard(resolved_ep, |bus| {
+                            (
+                                resolved_ep,
+                                bus.pending_count(resolved_ep),
+                                bus.waiting_receiver_pid(resolved_ep, self)
+                                    .unwrap_or(usize::MAX),
+                                bus.pending_callers_count(resolved_ep),
+                            )
+                        })
+                    } else {
+                        (u32::MAX, 0, usize::MAX, 0)
+                    };
+                if pending_call_cap != 0
+                    && waiting_receiver == resolved_owner
+                    && endpoint_queue_len > 0
+                    && pending_callers > 0
+                    && self.global_tick.saturating_sub(p.block_start_tick) > 50
+                {
+                    serial_println!(
+                        "[IPC-DIAG] stuck rendezvous caller={} server={} ep={} label={:#x}",
+                        p.pid,
+                        resolved_owner,
+                        resolved_ep,
+                        pending_call_label
+                    );
+                };
+                let pending_reply_wait = match p.pending_reply_wait {
+                    Some((ep, msg)) => (ep, msg.label),
+                    None => (0, 0),
+                };
+                serial_println!(
+                    "[SCHED-DIAG] pid={} name='{}' state={:?} ipc_ep={:?} pending_call_cap_present={} pending_call_label={:#x} pending_call_resolved_ep={} pending_call_resolved_owner_pid={} receiver_waiting_ep={} endpoint_queue_len={} endpoint_waiting_receiver_pid={} pending_callers={} reply_wait_ep={} reply_wait_label={} blocked_ticks={}",
+                    p.pid,
+                    p.name_str(),
+                    p.state,
+                    p.ipc_endpoint,
+                    pending_call_cap != 0,
+                    pending_call_label,
+                    resolved_ep,
+                    resolved_owner,
+                    receiver_waiting_ep,
+                    endpoint_queue_len,
+                    waiting_receiver,
+                    pending_callers,
+                    pending_reply_wait.0,
+                    pending_reply_wait.1,
+                    self.global_tick.saturating_sub(p.block_start_tick)
+                );
+            }
+            for (ep, owner) in caps.debug_endpoints() {
+                crate::ipc::with_shard(ep, |bus| {
+                    serial_println!(
+                        "[IPC-DIAG] ep={} owner={} waiting_receiver={} pending_callers={}",
+                        ep,
+                        owner,
+                        bus.waiting_receiver_pid(ep, self).unwrap_or(usize::MAX),
+                        bus.pending_callers_count(ep)
+                    );
+                });
+            }
+        }
+
+        // ── Accounting / leak-detection telemetry (per spec) ───────────────────
+        let live_process_count = self
+            .processes
+            .iter()
+            .filter(|p| !matches!(p.state, ProcessState::Finished | ProcessState::Reaped))
+            .count();
+        let finished_process_count = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Finished)
+            .count();
+        let reaped_process_count = self
+            .processes
+            .iter()
+            .filter(|p| p.state == ProcessState::Reaped)
+            .count();
+        let process_slots_used = self.processes.len();
+        let process_slots_finished = finished_process_count + reaped_process_count;
+
+        // Best-effort kernel heap stats if available (heap module may export).
+        // We log what we can; real numbers come from PMM + allocator diagnostics.
+        let kernel_heap_info = crate::memory::heap::heap_stats();
+
+        // PMM free pages (approx).
+        let pmm_free = crate::PMM.lock().free_page_count();
+
+        // Rough display surface/window counts are userspace-owned; we expose process stats here.
+        // IPC queue/wait snapshot (sampled).
+        let mut ipc_wait_entries: usize = 0;
+        let mut ipc_queue_entries: usize = 0;
+        for p in self.processes.iter() {
+            ipc_queue_entries += p.ipc_queue.len();
+        }
+        crate::ipc::for_all_shards(|bus| {
+            ipc_wait_entries += bus.total_waiter_count();
+        });
+
+        serial_println!(
+            "[SCHED-ACCT] live_process_count={} finished_process_count={} reaped_process_count={} process_slots_used={} process_slots_finished={} ipc_wait_entries={} ipc_queue_entries={}",
+            live_process_count,
+            finished_process_count,
+            reaped_process_count,
+            process_slots_used,
+            process_slots_finished,
+            ipc_wait_entries,
+            ipc_queue_entries
+        );
+        serial_println!(
+            "[SCHED-ACCT] kernel_heap_allocated={} kernel_heap_free={} kernel_heap_reusable={} pmm_free_pages={}",
+            kernel_heap_info.allocated,
+            kernel_heap_info.free,
+            kernel_heap_info.reusable,
+            pmm_free
+        );
+    }
+}
+
+pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
+    use x86_64::structures::paging::{Page, PhysFrame, Size4KiB};
+
+    fn borrower(
+        pid: usize,
+        owner_pid: usize,
+        shared_address_space: crate::process::address_space::SharedAddressSpaceHandle,
+    ) -> Process {
+        crate::process::Process::new_thread(
+            pid,
+            owner_pid,
+            "mm0-thread",
+            shared_address_space,
+            crate::process::fd_table::FdTable::new_boxed(),
+            crate::process::env::EnvMap::new(),
+            0,
+            0,
+            0,
+            alloc::vec::Vec::new(),
+            None,
+            0,
+        )
+    }
+
+    let free_before = crate::PMM.lock().free_page_count();
+    let owner = {
+        let mut pmm = crate::PMM.lock();
+        unsafe { crate::process::Process::new(0xA001, 0, "mm0-owner", &mut pmm, hhdm_offset) }
+    };
+    let pml4 = owner.address_space.pml4_phys;
+    let identity = owner.address_space.identity();
+    let shared_address_space = owner.address_space.shared_handle();
+    let owner_pid = owner.pid;
+    let sentinel_region = crate::process::region::MappingRegion::new(
+        0x40_0000,
+        0x40_1000,
+        crate::process::region::RegionProtection::READ_WRITE,
+        crate::process::region::MappingKind::InternalUserMapping,
+        crate::process::region::RegionPolicy::SYSTEM
+            .union(crate::process::region::RegionPolicy::OWNER_MANAGED),
+        crate::process::region::RegionBacking::Internal(0x4D4D_30),
+    )
+    .expect("MM-0 sentinel ledger range");
+    let sentinel_reservation = owner
+        .address_space
+        .preflight_region(sentinel_region)
+        .expect("MM-0 sentinel ledger reservation");
+
+    // Give the owner a real writable/NX user mapping and sentinel. Borrower
+    // teardown must preserve the frame and every lower page-table level.
+    let sentinel_frame = {
+        let mut pmm = crate::PMM.lock();
+        let frame_addr = pmm
+            .alloc_frame_owned(owner_pid as u32)
+            .expect("MM-0 sentinel frame");
+        assert!(crate::memory::security::sanitize_user_frame(
+            frame_addr,
+            hhdm_offset
+        ));
+        let page = Page::<Size4KiB>::from_start_address(x86_64::VirtAddr::new(0x40_0000))
+            .expect("MM-0 sentinel page");
+        let frame = unsafe { PhysFrame::from_start_address_unchecked(frame_addr) };
+        unsafe {
+            owner
+                .address_space
+                .map_page(
+                    page,
+                    frame,
+                    crate::memory::security::user_stack_flags(),
+                    &mut pmm,
+                    hhdm_offset,
+                )
+                .expect("MM-0 owner sentinel mapping");
+            owner
+                .address_space
+                .commit_region(sentinel_reservation)
+                .expect("MM-0 sentinel ledger commit");
+            (hhdm_offset + frame_addr.as_u64())
+                .as_mut_ptr::<u64>()
+                .write_volatile(0x534C_4D4D_3054_4852);
+        }
+        frame_addr
+    };
+    let free_with_owner_mapping = crate::PMM.lock().free_page_count();
+
+    let mut sched = Scheduler::new();
+    sched.processes.push(owner);
+
+    // Generation one: twelve concurrent borrower records all finish and reap.
+    for offset in 0..12 {
+        sched
+            .processes
+            .push(borrower(0xA100 + offset, owner_pid, shared_address_space));
+    }
+    assert_eq!(sched.live_address_space_borrowers(0), 12);
+    for borrower in &sched.processes[1..=12] {
+        assert_eq!(borrower.address_space.region_count(), 1);
+        assert_eq!(
+            borrower.address_space.lookup_region(0x40_0000),
+            Some(sentinel_region)
+        );
+    }
+    let stale_wakes_before = STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed);
+    for idx in 1usize..=12 {
+        let pid = sched.processes[idx].pid;
+        sched.processes[idx].state = ProcessState::Finished;
+        sched.processes[idx].exit_cleanup_pending = true;
+        sched.reap_process_resources(idx);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+        assert!(sched.processes[idx].kernel_stack.is_none());
+        assert_eq!(sched.processes[idx].queued_on_core, u8::MAX);
+        sched.enqueue_ready(idx);
+        sched.enqueue_ready(idx);
+        assert_eq!(sched.diagnostic_ready_occurrences(idx), 0);
+        sched.wake_pid(pid);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+        assert_eq!(sched.processes[0].address_space.pml4_phys, pml4);
+        assert_eq!(sched.processes[0].address_space.region_count(), 1);
+        let sentinel = unsafe {
+            (hhdm_offset + sentinel_frame.as_u64())
+                .as_ptr::<u64>()
+                .read_volatile()
+        };
+        assert_eq!(sentinel, 0x534C_4D4D_3054_4852);
+    }
+    assert_eq!(
+        STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed),
+        stale_wakes_before + 12
+    );
+    assert_eq!(crate::PMM.lock().free_page_count(), free_with_owner_mapping);
+
+    // Generation two must reuse the twelve Reaped task slots without growing
+    // the table or allowing a generation-one terminal state to wake/run.
+    let slots_before = sched.processes.len();
+    let mut second_generation_slots = alloc::vec::Vec::new();
+    for offset in 0..12 {
+        let idx = sched.add_process(borrower(0xB100 + offset, owner_pid, shared_address_space));
+        assert!(!second_generation_slots.contains(&idx));
+        second_generation_slots.push(idx);
+    }
+    assert_eq!(sched.processes.len(), slots_before);
+    assert_eq!(sched.live_address_space_borrowers(0), 12);
+    for idx in second_generation_slots {
+        sched.processes[idx].state = ProcessState::Finished;
+        sched.processes[idx].exit_cleanup_pending = true;
+        sched.reap_process_resources(idx);
+        assert_eq!(sched.processes[idx].state, ProcessState::Reaped);
+    }
+    assert_eq!(crate::PMM.lock().free_page_count(), free_with_owner_mapping);
+
+    // Owner exit still contains a live borrower and delays address-space
+    // reclamation until that borrower is terminal and Reaped.
+    let live_idx = sched.add_process(borrower(0xC100, owner_pid, shared_address_space));
+    sched.processes[0].state = ProcessState::Finished;
+    sched.processes[0].exit_cleanup_pending = true;
+    sched.reap_process_resources(0);
+    assert_eq!(sched.processes[0].state, ProcessState::Finished);
+    assert_eq!(sched.processes[live_idx].state, ProcessState::Finished);
+    sched.reap_process_resources(live_idx);
+    assert_eq!(sched.processes[live_idx].state, ProcessState::Reaped);
+    sched.reap_process_resources(0);
+    assert_eq!(sched.processes[0].state, ProcessState::Reaped);
+    assert_eq!(crate::PMM.lock().free_page_count(), free_before);
+
+    let mut replacement = {
+        let mut pmm = crate::PMM.lock();
+        unsafe { crate::process::Process::new(0xA002, 0, "mm0-reuse", &mut pmm, hhdm_offset) }
+    };
+    assert_ne!(replacement.address_space.identity(), identity);
+    assert_eq!(replacement.address_space.region_count(), 0);
+    {
+        let mut pmm = crate::PMM.lock();
+        unsafe {
+            replacement
+                .address_space
+                .reclaim_user_space(&mut pmm, hhdm_offset, true);
+        }
+    }
+    crate::serial_println!(
+        "[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK"
+    );
+    crate::serial_println!("[MM-0] thread address-space lifecycle: OK");
+}
+
+// ─── Queue helpers ────────────────────────────────────────────────────────────
+
+fn pop_ready_excluding_current(
+    queue: &mut VecDeque<usize>,
+    processes: &[Process],
+    current: usize,
+    skipped_current: &mut Option<usize>,
+) -> Option<usize> {
+    let mut remaining = queue.len();
+    while remaining > 0 {
+        let Some(idx) = queue.pop_front() else {
+            break;
+        };
+        remaining -= 1;
+
+        if idx >= processes.len() || !matches!(processes[idx].state, ProcessState::Ready) {
+            continue;
+        }
+
+        if idx == current && skipped_current.is_none() {
+            *skipped_current = Some(idx);
+            continue;
+        }
+
+        return Some(idx);
+    }
+    None
+}
+
+/// Per-core idle loop target for synthetic kernel interrupt frames.
+#[no_mangle]
+pub(crate) extern "C" fn core_idle_entry() -> ! {
+    accounting::idle_loop()
+}
+
+/// Build a saved interrupt frame that `iretq`s into [`core_idle_entry`] on a
+/// dedicated kernel stack. Used so a core with no runnable task never resumes a
+/// descheduled (blocked) user context when `idle_context_rsp` was unset.
+fn build_kernel_idle_frame(stack_top: u64) -> u64 {
+    const FRAME_SIZE: u64 = 160;
+    let frame_base = stack_top - FRAME_SIZE;
+    // SAFETY: `frame_base` lies within the per-core idle stack allocated in
+    // `init_core_idle_contexts`.
+    unsafe {
+        let base = frame_base as *mut u64;
+        for i in 0..15 {
+            base.add(i).write_volatile(0);
+        }
+        base.add(15)
+            .write_volatile(core_idle_entry as *const () as usize as u64);
+        base.add(16).write_volatile(0x08); // kernel 64-bit code selector
+        base.add(17).write_volatile(0x202); // IF=1
+        base.add(18).write_volatile(stack_top.saturating_sub(8));
+        base.add(19).write_volatile(0x10); // kernel data selector
+    }
+    frame_base
+}
+
+static mut CORE_IDLE_STACKS: [[u8; crate::process::KERNEL_STACK_SIZE]; MAX_CORES] =
+    [[0; crate::process::KERNEL_STACK_SIZE]; MAX_CORES];
+
+/// Top-of-stack address of the per-core static idle kernel stack for `cpu_id`.
+///
+/// This is the safer resting place for a CPU that has just called
+/// `finish_current_process` (or `terminate_current_user_process`) — it must
+/// `sti; hlt` waiting to be descheduled, but should do so on a static stack
+/// rather than the dying process's heap-allocated `Box<[u8; 32K]> kernel_stack`.
+/// A subsequent cross-core `Scheduler::add_process` can reuse the Finished slot
+/// (`self.processes[id] = process` in this file) which drops the old `Box` and
+/// frees that heap; if a CPU is still halted on the dying kernel stack, the
+/// next timer IRQ pushes the IRET frame into the now-freed heap, and the
+/// resulting `iretq` reads a zeroed/garbage CS and raises `#GP` (err=0) — the
+/// desktop appears frozen because the gpf_handler loops on `hlt`.
+pub(crate) fn core_idle_stack_top(cpu_id: usize) -> u64 {
+    let cpu = cpu_id.min(MAX_CORES - 1);
+    unsafe {
+        core::ptr::addr_of!(CORE_IDLE_STACKS[cpu][crate::process::KERNEL_STACK_SIZE - 1]) as u64 + 1
+    }
+}
+
+fn init_core_idle_contexts(online: usize) {
+    for core_id in 0..online.min(MAX_CORES) {
+        let stack_top = unsafe {
+            core::ptr::addr_of!(CORE_IDLE_STACKS[core_id][crate::process::KERNEL_STACK_SIZE - 1])
+                as u64
+                + 1
+        };
+        let idle_rsp = build_kernel_idle_frame(stack_top);
+        CORE_STATES[core_id].lock().idle_context_rsp = idle_rsp;
+    }
+}
+
+fn idle_loop() -> ! {
+    core_idle_entry();
+}
+
+// ─── Scheduler reschedule requests ────────────────────────────────────────────
+
+#[inline]
+fn reschedule_bit(cpu_id: usize) -> u64 {
+    1u64 << cpu_id.min(63)
+}
+
+/// Check if a reschedule is needed for `cpu_id` and clear only that CPU's bit.
+/// Uses AcqRel: cheaper than SeqCst (no store-load fence) but still correct
+/// because only the owning core ever clears its own bit.
+pub fn check_reschedule_on(cpu_id: usize) -> bool {
+    let requested = RESCHEDULE_MASK.take(cpu_id.min(63));
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    if requested {
+        remote_wake_test::opportunity(cpu_id);
+    }
+    #[cfg(feature = "scheduler_perf_diag")]
+    if requested {
+        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].rearms, 1);
+    }
+    requested
+}
+
+/// Non-consuming peek: returns true if the reschedule bit is set for `cpu_id`
+/// without clearing it. Safe to call without holding the scheduler lock —
+/// each core owns its own bit and no other core clears it.
+#[inline]
+pub fn peek_reschedule_on(cpu_id: usize) -> bool {
+    RESCHEDULE_MASK.pending(cpu_id.min(63))
+}
+
+/// Publish intent; remote callers also claim a coalesced dispatch obligation.
+/// Atomic-only under scheduler/IPC locks. The enclosing IRQ/syscall must flush
+/// after releasing all guards, before returning or entering idle.
+pub fn request_reschedule_on(cpu_id: usize) {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    doorbell_test::requested(cpu_id);
+    assert!(cpu_id < ONLINE_CORES.load(Ordering::Acquire));
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    pin_release_test::requested(cpu_id);
+    let source_cpu = current_cpu_id();
+    #[cfg(feature = "scheduler_perf_diag")]
+    perf::add(&perf::CPU[source_cpu.min(MAX_CORES - 1)].requests, 1);
+    if cpu_id != source_cpu && SCHEDULER_READY.load(Ordering::Acquire) {
+        if RESCHEDULE_MASK.request_delivery(cpu_id) {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+        }
+    } else {
+        RESCHEDULE_MASK.request(cpu_id);
+    }
+}
+
+#[cfg(feature = "scheduler_perf_diag")]
+fn record_perf_dispatch(process: &Process, cpu_id: usize) {
+    let rec = &perf::CPU[cpu_id];
+    perf::add(&rec.dispatches, 1);
+    let dispatch_ns = now_ns();
+    let clock_valid = perf::observe_clock(cpu_id, dispatch_ns);
+    let same_cpu_clock = process.perf_ready_cpu as usize == cpu_id && clock_valid;
+    let waited = if same_cpu_clock {
+        dispatch_ns.saturating_sub(process.perf_ready_since_ns)
+    } else {
+        0
+    };
+    if same_cpu_clock {
+        perf::sample(&rec.runnable_wait, waited);
+    }
+    let class = match process.nice {
+        8 => Some(0),
+        9 => Some(1),
+        10 => Some(2),
+        _ => None,
+    };
+    if let Some(class) = class {
+        perf::add(&rec.nice_dispatches[class], 1);
+        if same_cpu_clock {
+            let mut old = rec.nice_wait_max_ns[class].load(Ordering::Relaxed);
+            while waited > old {
+                match rec.nice_wait_max_ns[class].compare_exchange_weak(
+                    old,
+                    waited,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                ) {
+                    Ok(_) => break,
+                    Err(v) => old = v,
+                }
+            }
+        }
+    }
+}
+
+/// Set the reschedule flag for the current CPU.
+pub fn request_reschedule() {
+    request_reschedule_on(current_cpu_id());
+}
+
+pub(crate) fn diagnostic_dispatch_notifications() -> (u64, u64) {
+    (
+        DISPATCH_NOTIFICATIONS_SENT.load(Ordering::Relaxed),
+        DISPATCH_NOTIFICATIONS_BUSY.load(Ordering::Relaxed),
+    )
+}
+
+/// Publish an interrupt for a native pipe/TTY syscall retry after SYSRET.
+/// This is atomic-only and safe under SCHEDULER; dispatch flushes after dropping
+/// all guards. The pending interrupt parks the caller before it can replay the
+/// blocked syscall repeatedly while waiting for the periodic timer.
+pub(crate) fn request_park_after_sysret() {
+    let cpu_id = current_cpu_id();
+    request_reschedule_on(cpu_id);
+    if RESCHEDULE_MASK.request_delivery(cpu_id) {
+        DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+    }
+}
+
+/// Flush coalesced dispatch notifications after scheduler/ring locks are gone.
+/// Call with interrupts disabled and no scheduler/IPC/core locks held.
+/// Each claimed target is delivered within a finite hardware-attempt budget,
+/// or fails diagnostically. No periodic interrupt or later flush is required.
+pub(crate) fn flush_dispatch_notifications() {
+    let mut pending = DISPATCH_NOTIFICATION_MASK.swap(0, Ordering::AcqRel);
+    // At most MAX_CORES targets, each with a finite immediate retry budget.
+    while pending != 0 {
+        let cpu = pending.trailing_zeros() as usize;
+        let bit = reschedule_bit(cpu);
+        pending &= pending - 1;
+        if cpu >= ONLINE_CORES.load(Ordering::Acquire) {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(bit | pending, Ordering::Release);
+            panic!("remote reschedule target is no longer online: {}", cpu);
+        }
+        if unsafe {
+            crate::arch::x86_64::lapic::send_fixed_ipi_bounded(
+                cpu,
+                crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
+            )
+        } {
+            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+            doorbell_test::sent(cpu);
+            if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+                DISPATCH_NOTIFICATIONS_SENT.fetch_add(1, Ordering::Relaxed);
+            }
+        } else {
+            DISPATCH_NOTIFICATION_MASK.fetch_or(bit | pending, Ordering::Release);
+            if option_env!("SUNLIGHT_PTY_TRACE") == Some("1") {
+                DISPATCH_NOTIFICATIONS_BUSY.fetch_add(1, Ordering::Relaxed);
+            }
+            panic!(
+                "remote reschedule ICR retry exhausted source={} target={}",
+                current_cpu_id(),
+                cpu
+            );
+        }
+    }
+}
+
+/// Queue a voluntary context switch for the first ring-3 instruction after
+/// SYSRET. Call only with interrupts disabled and no scheduler lock held.
+pub fn request_reschedule_after_sysret() {
+    request_park_after_sysret();
+    flush_dispatch_notifications();
+}
+
+pub fn note_process_finished(pid: usize, name: &str) {
+    PROCESS_FINISHED.fetch_add(1, Ordering::Relaxed);
+    serial_println!("[SCHED] FINISHED process pid={} name='{}'", pid, name);
+}
+
+pub fn note_native_borrower_created() {
+    NATIVE_BORROWERS_CREATED.fetch_add(1, Ordering::Relaxed);
+    let live = LIVE_NATIVE_BORROWERS.fetch_add(1, Ordering::Relaxed) + 1;
+    MAX_LIVE_NATIVE_BORROWERS.fetch_max(live, Ordering::Relaxed);
+}
+
+fn note_native_borrower_finished() {
+    NATIVE_BORROWERS_FINISHED.fetch_add(1, Ordering::Relaxed);
+    let _ = LIVE_NATIVE_BORROWERS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |live| {
+        Some(live.saturating_sub(1))
+    });
+}
+
+pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize, usize, usize) {
+    (
+        NATIVE_BORROWERS_CREATED.load(Ordering::Relaxed),
+        NATIVE_BORROWERS_FINISHED.load(Ordering::Relaxed),
+        NATIVE_BORROWERS_REAPED.load(Ordering::Relaxed),
+        BORROWER_USER_RECLAIM_SKIPPED.load(Ordering::Relaxed),
+        STALE_TERMINAL_WAKEUPS_REJECTED.load(Ordering::Relaxed),
+        BORROWER_SLOTS_REUSED.load(Ordering::Relaxed),
+        MAX_LIVE_NATIVE_BORROWERS.load(Ordering::Relaxed),
+    )
+}
+
+/// Mark the current process finished and release resources.
+///
+/// Returns the **per-core static idle stack top** (NOT the dying process's
+/// heap-allocated `kernel_stack_top`) for the caller's final `sti; hlt` loop.
+/// Callers (`process_exit` in `arch/x86_64/syscall.rs` and
+/// `terminate_current_user_process` in `arch/x86_64/interrupts.rs`) pivot RSP
+/// to this value, release the physical handoff pin in that same asm block,
+/// then halt until the next timer IRQ dispatches. Until the post-pivot store,
+/// neither the task's stack nor its slot may be reclaimed, including borrowers
+/// whose caller-owned user stack can be freed after a join observes Reaped.
+///
+/// Returning the dying process's own `kernel_stack_top` here would leave the
+/// CPU halted on a `Box`-owned per-process stack whose memory is freed when
+/// `Scheduler::add_process` later reuses the Finished slot via
+/// `self.processes[id] = process`. The next timer IRQ would push an IRET
+/// frame into freed heap and the resulting `iretq` would load a zeroed CS
+/// and raise `#GP` (err=0) — the desktop "freeze after several app launches
+/// from the file manager" symptom.
+pub fn finish_current_process(code: i32, reason: &str) -> u64 {
+    serial_println!("[SCHED] process_exit_begin reason={}", reason);
+    #[cfg(all(
+        feature = "native_session_h4_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
+    let h4_exit = crate::capability::session_h4::exit_attempt();
+    #[cfg(all(
+        feature = "native_session_h4_test",
+        not(feature = "authenticated_completion_exit_test")
+    ))]
+    let mut sched = SCHEDULER.try_lock().unwrap_or_else(|| {
+        if let Some((pid, incarnation)) = h4_exit {
+            crate::capability::session_h3_trace::record(73, pid as u64, incarnation, 1, 0, 0);
+        }
+        SCHEDULER.lock()
+    });
+    #[cfg(not(any(
+        feature = "native_session_h4_test",
+        feature = "authenticated_completion_exit_test",
+        feature = "fastlane_channel_test"
+    )))]
+    let mut sched = SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    #[allow(unused_mut)]
+    let (mut sched, channel_exit_actor) = crate::capability::channel_race::acquire(if reason == "exit" {20} else {0}, 0);
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    let (mut sched, bell_exit_actor) = {
+        drop(sched);
+        crate::capability::bell_race::acquire(if reason == "exit" {20} else {0}, 0)
+    };
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    let (mut sched, exit_selected) =
+        crate::capability::completion_exit::acquire(crate::capability::completion_exit::EXIT, 0);
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::exit_acquired(sched.current_process());
+    let cpu_id = current_cpu_id();
+    let idle_top = core_idle_stack_top(cpu_id);
+    let cur = match sched.process_index_for_cpu(cpu_id) {
+        Some(idx) => idx,
+        None => {
+            serial_println!(
+                "[SCHED] WARN: finish_current_process with no current_task on cpu={}",
+                cpu_id
+            );
+            return idle_top;
+        }
+    };
+    if cur >= sched.processes.len() {
+        serial_println!(
+            "[SCHED] WARN: finish_current_process invalid current idx={} cpu={}",
+            cur,
+            cpu_id
+        );
+        return idle_top;
+    }
+
+    sched.pin_outgoing_stack(cpu_id, cur);
+    #[cfg(feature = "scheduler_b_test")]
+    if code == 0 {
+        regression::race_exit(&mut sched, cur);
+    }
+    if matches!(
+        sched.processes[cur].state,
+        crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+    ) {
+        // A remote kill can win just before this task's self-exit. Preserve
+        // that terminal result, but still retire actual execution exactly once
+        // before halting on the idle stack (not at a later timer callback).
+        sched.account_current_runtime();
+        sched.stop_execution_clock(cur, false);
+        sched.increment_context_switches(cpu_id);
+        sched.processes[cur].owning_core = u8::MAX;
+        sched.remove_from_ready_queues(cur);
+        sched.set_core_current_task(cpu_id, None);
+        #[cfg(feature = "scheduler_b_test")]
+        {
+            assert!(sched.processes[cur].cpu_charge_since.is_none());
+            assert_eq!(sched.processes[cur].exit_code, 137);
+            assert!(CORE_STATES[cpu_id]
+                .lock()
+                .slice
+                .finish(now_ns(), true)
+                .is_none());
+        }
+        return idle_top;
+    }
+
+    sched.cancel_foreground(cur, 1);
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    sched.doorbell_peer_exit(cur);
+    let my_pid = sched.processes[cur].pid;
+    let is_linux_worker = sched.processes[cur]
+        .linux_tgid
+        .is_some_and(|tgid| tgid != my_pid);
+    // Completion is published by the existing pin-gated reaper after the
+    // final physical handoff, for self-exit and remote termination alike.
+    let my_name_bytes = sched.processes[cur].name;
+    let my_name_len = my_name_bytes.iter().position(|b| *b == 0).unwrap_or(32);
+    let my_name = core::str::from_utf8(&my_name_bytes[..my_name_len]).unwrap_or("?");
+    serial_println!(
+        "[SCHED] process_mark_finished pid={} name='{}' reason={} code={}",
+        my_pid,
+        my_name,
+        reason,
+        code
+    );
+
+    #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+    sched.processes[cur].measurement.abort();
+    sched.account_current_runtime();
+    sched.stop_execution_clock(cur, false);
+    sched.increment_context_switches(cpu_id); // exiting task -> idle
+    let is_borrower = sched.processes[cur].native_thread;
+    {
+        let process = &mut sched.processes[cur];
+        process.exit_code = code;
+        process.state = crate::process::ProcessState::Finished;
+        process.exit_cleanup_pending = true;
+        process.owning_core = u8::MAX;
+        process.queued_on_core = u8::MAX;
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    sched.fastlane_mapping_sweep();
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::marked(exit_selected, &sched.processes[cur]);
+    if is_borrower {
+        note_native_borrower_finished();
+    }
+    sched.set_core_current_task(cpu_id, None);
+    sched.remove_from_ready_queues(cur);
+    if sched.processes[cur].owns_address_space && sched.processes[cur].linux_tgid.is_none() {
+        sched.terminate_address_space_borrowers(cur, "address-space-owner-exit");
+    }
+    if !is_linux_worker && sched.processes[cur].linux_tgid.is_none() {
+        sched.close_owned_ipc_endpoints(my_pid);
+    }
+
+    serial_println!(
+        "[SCHED] terminating pid={} name='{}' reason={}",
+        my_pid,
+        my_name,
+        reason
+    );
+    note_process_finished(my_pid, &my_name);
+
+    let parent_pid = sched.processes[cur].ppid;
+    let parent_waiting = sched
+        .process_mut_by_pid(parent_pid)
+        .is_some_and(|parent| !is_linux_worker && parent.wait_child == Some(my_pid));
+    if parent_waiting {
+        sched.wake_pid(parent_pid);
+    }
+
+    #[cfg(feature = "native_session_h4_test")]
+    crate::capability::session_h4::exit_releasing(&sched.processes[cur]);
+    #[cfg(feature = "authenticated_completion_exit_test")]
+    crate::capability::completion_exit::finished(
+        crate::capability::completion_exit::EXIT,
+        exit_selected,
+        &sched,
+        0,
+    );
+    #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
+    crate::capability::channel_race::finished(channel_exit_actor, 0);
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    crate::capability::bell_race::finished(bell_exit_actor, 0);
+    idle_top
+}
+
+// ─── Globals and wrappers ─────────────────────────────────────────────────────
+
+/// Global scheduler instance.
+pub static SCHEDULER: spin::Mutex<Scheduler> = spin::Mutex::new(Scheduler::new());
+
+pub fn with_scheduler<F, R>(f: F) -> R
+where
+    F: FnOnce(&mut Scheduler) -> R,
+{
+    f(&mut SCHEDULER.lock())
+}
+
+/// Enter the first ready user process without holding the scheduler lock across
+/// the privilege transition.
+pub fn enter_first_process() -> ! {
+    let (rsp, fs_base, kernel_stack_top) = {
+        let mut sched = SCHEDULER.lock();
+        let mut first = None;
+        for (i, p) in sched.processes.iter().enumerate() {
+            serial_println!(
+                "[SCHED] process {} '{}' state={:?}",
+                i,
+                p.name_str(),
+                p.state
+            );
+            if matches!(p.state, ProcessState::Ready) {
+                first = Some(i);
+                break;
+            }
+        }
+
+        if let Some(idx) = first {
+            sched.set_core_current_task(0, Some(idx));
+            sched.processes[idx].state = ProcessState::Running;
+            sched.processes[idx].last_run_tick = sched.global_tick;
+            sched.processes[idx].owning_core = 0;
+            sched.processes[idx].queued_on_core = u8::MAX;
+            sched.seed_ready_queues_except(idx);
+            // Run queues are now seeded and core 0 has its first task. Release
+            // the AP cores so their next LAPIC timer tick can steal/dispatch.
+            // APs still block on SCHEDULER.lock() until this function drops it.
+            mark_scheduler_ready();
+            let rsp = sched.processes[idx].context_rsp;
+            let fs_base = sched.processes[idx].fs_base;
+            crate::arch::x86_64::syscall_stack::validate(&sched.processes[idx]);
+            let kernel_stack_top = sched.processes[idx].kernel_stack_top;
+            unsafe {
+                sched.processes[idx].address_space.activate();
+                sched.processes[idx].fx_state.restore();
+            }
+            serial_println!(
+                "[SCHED] Entering process {} '{}' at rsp={:#x}",
+                idx,
+                sched.processes[idx].name_str(),
+                rsp
+            );
+            sched.start_charging_runtime(idx);
+            (rsp, fs_base, kernel_stack_top)
+        } else {
+            serial_println!("[SCHED] No user processes, entering idle");
+            drop(sched);
+            idle_loop();
+        }
+    };
+
+    flush_dispatch_notifications();
+    unsafe {
+        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
+        crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(kernel_stack_top);
+        context::iretq_to_context(rsp);
+    }
+}
+
+pub fn current_process_rsp() -> u64 {
+    let sched = SCHEDULER.lock();
+    let cpu_id = current_cpu_id();
+    match sched.core_current_task(cpu_id) {
+        Some(idx) => sched.processes[idx].context_rsp,
+        None => 0,
+    }
+}
+
+/// Best-effort current PID for exception diagnostics. Never spins on
+/// `SCHEDULER`; fault handlers may run while that lock is already held.
+pub fn try_current_pid() -> usize {
+    SCHEDULER
+        .try_lock()
+        .map(|sched| sched.current_pid())
+        .unwrap_or(usize::MAX)
+}
+
+// ─── SMP helpers ──────────────────────────────────────────────────────────────
+
+/// Return the current logical CPU index using the initial APIC ID from CPUID.
+///
+/// BSP has APIC ID 0 on all supported platforms. APs are parked until SMP
+/// Phase 1 LAPIC timers are wired; until then this always returns 0 on the
+/// BSP. When per-core timers fire, each AP's CPUID gives its own APIC ID,
+/// mapping directly to an index into CORES[].
+#[inline]
+pub fn current_cpu_id() -> usize {
+    // CPUID leaf 1, EBX[31:24] = initial APIC ID (valid for up to 256 logical CPUs).
+    let apic_id = core::arch::x86_64::__cpuid(1).ebx as usize >> 24;
+    apic_id.min(MAX_CORES - 1)
+}
+
+/// Initialise the per-core scheduler after SMP bring-up.
+///
+/// Called from main.rs after smp::start_aps() with the total number of
+/// logical CPUs (BSP + APs). Sets ONLINE_CORES and the Scheduler's
+/// online_cores field so that enqueue_process(), steal_work(), and
+/// schedule_tick() are aware of all available cores.
+pub fn init_cores(total_cpus: usize) {
+    let count = total_cpus.min(MAX_CORES).max(1);
+    ONLINE_CORES.store(count, Ordering::Release);
+    init_core_idle_contexts(count);
+    {
+        let mut sched = SCHEDULER.lock();
+        sched.online_cores = count;
+        for core_id in 0..count {
+            let idle_rsp = CORE_STATES[core_id].lock().idle_context_rsp;
+            sched.cores[core_id].idle_context_rsp = idle_rsp;
+        }
+    }
+    for core_id in 0..count {
+        CORE_STATES[core_id].lock().rr_queue.reserve(128);
+    }
+    serial_println!(
+        "[SCHED] Per-core work-stealing scheduler: {} online core(s)",
+        count
+    );
+}
+
+pub mod context;

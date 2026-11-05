@@ -1,0 +1,34 @@
+{
+  "firmware-bsp": [
+    "rg",
+    "-n",
+    "bsp_lapic_id|processor_id|lapic_id|bootstrap|extra_argument",
+    "kernel/src/arch/x86_64/cpu_identity.rs",
+    "kernel/src/arch/x86_64/cpu_topology.rs",
+    "kernel/src/arch/x86_64/smp.rs"
+  ],
+  "cpu-local-ownership": [
+    "rg",
+    "-n",
+    "logical|ap_slot|TSS|RSP0|IST|rsp0|nmi_stack_top|select\\(",
+    "kernel/src/arch/x86_64/smp.rs",
+    "kernel/src/arch/x86_64/syscall_stack.rs",
+    "kernel/src/arch/x86_64/interrupts.rs"
+  ],
+  "scheduler-remote-tls-fp": [
+    "rg",
+    "-n",
+    "cpu_mask|target_core|stack_is_pinned|wait_for_pin|fs_base|fx_state|wake_native_futex|request_reschedule",
+    "kernel/src/sched/mod.rs",
+    "kernel/src/sched/handoff.rs",
+    "kernel/src/sched/thread_admission.rs",
+    "kernel/src/arch/x86_64/syscall.rs"
+  ],
+  "ipi-tlb": [
+    "rg",
+    "-n",
+    "destination|apic_id|send_ipi|send_nmi|ack|sequence|active_cpu",
+    "kernel/src/arch/x86_64/lapic.rs",
+    "kernel/src/memory/tlb.rs"
+  ]
+}

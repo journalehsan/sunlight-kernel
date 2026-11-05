@@ -1,0 +1,13 @@
+{
+  "status": "PARTIAL",
+  "missing": [
+    "forced_native_race/final_global_slot",
+    "forced_native_race/final_vm_slot",
+    "forced_native_race/parent_exit",
+    "forced_native_race/vm_teardown",
+    "forced_native_race/exec",
+    "forced_native_race/immediate_child_exit",
+    "forced_native_race/concurrent_reap_reuse",
+    "forced_native_race/prepublication_cancel"
+  ]
+}

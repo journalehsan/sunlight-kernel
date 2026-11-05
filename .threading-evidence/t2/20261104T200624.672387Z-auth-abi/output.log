@@ -1,0 +1,52 @@
+swapgs
+mov QWORD PTR gs:0x8,rsp
+cmp QWORD PTR gs:0x0,0x0
+je ffffffff8003a476 <_RNvNtNtNtCs6nGMxd93LXx_15sunlight_kernel4arch6x86_647syscall13syscall_entry+0x86>
+mov rsp,QWORD PTR gs:0x0
+sub rsp,0x100
+and rsp,0xfffffffffffffff0
+push QWORD PTR gs:0x8
+swapgs
+push r15
+push r14
+push r13
+push r12
+push r11
+push r10
+push r9
+push r8
+push rbp
+push rdi
+push rsi
+push rdx
+push rcx
+push rbx
+push rax
+mov rdi,rsp
+mov rbx,rsp
+and rsp,0xfffffffffffffff0
+call ffffffff80063ab0 <syscall_dispatch>
+mov rsp,rbx
+mov QWORD PTR [rsp],rax
+pop rax
+pop rbx
+pop rcx
+pop rdx
+pop rsi
+pop rdi
+pop rbp
+pop r8
+pop r9
+pop r10
+pop r11
+pop r12
+pop r13
+pop r14
+pop r15
+or r11,0x200
+pop rsp
+sysretq
+cli
+hlt
+jmp ffffffff8003a476 <_RNvNtNtNtCs6nGMxd93LXx_15sunlight_kernel4arch6x86_647syscall13syscall_entry+0x86>
+Emitted syscall ABI and negative controls: PASS

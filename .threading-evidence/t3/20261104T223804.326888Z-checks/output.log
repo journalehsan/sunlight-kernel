@@ -1,0 +1,2006 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Blocking waiting for file lock on build directory
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+    Checking sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 17.75s
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-net v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+    Checking sunlight-block v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+    Checking sunlight-ipc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+    Checking sunlight-virtio v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+    Checking sunlight-smbios v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+    Checking sunlight-elf v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-elf)
+    Checking sunlight-sensors v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+    Checking sunlight-compat-linux v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+   Compiling sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+warning: manual `RangeInclusive::contains` implementation
+   --> sunlight-sensors/src/lib.rs:288:5
+    |
+288 |     v >= TEMP_MIN_SANE_MC && v <= TEMP_MAX_SANE_MC
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(TEMP_MIN_SANE_MC..=TEMP_MAX_SANE_MC).contains(&v)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+    = note: `#[warn(clippy::manual_range_contains)]` on by default
+
+warning: manual `!RangeInclusive::contains` implementation
+   --> sunlight-sensors/src/lib.rs:471:12
+    |
+471 |         if tj < 60 || tj > 120 {
+    |            ^^^^^^^^^^^^^^^^^^^ help: use: `!(60..=120).contains(&tj)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: manual case-insensitive ASCII comparison
+   --> sunlight-smbios/src/lib.rs:221:27
+    |
+221 |             .all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_ignore_case_cmp
+    = note: `#[warn(clippy::manual_ignore_case_cmp)]` on by default
+help: consider using `.eq_ignore_ascii_case()` instead
+    |
+221 -             .all(|(x, y)| x.to_ascii_lowercase() == y.to_ascii_lowercase())
+221 +             .all(|(x, y)| x.eq_ignore_ascii_case(y))
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+  --> sunlight-virtio/src/blk.rs:72:5
+   |
+72 | /     pub unsafe fn init(
+73 | |         io_base: u16,
+74 | |         queue_phys: u64,
+75 | |         queue_virt: u64,
+76 | |         req_phys: u64,
+77 | |         req_virt: u64,
+78 | |     ) -> Option<Self> {
+   | |_____________________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+   = note: `#[warn(clippy::missing_safety_doc)]` on by default
+
+warning: using `contains()` instead of `iter().any()` is more efficient
+   --> sunlight-smbios/src/lib.rs:279:5
+    |
+279 |     PLACEHOLDERS.iter().any(|p| *p == lower)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `PLACEHOLDERS.contains(&lower)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_contains
+    = note: `#[warn(clippy::manual_contains)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:211:5
+    |
+211 |     pub unsafe fn read_block(&mut self, lba: u64, buf: &mut [u8; 512]) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:221:5
+    |
+221 |     pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/blk.rs:230:5
+    |
+230 |     pub unsafe fn flush(&mut self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: `sunlight-sensors` (lib) generated 2 warnings (run `cargo clippy --fix --lib -p sunlight-sensors -- ` to apply 2 suggestions)
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:336:5
+    |
+336 | /     pub unsafe fn init(
+337 | |         info: &VirtioGpuPciInfo,
+338 | |         hhdm: u64,
+339 | |         ctrl_q_phys: u64,
+...   |
+348 | |         cursor_virt: u64,
+349 | |     ) -> Option<Self> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:470:5
+    |
+470 |     pub unsafe fn get_display_info(&mut self) -> Option<(u32, u32)> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:482:5
+    |
+482 |     pub unsafe fn get_display_modes(&mut self) -> Option<[VirtioGpuDisplayOne; 16]> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:506:5
+    |
+506 | /     pub unsafe fn resource_create_2d(
+507 | |         &mut self,
+508 | |         resource_id: u32,
+509 | |         format: u32,
+510 | |         w: u32,
+511 | |         h: u32,
+512 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:537:5
+    |
+537 | /     pub unsafe fn resource_attach_backing(
+538 | |         &mut self,
+539 | |         resource_id: u32,
+540 | |         entries: &[VirtioGpuMemEntry],
+541 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: clamp-like pattern without using clamp function
+   --> sunlight-tui/build.rs:165:20
+    |
+165 |         let left = m.xmin.max(-128).min(127) as i8;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `m.xmin.clamp(-128, 127)`
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+    = note: `#[warn(clippy::manual_clamp)]` on by default
+
+warning: manual slice size calculation
+   --> sunlight-virtio/src/gpu.rs:563:27
+    |
+563 |         let entries_len = (n * core::mem::size_of::<VirtioGpuMemEntry>()) as u32;
+    |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `core::mem::size_of_val(entries)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_slice_size_calculation
+    = note: `#[warn(clippy::manual_slice_size_calculation)]` on by default
+
+warning: clamp-like pattern without using clamp function
+   --> sunlight-tui/build.rs:167:19
+    |
+167 |         let top = top_raw.max(-128).min(127) as i8;
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `top_raw.clamp(-128, 127)`
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_clamp
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:586:5
+    |
+586 | /     pub unsafe fn set_scanout(
+587 | |         &mut self,
+588 | |         scanout_id: u32,
+589 | |         resource_id: u32,
+590 | |         w: u32,
+591 | |         h: u32,
+592 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:616:5
+    |
+616 | /     pub unsafe fn transfer_to_host_2d(
+617 | |         &mut self,
+618 | |         resource_id: u32,
+619 | |         x: u32,
+...   |
+623 | |         stride: u32,
+624 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+    Checking sunlight-fat v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:649:5
+    |
+649 | /     pub unsafe fn resource_flush(
+650 | |         &mut self,
+651 | |         resource_id: u32,
+652 | |         x: u32,
+...   |
+655 | |         h: u32,
+656 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:679:5
+    |
+679 | /     pub unsafe fn update_cursor(
+680 | |         &mut self,
+681 | |         scanout_id: u32,
+682 | |         resource_id: u32,
+...   |
+686 | |         hot_y: u32,
+687 | |     ) -> Result<(), u32> {
+    | |________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/gpu.rs:712:5
+    |
+712 |     pub unsafe fn move_cursor(&mut self, scanout_id: u32, x: u32, y: u32) -> Result<(), u32> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-virtio/src/gpu.rs:800:5
+    |
+800 | /     unsafe fn ctrl3(
+801 | |         &mut self,
+802 | |         cmd_phys: u64,
+803 | |         cmd_len: u32,
+...   |
+808 | |         rsp_type_v: *const u32,
+809 | |     ) -> u32 {
+    | |____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-virtio/src/gpu.rs:855:5
+    |
+855 | /     unsafe fn submit2(
+856 | |         q: &mut Virtq,
+857 | |         q_idx: u16,
+858 | |         d0_phys: u64,
+...   |
+863 | |         notify_mult: u32,
+864 | |     ) {
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+   --> sunlight-virtio/src/gpu.rs:892:5
+    |
+892 | /     unsafe fn submit3(
+893 | |         q: &mut Virtq,
+894 | |         q_idx: u16,
+895 | |         d0_phys: u64,
+...   |
+902 | |         notify_mult: u32,
+903 | |     ) {
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: this operation has no effect
+   --> sunlight-tui/build.rs:249:17
+    |
+249 |             img[didx + 0] = 0xFF; // B
+    |                 ^^^^^^^^ help: consider reducing it to: `didx`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#identity_op
+    = note: `#[warn(clippy::identity_op)]` on by default
+
+warning: manual implementation of `.is_multiple_of()`
+  --> compat-linux/src/affinity.rs:10:35
+   |
+10 |     if cpusetsize < MASK_BYTES || cpusetsize % core::mem::size_of::<u64>() != 0 {
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!cpusetsize.is_multiple_of(core::mem::size_of::<u64>())`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+   = note: `#[warn(clippy::manual_is_multiple_of)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:128:1
+    |
+128 | pub unsafe fn pci_read8(bus: u8, slot: u8, func: u8, offset: u8) -> u8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:140:1
+    |
+140 | pub unsafe fn read_bar_mmio_base(bus: u8, slot: u8, func: u8, bar_idx: u8) -> Option<u64> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:165:1
+    |
+165 | pub unsafe fn find_virtio_gpu() -> Option<VirtioGpuPciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:270:1
+    |
+270 | pub unsafe fn find_virtio_blk() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:298:1
+    |
+298 | pub unsafe fn find_virtio_net() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:328:1
+    |
+328 | pub unsafe fn find_virtio_rng() -> Option<(u8, u8, u8, u16)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:353:1
+    |
+353 | pub unsafe fn probe_vmxnet3() -> Result<Option<Vmxnet3PciInfo>, Vmxnet3ProbeError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:408:1
+    |
+408 | pub unsafe fn find_vmxnet3() -> Option<Vmxnet3PciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:417:1
+    |
+417 | pub unsafe fn probe_vmware_svga() -> Result<Option<VmwareSvgaPciInfo>, VmwareSvgaProbeError> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:475:1
+    |
+475 | pub unsafe fn find_vmware_svga() -> Option<VmwareSvgaPciInfo> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:480:1
+    |
+480 | pub unsafe fn vmware_svga_present() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:484:1
+    |
+484 | pub unsafe fn find_vmware_svga_bdf() -> Option<(u8, u8, u8)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this returns a `Result<_, ()>`
+  --> compat-linux/src/open_flags.rs:19:1
+   |
+19 | pub fn parse(raw: u64) -> Result<OpenFlags, ()> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use a custom `Error` type instead
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_unit_err
+   = note: `#[warn(clippy::result_unit_err)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:668:1
+    |
+668 | pub unsafe fn vmxnet3_present() -> bool {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:673:1
+    |
+673 | pub unsafe fn find_vmxnet3_bdf() -> Option<(u8, u8, u8)> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:692:1
+    |
+692 | pub unsafe fn pci_read32(bus: u8, slot: u8, func: u8, offset: u8) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: you should consider adding a `Default` implementation for `RuleSet<N>`
+   --> compat-linux/src/lib.rs:112:5
+    |
+112 | /     pub const fn new() -> Self {
+113 | |         Self { rules: Vec::new() }
+114 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+    = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+    |
+111 + impl<const N: usize> Default for RuleSet<N> {
+112 +     fn default() -> Self {
+113 +         Self::new()
+114 +     }
+115 + }
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:702:1
+    |
+702 | pub unsafe fn pci_write32(bus: u8, slot: u8, func: u8, offset: u8, value: u32) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:714:1
+    |
+714 | pub unsafe fn outl(port: u16, val: u32) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:724:1
+    |
+724 | pub unsafe fn inl(port: u16) -> u32 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:736:1
+    |
+736 | pub unsafe fn outb(port: u16, val: u8) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: you should consider adding a `Default` implementation for `RuleIndex<U, G, R>`
+   --> compat-linux/src/lib.rs:129:5
+    |
+129 | /     pub const fn new() -> Self {
+130 | |         Self {
+131 | |             uid_rules: LinearMap::new(),
+132 | |             gid_rules: LinearMap::new(),
+...   |
+135 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+128 + impl<const U: usize, const G: usize, const R: usize> Default for RuleIndex<U, G, R> {
+129 +     fn default() -> Self {
+130 +         Self::new()
+131 +     }
+132 + }
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:746:1
+    |
+746 | pub unsafe fn inb(port: u16) -> u8 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:758:1
+    |
+758 | pub unsafe fn outw(port: u16, val: u16) {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/pci.rs:768:1
+    |
+768 | pub unsafe fn inw(port: u16) -> u16 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: `sunlight-smbios` (lib) generated 2 warnings (run `cargo clippy --fix --lib -p sunlight-smbios -- ` to apply 2 suggestions)
+warning: you should consider adding a `Default` implementation for `MockCapabilityBroker<N>`
+   --> compat-linux/src/lib.rs:231:5
+    |
+231 | /     pub const fn new() -> Self {
+232 | |         Self {
+233 | |             next_token: 1,
+234 | |             table: LinearMap::new(),
+235 | |         }
+236 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+230 + impl<const N: usize> Default for MockCapabilityBroker<N> {
+231 +     fn default() -> Self {
+232 +         Self::new()
+233 +     }
+234 + }
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:338:5
+    |
+338 |     pub unsafe fn reg_write(io_base: u16, index: u32, value: u32) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:347:5
+    |
+347 |     pub unsafe fn reg_read(io_base: u16, index: u32) -> u32 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:365:5
+    |
+365 |     pub unsafe fn negotiate_version(io_base: u16) -> Result<u32, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:380:5
+    |
+380 |     pub unsafe fn probe_device(pci: &VmwareSvgaPciInfo) -> Result<SvgaProbeInfo, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:458:5
+    |
+458 | /     pub unsafe fn activate(
+459 | |         pci: &VmwareSvgaPciInfo,
+460 | |         fifo_virt: u64,
+461 | |         host_w: u32,
+462 | |         host_h: u32,
+463 | |         boot_fb_phys: Option<u64>,
+464 | |     ) -> Result<Self, SvgaError> {
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:580:5
+    |
+580 | /     pub unsafe fn apply_policy_mode(
+581 | |         &mut self,
+582 | |         host_w: u32,
+583 | |         host_h: u32,
+584 | |     ) -> Result<bool, SvgaError> {
+    | |________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:718:5
+    |
+718 |     pub unsafe fn set_mode(&mut self, width: u32, height: u32, bpp: u32) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:774:5
+    |
+774 |     pub unsafe fn set_exact_mode(&mut self, width: u32, height: u32) -> Result<bool, SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: manual `!Range::contains` implementation
+  --> sunlight-fat/src/fat/write.rs:99:16
+   |
+99 |             if next >= FAT_EOC || next < 2 {
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+   = note: `#[warn(clippy::manual_range_contains)]` on by default
+
+warning: the following explicit lifetimes could be elided: 'a
+   --> sunlight-fat/src/fat/write.rs:107:21
+    |
+107 |     fn split_parent<'a>(path: &'a [u8]) -> Result<(&'a [u8], &'a [u8]), FatError> {
+    |                     ^^         ^^                   ^^        ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+    = note: `#[warn(clippy::needless_lifetimes)]` on by default
+help: elide the lifetimes
+    |
+107 -     fn split_parent<'a>(path: &'a [u8]) -> Result<(&'a [u8], &'a [u8]), FatError> {
+107 +     fn split_parent(path: &[u8]) -> Result<(&[u8], &[u8]), FatError> {
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:823:5
+    |
+823 | /     pub unsafe fn set_mode_with_fallbacks(
+824 | |         &mut self,
+825 | |         candidates: &[(u32, u32, &'static str)],
+826 | |     ) -> Result<&'static str, SvgaError> {
+    | |________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:932:5
+    |
+932 |     pub unsafe fn fifo_write(&mut self, words: &[u32]) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:159:16
+    |
+159 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-virtio/src/svga.rs:967:5
+    |
+967 |     pub unsafe fn update_rect(&mut self, x: u32, y: u32, w: u32, h: u32) -> Result<(), SvgaError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: `sunlight-compat-linux` (lib) generated 5 warnings (run `cargo clippy --fix --lib -p sunlight-compat-linux -- ` to apply 4 suggestions)
+warning: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:242:16
+    |
+242 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: the loop variable `disk_index` is used to index `slots`
+   --> sunlight-fat/src/fat/write.rs:316:27
+    |
+316 |         for disk_index in 0..lfn_count {
+    |                           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `#[warn(clippy::needless_range_loop)]` on by default
+help: consider using an iterator and enumerate()
+    |
+316 -         for disk_index in 0..lfn_count {
+316 +         for (disk_index, <item>) in slots.iter().enumerate().take(lfn_count) {
+    |
+
+warning: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat/write.rs:360:16
+    |
+360 |             if next >= FAT_EOC || next < 2 {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&next)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: `sunlight-virtio` (lib) generated 51 warnings (run `cargo clippy --fix --lib -p sunlight-virtio -- ` to apply 1 suggestion)
+warning: manual `Range::contains` implementation
+    --> kernel/build.rs:1078:5
+     |
+1078 |     entry >= 0x400000 && entry < 0x0000_8000_0000_0000
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(0x400000..0x0000_8000_0000_0000).contains(&entry)`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+     = note: `#[warn(clippy::manual_range_contains)]` on by default
+
+warning: manual `!Range::contains` implementation
+   --> sunlight-fat/src/fat.rs:132:12
+    |
+132 |         if val >= FAT_EOC || val < 2 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `!(2..FAT_EOC).contains(&val)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: `sunlight-fat` (lib) generated 7 warnings (run `cargo clippy --fix --lib -p sunlight-fat -- ` to apply 6 suggestions)
+    Checking sunlight-fs v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+warning: `sunlight-tui` (build script) generated 3 warnings
+warning: `sunlight-kernel` (build script) generated 1 warning
+warning: manual `!RangeInclusive::contains` implementation
+   --> sunlight-fs/src/passwd.rs:254:12
+    |
+254 |         if b < b'0' || b > b'9' {
+    |            ^^^^^^^^^^^^^^^^^^^^ help: use: `!(b'0'..=b'9').contains(&b)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+    = note: `#[warn(clippy::manual_range_contains)]` on by default
+
+warning: this assertion has a constant value
+   --> sunlight-fs/src/vfs.rs:528:9
+    |
+528 |         debug_assert!(MAX_NAME_83 <= VFS_NAME_MAX);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: consider moving this into a const block: `const { assert!(..) }`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#assertions_on_constants
+    = note: `#[warn(clippy::assertions_on_constants)]` on by default
+
+warning: large size difference between variants
+   --> sunlight-fs/src/vfs.rs:559:1
+    |
+559 | / pub enum FsNode<D: BlockDevice = NullDevice> {
+560 | |     Ram(RamFs),
+    | |     ---------- the largest variant contains at least 13224 bytes
+561 | |     Fat(FatFs<D>),
+    | |     ------------- the second-largest variant contains at least 2391 bytes
+562 | | }
+    | |_^ the entire enum is at least 13224 bytes
+    |
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+   --> sunlight-fs/src/vfs.rs:560:5
+    |
+560 |     Ram(RamFs),
+    |     ^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+    = note: `#[warn(clippy::large_enum_variant)]` on by default
+
+warning: this `map_or` can be simplified
+    --> sunlight-fs/src/vfs.rs:1070:16
+     |
+1070 |             if best.map_or(true, |(_, best_len, _)| len > best_len) {
+     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_map_or
+     = note: `#[warn(clippy::unnecessary_map_or)]` on by default
+help: use `is_none_or` instead
+     |
+1070 -             if best.map_or(true, |(_, best_len, _)| len > best_len) {
+1070 +             if best.is_none_or(|(_, best_len, _)| len > best_len) {
+     |
+
+warning: `sunlight-fs` (lib) generated 4 warnings (run `cargo clippy --fix --lib -p sunlight-fs -- ` to apply 2 suggestions)
+warning: this returns a `Result<_, ()>`
+    --> ipc/src/lib.rs:5435:1
+     |
+5435 | pub fn native_poll(fds: &mut [NativePollFd], timeout_ms: i32) -> Result<usize, ()> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: use a custom `Error` type instead
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#result_unit_err
+     = note: `#[warn(clippy::result_unit_err)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-tui/src/draw.rs:100:1
+    |
+100 | / pub fn progress_bar(
+101 | |     fb: &mut Framebuffer,
+102 | |     x: u32,
+103 | |     y: u32,
+...   |
+108 | |     fill_color: u32,
+109 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-tui/src/draw.rs:123:1
+    |
+123 | / pub fn spinner_frame(
+124 | |     fb: &mut Framebuffer,
+125 | |     cx: u32,
+126 | |     cy: u32,
+...   |
+131 | |     color: u32,
+132 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: manual arithmetic check found
+   --> sunlight-tui/src/draw.rs:133:24
+    |
+133 |       let inner_radius = if radius > thickness {
+    |  ________________________^
+134 | |         radius - thickness
+135 | |     } else {
+136 | |         0
+137 | |     };
+    | |_____^ help: replace it with: `radius.saturating_sub(thickness)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#implicit_saturating_sub
+    = note: `#[warn(clippy::implicit_saturating_sub)]` on by default
+
+warning: the following explicit lifetimes could be elided: 'a
+ --> sunlight-tui/src/fmt.rs:7:16
+  |
+7 | pub fn fmt_u32<'a>(buf: &'a mut [u8; 20], n: u32) -> &'a str {
+  |                ^^        ^^                           ^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+  = note: `#[warn(clippy::needless_lifetimes)]` on by default
+help: elide the lifetimes
+  |
+7 - pub fn fmt_u32<'a>(buf: &'a mut [u8; 20], n: u32) -> &'a str {
+7 + pub fn fmt_u32(buf: &mut [u8; 20], n: u32) -> &str {
+  |
+
+warning: the following explicit lifetimes could be elided: 'a
+  --> sunlight-tui/src/fmt.rs:29:16
+   |
+29 | pub fn fmt_hex<'a>(buf: &'a mut [u8; 20], n: u64) -> &'a str {
+   |                ^^        ^^                           ^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+help: elide the lifetimes
+   |
+29 - pub fn fmt_hex<'a>(buf: &'a mut [u8; 20], n: u64) -> &'a str {
+29 + pub fn fmt_hex(buf: &mut [u8; 20], n: u64) -> &str {
+   |
+
+warning: the following explicit lifetimes could be elided: 'a
+   --> sunlight-tui/src/fmt.rs:107:16
+    |
+107 | pub fn fmt_mib<'a>(buf: &'a mut [u8; 32], used: u32, total: u32) -> &'a str {
+    |                ^^        ^^                                          ^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_lifetimes
+help: elide the lifetimes
+    |
+107 - pub fn fmt_mib<'a>(buf: &'a mut [u8; 32], used: u32, total: u32) -> &'a str {
+107 + pub fn fmt_mib(buf: &mut [u8; 32], used: u32, total: u32) -> &str {
+    |
+
+warning: doc list item without indentation
+   --> sunlight-tui/src/font.rs:125:5
+    |
+125 | /// Transparent mode: renders only foreground pixels, no background fill.
+    |     ^
+    |
+    = help: if this is supposed to be its own paragraph, add a blank line
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_lazy_continuation
+    = note: `#[warn(clippy::doc_lazy_continuation)]` on by default
+help: indent this line
+    |
+125 | ///     Transparent mode: renders only foreground pixels, no background fill.
+    |     ++++
+
+warning: manual `RangeInclusive::contains` implementation
+  --> sunlight-tui/src/fontatlas.rs:98:17
+   |
+98 |     let ch = if ch >= GLYPH_FIRST && ch <= GLYPH_LAST {
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(GLYPH_FIRST..=GLYPH_LAST).contains(&ch)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+   = note: `#[warn(clippy::manual_range_contains)]` on by default
+
+warning: manual `RangeInclusive::contains` implementation
+   --> sunlight-tui/src/fontatlas.rs:289:30
+    |
+289 |                 .filter(|&w| w >= 4 && w <= 32)
+    |                              ^^^^^^^^^^^^^^^^^ help: use: `(4..=32).contains(&w)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: manual implementation of `.is_multiple_of()`
+  --> sunlight-tui/src/framebuffer.rs:30:57
+   |
+30 |     if width == 0 || height == 0 || pitch_bytes == 0 || pitch_bytes % BYTES_PER_PIXEL != 0 {
+   |                                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!pitch_bytes.is_multiple_of(BYTES_PER_PIXEL)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+   = note: `#[warn(clippy::manual_is_multiple_of)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+  --> sunlight-tui/src/framebuffer.rs:51:5
+   |
+51 |     pub unsafe fn from_limine(addr: *mut u32, width: u32, height: u32, pitch: u32) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+   = note: `#[warn(clippy::missing_safety_doc)]` on by default
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-tui/src/interaction.rs:221:5
+    |
+221 | /     pub fn handle_report(
+222 | |         &mut self,
+223 | |         dx: i16,
+224 | |         dy: i16,
+...   |
+229 | |         widgets: &[Widget],
+230 | |     ) -> PointerOutcome {
+    | |_______________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: `sunlight-ipc` (lib) generated 1 warning
+warning: you should consider adding a `Default` implementation for `LogBuffer`
+  --> sunlight-tui/src/modes/debug.rs:47:5
+   |
+47 | /     pub const fn new() -> Self {
+48 | |         Self {
+49 | |             lines: [LogLine::empty(); LOG_CAPACITY],
+50 | |             head: 0,
+...  |
+53 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+   = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+   |
+46 + impl Default for LogBuffer {
+47 +     fn default() -> Self {
+48 +         Self::new()
+49 +     }
+50 + }
+   |
+
+warning: manual arithmetic check found
+   --> sunlight-tui/src/modes/debug.rs:148:21
+    |
+148 |       let start_idx = if log_count > max_lines as usize {
+    |  _____________________^
+149 | |         log_count - max_lines as usize
+150 | |     } else {
+151 | |         0
+152 | |     };
+    | |_____^ help: replace it with: `log_count.saturating_sub(max_lines as usize)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#implicit_saturating_sub
+
+warning: unsafe function's docs are missing a `# Safety` section
+  --> sunlight-tui/src/splash.rs:39:5
+   |
+39 | /     pub unsafe fn init(
+40 | |         fb_addr: *mut u32,
+41 | |         fb_width: u32,
+42 | |         fb_height: u32,
+...  |
+45 | |         ram_mib: u32,
+46 | |     ) -> Self {
+   | |_____________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: manually reimplementing `div_ceil`
+  --> sunlight-tui/src/tga.rs:47:22
+   |
+47 |             cm_len * ((cm_entry_bits + 7) / 8)
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using `.div_ceil()`: `cm_entry_bits.div_ceil(8)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_div_ceil
+   = note: `#[warn(clippy::manual_div_ceil)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-tui/src/lib.rs:193:1
+    |
+193 | / pub unsafe fn render_tty_shell(
+194 | |     fb_addr: *mut u32,
+195 | |     fb_width: u32,
+196 | |     fb_height: u32,
+...   |
+202 | |     prompt: &[u8],
+203 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (9/7)
+   --> sunlight-tui/src/lib.rs:193:1
+    |
+193 | / pub unsafe fn render_tty_shell(
+194 | |     fb_addr: *mut u32,
+195 | |     fb_width: u32,
+196 | |     fb_height: u32,
+...   |
+202 | |     prompt: &[u8],
+203 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: manual arithmetic check found
+   --> sunlight-tui/src/lib.rs:291:22
+    |
+291 |       let start_line = if line_count > max_visible {
+    |  ______________________^
+292 | |         line_count - max_visible
+293 | |     } else {
+294 | |         0
+295 | |     };
+    | |_____^ help: replace it with: `line_count.saturating_sub(max_visible)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#implicit_saturating_sub
+
+warning: manual `RangeInclusive::contains` implementation
+   --> sunlight-tui/src/lib.rs:351:12
+    |
+351 |         if b >= 0x20 && b <= 0x7E {
+    |            ^^^^^^^^^^^^^^^^^^^^^^ help: use: `(0x20..=0x7E).contains(&b)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-tui/src/lib.rs:393:1
+    |
+393 | / pub unsafe fn render_terminal_grid_interactive(
+394 | |     fb_addr: *mut u32,
+395 | |     fb_width: u32,
+396 | |     fb_height: u32,
+...   |
+410 | |     add_enabled: bool,
+411 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (17/7)
+   --> sunlight-tui/src/lib.rs:393:1
+    |
+393 | / pub unsafe fn render_terminal_grid_interactive(
+394 | |     fb_addr: *mut u32,
+395 | |     fb_width: u32,
+396 | |     fb_height: u32,
+...   |
+410 | |     add_enabled: bool,
+411 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: manual arithmetic check found
+   --> sunlight-tui/src/lib.rs:559:21
+    |
+559 |       let start_row = if rows > max_visible {
+    |  _____________________^
+560 | |         rows - max_visible
+561 | |     } else {
+562 | |         0
+563 | |     };
+    | |_____^ help: replace it with: `rows.saturating_sub(max_visible)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#implicit_saturating_sub
+
+warning: this binary expression can be simplified
+   --> sunlight-tui/src/lib.rs:578:16
+    |
+578 |             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `cell.ch > b' '`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#double_comparisons
+    = note: `#[warn(clippy::double_comparisons)]` on by default
+
+warning: this binary expression can be simplified
+   --> sunlight-tui/src/lib.rs:604:16
+    |
+604 |             if cell.ch != b' ' && cell.ch >= 0x20 && cell.ch <= 0x7E {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `cell.ch > b' '`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#double_comparisons
+
+warning: manual `RangeInclusive::contains` implementation
+   --> sunlight-tui/src/lib.rs:649:12
+    |
+649 |         if ch >= 0x20 && ch <= 0x7E {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^ help: use: `(0x20..=0x7E).contains(&ch)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-tui/src/lib.rs:657:1
+    |
+657 | / pub unsafe fn render_terminal_grid(
+658 | |     fb_addr: *mut u32,
+659 | |     fb_width: u32,
+660 | |     fb_height: u32,
+...   |
+672 | |     input_cursor: usize,
+673 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (15/7)
+   --> sunlight-tui/src/lib.rs:657:1
+    |
+657 | / pub unsafe fn render_terminal_grid(
+658 | |     fb_addr: *mut u32,
+659 | |     fb_width: u32,
+660 | |     fb_height: u32,
+...   |
+672 | |     input_cursor: usize,
+673 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: this function has too many arguments (10/7)
+   --> sunlight-tui/src/lib.rs:883:1
+    |
+883 | / fn draw_user_avatar(
+884 | |     fb: &mut framebuffer::Framebuffer,
+885 | |     cx: u32,       // horizontal center of the slot
+886 | |     icon_top: u32, // top of the 32×32 icon area
+...   |
+893 | |     pressed: bool,
+894 | | ) {
+    | |_^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: manual `RangeInclusive::contains` implementation
+   --> sunlight-tui/src/lib.rs:964:16
+    |
+964 |             if c >= b'a' && c <= b'z' {
+    |                ^^^^^^^^^^^^^^^^^^^^^^ help: use: `(b'a'..=b'z').contains(&c)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_range_contains
+
+warning: unsafe function's docs are missing a `# Safety` section
+    --> sunlight-tui/src/lib.rs:983:1
+     |
+ 983 | / pub unsafe fn render_login_grid_interactive(
+ 984 | |     fb_addr: *mut u32,
+ 985 | |     fb_width: u32,
+ 986 | |     fb_height: u32,
+...    |
+1000 | |     pointer: LoginPointerVisual,
+1001 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (17/7)
+    --> sunlight-tui/src/lib.rs:983:1
+     |
+ 983 | / pub unsafe fn render_login_grid_interactive(
+ 984 | |     fb_addr: *mut u32,
+ 985 | |     fb_width: u32,
+ 986 | |     fb_height: u32,
+...    |
+1000 | |     pointer: LoginPointerVisual,
+1001 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: unsafe function's docs are missing a `# Safety` section
+    --> sunlight-tui/src/lib.rs:1391:1
+     |
+1391 | / pub unsafe fn render_login_grid(
+1392 | |     fb_addr: *mut u32,
+1393 | |     fb_width: u32,
+1394 | |     fb_height: u32,
+...    |
+1407 | |     message: &str,
+1408 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+    --> sunlight-tui/src/lib.rs:1432:1
+     |
+1432 | / pub unsafe fn render_login_dynamic(
+1433 | |     fb_addr: *mut u32,
+1434 | |     fb_width: u32,
+1435 | |     fb_height: u32,
+...    |
+1441 | |     message: &str,
+1442 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (9/7)
+    --> sunlight-tui/src/lib.rs:1432:1
+     |
+1432 | / pub unsafe fn render_login_dynamic(
+1433 | |     fb_addr: *mut u32,
+1434 | |     fb_width: u32,
+1435 | |     fb_height: u32,
+...    |
+1441 | |     message: &str,
+1442 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: unsafe function's docs are missing a `# Safety` section
+    --> sunlight-tui/src/lib.rs:1610:1
+     |
+1610 | / pub unsafe fn render_login_screen(
+1611 | |     fb_addr: *mut u32,
+1612 | |     fb_width: u32,
+1613 | |     fb_height: u32,
+1614 | |     fb_pitch: u32,
+1615 | |     bg: Option<LoginBackground<'_>>,
+1616 | | ) {
+     | |_^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: `sunlight-tui` (lib) generated 36 warnings (run `cargo clippy --fix --lib -p sunlight-tui -- ` to apply 17 suggestions)
+warning: empty line after doc comment
+ --> sunlight-net/src/simulation.rs:4:1
+  |
+4 | / /// This module simulates DHCP responses for testing the network stack integration.
+5 | |
+  | |_^
+6 |   pub struct SimulatedDhcpResponse {
+  |   -------------------------------- the comment documents this struct
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#empty_line_after_doc_comments
+  = note: `#[warn(clippy::empty_line_after_doc_comments)]` on by default
+  = help: if the empty line is unintentional, remove it
+help: if the comment should document the parent module use an inner doc comment
+  |
+1 ~ //! QEMU simulation mode for testing network functionality without full drivers
+2 ~ //!
+3 ~ //! In QEMU user-net mode (not tun/tap), we don't have direct packet access.
+4 ~ //! This module simulates DHCP responses for testing the network stack integration.
+  |
+
+warning: large size difference between variants
+  --> sunlight-net/src/backend.rs:36:1
+   |
+36 | / pub enum NetBackend {
+37 | |     Virtio(VirtioNet),
+   | |     ----------------- the second-largest variant contains at least 312 bytes
+38 | |     Vmxnet3(Vmxnet3),
+   | |     ---------------- the largest variant contains at least 1312 bytes
+39 | | }
+   | |_^ the entire enum is at least 1312 bytes
+   |
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+  --> sunlight-net/src/backend.rs:38:5
+   |
+38 |     Vmxnet3(Vmxnet3),
+   |     ^^^^^^^^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+   = note: `#[warn(clippy::large_enum_variant)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/backend.rs:120:5
+    |
+120 |     pub unsafe fn send(&mut self, frame: &[u8]) -> Result<(), NetError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+    = note: `#[warn(clippy::missing_safety_doc)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/backend.rs:127:5
+    |
+127 |     pub unsafe fn recv(&mut self, frame: &mut [u8]) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: you should consider adding a `Default` implementation for `DnsCache`
+  --> sunlight-net/src/dns/cache.rs:24:5
+   |
+24 | /     pub fn new() -> Self {
+25 | |         DnsCache {
+26 | |             entries: BTreeMap::new(),
+27 | |         }
+28 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+   = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+   |
+23 + impl Default for DnsCache {
+24 +     fn default() -> Self {
+25 +         Self::new()
+26 +     }
+27 + }
+   |
+
+warning: struct `DnsCache` has a public `len` method, but no `is_empty` method
+  --> sunlight-net/src/dns/cache.rs:64:5
+   |
+64 |     pub fn len(&self) -> usize {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#len_without_is_empty
+   = note: `#[warn(clippy::len_without_is_empty)]` on by default
+
+warning: you should consider adding a `Default` implementation for `BytePacketBuffer`
+  --> sunlight-net/src/dns/wire.rs:34:5
+   |
+34 | /     pub fn new() -> BytePacketBuffer {
+35 | |         BytePacketBuffer {
+36 | |             buf: [0; 512],
+37 | |             pos: 0,
+38 | |         }
+39 | |     }
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+   |
+33 + impl Default for BytePacketBuffer {
+34 +     fn default() -> Self {
+35 +         Self::new()
+36 +     }
+37 + }
+   |
+
+warning: you should consider adding a `Default` implementation for `DnsHeader`
+   --> sunlight-net/src/dns/wire.rs:249:5
+    |
+249 | /     pub fn new() -> DnsHeader {
+250 | |         DnsHeader {
+251 | |             id: 0,
+252 | |             recursion_desired: false,
+...   |
+267 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+248 + impl Default for DnsHeader {
+249 +     fn default() -> Self {
+250 +         Self::new()
+251 +     }
+252 + }
+    |
+
+warning: you should consider adding a `Default` implementation for `DnsPacket`
+   --> sunlight-net/src/dns/wire.rs:574:5
+    |
+574 | /     pub fn new() -> DnsPacket {
+575 | |         DnsPacket {
+576 | |             header: DnsHeader::new(),
+577 | |             questions: Vec::new(),
+...   |
+582 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+573 + impl Default for DnsPacket {
+574 +     fn default() -> Self {
+575 +         Self::new()
+576 +     }
+577 + }
+    |
+
+warning: manual checked division
+  --> sunlight-net/src/icmp.rs:50:12
+   |
+50 |         if self.packets_sent == 0 {
+   |            ^^^^^^^^^^^^^^^^^^^^^^ check performed here
+...
+53 |             ((self.packets_sent - self.packets_received) * 100) / self.packets_sent
+   |             ----------------------------------------------------------------------- division performed here
+   |
+   = help: consider using `checked_div`
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_checked_ops
+   = note: `#[warn(clippy::manual_checked_ops)]` on by default
+
+warning: you should consider adding a `Default` implementation for `TcpManager`
+   --> sunlight-net/src/tcp.rs:143:5
+    |
+143 | /     pub fn new() -> Self {
+144 | |         Self {
+145 | |             slots: BTreeMap::new(),
+146 | |             next_generation: 1,
+...   |
+150 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#new_without_default
+help: try adding this
+    |
+142 + impl Default for TcpManager {
+143 +     fn default() -> Self {
+144 +         Self::new()
+145 +     }
+146 + }
+    |
+
+warning: this function has too many arguments (8/7)
+   --> sunlight-net/src/tcp.rs:290:5
+    |
+290 | /     pub fn connect<D: Device>(
+291 | |         &mut self,
+292 | |         owner_pid: u64,
+293 | |         identity: SocketIdentity,
+...   |
+298 | |         _device: &mut D,
+299 | |     ) -> Result<(), TcpError> {
+    | |_____________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/virtio_net.rs:120:5
+    |
+120 | /     pub unsafe fn init(
+121 | |         io_base: u16,
+122 | |         bus: u8,
+123 | |         slot: u8,
+...   |
+132 | |         tx_buf_virt: u64,
+133 | |     ) -> Option<Self> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: this function has too many arguments (12/7)
+   --> sunlight-net/src/virtio_net.rs:120:5
+    |
+120 | /     pub unsafe fn init(
+121 | |         io_base: u16,
+122 | |         bus: u8,
+123 | |         slot: u8,
+...   |
+132 | |         tx_buf_virt: u64,
+133 | |     ) -> Option<Self> {
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+
+warning: the loop variable `i` is used to index `mac`
+   --> sunlight-net/src/virtio_net.rs:156:18
+    |
+156 |         for i in 0..6 {
+    |                  ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+    = note: `#[warn(clippy::needless_range_loop)]` on by default
+help: consider using an iterator and enumerate()
+    |
+156 -         for i in 0..6 {
+156 +         for (i, <item>) in mac.iter_mut().enumerate() {
+    |
+
+warning: the loop variable `i` is used to index `rx_buf_phys`
+   --> sunlight-net/src/virtio_net.rs:199:22
+    |
+199 |             for i in 0..MAX_RX_BUFFERS {
+    |                      ^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+    |
+199 -             for i in 0..MAX_RX_BUFFERS {
+199 +             for (i, <item>) in rx_buf_phys.iter().enumerate().take(MAX_RX_BUFFERS) {
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/virtio_net.rs:294:5
+    |
+294 |     pub unsafe fn recv(&mut self, buf: &mut [u8]) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/virtio_net.rs:383:5
+    |
+383 |     pub unsafe fn send(&mut self, frame: &[u8]) -> Result<(), NetError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/vmxnet3.rs:173:5
+    |
+173 | /     pub unsafe fn init<F>(
+174 | |         bar0: u64,
+175 | |         bar1: u64,
+176 | |         shared_phys: u64,
+...   |
+188 | |     where
+189 | |         F: FnMut(Vmxnet3InitEvent),
+    | |___________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: field assignment outside of initializer for an instance created with Default::default()
+   --> sunlight-net/src/vmxnet3.rs:349:9
+    |
+349 |         counters.device_resets = 1;
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: consider initializing the variable with `backend::NetDeviceCounters { device_resets: 1, device_activations: 1, rx_buffers_posted: (VMXNET3_RING_SIZE - 1) as u64, ..Default::default() }` and removing relevant reassignments
+   --> sunlight-net/src/vmxnet3.rs:348:9
+    |
+348 |         let mut counters = NetDeviceCounters::default();
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#field_reassign_with_default
+    = note: `#[warn(clippy::field_reassign_with_default)]` on by default
+
+warning: the loop variable `index` is used to index `rx_buf_phys`
+   --> sunlight-net/src/vmxnet3.rs:317:22
+    |
+317 |         for index in 0..VMXNET3_RING_SIZE {
+    |                      ^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_range_loop
+help: consider using an iterator and enumerate()
+    |
+317 -         for index in 0..VMXNET3_RING_SIZE {
+317 +         for (index, <item>) in rx_buf_phys.iter().enumerate().take(VMXNET3_RING_SIZE) {
+    |
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/vmxnet3.rs:475:5
+    |
+475 |     pub unsafe fn send(&mut self, frame: &[u8]) -> Result<(), NetError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: unsafe function's docs are missing a `# Safety` section
+   --> sunlight-net/src/vmxnet3.rs:530:5
+    |
+530 |     pub unsafe fn recv(&mut self, frame: &mut [u8]) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#missing_safety_doc
+
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 27 warnings (run `cargo clippy --fix --lib -p sunlight-net -- ` to apply 5 suggestions)
+error: failed to run custom build command for `sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)`
+
+Caused by:
+  process didn't exit successfully: `/home/ehsantor/Projects/sunlightos-kernel/target/debug/build/sunlight-kernel-6a9704cc503435b6/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-env-changed=SUNLIGHT_T2R_CASE
+  cargo:rerun-if-env-changed=SUNLIGHT_T2R_WINNER
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_svg_apps.sh
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_native_std.sh
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/native-std
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-files
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-dialogd
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel
+  cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/docs/icons/SunlightOS
+  /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+
+  --- stderr
+  warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS="-j --jobserver-fds=3,5 --jobserver-auth=3,5"`: cannot open file descriptor 3 from the jobserver environment variable value: Bad file descriptor (os error 9)
+    |
+    = note: the build environment is likely misconfigured
+
+  warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+    * `bin` target `d2-fixture`
+    * `bin` target `d3-leaf`
+    * `bin` target `d3-parent`
+  warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+     Compiling compiler_builtins v0.1.160 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+     Compiling core v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core)
+     Compiling std v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std)
+  warning: this operation has no effect
+     --> sunlight-calendar/build.rs:140:17
+      |
+  140 |             img[didx + 0] = 0xFF;
+      |                 ^^^^^^^^ help: consider reducing it to: `didx`
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#identity_op
+      = note: `#[warn(clippy::identity_op)]` on by default
+
+  warning: this operation has no effect
+    --> services/sunlight-vortex-shell/build.rs:65:17
+     |
+  65 |             img[didx + 0] = 0xFF;
+     |                 ^^^^^^^^ help: consider reducing it to: `didx`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#identity_op
+     = note: `#[warn(clippy::identity_op)]` on by default
+
+  warning: `sunlight-calendar` (build script) generated 1 warning
+  warning: `sunlight-vortex-shell` (build script) generated 1 warning
+     Compiling crc32fast v1.5.0
+     Compiling heapless v0.8.0
+     Compiling sun-font v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-font)
+     Compiling generic-array v0.14.7
+     Compiling sunlight-tz v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tz)
+     Compiling thiserror v2.0.19
+     Compiling serde_core v1.0.228
+     Compiling serde v1.0.228
+     Compiling libm v0.2.16
+     Compiling anyhow v1.0.103
+     Compiling sunlight-calendar v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-calendar)
+     Compiling sunlight-vortex-shell v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell)
+     Compiling sunlight-control-panel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel)
+  warning: sun-font@0.2.6324-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+     Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+     Compiling alloc v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc)
+     Compiling libc v0.2.185
+     Compiling panic_abort v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_abort)
+     Compiling cfg-if v1.0.4
+     Compiling rustc-demangle v0.1.27
+     Compiling rustc-literal-escaper v0.0.7
+     Compiling unwind v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/unwind)
+     Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+     Compiling panic_unwind v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/panic_unwind)
+     Compiling std_detect v0.1.5 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std_detect)
+     Compiling hashbrown v0.17.1
+  error: none of the predicates in this `cfg_select` evaluated to true
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:71:1
+      |
+   71 | / cfg_select! {
+   72 | |     any(
+   73 | |         target_family = "unix",
+   74 | |         target_os = "wasi",
+  ...   |
+  110 | | }
+      | |_^
+
+  error: none of the predicates in this `cfg_select` evaluated to true
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/io/error/mod.rs:1:1
+     |
+   1 | / cfg_select! {
+   2 | |     target_os = "hermit" => {
+   3 | |         mod hermit;
+   4 | |         pub use hermit::*;
+  ...  |
+  51 | | }
+     | |_^
+
+  error[E0432]: unresolved imports `error::decode_error_kind`, `error::errno`, `error::error_string`, `error::is_interrupted`
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/io/mod.rs:44:17
+     |
+  44 | pub use error::{decode_error_kind, errno, error_string, is_interrupted};
+     |                 ^^^^^^^^^^^^^^^^^  ^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^^ no `is_interrupted` in `sys::io::error`
+     |                 |                  |      |
+     |                 |                  |      no `error_string` in `sys::io::error`
+     |                 |                  no `errno` in `sys::io::error`
+     |                 no `decode_error_kind` in `sys::io::error`
+
+  error[E0432]: unresolved imports `super::key::Key`, `super::key::LazyKey`, `super::key::get`, `super::key::set`
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:1:18
+    |
+  1 | use super::key::{Key, LazyKey, get, set};
+    |                  ^^^  ^^^^^^^  ^^^  ^^^ no `set` in `sys::thread_local::key`
+    |                  |    |        |
+    |                  |    |        no `get` in `sys::thread_local::key`
+    |                  |    no `LazyKey` in `sys::thread_local::key`
+    |                  no `Key` in `sys::thread_local::key`
+    |
+  note: module `crate::collections::hash::set` exists but is inaccessible
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/collections/hash/mod.rs:4:1
+    |
+  4 | pub mod set;
+    | ^^^^^^^^^^^^ not accessible
+
+  error[E0432]: unresolved imports `crate::sys::thread_local::key::LazyKey`, `crate::sys::thread_local::key::set`
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/guard/key.rs:6:37
+    |
+  6 | use crate::sys::thread_local::key::{LazyKey, set};
+    |                                     ^^^^^^^  ^^^ no `set` in `sys::thread_local::key`
+    |                                     |
+    |                                     no `LazyKey` in `sys::thread_local::key`
+    |
+  note: module `crate::collections::hash::set` exists but is inaccessible
+   --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/collections/hash/mod.rs:4:1
+    |
+  4 | pub mod set;
+    | ^^^^^^^^^^^^ not accessible
+
+  error[E0425]: cannot find function `fill_bytes` in module `sys`
+    --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/random.rs:67:14
+     |
+  67 |         sys::fill_bytes(bytes)
+     |              ^^^^^^^^^^ not found in `sys`
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:60:42
+      |
+   60 |         let new_ptr = GlobalAlloc::alloc(alloc, new_layout);
+      |                       ------------------ ^^^^^ unsatisfied trait bound
+      |                       |
+      |                       required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/alloc/mod.rs:64:34
+      |
+   64 |             GlobalAlloc::dealloc(alloc, ptr, old_layout);
+      |             -------------------- ^^^^^ unsatisfied trait bound
+      |             |
+      |             required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0425]: cannot find function `fill_bytes` in this scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/random/mod.rs:128:5
+      |
+  128 |     fill_bytes(&mut buf);
+      |     ^^^^^^^^^^ not found in this scope
+
+  error[E0599]: no method named `alloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:110:51
+      |
+  110 |         let ptr: *mut Value<T> = (unsafe { System.alloc(layout) }).cast();
+      |                                                   ^^^^^
+      |
+     ::: /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc` not found for this struct
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate` with a similar name
+      |
+  110 |         let ptr: *mut Value<T> = (unsafe { System.allocate(layout) }).cast();
+      |                                                        +++
+
+  error[E0599]: no method named `dealloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sys/thread_local/os.rs:146:20
+      |
+  146 |             System.dealloc(self.ptr.as_ptr().cast(), layout);
+      |                    ^^^^^^^
+      |
+     ::: /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ----------------- method `dealloc` not found for this struct
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `dealloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `deallocate` with a similar name
+      |
+  146 |             System.deallocate(self.ptr.as_ptr().cast(), layout);
+      |                           +++
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:149:47
+      |
+  149 |                     GlobalAlloc::alloc_zeroed(self, layout)
+      |                     ------------------------- ^^^^ unsatisfied trait bound
+      |                     |
+      |                     required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:151:40
+      |
+  151 |                     GlobalAlloc::alloc(self, layout)
+      |                     ------------------ ^^^^ unsatisfied trait bound
+      |                     |
+      |                     required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:185:52
+      |
+  185 |                 let raw_ptr = GlobalAlloc::realloc(self, ptr.as_ptr(), old_layout, new_size);
+      |                               -------------------- ^^^^ unsatisfied trait bound
+      |                               |
+      |                               required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:227:43
+      |
+  227 |             unsafe { GlobalAlloc::dealloc(self, ptr.as_ptr(), layout) }
+      |                      -------------------- ^^^^ unsatisfied trait bound
+      |                      |
+      |                      required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0277]: the trait bound `System: core::alloc::GlobalAlloc` is not satisfied
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:277:52
+      |
+  277 |                 let raw_ptr = GlobalAlloc::realloc(self, ptr.as_ptr(), old_layout, new_size);
+      |                               -------------------- ^^^^ unsatisfied trait bound
+      |                               |
+      |                               required by a bound introduced by this call
+      |
+  help: the trait `core::alloc::GlobalAlloc` is not implemented for `System`
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:139:1
+      |
+  139 | pub struct System;
+      | ^^^^^^^^^^^^^^^^^
+
+  error[E0599]: no method named `alloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:455:20
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc` not found for this struct
+  ...
+  455 |             System.alloc(layout)
+      |                    ^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate` with a similar name
+      |
+  455 |             System.allocate(layout)
+      |                         +++
+
+  error[E0599]: no method named `dealloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:463:25
+      |
+  139 | pub struct System;
+      | ----------------- method `dealloc` not found for this struct
+  ...
+  463 |         unsafe { System.dealloc(ptr, Layout::from_size_align_unchecked(size, align)) }
+      |                         ^^^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `dealloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `deallocate` with a similar name
+      |
+  463 |         unsafe { System.deallocate(ptr, Layout::from_size_align_unchecked(size, align)) }
+      |                                +++
+
+  error[E0599]: no method named `realloc` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:477:20
+      |
+  139 | pub struct System;
+      | ----------------- method `realloc` not found for this struct
+  ...
+  477 |             System.realloc(ptr, old_layout, new_size)
+      |                    ^^^^^^^ method not found in `System`
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `realloc`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+
+  error[E0599]: no method named `alloc_zeroed` found for struct `System` in the current scope
+     --> /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/alloc.rs:487:20
+      |
+  139 | pub struct System;
+      | ----------------- method `alloc_zeroed` not found for this struct
+  ...
+  487 |             System.alloc_zeroed(layout)
+      |                    ^^^^^^^^^^^^
+      |
+      = help: items from traits can only be used if the trait is implemented and in scope
+      = note: the following trait defines an item `alloc_zeroed`, perhaps you need to implement it:
+              candidate #1: `core::alloc::GlobalAlloc`
+  help: there is a method `allocate_zeroed` with a similar name
+      |
+  487 |             System.allocate_zeroed(layout)
+      |                         +++
+
+  Some errors have detailed explanations: E0277, E0425, E0432, E0599.
+  For more information about an error, try `rustc --explain E0277`.
+  error: could not compile `std` (lib) due to 20 previous errors
+
+  thread 'main' (2832647) panicked at kernel/build.rs:192:5:
+  failed to build native SVG consumers
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -1,0 +1,45 @@
+{
+  "suite": "auth",
+  "pass": true,
+  "commands": [
+    [
+      "env",
+      "SUNLIGHT_CAP_EXEC_PROBE=1",
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--offline",
+      "--features",
+      "syscall_stack_auth_test"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224449.342495Z-suite-auth/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224449.342495Z-suite-auth/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224449.342495Z-suite-auth/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224449.342495Z-suite-auth/kernel.elf"
+    ]
+  ],
+  "guests": {
+    "1": 0,
+    "2": 0,
+    "4": 0,
+    "12": 0
+  },
+  "kernel_sha256": "58e77a7c8f6b453711c64eef5feab7f7b17e9a7f40c6cb215e58cc1500c0a2cc"
+}

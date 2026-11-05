@@ -1,0 +1,13 @@
+{
+  "timeout": false,
+  "command": [
+    "objcopy",
+    "--strip-debug",
+    "target/x86_64-unknown-none/debug/sunlight-kernel",
+    ".threading-evidence/t4a/pilot-third.elf"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 0.5432403229933698
+}

@@ -211,8 +211,11 @@ pub unsafe fn setup_syscall_msrs(handler: VirtAddr) {
 
         x86_64::registers::model_specific::Msr::new(0xC0000081).write(star_val);
         x86_64::registers::model_specific::Msr::new(0xC0000082).write(handler.as_u64());
-        // Clear IF (bit 9) on syscall entry so interrupts are disabled in kernel.
-        x86_64::registers::model_specific::Msr::new(0xC0000084).write(0x200); // 1 << 9
+        // Mask IF, TF, DF, NT and AC before the first instruction. Saved R11
+        // retains the user flags. In particular, no single-step trap can use
+        // the untrusted pre-pivot RSP, and Rust always sees DF=0.
+        x86_64::registers::model_specific::Msr::new(0xC0000084).write(0x44700);
+        super::syscall_stack::init();
     }
     crate::serial_println!("[SYSCALL] LSTAR = {:#x}", handler.as_u64());
 }
@@ -222,10 +225,21 @@ pub unsafe fn setup_syscall_msrs(handler: VirtAddr) {
 #[unsafe(naked)]
 pub unsafe extern "C" fn syscall_entry() {
     naked_asm!(
-        // Disable interrupts for the duration of the syscall.
-        "cli",
-        // Build a full frame on the current stack (user's stack, valid in kernel mode via HHDM).
-        // We must preserve all registers because sysretq only restores RIP and RFLAGS.
+        // FMASK has already disabled IRQs/TF/DF. No push/call or user
+        // memory access until RSP names this dispatched task's kernel stack.
+        // NMI uses a dedicated IST and never touches this short-lived scratch.
+        "swapgs",
+        "mov gs:[8], rsp",
+        "cmp qword ptr gs:[0], 0",
+        "je 3f",
+        "mov rsp, gs:[0]",
+        // Leave init_context's top 160 bytes untouched during exec commit.
+        "sub rsp, 256",
+        "and rsp, -16",
+        "push qword ptr gs:[8]",
+        "swapgs",
+        // All continuation state is private to this thread from here on.
+        // Keep the established 120-byte register ABI unchanged.
         "push r15",
         "push r14",
         "push r13",
@@ -243,9 +257,7 @@ pub unsafe extern "C" fn syscall_entry() {
         "push rax",
         // Pass pointer to saved frame as first argument
         "mov rdi, rsp",
-        // SYSCALL can interrupt either user stack alignment. Keep the saved
-        // frame in a callee-saved register and establish the SysV call-site
-        // alignment for Rust locals, including 16-byte FXSAVE storage.
+        // Keep the frame in a callee-saved register and align the Rust call.
         "mov rbx, rsp",
         "and rsp, -16",
         "call syscall_dispatch",
@@ -270,7 +282,15 @@ pub unsafe extern "C" fn syscall_entry() {
         "pop r15",
         // Ensure IF is set in R11 so user space returns with interrupts enabled.
         "or r11, 0x200",
+        // Last trusted-stack access. NMI uses IST even in this return window.
+        "pop rsp",
         "sysretq",
+        // An unarmed entry is a kernel invariant failure. Stop without
+        // raising an exception on the still-untrusted RSP. NMI remains on IST.
+        "3:",
+        "cli",
+        "hlt",
+        "jmp 3b",
     );
 }
 
@@ -457,8 +477,26 @@ fn send_signal_generation(
 /// SAFETY: `frame` must point to a valid SyscallFrame on the stack.
 #[no_mangle]
 pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
+    // TSS and entry top are installed together by the scheduler after
+    // validating the Box allocation. IRQs remain masked; no scheduler lock is
+    // needed to validate this local frame against the selected stack.
+    let top = super::smp::current_cpu_tss_rsp0();
+    assert_eq!(frame as *mut SyscallFrame as u64, ((top - 256) & !15) - 128);
+    // SYSRET faults at CPL0 for a noncanonical RCX. Reject it while still
+    // on the trusted stack. RSP itself is opaque and is never dereferenced.
+    if frame.rcx >= 0x0000_8000_0000_0000 {
+        process_exit(139);
+    }
     #[cfg(all(debug_assertions, feature = "fastlane_shared_ring_test"))]
     crate::capability::channel_shared_ring::syscall(frame.rax, frame.rdi);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::syscall_enter(frame.rax, frame.rdi, frame.rsi);
+    // Isolated fixture control transport, including Linux-personality actors.
+    // Production never compiles this bypass; futex 202 still uses translation.
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    if frame.rax == 99 {
+        return debug_log(frame.rdi, frame.rsi);
+    }
     let mut num = frame.rax;
     let original_linux_num = num;
     let original_args = [
@@ -940,7 +978,10 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
             // Fixture placement only; no channel state or role is installed.
             let mut sched = sched::SCHEDULER.lock();
             let p = sched.current_process_mut();
-            if frame.rdi <= 1 && p.uid == 0 && matches!(p.name_str(), "session-racer" | "session-race-probe") {
+            let fixture = matches!(p.name_str(), "session-racer" | "session-race-probe");
+            #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+            let fixture = fixture || p.contract_service == Some(crate::capability::channel_contract::Service::RequiredStream);
+            if frame.rdi <= 1 && p.uid == 0 && fixture {
                 p.cpu_mask = 1 << frame.rdi;
                 #[cfg(feature = "fastlane_coord_diag")]
                 if frame.rdi == 0 { p.cpu_mask = u64::MAX; }
@@ -2154,6 +2195,8 @@ fn ipc_defer_reply() -> u64 {
 fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
     let token = frame.rsi;
     let reply = IpcMsg::from_registers(frame);
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    let (mut sched, hybrid_selected) = crate::capability::hybrid_race::acquire(token);
     #[cfg(feature = "authenticated_completion_exit_test")]
     let (mut sched, exit_selected) = crate::capability::completion_exit::acquire(
         crate::capability::completion_exit::COMPLETE,
@@ -2169,7 +2212,8 @@ fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
     );
     #[cfg(not(any(
         feature = "authenticated_completion_race_test",
-        feature = "authenticated_completion_exit_test"
+        feature = "authenticated_completion_exit_test",
+        feature = "fastlane_hybrid_lifecycle_test"
     )))]
     let mut sched = crate::sched::SCHEDULER.lock();
     let server_pid = sched.current_process().pid;
@@ -2189,6 +2233,8 @@ fn ipc_complete_deferred_reply(frame: &mut SyscallFrame) -> u64 {
             },
         )
     })();
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    crate::capability::hybrid_race::finished(hybrid_selected, result, token, &mut sched);
     #[cfg(all(
         feature = "authenticated_completion_race_test",
         not(feature = "authenticated_completion_exit_test")
@@ -2487,12 +2533,8 @@ fn process_exit(code: i32) -> ! {
     sched::request_park_after_sysret();
     sched::flush_dispatch_notifications();
 
-    // We currently run on the process's *user* stack (syscall_entry builds
-    // its frame there). The timer IRQ that switches away will keep using
-    // this stack across the CR3 switch, where it is no longer mapped. Pivot
-    // to the process's kernel stack (kernel heap — mapped in every address
-    // space), then re-enable interrupts (syscall_entry ran `cli`) and wait
-    // to be switched away from; this context is never resumed.
+    // Retire the private kernel continuation on the stable per-CPU idle
+    // stack before releasing the physical outgoing-stack pin. Never resume.
     let handoff = sched::stack_handoff_slot();
     unsafe {
         core::arch::asm!(
@@ -2517,6 +2559,8 @@ fn process_exit(code: i32) -> ! {
 /// Syscall: ProcessYield
 fn process_yield() -> u64 {
     sched::with_scheduler(|s| {
+        #[cfg(all(debug_assertions, feature = "syscall_stack_auth_test"))]
+        crate::capability::gate::t1_progress(s);
         // Phase 1 + Phase 4: account + penalize extremely short voluntary yields
         s.account_and_apply_churn_penalty();
         if s.current_process().state == ProcessState::Running {
@@ -2633,10 +2677,25 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
         return u64::MAX;
     }
 
+    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+    crate::sched::t2r_fixture::enter();
     let mut sched = crate::sched::SCHEDULER.lock();
     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
-    if sched.fastlane_vm_member() { return u64::MAX; }
+    if sched.fastlane_vm_member() {
+        return u64::MAX;
+    }
 
+    #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+    let _fault = crate::sched::t2_fixture::begin(sched.current_process());
+    let slot = match sched.reserve_thread_slot() {
+        Ok(slot) => slot,
+        Err(error) => {
+            #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+            crate::sched::t2r_fixture::rejected(&sched, &error);
+            let _ = error;
+            return u64::MAX - 1; // native EAGAIN
+        }
+    };
     // Collect everything we need from the parent in one borrow scope so
     // we can release it before calling clone_boxed (which also borrows sched).
     let (
@@ -2660,49 +2719,73 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
             p.uid,
             p.gid,
             p.nice,
-            crate::process::env::EnvMap::inherit(&p.env),
-            p.capabilities.clone(),
+            match crate::process::env::EnvMap::try_inherit(&p.env) {
+                Ok(env) => env,
+                Err(_) => return u64::MAX - 1,
+            },
+            match crate::process::thread_admission::try_copy(&p.capabilities) {
+                Ok(caps) => caps,
+                Err(_) => return u64::MAX - 1,
+            },
             p.tty_tab,
             p.tty_generation,
             p.name,
-            p.cwd.clone(),
+            match crate::process::thread_admission::try_string(&p.cwd) {
+                Ok(cwd) => cwd,
+                Err(_) => return u64::MAX - 1,
+            },
             p.service_lookup_restrictions,
         )
     };
     let shared_owner = sched.current_shared_process().pid;
-    let thread_fd = if shared_descriptors {
-        crate::process::fd_table::FdTable::new_boxed()
-    } else {
-        sched.current_shared_process().fd_table.clone_boxed()
+    let thread_fd =
+        match crate::process::fd_table::FdTable::try_thread_snapshot(if shared_descriptors {
+            None
+        } else {
+            Some(&sched.current_shared_process().fd_table)
+        }) {
+            Ok(fd) => fd,
+            Err(_) => return u64::MAX - 1,
+        };
+    let kernel_stack = match crate::process::try_kernel_stack() {
+        Ok(stack) => stack,
+        Err(_) => return u64::MAX - 1,
     };
 
     let Some(new_tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
-        return u64::MAX;
+        return u64::MAX - 1;
     };
+    if u32::try_from(new_tid).is_err() {
+        return u64::MAX - 1;
+    }
 
     let name_len = parent_name.iter().position(|&b| b == 0).unwrap_or(32);
     let name_str = core::str::from_utf8(&parent_name[..name_len]).unwrap_or("thread");
 
-    let mut thread = crate::process::Process::new_thread(
+    let mut thread = crate::process::Process::thread_with_resources(
         new_tid,
         parent_pid,
         name_str,
         shared_address_space,
-        thread_fd,
-        env,
-        uid,
-        gid,
-        nice,
-        caps,
-        tty_tab,
-        tty_generation,
+        crate::process::ThreadResources {
+            fd_table: thread_fd,
+            env,
+            uid,
+            gid,
+            nice,
+            capabilities: caps,
+            tty_tab,
+            tty_generation,
+            kernel_stack,
+            cwd: parent_cwd,
+        },
     );
 
     thread.native_thread = true;
+    thread.capability_mode = sched.current_process().capability_mode;
     thread.native_shared_owner = shared_descriptors.then_some(shared_owner);
     // Borrower threads retain the parent's endpoint authorization boundary.
     thread.service_lookup_restrictions = parent_service_restrictions;
-    thread.cwd = parent_cwd;
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,
     // then override RDI/RSI so the trampoline receives func and arg.
     thread.init_context(trampoline, user_stack_top);
@@ -2710,8 +2793,23 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     unsafe { thread.fx_state.save() };
     thread.fs_base = tls_ptr;
 
-    let idx = sched.add_process(thread);
-    sched.enqueue_ready_on_cpu(idx, current_cpu);
+    if crate::process::thread_admission::checkpoint("publication").is_err() {
+        return u64::MAX - 1;
+    }
+    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+    let current_cpu = crate::sched::t2r_fixture::placement(&sched, &mut thread, arg, current_cpu);
+    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+    crate::sched::t3r_fixture::placement(&sched, &mut thread, arg);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::placement(&sched, &mut thread, arg);
+    let published = sched.publish_thread(slot, thread, current_cpu);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::created(&sched, published, arg);
+    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+    crate::sched::t3r_fixture::created(&sched, published, arg);
+    #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+    crate::sched::t2r_fixture::committed(&sched, published);
+    let _ = published;
     crate::sched::note_native_borrower_created();
 
     crate::serial_println!(
@@ -2738,6 +2836,22 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        if let Some(result) = crate::sched::t4a_fixture::query(s) {
+            return result;
+        }
+        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
+        if let Some(result) = crate::sched::t3r_fixture::query(s) {
+            return result;
+        }
+        #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+        if let Some(result) = crate::sched::t2r_fixture::query(s) {
+            return result;
+        }
+        #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+        if let Some(result) = crate::sched::t2_fixture::query(s) {
+            return result;
+        }
         #[cfg(feature = "authenticated_completion_exit_test")]
         if let Some(result) = crate::capability::completion_exit::query(s) {
             return result;
@@ -2777,36 +2891,70 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 /// with wake and VM mutation. Spurious wakeups are permitted; userspace loops.
 /// WAIT: rdi=u32 pointer, rsi=0, rdx=expected, r10=absolute monotonic ns
 /// (u64::MAX means indefinite). WAKE: rsi=1, rdx=maximum wake count.
+/// RESULT: rsi=2, consume this thread's completed WAIT result (0=wake, 2=timeout).
 fn sys_native_futex(frame: &SyscallFrame) -> u64 {
     let address = frame.rdi;
-    if address & 3 != 0 || frame.rsi > 1 {
+    if address & 3 != 0 || frame.rsi > 2 {
         return u64::MAX - 5;
     }
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, frame.rsi, 0);
     let mut sched = crate::sched::SCHEDULER.lock();
+    if sched.current_process().is_exiting() {
+        return ERR_EINVAL;
+    }
+    if frame.rsi == 2 {
+        // Consume only this thread's completed wait. Do not revalidate memory:
+        // a committed unmap may itself have completed the registration.
+        let process = sched.current_process_mut();
+        return match process.native_futex_result {
+            Some((word, result)) if word == address => {
+                process.native_futex_result = None;
+                result
+            }
+            _ => ERR_EINVAL,
+        };
+    }
+    if frame.rsi == 0 {
+        sched.current_process_mut().native_futex_result = None;
+    }
     let Some(hhdm) = crate::HHDM_REQ.response().map(|r| VirtAddr::new(r.offset)) else {
         return u64::MAX;
     };
     let process = sched.current_process();
-    let value = match crate::memory::user::read_process_atomic_u32(process, hhdm, address) {
+    let value = match crate::memory::user::read_process_futex_u32(process, hhdm, address) {
         Ok(value) => value,
         Err(_) => return u64::MAX - 5,
     };
     let identity = process.address_space.identity();
     if frame.rsi == 1 {
-        return sched.wake_native_futex(identity, address, frame.rdx as usize) as u64;
+        let woken = sched.wake_native_futex(identity, address, frame.rdx as usize) as u64;
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        crate::sched::t4a_fixture::wake_done(address, woken);
+        return woken;
     }
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, frame.rsi, 1);
     if value != frame.rdx as u32 {
         return 1;
     }
     let deadline = frame.r10;
-    if deadline != u64::MAX && deadline <= now_ns() {
+    if deadline != u64::MAX && deadline <= crate::timekeeping::monotonic_ns() {
         return 2;
     }
     let idx = sched.current_process_index().unwrap_or(0);
     sched.processes[idx].native_futex_wait = Some(address);
     sched.processes[idx].native_futex_deadline = (deadline != u64::MAX).then_some(deadline);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::registered(&sched.processes[idx]);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, frame.rsi, 2);
     sched.set_state(idx, ProcessState::BlockedOnIo);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, frame.rsi, 3);
     drop(sched);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, frame.rsi, 4);
     sched::request_reschedule_after_sysret();
     0
 }
@@ -2907,32 +3055,70 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     }
     if crate::memory::user::validate_process_write(current, hhdm, stack - 8, 8).is_err()
         || flags & CLONE_PARENT_SETTID != 0
-            && crate::memory::user::validate_process_write(current, hhdm, parent_tid, 4).is_err()
+            && (parent_tid & 3 != 0
+                || crate::memory::user::validate_process_write(current, hhdm, parent_tid, 4)
+                    .is_err())
     {
         return linux_errno(14);
     }
+    #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+    let _fault = crate::sched::t2_fixture::begin(sched.current_process());
+    let slot = match sched.reserve_thread_slot() {
+        Ok(slot) => slot,
+        Err(crate::process::thread_admission::Error::NoMemory) => return linux_errno(12),
+        Err(_) => return linux_errno(11),
+    };
     // The scheduler lock serializes clone against mmap/munmap and FD mutation.
     // Only the group leader owns the VM and shared resources; it remains live
     // until every borrower is reaped, even if the leader exits first.
     let Some(tid) = crate::process::pid::next_pid(sched.processes.iter().map(|p| p.pid)) else {
         return linux_errno(11);
     };
+    if tid > i32::MAX as usize {
+        return linux_errno(11);
+    }
     let parent = sched.current_process();
-    let mut child = crate::process::Process::new_thread(
+    let env = match crate::process::env::EnvMap::try_inherit(&parent.env) {
+        Ok(env) => env,
+        Err(_) => return linux_errno(12),
+    };
+    let caps = match crate::process::thread_admission::try_copy(&parent.capabilities) {
+        Ok(caps) => caps,
+        Err(_) => return linux_errno(12),
+    };
+    let cwd = match crate::process::thread_admission::try_string(&parent.cwd) {
+        Ok(cwd) => cwd,
+        Err(_) => return linux_errno(12),
+    };
+    let fd = match crate::process::fd_table::FdTable::try_thread_snapshot(None) {
+        Ok(fd) => fd,
+        Err(_) => return linux_errno(12),
+    };
+    let kernel_stack = match crate::process::try_kernel_stack() {
+        Ok(stack) => stack,
+        Err(_) => return linux_errno(12),
+    };
+    let mut child = crate::process::Process::thread_with_resources(
         tid,
         parent.ppid,
         parent.name_str(),
         parent.address_space.shared_handle(),
-        crate::process::fd_table::FdTable::new_boxed(),
-        crate::process::env::EnvMap::inherit(&parent.env),
-        parent.uid,
-        parent.gid,
-        parent.nice,
-        parent.capabilities.clone(),
-        parent.tty_tab,
-        parent.tty_generation,
+        crate::process::ThreadResources {
+            fd_table: fd,
+            env,
+            uid: parent.uid,
+            gid: parent.gid,
+            nice: parent.nice,
+            capabilities: caps,
+            tty_tab: parent.tty_tab,
+            tty_generation: parent.tty_generation,
+            kernel_stack,
+            cwd,
+        },
     );
     child.linux_tgid = parent.linux_tgid;
+    child.capability_mode = parent.capability_mode;
+    child.service_lookup_restrictions = parent.service_lookup_restrictions;
     child.personality = parent.personality;
     if let Some(state) = child.linux_state_mut() {
         state.tid_address = if flags & sunlight_compat_linux::clone::CLONE_CHILD_CLEARTID != 0 {
@@ -2973,21 +3159,17 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     } else {
         parent.fs_base
     };
-    // The prevalidated parent store is done before the child can be runnable.
-    if flags & CLONE_PARENT_SETTID != 0 {
-        if crate::memory::user::copy_to_process_bytes(
-            parent,
-            hhdm,
-            parent_tid,
-            &(tid as u32).to_ne_bytes(),
-        )
-        .is_err()
-        {
-            return linux_errno(14);
-        }
+    if crate::process::thread_admission::checkpoint("publication").is_err() {
+        return linux_errno(12);
     }
-    let idx = sched.add_process(child);
-    sched.enqueue_ready(idx);
+    // The prevalidated parent store is done before the child can be runnable.
+    if flags & CLONE_PARENT_SETTID != 0
+        && crate::memory::user::write_process_atomic_u32(parent, hhdm, parent_tid, tid as u32)
+            .is_err()
+    {
+        return linux_errno(14);
+    }
+    let idx = sched.publish_thread(slot, child, crate::sched::current_cpu_id());
     crate::serial_println!(
         "[HELIOS-THREAD] clone tgid={} tid={} tls={:#x} stack={:#x}",
         sched.processes[idx].linux_tgid.unwrap_or(tid),
@@ -2998,20 +3180,24 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     tid as u64
 }
 
-/// Futexes are keyed by the shared address-space identity and the aligned
-/// userspace u32 address. The scheduler lock closes the compare/enqueue race.
+/// Same-VM WAIT/WAKE subset, keyed by VM generation and aligned VA. Shared
+/// backing across VMs or different VAs is unsupported. SCHEDULER serializes
+/// validation, the atomic comparison, registration and BlockedOnIo with wake
+/// and mapping retirement. The deferred scheduling request cannot re-block a
+/// waiter already made Ready by another CPU.
 fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
     let address = frame.rdi;
     let op = frame.rsi;
     let command = op & 0x7f;
-    // PRIVATE is a keying hint. For this supported shared-VM subset the VM
-    // identity and address are also the correct private-futex key.
+    // Without PRIVATE we support only threads using this same VM and VA.
     if op & !(0x7f | 0x80) != 0 || !matches!(command, 0 | 1) {
         return linux_errno(38);
     }
     if address & 3 != 0 {
         return linux_errno(22);
     }
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, command, 0);
     let mut sched = crate::sched::SCHEDULER.lock();
     let Some(hhdm) = crate::HHDM_REQ
         .response()
@@ -3020,31 +3206,47 @@ fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
         return linux_errno(12);
     };
     let current = sched.current_process();
-    if !current.is_linux_compat() {
+    if !current.is_linux_compat() || current.is_exiting() {
         return linux_errno(38);
     }
-    let mut bytes = [0; 4];
-    if crate::memory::user::copy_from_process_bytes(current, hhdm, address, &mut bytes).is_err() {
-        return linux_errno(14);
-    }
+    let value = match crate::memory::user::read_process_futex_u32(current, hhdm, address) {
+        Ok(value) => value,
+        Err(_) => return linux_errno(14),
+    };
     let identity = current.address_space.identity();
     if command == 1 {
-        return sched.wake_linux_futex(identity, address, frame.rdx as usize) as u64;
+        // Linux val is a signed 32-bit int, even on the x86-64 register ABI.
+        let limit = frame.rdx as u32 as i32;
+        if limit < 0 { return linux_errno(22); }
+        let woken = sched.wake_linux_futex(identity, address, limit as usize) as u64;
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        crate::sched::t4a_fixture::wake_done(address, woken);
+        return woken;
     }
     if frame.r10 != 0 {
         // A timed wait needs Linux relative timespec handling, not a fake
         // indefinite sleep. No timed wait was in the observed clone path.
         return linux_errno(38);
     }
-    if u32::from_ne_bytes(bytes) != frame.rdx as u32 {
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, command, 1);
+    if value != frame.rdx as u32 {
         return linux_errno(11); // EAGAIN
     }
     if let Some(state) = sched.current_process_mut().linux_state_mut() {
         state.futex_wait = Some(address);
     }
     let idx = sched.current_process_index().unwrap_or(0);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::registered(&sched.processes[idx]);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, command, 2);
     sched.set_state(idx, ProcessState::BlockedOnIo);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, command, 3);
     drop(sched);
+    #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+    crate::sched::t4a_fixture::point(address, command, 4);
     sched::request_reschedule_after_sysret();
     0
 }
@@ -3076,50 +3278,17 @@ fn sys_linux_exit_group(code: i32) -> ! {
 /// rdi = path pointer (C string)
 /// rsi = argv pointer (array of *const u8, NULL-terminated)
 /// rdx = envp pointer (array of *const u8, NULL-terminated)
-// Exec alone must outlive the calling VM. Reserve the top 256 bytes for
-// init_context's 160-byte iret frame; preparation runs strictly below it.
-// Copy the 120-byte register input below the reservation as well. On failure
-// the old VM and syscall frame remain valid, so return normally.
-// On success sys_exec's owned temporaries have been dropped before entering
-// the installed context. Never unwind or sysret through the retired VM.
+// Ordinary entry reserves the top 256 bytes for init_context. Exec runs
+// below that reservation on the same supervisor stack; repivoting to its top
+// here would overwrite the live dispatcher. Success never returns to old VM.
 const _: () = assert!(core::mem::size_of::<SyscallFrame>() == 120);
 
-#[unsafe(naked)]
-unsafe extern "C" fn exec_on_kernel_stack(_frame: &mut SyscallFrame) -> u64 {
-    naked_asm!(
-        "push rdi",
-        "call {stack_top}",
-        "pop rdi",
-        "mov r11, rsp",
-        "mov rsp, rax",
-        "sub rsp, 256",
-        "and rsp, -16",
-        "push r11",
-        "sub rsp, 136",
-        // Keep even the input register frame in the surviving address space.
-        "mov rsi, rdi",
-        "mov rdi, rsp",
-        "mov ecx, 15",
-        "cld",
-        "rep movsq",
-        "mov rdi, rsp",
-        "call {exec}",
-        "test rax, rax",
-        "jz 2f",
-        "add rsp, 136",
-        "pop rsp",
-        "ret",
-        "2:",
-        "call {enter}",
-        "ud2",
-        stack_top = sym exec_kernel_stack_top,
-        exec = sym sys_exec,
-        enter = sym enter_exec_image,
-    );
-}
-
-extern "C" fn exec_kernel_stack_top() -> u64 {
-    sched::SCHEDULER.lock().current_process().kernel_stack_top
+unsafe extern "C" fn exec_on_kernel_stack(frame: &mut SyscallFrame) -> u64 {
+    let result = sys_exec(frame);
+    if result == 0 {
+        enter_exec_image();
+    }
+    result
 }
 
 extern "C" fn enter_exec_image() -> ! {
@@ -3298,6 +3467,8 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
     };
 
     let retired_server = process.pid;
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    crate::serial_println!("[FL-P1-K] event=exec-enter caller={} ci={} old_vm={} owns_vm={} pending={} path={}", process.pid, process.foreground.incarnation, process.address_space.identity().generation, process.owns_address_space, u8::from(process.pending_call.is_some()), path_str);
     let retired_ordinary = process.ipc_reply_target;
     let retired_call = process
         .pending_call
@@ -3345,6 +3516,8 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
+            #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+            crate::serial_println!("[FL-P1-K] event=exec-installed caller={} ci={} new_vm={} entry={:#x}", process.pid, process.foreground.incarnation, process.address_space.identity().generation, entry);
             process.ipc_reply = None;
             process.ipc_call_outcome = None;
             process.ipc_deadline = None;
@@ -3604,6 +3777,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     let mut sched = crate::sched::SCHEDULER.lock();
     let pty_lock_acquired = if pty_lock_start != 0 { now_ns() } else { 0 };
     sched.reap_finished_processes();
+    if sched.reserve_task_storage().is_err() {
+        return u64::MAX - 1;
+    }
     let mut pmm = crate::PMM.lock();
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().expect("no hhdm").offset);
 
@@ -3704,6 +3880,10 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     ) {
         Ok(_) => {
             child.nice = crate::process::spawn::initial_embedded_nice(path_str, uid);
+            #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+            if uid == 0 && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok() {
+                child.contract_service = crate::capability::channel_contract::Service::embedded_path(path_str);
+            }
             #[cfg(feature = "native_session_h4_test")]
             if path_str == "/bin/sunlightctl" || path_str == "/bin/session-racer" {
                 child.cpu_mask = 1;
@@ -9207,6 +9387,10 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                                 return user_memory_failure_for(is_linux, error);
                             }
                             if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+                                #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+                                if let Some(result) = crate::sched::t2_fixture::query(s) {
+                                    return result;
+                                }
                                 crate::serial_println!("{}", s);
                             }
                             copy_len as u64
@@ -9667,11 +9851,6 @@ fn sys_munmap(frame: &mut SyscallFrame) -> u64 {
     let linux_compat = sched.current_process().is_linux_compat();
     let mut pmm = crate::PMM.lock();
     let result = crate::process::mmap::sys_munmap(addr, length, &mut pmm, &mut sched);
-    if result.is_ok() {
-        let identity = sched.current_process().address_space.identity();
-        let end = addr.saturating_add(length).saturating_add(4095) & !4095;
-        sched.cancel_native_futex_range(identity, addr, end);
-    }
     drop(pmm);
     drop(sched);
 
@@ -12463,6 +12642,36 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
     use crate::capability::{channel::Handle, CapabilityToken};
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    if frame.rdi==40 {
+        return match crate::capability::hybrid_race::retire_current(frame.r10) {
+            Ok(v) => {frame.rsi=v;0}, Err(e) => e as u64
+        };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
+    if matches!(frame.rdi, 37..=39) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let h = Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx };
+        let result = if frame.rdi == 37 {
+            crate::capability::hybrid_race::arm(&sched,h,frame.r10)
+        } else if frame.rdi == 39 {
+            crate::capability::hybrid_race::stale_policy(&sched,h,frame.r10)
+        } else {
+            sched.fastlane_mapping_sweep();
+            crate::capability::hybrid_race::inventory(&mut sched,h)
+        };
+        return match result { Ok(v) => { frame.rsi=v; 0 }, Err(e) => e as u64 };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+    if (31..=36).contains(&frame.rdi) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let result = sched.fastlane_contract(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.rdi, frame.r10);
+        sched.fastlane_mapping_sweep();
+        return match result {
+            Ok(value) => { frame.rsi = value; 0 }
+            Err(error) => { frame.rsi = 0; error as u64 }
+        };
+    }
     #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
     if matches!(frame.rdi, 10 | 11 | 13 | 14 | 15 | 16 | 17) {
         let (mut sched, actor) = crate::capability::bell_race::acquire(frame.rdi, frame.rdx);
@@ -12470,6 +12679,14 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
         crate::capability::bell_race::finished(actor, result.as_ref().err().map_or(0, |e| *e as u64));
         return match result {
             Ok(value) => { frame.rsi = value; 0 }
+            Err(e) => { frame.rsi = 0; e as u64 }
+        };
+    }
+    #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+    if matches!(frame.rdi, 28 | 29 | 30) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        return match sched.fastlane_mediated_accounting(Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx }, frame.rdi, frame.r10) {
+            Ok(()) => { frame.rsi = 0; 0 }
             Err(e) => { frame.rsi = 0; e as u64 }
         };
     }

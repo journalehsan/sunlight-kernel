@@ -1,0 +1,6 @@
+[TZ] Registered as 'tz'
+[timed] Registered as 'timed'
+[TTY]  Login success: root (uid=0, gid=0)
+[TTY]  Shell: sshl v0.1.0 running
+[TTY]  cmd: tzctl set Asia/Tehran -> Timezone changed to Asia/Tehran
+[TTY]  cmd: tzctl get -> Active: Asia/Tehran

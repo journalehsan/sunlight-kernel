@@ -1,0 +1,22 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t3r_validate.py",
+    "guest",
+    "tlb-12cpu",
+    "--iso",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/tlb/boot.iso",
+    "--cpus",
+    "12",
+    "--timeout",
+    "180",
+    "--marker",
+    "[MM-2B] 12 CPUs pre-touched, replaced, acknowledged, and observed new content: OK",
+    "--marker",
+    "[MM-2B] PMM accounting returned to baseline: OK"
+  ],
+  "exit_code": 0,
+  "seconds": 34.51356617198326
+}

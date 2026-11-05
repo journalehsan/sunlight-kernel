@@ -1,0 +1,11 @@
+--- validated/kernel/src/arch/x86_64/smp.rs
++++ kernel/src/arch/x86_64/smp.rs
+@@ -311,7 +311,7 @@
+ /// Execution order (mirrors BSP early boot, adding per-AP TSS + LAPIC):
+ ///
+ /// 1. CPU feature init (x87/SSE)
+-/// 2. Read AP index from AP_ONLINE (before incrementing — BSP serialises startup)
++/// 2. Resolve logical CPU and AP storage slot through the immutable topology
+ /// 3. Build and load per-AP GDT + TSS
+ /// 4. Setup SYSCALL MSRs
+ /// 5. Init LAPIC (enable via SVR)

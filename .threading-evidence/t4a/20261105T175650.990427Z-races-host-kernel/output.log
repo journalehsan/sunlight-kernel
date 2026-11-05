@@ -1,0 +1,369 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: sunlight-net@0.2.6324-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+   Compiling sunlight-kernel v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:34:9
+   |
+34 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:52:9
+   |
+52 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:63:9
+   |
+63 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+warning: method `as_ipc` is never used
+   --> kernel/src/capability/mod.rs:238:8
+    |
+171 | impl CapabilityRights {
+    | --------------------- method in this implementation
+...
+238 |     fn as_ipc(&self) -> Option<(bool, bool, bool)> {
+    |        ^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `preflight_shared_mapping` is never used
+    --> kernel/src/capability/mod.rs:1233:19
+     |
+ 518 | impl CapabilityBroker {
+     | --------------------- method in this implementation
+...
+1233 |     pub(crate) fn preflight_shared_mapping(&self, token: CapabilityToken) -> bool {
+     |                   ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: method `readable` is never used
+  --> kernel/src/capability/channel_repeated.rs:98:12
+   |
+20 | impl Repeated {
+   | ------------- method in this implementation
+...
+98 |     pub fn readable(&self, slot: usize) -> bool {
+   |            ^^^^^^^^
+
+warning: variants `Cancelled` and `Pending` are never constructed
+  --> kernel/src/capability/channel.rs:21:5
+   |
+12 | pub(crate) enum Error {
+   |                 ----- variants in this enum
+...
+21 |     Cancelled = 9,
+   |     ^^^^^^^^^
+...
+25 |     Pending = 11,
+   |     ^^^^^^^
+   |
+   = note: `Error` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: variant `IdentityChanged` is never constructed
+  --> kernel/src/capability/channel.rs:57:5
+   |
+52 | pub(crate) enum Terminal {
+   |                 -------- variant in this enum
+...
+57 |     IdentityChanged,
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `Terminal` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: field `repeated` is never read
+  --> kernel/src/capability/channel.rs:88:9
+   |
+65 | pub(super) struct Channel {
+   |                   ------- field in this struct
+...
+88 |     pub repeated: super::channel_repeated::Repeated,
+   |         ^^^^^^^^
+
+warning: constant `DEFAULT_PATH` is never used
+  --> kernel/src/process/env.rs:11:11
+   |
+11 | pub const DEFAULT_PATH: &str = "/bin:/usr/bin";
+   |           ^^^^^^^^^^^^
+
+warning: associated items `with_defaults`, `inherit`, `is_empty`, `path_entries`, and `to_envp` are never used
+   --> kernel/src/process/env.rs:27:12
+    |
+ 19 | impl EnvMap {
+    | ----------- associated items in this implementation
+...
+ 27 |     pub fn with_defaults(uid: u32, username: &str) -> Self {
+    |            ^^^^^^^^^^^^^
+...
+ 57 |     pub fn inherit(parent: &EnvMap) -> Self {
+    |            ^^^^^^^
+...
+103 |     pub fn is_empty(&self) -> bool {
+    |            ^^^^^^^^
+...
+112 |     pub fn path_entries(&self) -> impl Iterator<Item = &str> {
+    |            ^^^^^^^^^^^^
+...
+121 |     pub fn to_envp(&self) -> Vec<String> {
+    |            ^^^^^^^
+
+warning: constant `MAX_INHERITED_BYTES` is never used
+  --> kernel/src/process/thread_admission.rs:11:11
+   |
+11 | pub const MAX_INHERITED_BYTES: usize = 16 * 1024;
+   |           ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `THREAD_HEAP_HEADROOM` is never used
+  --> kernel/src/process/thread_admission.rs:14:11
+   |
+14 | pub const THREAD_HEAP_HEADROOM: usize = 2 * 1024 * 1024;
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_ENV_ENTRIES` is never used
+  --> kernel/src/process/thread_admission.rs:15:11
+   |
+15 | pub const MAX_ENV_ENTRIES: usize = 128;
+   |           ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_CAPABILITIES` is never used
+  --> kernel/src/process/thread_admission.rs:16:11
+   |
+16 | pub const MAX_CAPABILITIES: usize = 256;
+   |           ^^^^^^^^^^^^^^^^
+
+warning: variant `Cancelled` is never constructed
+  --> kernel/src/process/thread_admission.rs:22:5
+   |
+19 | pub enum Error {
+   |          ----- variant in this enum
+...
+22 |     Cancelled,
+   |     ^^^^^^^^^
+   |
+   = note: `Error` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: function `try_box_uninit` is never used
+  --> kernel/src/process/thread_admission.rs:50:8
+   |
+50 | pub fn try_box_uninit<T>() -> Result<Box<MaybeUninit<T>>, Error> {
+   |        ^^^^^^^^^^^^^^
+
+warning: function `try_copy` is never used
+  --> kernel/src/process/thread_admission.rs:72:8
+   |
+72 | pub fn try_copy<T: Copy>(value: &[T]) -> Result<Vec<T>, Error> {
+   |        ^^^^^^^^
+
+warning: variant `DeadlineExpired` is never constructed
+  --> kernel/src/process/ipc_identity.rs:13:5
+   |
+11 | pub enum IpcCallOutcome {
+   |          -------------- variant in this enum
+12 |     ReplyDelivered(u64),
+13 |     DeadlineExpired(u64),
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `IpcCallOutcome` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: method `generation` is never used
+  --> kernel/src/process/ipc_identity.rs:19:18
+   |
+18 | impl IpcCallOutcome {
+   | ------------------- method in this implementation
+19 |     pub const fn generation(self) -> u64 {
+   |                  ^^^^^^^^^^
+
+warning: `sunlight-kernel` (lib test) generated 17 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 10.50s
+     Running unittests src/mm2a_host.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_kernel_mm2a-91c1efde16f817ed)
+
+running 171 tests
+test accounting_host::tests::invalid_free_does_not_underflow ... ok
+test accounting_host::tests::reclass_preserves_total ... ok
+test accounting_host::tests::shm_unique_not_multiplied ... ok
+test accounting_host::tests::cache_not_inferred_from_residual ... ok
+test accounting_host::tests::alloc_increments_one_class ... ok
+test capability::channel::tests::channel_tag_preserves_reserved_spawn_marker_and_class_isolation ... ok
+test accounting_host::tests::failed_zero_frames_noop ... ok
+test accounting_host::tests::zram_logical_excluded_from_physical ... ok
+test capability::channel::tests::hybrid_reply_revocation_and_completion_share_channel_lifetime ... ok
+test capability::channel::tests::hybrid_policy_reuse_cannot_restore_original_reply ... ok
+test capability::channel::tests::independent_roles_are_recipient_bound_and_once_only ... ok
+test accounting_host::tests::free_decrements_correct_class ... ok
+test capability::channel::tests::mapping_requires_exact_attached_role_and_asymmetric_region_rights ... ok
+test capability::channel::tests::pair_confirmation_receipt_is_exact_one_use_and_failure_atomic ... ok
+test capability::channel::tests::first_terminal_wins_exit_exec_revocation_and_expiry ... ok
+test capability::channel::tests::generation_exhaustion_never_wraps_or_refunds_identity ... ok
+test capability::channel::tests::pair_creation_rejects_foreign_issuer_session_uid_and_reassignment ... ok
+test capability::channel::tests::restricted_shm_is_not_a_legacy_bearer_even_with_the_exact_token ... ok
+test capability::channel::tests::bell_exhaustion_never_wraps_and_retirement_preserves_wake ... ok
+test capability::channel::tests::slot_reuse_never_adopts_old_handle_and_incomplete_expires ... ok
+test capability::channel::tests::undrained_backing_prevents_slot_reuse_and_vm_borrowers ... ok
+test capability::channel::tests::bounded_metadata_and_failure_atomicity ... ok
+test capability::channel_contract::tests::catalog_capacity_and_generation_exhaustion_fail_closed ... ok
+test capability::channel_contract::tests::client_policy_claims_and_partial_setup_never_downgrade ... ok
+test capability::channel::tests::authenticated_bell_roles_ordering_terminal_and_reuse ... ok
+test capability::channel_contract::tests::explicit_directional_contract_fails_closed ... ok
+test capability::channel_contract::tests::independent_catalog_revocation_and_foreign_binding ... ok
+test capability::channel_contract::tests::independent_operation_authorization_precedes_transport ... ok
+test capability::channel_contract::tests::policy_catalog_and_malformed_values_fail_closed ... ok
+test capability::channel_contract::tests::selection_matrix_and_frozen_lifetime ... ok
+test capability::channel_contract::tests::versioned_transform_binding_does_not_grant_permission ... ok
+test capability::channel_repeated::tests::cancellation_identity_and_exhaustion ... ok
+test capability::channel_repeated::tests::bounded_reuse_and_stale_ack ... ok
+test capability::lifecycle_tests::account_publication_vs_cleanup ... ok
+test capability::lifecycle_tests::account_publication_vs_exec ... ok
+test capability::lifecycle_tests::auth_publication_vs_cleanup ... ok
+test capability::lifecycle_tests::auth_publication_vs_exec ... ok
+test capability::lifecycle_tests::capacity_failure_then_cleanup_returns_grant_inventory_to_zero ... ok
+test capability::lifecycle_tests::delivery_cleanup_exec_and_vm_mismatch_never_adopt_authority ... ok
+test capability::lifecycle_tests::committed_grants_remain_recipient_owned_after_issuer_exit ... ok
+test capability::lifecycle_tests::concurrent_grants_and_cleanup_have_no_late_publication ... ok
+test capability::lifecycle_tests::concurrent_participant_exit_cannot_resurrect_grants ... ok
+test capability::lifecycle_tests::delivered_authority_survives_issuer_exit_but_not_recipient_exec ... ok
+test capability::lifecycle_tests::cleanup_during_synthetic_preparation_rejects_both_grant_types ... ok
+test capability::lifecycle_tests::delivery_failure_cancellation_and_omission_retire_pending_records ... ok
+test capability::lifecycle_tests::delivery_pending_is_not_usage_eligibility ... ok
+test capability::lifecycle_tests::exec_during_external_preparation_cancels_stale_publication ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s1_s3_s8_normal_commit_retry_consumption_and_revocation_policy ... ok
+test capability::lifecycle_tests::exec_withdraws_issuer_image_provenance_after_success_only ... ok
+test capability::lifecycle_tests::grant_withdrawal_does_not_permanently_ban_a_live_pid ... ok
+test capability::lifecycle_tests::invalid_identity_and_stale_ipc_never_publish ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::failed_delivery_retires_only_its_exact_receipt_and_preserves_committed_reply ... ok
+test capability::lifecycle_tests::preparation_exit_issuer_exit_reuse_and_exec ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::live_owner_control_principal_policy_and_bounded_receipts ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::registration_requires_live_roles_exact_login_request_and_original_issuer_vm ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s10_s11_s12_s13_s14_stale_service_roles_incarnations_and_vm_rejected ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s18_entropy_and_delivery_failure_publish_no_authority ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s2_s5_s7_revocation_and_logout_before_commit_are_terminal_and_idempotent ... ok
+test capability::lifecycle_tests::faults_exhaustion_and_multiple_recipients ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s4_s15_s16_concurrent_commit_revoke_and_cancel_choose_one_order ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s9_s17_exhaustion_and_reinitialized_broker_do_not_alias ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::s6_expiration_at_boundary_fences_mint_consume_and_activation ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::session_capacity_failure_preserves_proof_and_allocation_failure_preserves_receipt ... ok
+test capability::lifecycle_tests::production_tests::broker_session_tests::suspension_denies_consumption_without_reviving_cancelled_grants ... ok
+test capability::lifecycle_tests::production_tests::production_auth_account_retirement_cannot_reassign_changed_scope ... ok
+test capability::lifecycle_tests::production_tests::production_bounded_cycles_capacity_and_metadata_inventory ... ok
+test capability::lifecycle_tests::production_tests::production_commit_holds_lifecycle_serialization_through_proof_exchange ... ok
+test capability::lifecycle_tests::production_tests::production_exact_path_not_prefix_and_no_legacy_adoption ... ok
+test capability::lifecycle_tests::production_tests::production_batch_failure_preserves_proof_and_publishes_nothing ... ok
+test capability::lifecycle_tests::production_tests::production_failed_mint_retry_cannot_reissue_burned_batch_identity ... ok
+test capability::lifecycle_tests::production_tests::production_exit_exec_and_pid_reuse_before_delivery ... ok
+test capability::lifecycle_tests::production_tests::production_failed_omitted_partial_and_ambiguous_delivery ... ok
+test capability::lifecycle_tests::production_tests::production_invalidation_completes_before_issuance_thread_commits ... ok
+test capability::lifecycle_tests::production_tests::production_retired_bearer_replay_after_controlled_vfs_slot_reuse ... ok
+test capability::lifecycle_tests::production_tests::production_rejects_forged_nonroot_pending_expired_and_withdrawn_proofs ... ok
+test capability::lifecycle_tests::production_tests::production_root_proof_to_vfs_consumption_and_cleanup ... ok
+test capability::lifecycle_tests::production_tests::production_service_restart_preserves_delivered_recipient_ownership ... ok
+test capability::history_boundary::tests::concurrent_last_slot_issuance_has_one_winner_and_permanent_exhaustion ... ok
+test capability::history_boundary::tests::actual_broker_exact_history_boundary_preserves_live_authority ... ok
+test capability::lifecycle_tests::production_tests::production_retirement_vs_consumption_is_single_terminal_operation ... ok
+test capability::lifecycle_tests::production_tests::production_two_issuers_share_one_recipient_vm_without_adopting_ownership ... ok
+test capability::lifecycle_tests::production_tests::production_vfs_consumer_requires_live_role_exact_request_and_identity ... ok
+test capability::lifecycle_tests::production_tests::session_authority_tests::production_account_refuses_all_session_tuples_without_authority ... ok
+test capability::lifecycle_tests::production_tests::session_authority_tests::production_account_restart_stale_delivery_and_expiration_cannot_open_authority ... ok
+test capability::measurement_window::tests::matched_and_rejected_observations ... ok
+test capability::measurement_window::tests::migration_returning_to_start_and_bad_charge_are_sticky ... ok
+test capability::lifecycle_tests::production_tests::session_authority_tests::concurrent_account_requests_and_cancellation_publish_no_authority ... ok
+test capability::sessions::epoch_exhaustion_never_wraps_or_changes_the_allocator ... ok
+test capability::tests::account_and_auth_grants_share_collision_domain_and_remain_single_use ... ok
+test capability::tests::collision_retry_does_not_replace_existing_authority ... ok
+test capability::tests::adjacent_prediction_is_rejected_by_actual_broker ... ok
+test capability::tests::cross_domain_collision_including_retired_shm_is_rejected ... ok
+test capability::tests::entropy_failure_publishes_nothing_and_preserves_endpoint_id ... ok
+test capability::tests::exit_revokes_endpoint_and_bound_grants_preserving_transferable_vfs ... ok
+test capability::tests::failed_batch_and_dropped_preparation_burn_token_identity ... ok
+test capability::tests::preparation_failure_never_takes_shm_frame_ownership ... ok
+test capability::channel::tests::attach_revocation_races_linearize_under_existing_broker_guard ... ok
+test capability::tests::reservation_and_endpoint_exhaustion_do_not_consume_randomness ... ok
+test capability::tests::reserved_selectors_never_become_tokens ... ok
+test capability::tests::retired_candidate_stuck_source_cannot_revive_authority ... ok
+test capability::tests::retired_endpoint_token_is_not_reassigned_after_storage_reuse ... ok
+test capability::tests::rights_attenuation_type_and_owner_checks_survive_secure_issuance ... ok
+test capability::tests::stuck_source_and_zero_payload_fail_boundedly ... ok
+test capability::tests::vfs_batch_rollback_preserves_only_preexisting_authority ... ok
+test conditioner::tests::conditioner_expands_seed_without_repeating_a_block ... ok
+test conditioner::tests::different_seeds_yield_different_keystreams ... ok
+test conditioner::tests::exhausted_counter_fails_without_partial_output_or_repeated_block ... ok
+test conditioner::tests::fill_initializes_every_output_byte ... ok
+test conditioner::tests::rfc8439_block_known_answer ... ok
+test deferred_token::tests::exhaustion_never_reissues_a_stale_handle ... ok
+test deferred_token::tests::final_handle_is_available_once ... ok
+test deferred_token::tests::first_and_successive_handles_preserve_wire_encoding ... ok
+test capability::tests::concurrent_mint_revoke_has_no_duplicate_live_token_or_slot_drift ... ok
+test delegated_caller::tests::capacity_is_bounded_and_fails_closed ... ok
+test delegated_caller::tests::duplicates_reserved_pairs_and_cross_table_collisions_fail_closed ... ok
+test capability::lifecycle_tests::production_tests::session_authority_tests::concurrent_last_history_slot_has_one_commit_and_one_explicit_failure ... ok
+test delegated_caller::tests::one_shot_take_rejects_replay_and_wrong_tag ... ok
+test delegated_caller::tests::participant_retirement_and_session_cancellation_remove_authority ... ok
+test delegated_caller::tests::session_generation_change_and_logout_revoke_all ... ok
+test mm2b_state::tests::active_mask_tracks_switches_and_online_cpus ... ok
+test mm2b_state::tests::destroyed_and_recreated_roots_have_distinct_identity ... ok
+test mm2b_state::tests::mailbox_rejects_overwrite_and_stale_sequence ... ok
+test mm2b_state::tests::multiple_mailboxes_acknowledge_one_sequence_independently ... ok
+test mm2b_state::tests::owner_and_borrower_share_identity ... ok
+test mm2b_state::tests::repeated_requests_are_neither_lost_nor_overwritten ... ok
+test pid::tests::sparse_and_exhausted_pid_spaces_never_alias ... ok
+test pid::tests::dynamic_publication_preserves_maximum_even_when_reaped_slot_is_replaced ... ok
+test process::env::tests::sorted_inheritance_and_all_allocation_failures ... ok
+test process::thread_admission::tests::quota_boundaries_and_overflow ... ok
+test reply_identity::tests::closure_and_exec_withdrawal_fence_late_publication ... ok
+test reply_identity::tests::each_identity_component_is_required ... ok
+test reply_race_gate::tests::neither_winner_can_start_without_both_entrants ... ok
+test reply_race_gate::tests::independent_threads_publish_readiness_and_retirement ... ok
+test shared_lifetime::tests::all_bounded_admission_retirement_release_interleavings ... ok
+test shared_lifetime::tests::overflow_and_failed_preflight_leave_state_unchanged ... ok
+test shared_lifetime::tests::retirement_preserves_every_existing_view ... ok
+test shared_lifetime::tests::unmapped_retirement_is_immediately_reclaimable ... ok
+test tests::address_and_range_lookup_detect_containment_and_holes ... ok
+test tests::checked_page_layout_rejects_zero_and_overflow ... ok
+test tests::cursor_changes_only_at_commit ... ok
+test tests::capacity_is_reserved_before_commit ... ok
+test tests::cursor_overflow_fails_without_mutation ... ok
+test tests::distinct_shm_objects_never_merge ... ok
+test tests::ledger_insert_overlap_adjacency_and_merge ... ok
+test tests::mapping_plans_do_not_embed_ledger_images_on_the_kernel_stack ... ok
+test tests::full_ledger_allows_adjacent_compatible_mapping ... ok
+test tests::mprotect_middle_prefix_suffix_and_merge_layouts ... ok
+test tests::munmap_full_prefix_and_suffix_layouts ... ok
+test tests::mprotect_capacity_hole_and_policy_failures_are_atomic ... ok
+test capability::tests::history_exhaustion_is_permanent_even_after_all_authority_retires ... ok
+test tests::munmap_holes_and_protected_overlap_are_preflighted_atomically ... ok
+test tests::munmap_middle_split_preserves_policy_protection_and_backing ... ok
+test tests::munmap_split_capacity_failure_is_atomic ... ok
+test tests::rollback_removal_is_exact ... ok
+test tests::stale_swap_slot_generation_is_rejected ... ok
+test tests::zram_allocator_accounting_includes_alignment_and_rejects_overflow ... ok
+test tests::zram_incompressible_page_is_rejected ... ok
+test tests::zram_lz4_round_trip_and_integrity ... ok
+test tests::swap1_gate_sample_payload_size_is_stable ... ok
+test capability::token_history::tests::full_history_fails_closed_without_evicting_old_identity ... ok
+test capability::lifecycle_tests::production_tests::session_authority_tests::production_vfs_full_history_rolls_back_batch_and_preserves_existing_grant ... ok
+test capability::lifecycle_tests::repeated_delivery_cleanup_cycles_have_exact_metadata_inventory ... ok
+test capability::lifecycle_tests::stale_delivered_token_cannot_authorize_replacement_incarnation_or_vm ... ok
+test capability::lifecycle_tests::stale_incarnation_with_identical_pending_generation_is_rejected ... ok
+test capability::lifecycle_tests::token_observed_before_delivery_cannot_be_consumed ... ok
+test capability::lifecycle_tests::uac_may_consume_its_own_pending_account_grant_on_the_same_request ... ok
+test capability::lifecycle_tests::vfs_commit_serializes_role_withdrawal_and_preserves_bearer_policy ... ok
+test capability::lifecycle_tests::vfs_failed_reservation_or_entropy_has_no_partial_record ... ok
+test capability::lifecycle_tests::vfs_numeric_slot_is_not_authority ... ok
+test capability::lifecycle_tests::vfs_preparation_exec_exit_and_slot_reuse_fail_closed ... ok
+test capability::tests::global_active_limit_is_explicit_and_recovers_after_revoke ... ok
+
+test result: ok. 171 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+

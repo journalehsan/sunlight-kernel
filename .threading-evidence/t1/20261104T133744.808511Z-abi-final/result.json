@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/check_syscall_stack_abi.py",
+    "target/x86_64-unknown-none/debug/sunlight-kernel"
+  ],
+  "exit_code": 1,
+  "seconds": 0.25068787999043707
+}

@@ -1,0 +1,37 @@
+{
+  "canonical_sha256": "d5c076715b7db5eefa911274858d95705077a713b6b4fd14c34b0f64e00b4418",
+  "changed_files": [
+    "docs/kernel/threading-t2r-lifecycle-race-closure.md",
+    "kernel/src/sched/t2r_fixture.rs",
+    "tools/helios-probes/thread-lifecycle-race-probe.S",
+    "tools/test_threading_t2r.py",
+    "tools/threading_t2r_format.py",
+    "tools/threading_t2r_pilot.py",
+    "tools/threading_t2r_receipt.py",
+    "tools/threading_t2r_regressions.py",
+    "tools/threading_t2r_validate.py",
+    "kernel/Cargo.toml",
+    "kernel/build.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "kernel/src/main.rs",
+    "kernel/src/process/fd_table.rs",
+    "kernel/src/sched/mod.rs"
+  ],
+  "sha256": {
+    "docs/kernel/threading-t2r-lifecycle-race-closure.md": "641344e20eb7cfe57667c0a528f29be9c00383e91664378ae920264f6ff20ed9",
+    "kernel/src/sched/t2r_fixture.rs": "aacfb48b3b43cd7abd22999d68ff4ee259b739a589739702d7d54a6bde310751",
+    "tools/helios-probes/thread-lifecycle-race-probe.S": "ee082902d1efdaaae4da8779bb4d966efc47920680a4fda8e9ccfb49907445f5",
+    "tools/test_threading_t2r.py": "6db37607f037e25f55826acac2eca85b2645af409eaa39772f424e36cdf25315",
+    "tools/threading_t2r_format.py": "1788865f729eb40629306ca79f799b93631d3cf240038cdca071dd0defec61e8",
+    "tools/threading_t2r_pilot.py": "f605353671d0291695784d955a291fce62a03de27a3bf8825754f485795f4618",
+    "tools/threading_t2r_receipt.py": "9f7df6b217f9a1c7cd0d3cb8b12f5ffb8b8b1d469c6bb6a51a83cfbdd166d434",
+    "tools/threading_t2r_regressions.py": "ce3868a03aa1fda186ed23c474a8013458cf47e8ebda6eae05b79ae2f2b4b40c",
+    "tools/threading_t2r_validate.py": "eb737180655f4c7697849a0c8b416f6416dd09759e1c64ea11620bc763ec308e",
+    "kernel/Cargo.toml": "7cbe94805702e8416639bfa47e14544a3bf67141c0ebc668a42dbcebd4b4306b",
+    "kernel/build.rs": "1f73cd409ee31368fc46f7445a4897d31775e33e813f2d74a46ad14c8f7cc0b8",
+    "kernel/src/arch/x86_64/syscall.rs": "7746b8f9c1a27f02c3cb6f263ea24df6f57e0f19800a5d6daa743a541037ab5b",
+    "kernel/src/main.rs": "49eb49b25f61746b510045a202adb77d78ff1da51bfa91738994da637f23b476",
+    "kernel/src/process/fd_table.rs": "fb9e89df434b1a62c139d1380b36c6602c593ca80ddeeb08a7a9f423a3dd165c",
+    "kernel/src/sched/mod.rs": "e6f185acbbf15e5a8da08c198e911b41aa1bcfce41f6269b10af0410c875203b"
+  }
+}

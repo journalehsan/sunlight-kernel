@@ -1,0 +1,45 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "70a3cc31de969391056291a93af45374a1df280be38c99611d744c40e06e592c",
+  "cpus": 4,
+  "markers": [
+    "[F13NR] PASS cpus=4 "
+  ],
+  "topology": "sparse",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4,maxcpus=6,sockets=2,cores=3,threads=1",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/remote-wake/sunlightos.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230107.844263Z-remote-wake-sparse/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "observed_apic_ids": [
+    0,
+    1,
+    2,
+    4
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "cbf8b91186a298dbce673b647a07a2133eb498edaa3171bc27b8bef4fcc836ff",
+  "seconds": 43.8553572469973
+}

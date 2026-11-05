@@ -61,6 +61,10 @@ pub(crate) fn physical(frame: u64, event: &str) {
                 frame
             );
             f.live.store(0, Ordering::Relaxed);
+        } else if event == "free" {
+            panic!("tracked physical backing freed twice before reuse");
+        } else if event == "claim" && live == 1 {
+            panic!("tracked physical backing reused before release");
         } else if event == "claim" && live == 0 {
             crate::serial_println!(
                 "[FL-FRAME] seq={} event=reuse generation={} region={} frame={}",
@@ -69,6 +73,7 @@ pub(crate) fn physical(frame: u64, event: &str) {
                 f.region.load(Ordering::Relaxed),
                 frame
             );
+            f.address.store(0, Ordering::Relaxed);
         }
     }
 }

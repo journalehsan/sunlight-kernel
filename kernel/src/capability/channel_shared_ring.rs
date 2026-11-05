@@ -70,6 +70,10 @@ impl Scheduler {
 #[derive(Clone, Copy)]
 pub struct ActorCounters {
     enabled: bool,
+    #[cfg(feature = "fastlane_mediated_accounting_test")]
+    window: super::measurement_window::Window,
+    #[cfg(feature = "fastlane_mediated_accounting_test")]
+    raw_start: Option<[u64; 7]>,
     values: [u64; 4], // syscalls, notifications, task-change switch-ins, wake publications
     overflow: bool,
     generation: u64,
@@ -81,7 +85,12 @@ pub struct ActorCounters {
 #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
 impl ActorCounters {
     pub const fn new() -> Self {
-        Self { enabled: false, values: [0; 4], overflow: false, generation: 0, runtime_start: 0, start_ms: 0, cpu_start: 0, wall_start: None }
+        Self {
+            #[cfg(feature = "fastlane_mediated_accounting_test")]
+            window: super::measurement_window::Window::new(),
+            #[cfg(feature = "fastlane_mediated_accounting_test")]
+            raw_start: None,
+            enabled: false, values: [0; 4], overflow: false, generation: 0, runtime_start: 0, start_ms: 0, cpu_start: 0, wall_start: None }
     }
     fn increment(&mut self, index: usize) {
         if !self.enabled { return; }
@@ -155,3 +164,7 @@ impl Scheduler {
         Ok(())
     }
 }
+
+#[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
+#[path = "channel_mediated_accounting.rs"]
+mod mediated;

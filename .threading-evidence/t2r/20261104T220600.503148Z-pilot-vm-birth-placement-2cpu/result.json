@@ -1,0 +1,37 @@
+{
+  "pass": false,
+  "timeout": false,
+  "iso_sha256": "0208ff0d8819c95f5972f0d5876876e09b629d2e9fa0993ac407e03b30068c6c",
+  "cpus": 2,
+  "markers": [
+    "[T2R] PILOT PASS case=1 cpus=2"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "2",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/pilot-vm-birth-placement/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T220600.503148Z-pilot-vm-birth-placement-2cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "serial_sha256": "5d15ac870846d2c763cc8466b9cd59e7ba846372ea1672f51425366d55ee4d1f",
+  "seconds": 40.58333288200083
+}

@@ -1,0 +1,45 @@
+{
+  "suite": "linux",
+  "pass": true,
+  "commands": [
+    [
+      "env",
+      "SUNLIGHT_INJECT_PHASE=helios-thread-probe",
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--offline",
+      "--features",
+      "key_inject"
+    ],
+    [
+      "objcopy",
+      "--strip-debug",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224641.929189Z-suite-linux/kernel.elf"
+    ],
+    [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224641.929189Z-suite-linux/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224641.929189Z-suite-linux/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    [
+      "python3",
+      "tools/check_syscall_stack_abi.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224641.929189Z-suite-linux/kernel.elf"
+    ]
+  ],
+  "guests": {
+    "1": 0,
+    "2": 0,
+    "4": 0,
+    "12": 0
+  },
+  "kernel_sha256": "b2ba48312413d5ac4395cb4cc0c1dbf6c278424ffbf3fe9da31ac6f952176475"
+}

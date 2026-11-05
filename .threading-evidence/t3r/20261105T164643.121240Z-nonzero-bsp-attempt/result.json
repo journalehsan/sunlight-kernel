@@ -1,0 +1,47 @@
+{
+  "argv": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max,apic-id=42",
+    "-smp",
+    "2",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164405.530264Z-migration/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/20261105T164643.121240Z-nonzero-bsp-attempt/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "iso_sha256": "d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e",
+  "requested_bsp_apic": 42,
+  "classification": "BLOCKED / NOT_RUN",
+  "hardware_proof": false,
+  "timeout": true,
+  "exit_code": 33,
+  "functional_migration": true,
+  "firmware": [
+    "[T3R-FW] slot=0 processor=0 apic=0 bsp=0",
+    "[T3R-FW] slot=1 processor=1 apic=1 bsp=0"
+  ],
+  "cpu_identity": [
+    "[CPU-ID] logical=0 apic=0 bsp=true",
+    "[CPU-ID] logical=1 apic=1 bsp=false",
+    "[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6e7dc8 ist_df=0xffffffff8f124250 ist_nmi=0xffffffff8e9b6080",
+    "[CPU-ID] online logical=1 apic=1 tss=0xffffffff8e6e53c8 ist_df=0xffffffff8ecc4250 ist_nmi=0xffffffff8e9ba080"
+  ],
+  "serial_sha256": "de201dd03db4e6cd8eaa9e85e9fbeca97b1be6e6551b05249c8b93476072eb13",
+  "seconds": 120.51338030598708,
+  "reason": "Actual BSP remained APIC 0; firmware slot 0 is BSP. CPU property did not produce the requested hardware."
+}

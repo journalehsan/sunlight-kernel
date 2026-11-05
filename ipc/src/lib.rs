@@ -1,5 +1,10 @@
 #![no_std]
 
+#[cfg(any(test, feature = "experimental-fastlane-authority"))]
+pub mod fastlane_operation;
+#[cfg(any(test, feature = "experimental-fastlane-authority"))]
+mod fastlane_operation_ipc;
+
 pub mod supervision;
 pub mod cpu_accounting;
 pub mod measurement_clock;

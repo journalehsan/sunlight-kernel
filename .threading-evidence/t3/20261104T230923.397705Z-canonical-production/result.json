@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t3_regressions.py",
+    "production"
+  ],
+  "exit_code": 0,
+  "seconds": 106.29000941800768
+}

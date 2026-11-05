@@ -1,0 +1,41 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "ab6000c578bcf74594ed00e244d9f8f25cc92f64665a38bf6867c107c4ba7f53",
+  "cpus": 2,
+  "markers": [
+    "[T1] PASS",
+    "[SCHED-B] PASS cpus=2 "
+  ],
+  "topology": "high",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "1,maxcpus=128,sockets=2,cores=64,threads=1",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T223803.199861Z-suite-t1/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T224002.957026Z-topology-high/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown",
+    "-device",
+    "max-x86_64-cpu,socket-id=1,core-id=0,thread-id=0"
+  ],
+  "exit_code": 33,
+  "serial_sha256": "79c228c6c035e472c04be4cbd2db67f30c1f6e330dfc02fb014dc602c921e45f",
+  "seconds": 69.13808053100365
+}

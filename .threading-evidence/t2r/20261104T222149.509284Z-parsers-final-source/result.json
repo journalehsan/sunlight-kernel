@@ -1,0 +1,16 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools",
+    "-p",
+    "test_threading_t*.py"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2508799560018815
+}

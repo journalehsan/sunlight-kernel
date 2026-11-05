@@ -1,0 +1,20 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "--timeout",
+    "1000",
+    "--",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--features",
+    "mm2b_smp_test",
+    "--offline"
+  ],
+  "error": "FileNotFoundError(2, 'No such file or directory')",
+  "seconds": 0.0004768719954881817
+}

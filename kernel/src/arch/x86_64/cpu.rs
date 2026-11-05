@@ -36,6 +36,7 @@ pub fn init_cpu_features() {
 
         let mut cr4: u64;
         core::arch::asm!("mov {}, cr4", out(reg) cr4, options(nomem, nostack));
+        cr4 &= !(1 << 16); // FSGSBASE stays off: entry owns KERNEL_GS_BASE.
         cr4 &= !(1 << 18); // OSXSAVE stays off until YMM state is preserved.
         cr4 |= 1 << 9; // OSFXSR: enable FXSAVE/FXRSTOR and SSE instructions.
         cr4 |= 1 << 10; // OSXMMEXCPT: enable unmasked SSE exception delivery.

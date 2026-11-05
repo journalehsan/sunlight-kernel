@@ -1,0 +1,15 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230107.850714Z-remote-wake-high
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230107.844263Z-remote-wake-sparse
+PASS
+PASS
+remote-wake [('sparse', 0), ('high', 0)]
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230328.740926Z-handoff-sparse
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230328.758905Z-handoff-high
+PASS
+PASS
+handoff [('sparse', 0), ('high', 0)]
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230613.746642Z-doorbell-high
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230613.748728Z-doorbell-sparse
+PASS
+PASS
+doorbell [('sparse', 0), ('high', 0)]

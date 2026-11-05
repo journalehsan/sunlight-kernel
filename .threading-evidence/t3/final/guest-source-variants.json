@@ -1,0 +1,228 @@
+{
+  "t1": {
+    "2": {
+      "attempt": "20261104T225734.237962Z-t1-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "1": {
+      "attempt": "20261104T225734.244517Z-t1-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "4": {
+      "attempt": "20261104T225812.551721Z-t1-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "12": {
+      "attempt": "20261104T225819.827062Z-t1-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    }
+  },
+  "admission": {
+    "2": {
+      "attempt": "20261104T224249.189206Z-admission-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "1": {
+      "attempt": "20261104T224325.992746Z-admission-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "4": {
+      "attempt": "20261104T224325.996216Z-admission-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "12": {
+      "attempt": "20261104T224408.800101Z-admission-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    }
+  },
+  "auth": {
+    "1": {
+      "attempt": "20261104T224522.034968Z-auth-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "2": {
+      "attempt": "20261104T224522.037835Z-auth-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "4": {
+      "attempt": "20261104T224603.431087Z-auth-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "12": {
+      "attempt": "20261104T224603.911495Z-auth-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    }
+  },
+  "linux": {
+    "2": {
+      "attempt": "20261105T161651.061173Z-linux-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs"
+      ]
+    },
+    "1": {
+      "attempt": "20261105T161651.061364Z-linux-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs"
+      ]
+    },
+    "4": {
+      "attempt": "20261105T161736.962656Z-linux-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs"
+      ]
+    },
+    "12": {
+      "attempt": "20261105T161737.212180Z-linux-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs"
+      ]
+    }
+  },
+  "fp": {
+    "2": {
+      "attempt": "20261104T224927.239194Z-fp-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "1": {
+      "attempt": "20261104T224927.240048Z-fp-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "4": {
+      "attempt": "20261104T225111.307939Z-fp-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "12": {
+      "attempt": "20261104T225113.289431Z-fp-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    }
+  },
+  "std": {
+    "2": {
+      "attempt": "20261104T225346.213111Z-std-2cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "1": {
+      "attempt": "20261104T225346.213325Z-std-1cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "4": {
+      "attempt": "20261104T225429.595527Z-std-4cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    },
+    "12": {
+      "attempt": "20261104T225439.111114Z-std-12cpu",
+      "different_from_final_implementation": [
+        "kernel/src/arch/x86_64/smp.rs",
+        "kernel/src/sched/doorbell_test.rs",
+        "kernel/src/sched/pin_release_test.rs",
+        "tools/helios-probes/linux-thread-probe.S"
+      ]
+    }
+  },
+  "production": {
+    "1": {
+      "attempt": "20261105T161941.755357Z-production-1cpu",
+      "different_from_final_implementation": []
+    },
+    "2": {
+      "attempt": "20261105T161941.755735Z-production-2cpu",
+      "different_from_final_implementation": []
+    },
+    "4": {
+      "attempt": "20261105T162010.936462Z-production-4cpu",
+      "different_from_final_implementation": []
+    },
+    "12": {
+      "attempt": "20261105T162011.429558Z-production-12cpu",
+      "different_from_final_implementation": []
+    }
+  }
+}

@@ -1,0 +1,174 @@
+{
+  "heap_bytes": 16777216,
+  "sites": [
+    {
+      "file": "kernel/src/process/mod.rs",
+      "function": "try_kernel_stack",
+      "line": 33,
+      "phase": "before_commit",
+      "allocation": "32 KiB stack",
+      "handling": "null-checked raw allocation; zero in place",
+      "ownership": "Box drops on any rejection; reaper drops only after T1 physical quiescence"
+    },
+    {
+      "file": "kernel/src/process/thread_admission.rs",
+      "function": "try_box_uninit",
+      "line": 50,
+      "phase": "before_commit",
+      "allocation": "concrete stack/FD layouts",
+      "handling": "GlobalAlloc null -> NoMemory",
+      "ownership": "unique Box; no alloc_error handler"
+    },
+    {
+      "file": "kernel/src/process/env.rs",
+      "function": "try_inherit",
+      "line": 62,
+      "phase": "before_commit",
+      "allocation": "entry array, owned keys and values",
+      "handling": "entry Vec.try_reserve_exact; each String.try_reserve_exact",
+      "ownership": "RAII drops every initialized prefix"
+    },
+    {
+      "file": "kernel/src/process/thread_admission.rs",
+      "function": "try_copy",
+      "line": 72,
+      "phase": "before_commit",
+      "allocation": "capability Vec",
+      "handling": "try_reserve_exact then Copy; no broker issuance",
+      "ownership": "local Vec drop; no adopted authority reference"
+    },
+    {
+      "file": "kernel/src/process/thread_admission.rs",
+      "function": "try_string",
+      "line": 62,
+      "phase": "before_commit",
+      "allocation": "cwd and env strings",
+      "handling": "try_reserve_exact before push_str",
+      "ownership": "local String drop"
+    },
+    {
+      "file": "kernel/src/process/fd_table.rs",
+      "function": "try_thread_snapshot",
+      "line": 791,
+      "phase": "before_commit",
+      "allocation": "10,240-byte private FD snapshot or empty shared placeholder",
+      "handling": "checked Box allocation and complete entry initialization",
+      "ownership": "unretained snapshot drops storage only"
+    },
+    {
+      "file": "kernel/src/sched/thread_admission.rs",
+      "function": "reserve_task_storage",
+      "line": 144,
+      "phase": "before_commit",
+      "allocation": "512 Process records and all 64 CPU queues (RR; 3 tiers in BORE)",
+      "handling": "try_reserve_exact; user process spawn uses same bound",
+      "ownership": "bounded global reusable capacity may remain; no child/ticket ownership"
+    },
+    {
+      "file": "kernel/src/sched/thread_admission.rs",
+      "function": "reserve_thread_slot",
+      "line": 12,
+      "phase": "before_commit",
+      "allocation": "heap/accounting/slot/incarnation admission",
+      "handling": "checked counts and sizes; 2 MiB headroom beyond peak; no allocation itself",
+      "ownership": "guard-owned selection disappears; incarnation number intentionally not reused"
+    },
+    {
+      "file": "kernel/src/sched/thread_admission.rs",
+      "function": "publish_thread",
+      "line": 192,
+      "phase": "commit",
+      "allocation": "FD retains, slot insertion, ready admission",
+      "handling": "all capacity reserved; no heap allocation",
+      "ownership": "unreaped Process is exact live owner until physical reaping"
+    },
+    {
+      "file": "sunlight-libc/src/std_runtime.rs",
+      "function": "sl_std_spawn",
+      "line": 201,
+      "phase": "user_preparation",
+      "allocation": "native std JoinHandle bookkeeping",
+      "handling": "userspace allocator returns null; errno=ENOMEM",
+      "ownership": "free local handle on OS-stage failure"
+    },
+    {
+      "file": "sunlight-libc/src/thread.rs",
+      "function": "spawn_with_stack",
+      "line": 83,
+      "phase": "user_preparation",
+      "allocation": "user stack and 4 KiB TLS",
+      "handling": "checked stack rounding and fallible mmap with MAP_NATIVE_THREAD",
+      "ownership": "whole exact-boundary unmaps on error; after Reaped on join/detach"
+    },
+    {
+      "file": "kernel/src/process/mmap.rs",
+      "function": "map_anonymous_kind",
+      "line": 269,
+      "phase": "user_preparation",
+      "allocation": "mmap installed-page journal, swap candidate capacity and physical mappings",
+      "handling": "existing checked/fallible reservations and PMM mapping rollback",
+      "ownership": "cancel ledger reservation, roll back installed mappings; NO_MERGE preserves cleanup boundaries"
+    },
+    {
+      "file": "kernel/src/process/region.rs",
+      "function": "preflight_unmap",
+      "line": 351,
+      "phase": "user_cleanup",
+      "allocation": "formerly heap-backed unmap plan",
+      "handling": "now no allocation: validate compact bounded edit",
+      "ownership": "failure leaves mappings unchanged; whole thread resources need no extra record"
+    },
+    {
+      "file": "kernel/src/process/region.rs",
+      "function": "commit_unmap",
+      "line": 467,
+      "phase": "user_cleanup",
+      "allocation": "fixed 256-record ledger replay",
+      "handling": "no allocation or large stack array; preflight and guard establish capacity",
+      "ownership": "synchronous physical/TLB retirement in existing mmap path"
+    },
+    {
+      "file": "kernel/src/sched/mod.rs",
+      "function": "reap_process_resources",
+      "line": 2730,
+      "phase": "post_publication_lifecycle",
+      "allocation": "stack, inherited state and FD references",
+      "handling": "drops/releases after physical pins/owners/queues permit",
+      "ownership": "stack None, owned strings/Vecs dropped, then Reaped returns quota"
+    },
+    {
+      "file": "kernel/src/sched/mod.rs",
+      "function": "close_owned_ipc_endpoints",
+      "line": 2707,
+      "phase": "post_publication_lifecycle",
+      "allocation": "endpoint-ID vectors when task owns endpoints",
+      "handling": "existing infallible collection; outside recoverable construction return",
+      "ownership": "remaining general-retirement allocator path, not claimed globally OOM-safe"
+    },
+    {
+      "file": "kernel/src/arch/x86_64/syscall.rs",
+      "function": "sys_native_exit_group",
+      "line": 2901,
+      "phase": "post_publication_lifecycle",
+      "allocation": "sibling PID Vec",
+      "handling": "bounded by task table but still infallible collect",
+      "ownership": "remaining general process-abort/exit path; recoverable constructor errors do not invoke it"
+    },
+    {
+      "file": "kernel/src/process/mod.rs",
+      "function": "new_thread",
+      "line": 618,
+      "phase": "trusted_setup_only",
+      "allocation": "legacy stacks/default cwd and caller-provided owned state",
+      "handling": "infallible wrapper retained for trusted boot MM-0 and isolated prebuilt fixtures",
+      "ownership": "not reachable from native 22/158 or Linux clone"
+    }
+  ],
+  "notes": [
+    "Process metadata is inline until placement in the reserved Vec, not a separately boxed Process.",
+    "User std Box/Arc closure/packet allocation before the OS hook retains Rust global allocation/abort semantics.",
+    "Kernel stack/FD layouts and all inherited bytes are bounded before construction.",
+    "No constructor invokes the general reaper or allocates after its successful Linux TID store.",
+    "General process spawn, EnvMap mutation/serialization, FD opens, endpoint retirement and unrelated IPC/kernel users retain infallible allocation sites."
+  ]
+}

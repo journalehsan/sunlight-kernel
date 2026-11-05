@@ -1,0 +1,155 @@
+[workspace]
+resolver = "2"
+members = [
+    "fastlane-ring",
+    "fastlane-doorbell",
+    "kernel",
+    "ipc",
+    "drivers",
+    "compat-linux",
+    "sunlight-top",
+    "memoryctl",
+    "sunlight-telemetry",
+    "services/init",
+    "services/timer_server",
+    "services/timed",
+    "services/vfs_server",
+    "services/net_server",
+    "services/sunlightd",
+    "services/sunlight-swapd",
+    "services/sunlightctl",
+    "services/sunlight-uac",
+    "sunlight-tui",
+    "sunlight-tz",
+    "sunlight-block",
+    "sunlight-fs",
+    "sunlight-virtio",
+    "sunlight-fat",
+    "sunlight-libc",
+    "sunlight-tty",
+    "services/tty_server",
+    "services/timezone_service",
+    "sunlight-elf",
+    "sunshell",
+    "sunlight-net",
+    "sunlight-utils",
+    "sunlight-net-utils",
+    "sunlight-http",
+    "sunlight-fetch",
+    "services/sunlight-niced",
+    "services/sunlight-gcd",
+    "sunlight-kv",
+    "sunlight-kvctl",
+    "sunlight-tls",
+    "certificatectl",
+    "services/rand_service",
+    "services/secret_store_test",
+    "services/sunlight-sm",
+    "std-proof/sunlight-sunsay",
+    "std-proof/sunlight-zoxide",
+    "std-proof/sunlight-dict",
+    "sunlight-hangman", "helios-note",
+    "cpu-utils",
+    "sunlight-smbios",
+    "sunlight-sensors",
+    "sunlight-edit",
+    "sunlight-emoji-picker",
+    "sunlight-writer",
+    "services/sunlight-kbd",
+    "services/sunlight-mouse",
+    "services/sunlight-usb-mouse",
+    "services/sunlight-display",
+    "services/eyes",
+    "services/sun-exec",
+    "services/sun-open",
+    "services/sunlight-terminal",
+    "sunlight-ui",
+    "services/sunlight-tasks",
+    "services/sunlight-runner",
+    "services/sunlight-vortex-shell",
+    "services/sunlight-sessiond",
+    "services/sunlight-sessionctl",
+    "services/sunlight-startup-fixture",
+    "services/mezzo",
+    "services/pty_server",
+    "services/sunlight-deviced",
+    "services/sunlight-networkd",
+    "services/sunlight-resolved",
+    "services/sunlight-powerd",
+    "services/sunlight-thermald",
+    "sunlight-audio",
+    "sunlight-media",
+    "services/sunlight-audiod",
+    "services/solar",
+    "sun-font",
+    "sunlight-bench",
+    "sunlight-calculator",
+    "sunlight-welcome",
+    "sunlight-widget-gallery",
+    "sunlight-files",
+    "sunlight-docserv",
+    "sunlight-docview",
+    "sunlight-light-lens",
+    "sunlight-clipman",
+    "sunlight-dialogs",
+    "services/sunlight-dialogd",
+    "services/sunlight-control-panel",
+    "services/sunlight-thumbd",
+    "services/sunlight-clipd",
+    "sun-img",
+    "sun-imgc",
+    "sunlight-wallpaper",
+    "sunlight-locale",
+    "sunlight-calendar",
+    "sunlight-reminders",
+    "sunlight-devices",
+    "rappid-rabbit",
+    "sunlight-api-lab",
+    "golden-fish",
+    "melody-mina",
+    "sunlight-voice-recorder",
+    "chronos-core",
+    "sunlight-chronos",
+    "sunlight-silicon-echoes",
+    "sunlight-shell-appstate",
+    "mezzoctl",
+    "wiseowl-memory",
+    "wiseowl-memorydb",
+    "wiseowl-identity",
+    "wiseowl-index",
+    "wiseowl-brain",
+    "wiseowl-console",
+]
+
+[workspace.dependencies]
+# shared versions across all crates
+
+[profile.dev]
+panic = "abort"
+opt-level = 1        # some optimization needed even in dev for correctness
+
+[profile.release]
+panic = "abort"
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Size-optimized userland utilities (overrides workspace release defaults).
+[profile.release.package.sunlight-fetch]
+opt-level = "z"
+
+[profile.release.package.sunlight-top]
+opt-level = "z"
+
+[profile.release.package.sunshell]
+opt-level = "z"
+
+[profile.release.package.sunlight-files]
+opt-level = "z"
+
+[profile.release.package.sunlight-devices]
+opt-level = "z"
+
+[profile.release.package.helios-note]
+opt-level = "z"

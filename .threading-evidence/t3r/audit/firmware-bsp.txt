@@ -1,0 +1,16 @@
+kernel/src/arch/x86_64/smp.rs:120:pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
+kernel/src/arch/x86_64/smp.rs:123:        Some(bsp_lapic_id)
+kernel/src/arch/x86_64/smp.rs:129:        if cpu_info.lapic_id == bsp_lapic_id {
+kernel/src/arch/x86_64/smp.rs:134:            .logical_id(cpu_info.lapic_id)
+kernel/src/arch/x86_64/smp.rs:144:            "[SMP] Starting AP{}  proc_id={}  lapic_id={}  stack={:#x}..{:#x}",
+kernel/src/arch/x86_64/smp.rs:146:            cpu_info.processor_id,
+kernel/src/arch/x86_64/smp.rs:147:            cpu_info.lapic_id,
+kernel/src/arch/x86_64/smp.rs:152:        cpu_info.bootstrap(ap_entry, stack_top);
+kernel/src/arch/x86_64/smp.rs:214:/// Naked entry point given to Limine via `MpInfo::bootstrap`.
+kernel/src/arch/x86_64/smp.rs:217:/// `extra_argument` (offset 24) holds the kernel stack top written by
+kernel/src/arch/x86_64/smp.rs:333:        Some(info.lapic_id)
+kernel/src/arch/x86_64/smp.rs:369:    assert_eq!(lapic::local_apic_id(), info.lapic_id);
+kernel/src/arch/x86_64/smp.rs:375:        info.lapic_id,
+kernel/src/arch/x86_64/cpu_identity.rs:31:            ids[slot] = cpu.lapic_id;
+kernel/src/arch/x86_64/cpu_identity.rs:33:            crate::serial_println!("[T3R-FW] slot={} processor={} apic={} bsp={}", slot, cpu.processor_id, cpu.lapic_id, mp.bsp_lapic_id);
+kernel/src/arch/x86_64/cpu_identity.rs:35:        (cpus.len(), mp.bsp_lapic_id)

@@ -1,0 +1,73 @@
+Diff in /home/ehsantor/Projects/sunlightos-kernel/tools/tests/thread_admission.rs:367:
+ #[test]
+ fn inherited_state_budgets_reject_before_publication() {
+     let mut s = Scheduler::new(0, 0);
+[31m-    for n in 0..129 { s.processes[0].env.set(&format!("K{n}"), "value"); }
+(B[m[31m-    assert!(matches!(s.create(), Err(process::thread_admission::Error::Capacity)));
+(B[m[32m+    for n in 0..129 {
+(B[m[32m+        s.processes[0].env.set(&format!("K{n}"), "value");
+(B[m[32m+    }
+(B[m[32m+    assert!(matches!(
+(B[m[32m+        s.create(),
+(B[m[32m+        Err(process::thread_admission::Error::Capacity)
+(B[m[32m+    ));
+(B[m     assert_eq!(s.processes.len(), 1);
+     s.processes[0].env = process::env::EnvMap::new();
+     s.processes[0].cwd = "x".repeat(process::thread_admission::MAX_INHERITED_BYTES + 1);
+Diff in /home/ehsantor/Projects/sunlightos-kernel/tools/tests/thread_admission.rs:375:
+[31m-    assert!(matches!(s.create(), Err(process::thread_admission::Error::Capacity)));
+(B[m[32m+    assert!(matches!(
+(B[m[32m+        s.create(),
+(B[m[32m+        Err(process::thread_admission::Error::Capacity)
+(B[m[32m+    ));
+(B[m     s.processes[0].cwd.pop();
+     assert!(s.create().is_ok());
+ }
+Diff in /home/ehsantor/Projects/sunlightos-kernel/tools/tests/thread_admission.rs:390:
+         let start = Arc::new(Barrier::new(4));
+         let mut creators = Vec::new();
+         for _ in 0..2 {
+[31m-            let s = s.clone(); let start = start.clone();
+(B[m[31m-            creators.push(std::thread::spawn(move || { start.wait(); s.lock().unwrap().create().is_ok() }));
+(B[m[32m+            let s = s.clone();
+(B[m[32m+            let start = start.clone();
+(B[m[32m+            creators.push(std::thread::spawn(move || {
+(B[m[32m+                start.wait();
+(B[m[32m+                s.lock().unwrap().create().is_ok()
+(B[m[32m+            }));
+(B[m         }
+[31m-        let other = s.clone(); let ready = start.clone();
+(B[m[32m+        let other = s.clone();
+(B[m[32m+        let ready = start.clone();
+(B[m         let reaper = std::thread::spawn(move || {
+[31m-            ready.wait(); let mut s = other.lock().unwrap();
+(B[m[32m+            ready.wait();
+(B[m[32m+            let mut s = other.lock().unwrap();
+(B[m             s.processes[dead].pinned = false;
+             s.processes[dead].state = ProcessState::Reaped;
+         });
+Diff in /home/ehsantor/Projects/sunlightos-kernel/tools/tests/thread_admission.rs:402:
+         start.wait();
+         reaper.join().unwrap();
+[31m-        let admitted = creators.into_iter().map(|j| usize::from(j.join().unwrap())).sum::<usize>();
+(B[m[32m+        let admitted = creators
+(B[m[32m+            .into_iter()
+(B[m[32m+            .map(|j| usize::from(j.join().unwrap()))
+(B[m[32m+            .sum::<usize>();
+(B[m         assert!(admitted <= 1);
+         let mut s = s.lock().unwrap();
+[31m-        if admitted == 0 { assert_eq!(s.create().unwrap(), dead); }
+(B[m[32m+        if admitted == 0 {
+(B[m[32m+            assert_eq!(s.create().unwrap(), dead);
+(B[m[32m+        }
+(B[m         assert!(s.create().is_err());
+         assert_eq!(s.processes.len(), 33);
+     }
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/check_format.py", line 8, in <module>
+    subprocess.run(['rustfmt','--check','--edition','2021','--config','skip_children=true',str(path)],check=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['rustfmt', '--check', '--edition', '2021', '--config', 'skip_children=true', '/home/ehsantor/Projects/sunlightos-kernel/tools/tests/thread_admission.rs']' returned non-zero exit status 1.

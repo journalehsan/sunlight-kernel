@@ -1,0 +1,6 @@
+{
+  "[T1] PASS": false,
+  "[T1-AUTH] PASS": false,
+  "completion_reuses=32": false,
+  "blocked-authenticated-ipc": false
+}

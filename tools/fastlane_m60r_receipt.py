@@ -23,7 +23,7 @@ def qualify(t, c):
         return duration
     except (ValueError,KeyError,TypeError): return 'malformed'
 
-def retirement(raw, cpus):
+def retirement(raw, cpus, *, expected_backings=6, checkpoints=(732,832,932,999)):
     """Same generation/region and authenticated view contract as R2, for this fixture."""
     errors=[]
     def need(ok, why):
@@ -35,7 +35,7 @@ def retirement(raw, cpus):
     seq=lambda r:int(r['seq'])
     backs=[r for r in frames if r['event']=='backing']; frees=[r for r in frames if r['event']=='free']
     life=lambda r:(r['generation'],r['region'])
-    need(len(backs)==6,'backing inventory') # four transfer channels, three pages each
+    need(len(backs)==expected_backings,'backing inventory') # four transfer channels, three pages each
     need(len({life(r) for r in backs})==len(backs),'duplicate lifetime')
     need(len(frees)==len(backs),'physical retirement inventory')
     need(len(maps)==len(backs)*6,'exact two-view mapping inventory')
@@ -71,7 +71,7 @@ def retirement(raw, cpus):
                 need(all(a['observed']==a['request']==tr[0]['request'] and a['targets']==tr[0]['targets'] and a['flushed']=='1' and seq(tr[0])<seq(a)<seq(td[0]) for a in acks),'ACK request ordering')
     need(len(attributed_maps)==len(maps) and len(attributed_tlbs)==len(tlbs) and len(attributed_frees)==len(frees),'orphan retirement event')
     censuses=rows(raw,'[FL-CENSUS] ')
-    need({r['checkpoint'] for r in censuses}=={'732','832','932','999'} and len(censuses)==4,'census coverage')
+    need({r['checkpoint'] for r in censuses}=={str(c) for c in checkpoints} and len(censuses)==len(checkpoints),'census coverage')
     need(all(all(int(r[k])==0 for k in ('objects','views','frames')) for r in censuses),'scoped inventory')
     active=set()
     for line in raw.splitlines():

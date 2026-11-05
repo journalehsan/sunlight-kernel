@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/make_hybrid_iso.sh",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221022.584184Z-pilot-global-winner1/kernel.elf",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2r/20261104T221022.584184Z-pilot-global-winner1/boot.iso",
+    "target/limine",
+    "/home/ehsantor/Projects/sunlightos-kernel"
+  ],
+  "exit_code": 0,
+  "seconds": 0.7510368599905632
+}

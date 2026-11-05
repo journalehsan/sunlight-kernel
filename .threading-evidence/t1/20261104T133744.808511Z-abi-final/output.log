@@ -1,0 +1,64 @@
+
+target/x86_64-unknown-none/debug/sunlight-kernel:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+ffffffff800420b0 <_RNvNtNtNtCsfBCwI5vYyqA_15sunlight_kernel4arch6x86_647syscall13syscall_entry>:
+ffffffff800420b0:	swapgs
+ffffffff800420b3:	mov    QWORD PTR gs:0x8,rsp
+ffffffff800420bc:	cmp    QWORD PTR gs:0x0,0x0
+ffffffff800420c6:	je     ffffffff80042136 <_RNvNtNtNtCsfBCwI5vYyqA_15sunlight_kernel4arch6x86_647syscall13syscall_entry+0x86>
+ffffffff800420c8:	mov    rsp,QWORD PTR gs:0x0
+ffffffff800420d1:	sub    rsp,0x100
+ffffffff800420d8:	and    rsp,0xfffffffffffffff0
+ffffffff800420dc:	push   QWORD PTR gs:0x8
+ffffffff800420e4:	swapgs
+ffffffff800420e7:	push   r15
+ffffffff800420e9:	push   r14
+ffffffff800420eb:	push   r13
+ffffffff800420ed:	push   r12
+ffffffff800420ef:	push   r11
+ffffffff800420f1:	push   r10
+ffffffff800420f3:	push   r9
+ffffffff800420f5:	push   r8
+ffffffff800420f7:	push   rbp
+ffffffff800420f8:	push   rdi
+ffffffff800420f9:	push   rsi
+ffffffff800420fa:	push   rdx
+ffffffff800420fb:	push   rcx
+ffffffff800420fc:	push   rbx
+ffffffff800420fd:	push   rax
+ffffffff800420fe:	mov    rdi,rsp
+ffffffff80042101:	mov    rbx,rsp
+ffffffff80042104:	and    rsp,0xfffffffffffffff0
+ffffffff80042108:	call   ffffffff8006b1f0 <syscall_dispatch>
+ffffffff8004210d:	mov    rsp,rbx
+ffffffff80042110:	mov    QWORD PTR [rsp],rax
+ffffffff80042114:	pop    rax
+ffffffff80042115:	pop    rbx
+ffffffff80042116:	pop    rcx
+ffffffff80042117:	pop    rdx
+ffffffff80042118:	pop    rsi
+ffffffff80042119:	pop    rdi
+ffffffff8004211a:	pop    rbp
+ffffffff8004211b:	pop    r8
+ffffffff8004211d:	pop    r9
+ffffffff8004211f:	pop    r10
+ffffffff80042121:	pop    r11
+ffffffff80042123:	pop    r12
+ffffffff80042125:	pop    r13
+ffffffff80042127:	pop    r14
+ffffffff80042129:	pop    r15
+ffffffff8004212b:	or     r11,0x200
+ffffffff80042132:	pop    rsp
+ffffffff80042133:	sysretq
+ffffffff80042136:	ud2
+
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/check_syscall_stack_abi.py", line 53, in <module>
+    main()
+    ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/check_syscall_stack_abi.py", line 48, in main
+    raise AssertionError('negative ABI control accepted')
+AssertionError: negative ABI control accepted

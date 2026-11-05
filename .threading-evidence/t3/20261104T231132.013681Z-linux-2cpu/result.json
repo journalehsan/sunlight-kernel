@@ -1,0 +1,47 @@
+{
+  "pass": false,
+  "timeout": true,
+  "iso_sha256": "b76904d95b4c4d5216061cf5c45acf694b036cb7bc5f2352aa36ec9ae0f44bc8",
+  "cpus": 2,
+  "markers": [
+    "affinity_mask=0000000000000003",
+    "affinity=logical-dense invalid-size=EINVAL",
+    "THREAD_PROBE PASS",
+    "fd_table=ok eventfd=ok",
+    "child_tid_clear=ok"
+  ],
+  "topology": "standard",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "2",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231110.692614Z-suite-linux/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T231132.013681Z-linux-2cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "observed_apic_ids": [
+    0,
+    1
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "998672dd6569d7796163fcb1e5dc893acc0387bf64d52c75d53e3cf74f7640d6",
+  "seconds": 300.1848937809991
+}

@@ -81,6 +81,9 @@ impl RegionPolicy {
     /// ordinary anonymous mappings, including thread stacks and allocator
     /// arenas, so reserving virtual address space does not consume RAM.
     pub const DEMAND: Self = Self(1 << 6);
+    /// Preserve this allocation's boundaries so releasing the complete range
+    /// cannot require a middle split (and an additional ledger entry).
+    pub const NO_MERGE: Self = Self(1 << 7);
 
     pub const fn empty() -> Self {
         Self(0)
@@ -153,7 +156,9 @@ impl MappingRegion {
     }
 
     pub fn compatible_for_merge(self, other: Self) -> bool {
-        if self.kind != other.kind
+        if self.policy.contains(RegionPolicy::NO_MERGE)
+            || other.policy.contains(RegionPolicy::NO_MERGE)
+            || self.kind != other.kind
             || self.protection != other.protection
             || self.policy != other.policy
         {
@@ -192,10 +197,13 @@ pub struct UnmapEffects {
     pub middle_splits: u64,
 }
 
-/// Complete fixed-capacity ledger image staged before an unmap publishes any
-/// PTE changes. Its contents are intentionally opaque outside this module.
+/// Prevalidated bounded edit, held across PTE removal under the scheduler
+/// guard. Unlike replacement/protection plans, unmap needs no heap storage:
+/// one contiguous removal can split at most one existing region.
 pub struct UnmapPlan {
-    records: Vec<MappingRegion>,
+    start: u64,
+    end: u64,
+    original_len: usize,
     len: usize,
     effects: UnmapEffects,
 }
@@ -337,9 +345,9 @@ impl RegionLedger {
         Ok(())
     }
 
-    /// Resolve and stage a policy-authorized anonymous unmap. The complete
-    /// final layout is constructed here, so commit performs no allocation and
-    /// cannot encounter an expected capacity or policy failure.
+    /// Validate a policy-authorized anonymous unmap. Record the bounded edit
+    /// only after every policy/capacity decision, so neither preflight nor
+    /// commit needs an allocation. The scheduler guard spans both operations.
     pub fn preflight_unmap(&self, start: u64, end: u64) -> Result<UnmapPlan, LedgerError> {
         let requested = MappingRegion::new(
             start,
@@ -392,36 +400,10 @@ impl RegionLedger {
             return Err(LedgerError::CapacityExhausted);
         }
 
-        // Second pass builds the exact final sorted layout.
-        let mut records = Self::staging_records()?;
-        let mut output = 0usize;
-        for region in self.records[..self.len].iter().copied() {
-            let overlap_start = region.start.max(requested.start);
-            let overlap_end = region.end.min(requested.end);
-            if overlap_start >= overlap_end {
-                records[output] = region;
-                output += 1;
-                continue;
-            }
-
-            if region.start < overlap_start {
-                let mut left = region;
-                left.end = overlap_start;
-                records[output] = left;
-                output += 1;
-            }
-            if overlap_end < region.end {
-                let mut right = region;
-                right.start = overlap_end;
-                records[output] = right;
-                output += 1;
-            }
-        }
-        if output != final_len {
-            return Err(LedgerError::Inconsistent);
-        }
         Ok(UnmapPlan {
-            records,
+            start: requested.start,
+            end: requested.end,
+            original_len: self.len,
             len: final_len,
             effects,
         })
@@ -484,8 +466,52 @@ impl RegionLedger {
     /// transactions for an address space, and preflight rejects pending ones.
     pub fn commit_unmap(&mut self, plan: UnmapPlan) {
         assert_eq!(self.pending_len, 0, "ledger changed during staged unmap");
-        self.records.copy_from_slice(&plan.records);
-        self.len = plan.len;
+        assert_eq!(
+            self.len, plan.original_len,
+            "ledger changed during staged unmap"
+        );
+        // This revalidation is allocation-free too. The scheduler guard must
+        // span preflight/PTE removal/commit, as for the previous image plan.
+        let current = self
+            .preflight_unmap(plan.start, plan.end)
+            .expect("ledger policy changed during staged unmap");
+        assert_eq!(current.effects, plan.effects);
+        assert_eq!(current.len, plan.len);
+        let mut index = 0;
+        while index < self.len {
+            let region = self.records[index];
+            let start = region.start.max(plan.start);
+            let end = region.end.min(plan.end);
+            if start >= end {
+                index += 1;
+                continue;
+            }
+            match (start == region.start, end == region.end) {
+                (true, true) => self.remove_committed(index),
+                (true, false) => {
+                    self.records[index].start = end;
+                    index += 1;
+                }
+                (false, true) => {
+                    self.records[index].end = start;
+                    index += 1;
+                }
+                (false, false) => {
+                    // A middle split implies that this is the *only* region
+                    // intersected by the request. Preflight reserved its one
+                    // additional entry, so the temporary layout fits too.
+                    assert!(self.len < MAX_REGIONS_PER_ADDRESS_SPACE);
+                    self.records.copy_within(index + 1..self.len, index + 2);
+                    let mut right = region;
+                    right.start = end;
+                    self.records[index].end = start;
+                    self.records[index + 1] = right;
+                    self.len += 1;
+                    index += 2;
+                }
+            }
+        }
+        assert_eq!(self.len, plan.len);
         debug_assert_eq!(self.validate(), Ok(()));
     }
 

@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    "/tmp/threading_t1_direct_clippy.py",
+    ".threading-evidence/t1/atomic-direct-clippy-detail"
+  ],
+  "exit_code": 1,
+  "seconds": 14.515093649009941
+}

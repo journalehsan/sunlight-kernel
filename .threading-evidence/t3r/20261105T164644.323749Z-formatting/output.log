@@ -1,0 +1,357 @@
+[
+  {
+    "file": "kernel/src/arch/x86_64/cpu_identity.rs",
+    "discrepancies": []
+  },
+  {
+    "file": "kernel/src/sched/t3r_fixture.rs",
+    "discrepancies": []
+  },
+  {
+    "file": "kernel/build.rs",
+    "discrepancies": []
+  },
+  {
+    "file": "kernel/src/arch/x86_64/syscall.rs",
+    "discrepancies": [
+      {
+        "line": 400,
+        "changed": false
+      },
+      {
+        "line": 436,
+        "changed": false
+      },
+      {
+        "line": 557,
+        "changed": false
+      },
+      {
+        "line": 975,
+        "changed": false
+      },
+      {
+        "line": 979,
+        "changed": false
+      },
+      {
+        "line": 982,
+        "changed": false
+      },
+      {
+        "line": 1634,
+        "changed": false
+      },
+      {
+        "line": 1865,
+        "changed": false
+      },
+      {
+        "line": 1868,
+        "changed": false
+      },
+      {
+        "line": 1874,
+        "changed": false
+      },
+      {
+        "line": 1881,
+        "changed": false
+      },
+      {
+        "line": 1914,
+        "changed": false
+      },
+      {
+        "line": 2864,
+        "changed": false
+      },
+      {
+        "line": 3001,
+        "changed": false
+      },
+      {
+        "line": 3401,
+        "changed": false
+      },
+      {
+        "line": 3450,
+        "changed": false
+      },
+      {
+        "line": 3815,
+        "changed": false
+      },
+      {
+        "line": 7068,
+        "changed": false
+      },
+      {
+        "line": 7072,
+        "changed": false
+      },
+      {
+        "line": 7184,
+        "changed": false
+      },
+      {
+        "line": 7246,
+        "changed": false
+      },
+      {
+        "line": 7253,
+        "changed": false
+      },
+      {
+        "line": 10451,
+        "changed": false
+      },
+      {
+        "line": 12581,
+        "changed": false
+      },
+      {
+        "line": 12583,
+        "changed": false
+      },
+      {
+        "line": 12589,
+        "changed": false
+      },
+      {
+        "line": 12591,
+        "changed": false
+      },
+      {
+        "line": 12593,
+        "changed": false
+      },
+      {
+        "line": 12596,
+        "changed": false
+      },
+      {
+        "line": 12598,
+        "changed": false
+      },
+      {
+        "line": 12603,
+        "changed": false
+      },
+      {
+        "line": 12606,
+        "changed": false
+      },
+      {
+        "line": 12613,
+        "changed": false
+      },
+      {
+        "line": 12616,
+        "changed": false
+      },
+      {
+        "line": 12623,
+        "changed": false
+      },
+      {
+        "line": 12631,
+        "changed": false
+      },
+      {
+        "line": 12645,
+        "changed": false
+      },
+      {
+        "line": 12654,
+        "changed": false
+      },
+      {
+        "line": 12657,
+        "changed": false
+      },
+      {
+        "line": 12665,
+        "changed": false
+      },
+      {
+        "line": 12673,
+        "changed": false
+      },
+      {
+        "line": 12675,
+        "changed": false
+      },
+      {
+        "line": 12684,
+        "changed": false
+      },
+      {
+        "line": 12686,
+        "changed": false
+      }
+    ]
+  },
+  {
+    "file": "kernel/src/main.rs",
+    "discrepancies": [
+      {
+        "line": 218,
+        "changed": false
+      },
+      {
+        "line": 220,
+        "changed": false
+      },
+      {
+        "line": 222,
+        "changed": false
+      },
+      {
+        "line": 225,
+        "changed": false
+      },
+      {
+        "line": 227,
+        "changed": false
+      },
+      {
+        "line": 229,
+        "changed": false
+      },
+      {
+        "line": 231,
+        "changed": false
+      },
+      {
+        "line": 233,
+        "changed": false
+      },
+      {
+        "line": 235,
+        "changed": false
+      },
+      {
+        "line": 237,
+        "changed": false
+      },
+      {
+        "line": 239,
+        "changed": false
+      },
+      {
+        "line": 241,
+        "changed": false
+      },
+      {
+        "line": 243,
+        "changed": false
+      },
+      {
+        "line": 851,
+        "changed": false
+      }
+    ]
+  },
+  {
+    "file": "kernel/src/process/fd_table.rs",
+    "discrepancies": []
+  },
+  {
+    "file": "kernel/src/sched/handoff.rs",
+    "discrepancies": []
+  },
+  {
+    "file": "kernel/src/sched/mod.rs",
+    "discrepancies": [
+      {
+        "line": 90,
+        "changed": false
+      },
+      {
+        "line": 92,
+        "changed": false
+      },
+      {
+        "line": 94,
+        "changed": false
+      },
+      {
+        "line": 487,
+        "changed": false
+      },
+      {
+        "line": 492,
+        "changed": false
+      },
+      {
+        "line": 498,
+        "changed": false
+      },
+      {
+        "line": 504,
+        "changed": false
+      },
+      {
+        "line": 1083,
+        "changed": false
+      },
+      {
+        "line": 1149,
+        "changed": false
+      },
+      {
+        "line": 1213,
+        "changed": false
+      },
+      {
+        "line": 1836,
+        "changed": false
+      },
+      {
+        "line": 1924,
+        "changed": false
+      },
+      {
+        "line": 2720,
+        "changed": false
+      },
+      {
+        "line": 2734,
+        "changed": false
+      },
+      {
+        "line": 2876,
+        "changed": false
+      },
+      {
+        "line": 2882,
+        "changed": false
+      },
+      {
+        "line": 2924,
+        "changed": false
+      },
+      {
+        "line": 2979,
+        "changed": false
+      },
+      {
+        "line": 2984,
+        "changed": false
+      },
+      {
+        "line": 3136,
+        "changed": false
+      },
+      {
+        "line": 4390,
+        "changed": false
+      },
+      {
+        "line": 4394,
+        "changed": false
+      }
+    ]
+  }
+]

@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# --- Step 0: Auto-version all workspace crates ---
+echo "[build] Updating version..."
+python3 "$SCRIPT_DIR/version_manager.py" "$PROJECT_ROOT"
+
+# --- Configuration ---
+# Embedded userspace ELFs plus the bootloader's file buffer exceed 256 MiB.
+QEMU_MEMORY="1024M"
+QEMU_CPUS="2"
+KERNEL_ELF="target/x86_64-unknown-none/debug/sunlight-kernel"
+ISO_PATH="target/sunlightos.iso"
+LIMINE_BRANCH="v8.x"
+LIMINE_DIR="target/limine"
+
+# Kernel flags: conservative, no SIMD assumptions (x86-64 baseline only).
+# The kernel target (x86_64-unknown-none) already disables SSE/AVX via soft-float.
+KERNEL_RUSTFLAGS="-C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static"
+
+# Userspace baseline: x86-64-v2 (SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, CMPXCHG16B).
+# v2 enables better code generation for userspace services without requiring AVX.
+# v3 (AVX/AVX2) is runtime-only for selected apps until kernel adds XSAVE/YMM switching.
+SERVICE_RUSTFLAGS="-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone"
+
+# sunlight-tls links a pure-Rust rustls stack. x86_64-unknown-none disables SSE,
+# but x86-64-v2 re-enables SSE/SSE2. The RustCrypto crates still need soft backend
+# forcing because their auto-detection triggers AVX2/AES-NI backends that require
+# runtime feature checks or OS state the kernel doesn't provide yet (XSAVE/YMM).
+# See the Phase-0 TLS build recipe.
+# Phase-0 TLS build recipe.
+TLS_RUSTFLAGS="$SERVICE_RUSTFLAGS --cfg aes_force_soft --cfg polyval_force_soft --cfg poly1305_force_soft --cfg chacha20_force_soft --cfg curve25519_dalek_backend=\"serial\""
+
+# --- Step 1: Build service binaries first (embedded via include_bytes!) ---
+echo "[build] Building user-space services..."
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-init --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timer-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-swapd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kbd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-mouse --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-usb-mouse --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-deviced --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-networkd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-resolved --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-powerd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thermald --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-audiod --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-vfs-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tty-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package pty_server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-server --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package timezone_service --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-timed --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tz --features tzutils --bin tzutils --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rand_service --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessiond --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sessionctl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-startup-fixture --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-niced --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-gcd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightctl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-uac --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sm --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-solar --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$TLS_RUSTFLAGS" cargo build --package sunlight-tls --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package certificatectl --features sunlightos --no-default-features --release
+# sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunshell --features sunlight --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-utils --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-net-utils --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-top --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package memoryctl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-fetch --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sunsay --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-zoxide --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-dict --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-hangman --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package cpu-utils --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-display --release
+# Session lock: init-launched mezzo + /bin/mezzoctl (must use SERVICE_RUSTFLAGS).
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzo --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package mezzoctl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package eyes --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-runner --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-exec --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sun-open --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-terminal --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-chronos --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-tasks --release
+bash tools/build_svg_apps.sh -p sunlight-vortex-shell
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-bench --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calculator --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-widget-gallery --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-silicon-echoes --release
+bash tools/build_svg_apps.sh -p sunlight-files
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-light-lens --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package melody-mina --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-voice-recorder --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-edit --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
+bash tools/build_svg_apps.sh -p sunlight-dialogd
+bash tools/build_svg_apps.sh -p sunlight-control-panel
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-thumbd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipd --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-clipman --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memory --bin wiseowl-memoryd --bin wiseowl-memoryctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-memorydb --bin wiseowl-memorydb --bin wiseowl-memorydbctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-console --bin wiseowl --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release
+# Force a non-PIE static link so e_type is ET_EXEC (not ET_DYN). The kernel ELF
+# loader (sunlight-elf parse_elf_header) only accepts ET_EXEC; -no-pie + crt-static
+# is required because musl otherwise emits a static-PIE that loads as DYN.
+RUSTFLAGS="-C relocation-model=static -C target-feature=+crt-static -C link-arg=-no-pie" cargo build --package helios-note --release --target x86_64-unknown-linux-musl
+"$SCRIPT_DIR/stamp_helios_elf.sh" \
+    "$PROJECT_ROOT/target/x86_64-unknown-linux-musl/release/helios-note"
+"$SCRIPT_DIR/stamp_helios_elf.sh" "$PROJECT_ROOT/hello-linux/hello-linux.elf"
+
+# --- Step 2: Build the kernel ELF ---
+echo "[build] Building kernel..."
+# The kernel embeds userspace ELF blobs via include_bytes!, but Cargo does not
+# track those release artifacts as kernel inputs. Force a fresh kernel compile
+# so changed services are actually baked into the ISO.
+# Also force sunlightd rebuild so new service units are included.
+touch "$PROJECT_ROOT/kernel/src/main.rs"
+touch "$PROJECT_ROOT/services/sunlightd/src/main.rs"
+document_kernel_features=()
+# The native renderer is part of the default image: without it the viewer
+# launches, creates its window, then fails every open with
+# "[DOCVIEW] render failed: docserv is unavailable". Set
+# SUNLIGHT_DOCUMENT_VIEWER=0 to build a smaller image that omits documents.
+if [[ "${SUNLIGHT_DOCUMENT_VIEWER:-1}" != 0 ]]; then
+    bash "$SCRIPT_DIR/build_docserv.sh"
+    document_kernel_features=(--features document_viewer)
+    if [[ "${DOCSERV_BACKEND:-hayro}" == hayro ]]; then
+        document_kernel_features=(--features native_document_viewer)
+    fi
+    if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -n "${DOCSERV_GS_SOURCE:-}" ]]; then
+        bash "$SCRIPT_DIR/build_docserv_ghostscript.sh"
+    fi
+    if [[ "${DOCSERV_BACKEND:-hayro}" == mupdf-legacy && -f "$PROJECT_ROOT/target/docserv-gs" ]]; then
+        document_kernel_features=(--features document_viewer,document_postscript)
+    fi
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --features document-service
+else
+    echo "[build] Document rendering disabled (SUNLIGHT_DOCUMENT_VIEWER=0); enabling it for the legacy MuPDF backend also needs DOCSERV_BACKEND=mupdf-legacy and a musl C/C++ toolchain"
+    document_kernel_features=(--no-default-features)
+    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlightd --release --no-default-features
+fi
+cargo build --package sunlight-kernel "${document_kernel_features[@]}"
+
+# --- Step 3–6: Limine hybrid ISO (legacy BIOS + x86_64 UEFI) ---
+echo "[build] Building hybrid ISO (BIOS + UEFI)..."
+LIMINE_BRANCH="$LIMINE_BRANCH" "$SCRIPT_DIR/make_hybrid_iso.sh" \
+    "$KERNEL_ELF" "$ISO_PATH" "$PROJECT_ROOT/$LIMINE_DIR" "$PROJECT_ROOT"
+
+# --- Step 7: Launch QEMU ---
+echo "[build] Launching QEMU..."
+
+KVM_FLAGS=""
+if [[ -r /dev/kvm && -w /dev/kvm ]]; then
+    KVM_FLAGS="-enable-kvm"
+    echo "[build] KVM acceleration enabled"
+else
+    echo "[build] KVM not available, falling back to TCG"
+fi
+
+qemu-system-x86_64 \
+    -cdrom "$ISO_PATH" \
+    -serial stdio \
+    -display none \
+    -m "$QEMU_MEMORY" \
+    -smp "$QEMU_CPUS" \
+    $KVM_FLAGS \
+    -device virtio-rng-pci,disable-modern=on \
+    -device qemu-xhci,id=xhci -device usb-mouse,bus=xhci.0 \
+    -netdev user,id=net0,hostfwd=tcp::8080-:80 -device virtio-net-pci,netdev=net0,disable-modern=on \
+    -no-reboot \
+    -no-shutdown

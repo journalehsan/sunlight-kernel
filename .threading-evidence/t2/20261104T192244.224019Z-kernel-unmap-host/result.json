@@ -1,0 +1,16 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "sunlight-kernel",
+    "--lib",
+    "--target",
+    "x86_64-unknown-linux-gnu",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 13.258383809006773
+}

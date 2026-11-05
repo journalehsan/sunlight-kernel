@@ -1,0 +1,92 @@
+{
+  "native_input": ".threading-evidence/t3r/20261105T164434.160709Z-migration-2cpu/serial.log",
+  "native_input_sha256": "336bd3bc5a8e620c195a5a10dc479121f2228d366ed5ed31b98b134de0105009",
+  "native_positive_accepted": true,
+  "controls": [
+    {
+      "name": "request_only",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "ab0265c2d9e57fecdfde6562ec7812c5b009e58788e71bf66931ca563aad8a8c"
+    },
+    {
+      "name": "wrong_process_incarnation",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "cb2592cc2da34c2c4f58f4dd51dc44f932fea8309c5e9c8cc7550b4984101c9d"
+    },
+    {
+      "name": "wrong_thread_incarnation",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "71b36aed5ada9b16b32b69e90596b602895ac34a3b6bd50029dd5d7bdd31919f"
+    },
+    {
+      "name": "identical_physical_cpu",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "cc9cfb19a93c6f6aebe2979b5b4b7bed9c3cf52c7c39dbe53c9d696703d67614"
+    },
+    {
+      "name": "missing_destination_execution",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "37a2c3547246c6660ed3e47ef293d836436e58d208b944a3d552c45854db0403"
+    },
+    {
+      "name": "invalid_topology_mapping",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "a42ee67a509709da9bee918dcd8590f9985b1d8646c9a4c53ffcfc67445c5223"
+    },
+    {
+      "name": "wrong_tss_owner",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "2e79d3017bb73d2c2caa98eb238fe026a9b1adeebf40847d791304e51e1e18f7"
+    },
+    {
+      "name": "missing_tls_validation",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "d8da422c833c69eb86ea4cd81212c7a5d8ad683e4f3e36b4835428911615ac08"
+    },
+    {
+      "name": "corrupt_fp_validation",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "e6a0f17f59f79de4ffffcda41aa91a17f8c0fd8448764d3833b3cb304330c08f"
+    },
+    {
+      "name": "missing_retirement",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "e77e32f1e352d227d988388b4fee09f1f2b1591f5e5a3ffd55bda89800278922"
+    },
+    {
+      "name": "incomplete_reaping",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "0caeefe91981d867af9be4d2a747b1b0b0124c28c0d936aa1ea9e6f78c0514ba"
+    },
+    {
+      "name": "abandoned_handoff_waiter",
+      "classification": "HOST PARSER NEGATIVE CONTROL",
+      "accepted": false,
+      "pass": true,
+      "sha256": "da053d733bbdfaa81f08f4f245597cc0107a5b66a371c7f4714093cdff405539"
+    }
+  ],
+  "pass": true
+}

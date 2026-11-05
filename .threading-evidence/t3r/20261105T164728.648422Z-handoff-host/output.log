@@ -1,0 +1,12 @@
+
+running 7 tests
+test tests::cannot_overwrite_an_unreleased_context - should panic ... ok
+test tests::cpu_release_does_not_release_a_remote_stack_or_reused_index ... ok
+test tests::waiter_registered_while_pinned_is_drained_by_release ... ok
+test tests::waiter_after_release_proceeds_and_leaves_no_registration ... ok
+test tests::no_waiters_means_no_release_work ... ok
+test tests::remote_reclaim_and_selection_wait_for_physical_release ... ok
+test tests::racing_register_and_release_never_loses_the_waiter ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+

@@ -22,8 +22,9 @@ impl Thread {
         let ptr = Box::into_raw(init);
         let handle = unsafe { sl_std_spawn(entry, ptr.cast(), stack.max(DEFAULT_MIN_STACK_SIZE)) };
         if handle.is_null() {
+            let errno = unsafe { sl_std_errno() };
             unsafe { drop(Box::from_raw(ptr)) };
-            Err(io::Error::from_raw_os_error(12))
+            Err(io::Error::from_raw_os_error(errno))
         } else {
             Ok(Thread(handle))
         }

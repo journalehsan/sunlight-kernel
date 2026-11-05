@@ -172,7 +172,7 @@ fn capability_admission_probe() {
     );
 }
 
-fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
+pub fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     use super::tlb;
     const OLD: u64 = 0xFA57_1A4E_0101;
     const NEW: u64 = 0xFA57_1A4E_0202;
@@ -182,6 +182,11 @@ fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     let (base, token) = alloc_shared_region(&mut owner, pmm, &mut caps, hhdm, 4096).unwrap();
     let identity = owner.address_space.identity();
     let old_frame = caps.resolve_shared_region(token).unwrap().frames[0].start_address();
+    #[cfg(feature = "fastlane_hybrid_lifecycle_test")]
+    {
+        crate::capability::mapping_trace::backing(u64::MAX, 0, old_frame.as_u64());
+        crate::capability::mapping_trace::mapped(u64::MAX, 0, 0, &owner, base.as_u64(), old_frame.as_u64(), true);
+    }
     unsafe {
         (hhdm + old_frame.as_u64())
             .as_mut_ptr::<u64>()
@@ -192,6 +197,7 @@ fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     let cpus = crate::sched::ONLINE_CORES.load(Ordering::Acquire);
     let local = crate::sched::current_cpu_id();
     let targets = ((1u64 << cpus) - 1) & !(1u64 << local);
+    assert_ne!(targets, 0, "remote SHM retirement requires a real AP target");
     tlb::test_activate_and_read(identity, base.as_u64(), targets);
     for cpu in 0..cpus {
         if cpu != local {
@@ -199,6 +205,10 @@ fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
         }
     }
     let remote_before = tlb::test_remote_invalidation_count();
+    #[cfg(feature = "fastlane_hybrid_lifecycle_test")]
+    {
+        crate::serial_println!("[FL-R2-REMOTE] event=established generation={} vm={} va={} frame={} targets={} scope=kernel-shm-prerequisite",u64::MAX,identity.generation,base.as_u64(),old_frame.as_u64(),targets);
+    }
     assert!(caps.revoke_shared(token).is_none());
     free_shared_page(&mut owner, token, pmm, &mut caps, hhdm).unwrap();
     assert_eq!(

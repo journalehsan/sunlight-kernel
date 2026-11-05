@@ -1,0 +1,17 @@
+{
+  "kernel/src/sched/mod.rs": {
+    "before": "8c672711372d936ccc3fbc33a45a3e83bae6afeb2023ff2d89caa1e9da1f54e6",
+    "after": "477d41109a2b0a576392e5ab023e26e7dc126bfc475c65bb5719d9b57ed3aa18",
+    "complete_rustfmt_output_sha256": "49f3a520b8e4d1a572981efe1ceb60a389289d60ccc6171683bc20d674fb44a0"
+  },
+  "kernel/src/arch/x86_64/syscall.rs": {
+    "before": "605d39fe31eac6f25bccca0e1f0c56328985dfd5a51d5e1a4c4b7fae68dcdc06",
+    "after": "be69f7850a8b4a9062d3fae760896a078d3108ead34fb37e09b4843adc948c02",
+    "complete_rustfmt_output_sha256": "987d392ed777c436b2c489f6ed6a32490273b191e0b13839b5f2918e3ad48500"
+  },
+  "sunlight-libc/src/std_runtime.rs": {
+    "before": "3f2277a2cf222ec9f166c5eb1a2d5eb7661667af3fa7c72d0317d05b66c234d1",
+    "after": "966213cbb36ac18d93673d6ad389440d4e35c5583e65d4402168299fab53b468",
+    "complete_rustfmt_output_sha256": "966213cbb36ac18d93673d6ad389440d4e35c5583e65d4402168299fab53b468"
+  }
+}

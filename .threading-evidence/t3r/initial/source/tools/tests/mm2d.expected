@@ -1,0 +1,8 @@
+[MM-2D] full/prefix/suffix/middle + exact PMM release: OK
+[MM-2D] hole-only and mixed hole/anonymous ranges: OK
+[MM-2D] ELF/stack/brk/SHM/device/internal policy rejection: OK
+[MM-2D] native failure convention and Helios errno classes: OK
+[MM-2D] middle-split capacity rejection is atomic: OK
+[MM-2D] swapped anonymous page released without swap-in: OK
+[MM-2D] all CPUs dropped translation before frame reuse: OK
+[MM-2D] focused munmap/shootdown gate: OK

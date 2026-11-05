@@ -1,0 +1,20 @@
+{
+  "debug": {
+    "sha256": "eeb3d3ec390340cc3fc1db362cd3060187591d26d466cd78166eb34823a48905",
+    "fixture_markers": {
+      "[T1] PASS": false,
+      "[T1-AUTH] PASS": false,
+      "completion_reuses=32": false,
+      "blocked-authenticated-ipc": false
+    }
+  },
+  "release": {
+    "sha256": "09def12af4b5513af25183cd0cc9635e157fb6d42fc730168794f11235775f90",
+    "fixture_markers": {
+      "[T1] PASS": false,
+      "[T1-AUTH] PASS": false,
+      "completion_reuses=32": false,
+      "blocked-authenticated-ipc": false
+    }
+  }
+}

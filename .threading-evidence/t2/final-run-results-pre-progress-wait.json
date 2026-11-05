@@ -1,0 +1,11 @@
+[
+  {
+    "suite": "admission",
+    "command": [
+      "python3",
+      "tools/threading_t2_regressions.py",
+      "admission"
+    ],
+    "exit_code": 1
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--features",
+    "thread_admission_test",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 12.517529161996208
+}

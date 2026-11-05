@@ -1,0 +1,1057 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-05T17:36:29Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf1db708 (61916 frames, 241 MiB)
+[PMM] 1318/1559 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11907 end_count=7907 elapsed_counts=4000 tsc_delta=8311919 tsc_hz=2479408034
+[TIME] TSC calibrated ~2479408034 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8d68f068 ist_df=0xffffffff8e822000 ist_nmi=0xffffffff8e8a7c70
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62926600 lapic_initial_count=629266 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2479408034
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x05 hour=0x17 minute=0x37 second=0x07 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-05T17:37:07Z assumed_basis=UTC
+wall: utc=2026-11-05T17:37:07Z unix=1793900227 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8005e520
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8edeb3d0..0xffffffff8edfb3d0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8005e520
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8e762ba8 ist_df=0xffffffff8edfb3d0 ist_nmi=0xffffffff8e8abc70
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3893 memsz=3893 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=64c memsz=64c prot=Read
+[ELF] PT_LOAD off=5650 vaddr=404650 filesz=58 memsz=58 prot=ReadWrite
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=130 memsz=101128 prot=ReadWrite
+[SCHED] CREATED process #1 't4a-owner' idx=0 burst_score=256 tier=High
+[T4A] begin cpus=2 owner=58368 inc=1 vm=AddressSpaceIdentity { pml4_phys: 270422016, generation: 1 } heap=1919184 frames=332733
+[SCHED] process 0 't4a-owner' state=Ready
+[SCHED] Entering process 0 't4a-owner' at rsp=0xffffffff900087a0
+[SYSCALL] mmap(0x100000000, 0x1000) -> 0x100000000
+[SYSCALL] mmap(0x100000000, 0x1000) -> 0x100000000
+[T4A] arm case=0 address=0x406108 point=18446744073709551615
+[T4A] created case=0 role=0 tid=58369 inc=2 stack=0xffffffff901e0520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58369 trampoline=0x400000
+[T4A] created case=0 role=1 tid=58370 inc=3 stack=0xffffffff901ead20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58370 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58370 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58370 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58370 name='t4a-owner'
+[SCHED] process_mark_finished pid=58369 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58369 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58369 name='t4a-owner'
+[SCHED] process_reaped pid=58369 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58369 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58369 cleared_msgs=0
+[SCHED] process_reaped pid=58370 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58370 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58370 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=0 max_live=2
+[T4A] case=0 registered=0 completed=0 wakes=0 live_wakes=0 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=1 address=0x406108 point=0
+[T4A] created case=1 role=0 tid=58371 inc=4 stack=0xffffffff901ead20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58371 trampoline=0x400000
+[T4A] created case=1 role=1 tid=58372 inc=5 stack=0xffffffff901f2d20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58372 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58371 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58371 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58371 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58372 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58372 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58372 name='t4a-owner'
+[SCHED] process_reaped pid=58371 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58371 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58371 cleared_msgs=0
+[SCHED] process_reaped pid=58372 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58372 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58372 cleared_msgs=0
+[THREAD-LIFECYCLE] created=4 finished=4 reaped=4 borrower_reclaim_skipped=4 stale_wake_rejected=0 borrower_slots_reused=2 max_live=2
+[T4A] case=1 registered=0 completed=0 wakes=0 live_wakes=0 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=2 address=0x406108 point=1
+[T4A] created case=2 role=0 tid=58373 inc=6 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58373 trampoline=0x400000
+[T4A] created case=2 role=1 tid=58374 inc=7 stack=0xffffffff901ed520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58374 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58374 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58374 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58374 name='t4a-owner'
+[SCHED] process_reaped pid=58374 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58374 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58374 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58373 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58373 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58373 name='t4a-owner'
+[SCHED] process_reaped pid=58373 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58373 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58373 cleared_msgs=0
+[THREAD-LIFECYCLE] created=6 finished=6 reaped=6 borrower_reclaim_skipped=6 stale_wake_rejected=0 borrower_slots_reused=4 max_live=2
+[T4A] case=2 registered=1 completed=1 wakes=1 live_wakes=1 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=3 address=0x406108 point=2
+[T4A] created case=3 role=0 tid=58375 inc=8 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58375 trampoline=0x400000
+[T4A] created case=3 role=1 tid=58376 inc=9 stack=0xffffffff901ed520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58376 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58376 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58376 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58376 name='t4a-owner'
+[SCHED] process_reaped pid=58376 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58376 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58376 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58375 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58375 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58375 name='t4a-owner'
+[SCHED] process_reaped pid=58375 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58375 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58375 cleared_msgs=0
+[THREAD-LIFECYCLE] created=8 finished=8 reaped=8 borrower_reclaim_skipped=8 stale_wake_rejected=0 borrower_slots_reused=6 max_live=2
+[T4A] case=3 registered=1 completed=1 wakes=1 live_wakes=1 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=4 address=0x406108 point=3
+[T4A] created case=4 role=0 tid=58377 inc=10 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58377 trampoline=0x400000
+[T4A] created case=4 role=1 tid=58378 inc=11 stack=0xffffffff901ed520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58378 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58378 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58378 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58378 name='t4a-owner'
+[SCHED] process_reaped pid=58378 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58378 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58378 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58377 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58377 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58377 name='t4a-owner'
+[SCHED] process_reaped pid=58377 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58377 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58377 cleared_msgs=0
+[THREAD-LIFECYCLE] created=10 finished=10 reaped=10 borrower_reclaim_skipped=10 stale_wake_rejected=0 borrower_slots_reused=8 max_live=2
+[T4A] case=4 registered=1 completed=1 wakes=1 live_wakes=1 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=5 address=0x406108 point=4
+[T4A] created case=5 role=0 tid=58379 inc=12 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58379 trampoline=0x400000
+[T4A] created case=5 role=1 tid=58380 inc=13 stack=0xffffffff901ed520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58380 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58380 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58380 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58380 name='t4a-owner'
+[SCHED] process_reaped pid=58380 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58380 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58380 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58379 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58379 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58379 name='t4a-owner'
+[SCHED] process_reaped pid=58379 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58379 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58379 cleared_msgs=0
+[THREAD-LIFECYCLE] created=12 finished=12 reaped=12 borrower_reclaim_skipped=12 stale_wake_rejected=0 borrower_slots_reused=10 max_live=2
+[T4A] case=5 registered=1 completed=1 wakes=1 live_wakes=1 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=6 address=0x406108 point=18446744073709551615
+[T4A] created case=6 role=0 tid=58381 inc=14 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58381 trampoline=0x400000
+[T4A] created case=6 role=1 tid=58382 inc=15 stack=0xffffffff901ed520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58382 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58382 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58382 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58382 name='t4a-owner'
+[SCHED] process_mark_finished pid=58381 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58381 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58381 name='t4a-owner'
+[SCHED] process_reaped pid=58381 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58381 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58381 cleared_msgs=0
+[SCHED] process_reaped pid=58382 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58382 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58382 cleared_msgs=0
+[THREAD-LIFECYCLE] created=14 finished=14 reaped=14 borrower_reclaim_skipped=14 stale_wake_rejected=0 borrower_slots_reused=12 max_live=2
+[T4A] case=6 registered=1 completed=1 wakes=1 live_wakes=0 dispatch0=0x1 heap=1939712 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=7 address=0x406108 point=18446744073709551615
+[T4A] created case=7 role=0 tid=58383 inc=16 stack=0xffffffff901e5520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58383 trampoline=0x400000
+[T4A] created case=7 role=2 tid=58384 inc=17 stack=0xffffffff901ed520 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58384 trampoline=0x400000
+[T4A] created case=7 role=1 tid=58385 inc=18 stack=0xffffffff901f5520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58385 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58383 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58383 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58383 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58385 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58385 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58385 name='t4a-owner'
+[SCHED] process_reaped pid=58383 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58383 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58383 cleared_msgs=0
+[SCHED] process_reaped pid=58385 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58385 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58385 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58384 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58384 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58384 name='t4a-owner'
+[SCHED] process_reaped pid=58384 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58384 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58384 cleared_msgs=0
+[THREAD-LIFECYCLE] created=17 finished=17 reaped=17 borrower_reclaim_skipped=17 stale_wake_rejected=0 borrower_slots_reused=14 max_live=3
+[T4A] case=7 registered=2 completed=2 wakes=2 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=8 address=0x406108 point=18446744073709551615
+[T4A] created case=8 role=0 tid=58386 inc=19 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58386 trampoline=0x400000
+[T4A] created case=8 role=1 tid=58387 inc=20 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58387 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58386 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58386 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58386 name='t4a-owner'
+[SCHED] process_mark_finished pid=58387 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58387 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58387 name='t4a-owner'
+[SCHED] process_reaped pid=58386 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58386 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58386 cleared_msgs=0
+[SCHED] process_reaped pid=58387 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58387 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58387 cleared_msgs=0
+[THREAD-LIFECYCLE] created=19 finished=19 reaped=19 borrower_reclaim_skipped=19 stale_wake_rejected=0 borrower_slots_reused=16 max_live=3
+[T4A] case=8 registered=1 completed=1 wakes=1 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=9 address=0x406108 point=18446744073709551615
+[T4A] created case=9 role=0 tid=58388 inc=21 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58388 trampoline=0x400000
+[T4A] created case=9 role=1 tid=58389 inc=22 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58389 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58388 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58388 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58388 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58389 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58389 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58389 name='t4a-owner'
+[SCHED] process_reaped pid=58388 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58388 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58388 cleared_msgs=0
+[SCHED] process_reaped pid=58389 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58389 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58389 cleared_msgs=0
+[THREAD-LIFECYCLE] created=21 finished=21 reaped=21 borrower_reclaim_skipped=21 stale_wake_rejected=0 borrower_slots_reused=18 max_live=3
+[T4A] case=9 registered=1 completed=1 wakes=1 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=10 address=0x406108 point=18446744073709551615
+[T4A] created case=10 role=0 tid=58390 inc=23 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58390 trampoline=0x400000
+[T4A] created case=10 role=1 tid=58391 inc=24 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58391 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58390 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58390 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58390 name='t4a-owner'
+[SCHED] process_mark_finished pid=58391 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58391 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58391 name='t4a-owner'
+[SCHED] process_reaped pid=58390 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58390 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58390 cleared_msgs=0
+[SCHED] process_reaped pid=58391 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58391 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58391 cleared_msgs=0
+[THREAD-LIFECYCLE] created=23 finished=23 reaped=23 borrower_reclaim_skipped=23 stale_wake_rejected=0 borrower_slots_reused=20 max_live=3
+[T4A] case=10 registered=1 completed=1 wakes=0 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=11 address=0x100000000 point=18446744073709551615
+[T4A] created case=11 role=0 tid=58392 inc=25 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58392 trampoline=0x400000
+[T4A] created case=11 role=1 tid=58393 inc=26 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58393 trampoline=0x400000
+[SYSCALL] mmap(0x100000000, 0x1000) -> 0x100000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58392 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58392 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58392 name='t4a-owner'
+[SCHED] process_mark_finished pid=58393 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58393 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58393 name='t4a-owner'
+[SCHED] process_reaped pid=58392 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58392 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58392 cleared_msgs=0
+[SCHED] process_reaped pid=58393 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58393 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58393 cleared_msgs=0
+[THREAD-LIFECYCLE] created=25 finished=25 reaped=25 borrower_reclaim_skipped=25 stale_wake_rejected=0 borrower_slots_reused=22 max_live=3
+[T4A] case=11 registered=1 completed=1 wakes=1 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=12 address=0x100000000 point=18446744073709551615
+[T4A] created case=12 role=0 tid=58394 inc=27 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58394 trampoline=0x400000
+[T4A] created case=12 role=1 tid=58395 inc=28 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58395 trampoline=0x400000
+[SYSCALL] mmap(0x100000000, 0x1000) -> 0x100000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58394 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58394 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58394 name='t4a-owner'
+[SCHED] process_mark_finished pid=58395 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58395 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58395 name='t4a-owner'
+[SCHED] process_reaped pid=58394 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58394 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58394 cleared_msgs=0
+[SCHED] process_reaped pid=58395 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58395 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58395 cleared_msgs=0
+[THREAD-LIFECYCLE] created=27 finished=27 reaped=27 borrower_reclaim_skipped=27 stale_wake_rejected=0 borrower_slots_reused=24 max_live=3
+[T4A] case=12 registered=1 completed=1 wakes=1 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=13 address=0x406108 point=18446744073709551615
+[T4A] created case=13 role=0 tid=58396 inc=29 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58396 trampoline=0x400000
+[T4A] created case=13 role=1 tid=58397 inc=30 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58397 trampoline=0x400000
+[SCHED] process_exit_begin external pid=58396 reason=t4a-waiting-exit
+[SCHED] process_mark_finished pid=58396 name='t4a-owner' reason=t4a-waiting-exit code=37 (external)
+[SCHED] FINISHED process pid=58396 name='t4a-owner'
+[SCHED] terminating pid=58396 name='t4a-owner' reason=t4a-waiting-exit
+[SCHED] process_reaped pid=58396 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58396 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58396 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58397 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58397 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58397 name='t4a-owner'
+[SCHED] process_reaped pid=58397 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58397 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58397 cleared_msgs=0
+[THREAD-LIFECYCLE] created=29 finished=29 reaped=29 borrower_reclaim_skipped=29 stale_wake_rejected=0 borrower_slots_reused=26 max_live=3
+[T4A] case=13 registered=1 completed=1 wakes=0 live_wakes=0 dispatch0=0x1 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=14 address=0x406108 point=18446744073709551615
+[T4A] created case=14 role=0 tid=58398 inc=31 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58398 trampoline=0x400000
+[T4A] created case=14 role=1 tid=58399 inc=32 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58399 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58399 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58399 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58399 name='t4a-owner'
+[SCHED] process_reaped pid=58399 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58399 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58399 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58398 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58398 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58398 name='t4a-owner'
+[SCHED] process_reaped pid=58398 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58398 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58398 cleared_msgs=0
+[THREAD-LIFECYCLE] created=31 finished=31 reaped=31 borrower_reclaim_skipped=31 stale_wake_rejected=0 borrower_slots_reused=28 max_live=3
+[T4A] case=14 registered=128 completed=128 wakes=128 live_wakes=0 dispatch0=0x3 heap=1949952 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=15 address=0x406108 point=18446744073709551615
+[T4A] created case=15 role=0 tid=58400 inc=33 stack=0xffffffff901e7d20 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58400 trampoline=0x400000
+[T4A] created case=15 role=1 tid=58401 inc=34 stack=0xffffffff901efd20 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58401 trampoline=0x400000
+[T4A] created case=15 role=2 tid=58402 inc=35 stack=0xffffffff901f7d20 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58402 trampoline=0x400000
+[T4A] created case=15 role=3 tid=58403 inc=36 stack=0xffffffff901ffd20 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58403 trampoline=0x400000
+[T4A] created case=15 role=4 tid=58404 inc=37 stack=0xffffffff9020a520 tls=0x406020
+[SYSCALL] thread_spawn: parent=58368 tid=58404 trampoline=0x400000
+[T4A] created case=15 role=5 tid=58405 inc=38 stack=0xffffffff90214d20 tls=0x406028
+[SYSCALL] thread_spawn: parent=58368 tid=58405 trampoline=0x400000
+[T4A] created case=15 role=6 tid=58406 inc=39 stack=0xffffffff9021f520 tls=0x406030
+[SYSCALL] thread_spawn: parent=58368 tid=58406 trampoline=0x400000
+[T4A] created case=15 role=7 tid=58407 inc=40 stack=0xffffffff90229d20 tls=0x406038
+[SYSCALL] thread_spawn: parent=58368 tid=58407 trampoline=0x400000
+[T4A] created case=15 role=8 tid=58408 inc=41 stack=0xffffffff90234520 tls=0x406040
+[SYSCALL] thread_spawn: parent=58368 tid=58408 trampoline=0x400000
+[T4A] created case=15 role=9 tid=58409 inc=42 stack=0xffffffff9023ed20 tls=0x406048
+[SYSCALL] thread_spawn: parent=58368 tid=58409 trampoline=0x400000
+[T4A] created case=15 role=10 tid=58410 inc=43 stack=0xffffffff90249520 tls=0x406050
+[SYSCALL] thread_spawn: parent=58368 tid=58410 trampoline=0x400000
+[T4A] created case=15 role=11 tid=58411 inc=44 stack=0xffffffff90253d20 tls=0x406058
+[SYSCALL] thread_spawn: parent=58368 tid=58411 trampoline=0x400000
+[T4A] created case=15 role=12 tid=58412 inc=45 stack=0xffffffff9025e520 tls=0x406060
+[SYSCALL] thread_spawn: parent=58368 tid=58412 trampoline=0x400000
+[T4A] created case=15 role=13 tid=58413 inc=46 stack=0xffffffff90268d20 tls=0x406068
+[SYSCALL] thread_spawn: parent=58368 tid=58413 trampoline=0x400000
+[T4A] created case=15 role=14 tid=58414 inc=47 stack=0xffffffff90273520 tls=0x406070
+[SYSCALL] thread_spawn: parent=58368 tid=58414 trampoline=0x400000
+[T4A] created case=15 role=15 tid=58415 inc=48 stack=0xffffffff9027dd20 tls=0x406078
+[SYSCALL] thread_spawn: parent=58368 tid=58415 trampoline=0x400000
+[T4A] created case=15 role=16 tid=58416 inc=49 stack=0xffffffff90288520 tls=0x406080
+[SYSCALL] thread_spawn: parent=58368 tid=58416 trampoline=0x400000
+[T4A] created case=15 role=17 tid=58417 inc=50 stack=0xffffffff90292d20 tls=0x406088
+[SYSCALL] thread_spawn: parent=58368 tid=58417 trampoline=0x400000
+[T4A] created case=15 role=18 tid=58418 inc=51 stack=0xffffffff9029d520 tls=0x406090
+[SYSCALL] thread_spawn: parent=58368 tid=58418 trampoline=0x400000
+[T4A] created case=15 role=19 tid=58419 inc=52 stack=0xffffffff902a7d20 tls=0x406098
+[SYSCALL] thread_spawn: parent=58368 tid=58419 trampoline=0x400000
+[T4A] created case=15 role=20 tid=58420 inc=53 stack=0xffffffff902b2520 tls=0x4060a0
+[SYSCALL] thread_spawn: parent=58368 tid=58420 trampoline=0x400000
+[T4A] created case=15 role=21 tid=58421 inc=54 stack=0xffffffff902bcd20 tls=0x4060a8
+[SYSCALL] thread_spawn: parent=58368 tid=58421 trampoline=0x400000
+[T4A] created case=15 role=22 tid=58422 inc=55 stack=0xffffffff902c7520 tls=0x4060b0
+[SYSCALL] thread_spawn: parent=58368 tid=58422 trampoline=0x400000
+[T4A] created case=15 role=23 tid=58423 inc=56 stack=0xffffffff902d1d20 tls=0x4060b8
+[SYSCALL] thread_spawn: parent=58368 tid=58423 trampoline=0x400000
+[T4A] created case=15 role=24 tid=58424 inc=57 stack=0xffffffff902dc520 tls=0x4060c0
+[SYSCALL] thread_spawn: parent=58368 tid=58424 trampoline=0x400000
+[T4A] created case=15 role=25 tid=58425 inc=58 stack=0xffffffff902e6d20 tls=0x4060c8
+[SYSCALL] thread_spawn: parent=58368 tid=58425 trampoline=0x400000
+[T4A] created case=15 role=26 tid=58426 inc=59 stack=0xffffffff902f1520 tls=0x4060d0
+[SYSCALL] thread_spawn: parent=58368 tid=58426 trampoline=0x400000
+[T4A] created case=15 role=27 tid=58427 inc=60 stack=0xffffffff902fbd20 tls=0x4060d8
+[SYSCALL] thread_spawn: parent=58368 tid=58427 trampoline=0x400000
+[T4A] created case=15 role=28 tid=58428 inc=61 stack=0xffffffff90306520 tls=0x4060e0
+[SYSCALL] thread_spawn: parent=58368 tid=58428 trampoline=0x400000
+[T4A] created case=15 role=29 tid=58429 inc=62 stack=0xffffffff90310d20 tls=0x4060e8
+[SYSCALL] thread_spawn: parent=58368 tid=58429 trampoline=0x400000
+[T4A] created case=15 role=30 tid=58430 inc=63 stack=0xffffffff9031b520 tls=0x4060f0
+[SYSCALL] thread_spawn: parent=58368 tid=58430 trampoline=0x400000
+[T4A] created case=15 role=31 tid=58431 inc=64 stack=0xffffffff90325d20 tls=0x4060f8
+[SYSCALL] thread_spawn: parent=58368 tid=58431 trampoline=0x400000
+[T4A] cardinality step=0 limit=0 actual=0 selected_total=0 resumed=0 remaining=32 unique=true
+[T4A] cardinality step=1 limit=1 actual=1 selected_total=1 resumed=0 remaining=31 unique=true
+[T4A] cardinality step=2 limit=4 actual=4 selected_total=5 resumed=3 remaining=27 unique=true
+[T4A] cardinality step=3 limit=4294967295 actual=27 selected_total=32 resumed=5 remaining=0 unique=true
+[T4A] cardinality step=4 limit=1 actual=0 selected_total=32 resumed=32 remaining=0 unique=true
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58420 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58420 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58420 name='t4a-owner'
+[SCHED] process_mark_finished pid=58401 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58401 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58401 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58403 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58403 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58403 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58422 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58422 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58422 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58405 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58405 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58405 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58424 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58424 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58424 name='t4a-owner'
+[SCHED] process_mark_finished pid=58407 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58407 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58407 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58426 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58426 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58426 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58409 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58409 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58409 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58428 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58428 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58428 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58411 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58411 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58411 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58430 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58430 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58430 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58413 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58413 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58413 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58402 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58402 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58402 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58415 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58415 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58415 name='t4a-owner'
+[SCHED] process_mark_finished pid=58404 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58404 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58404 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58417 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58417 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58417 name='t4a-owner'
+[SCHED] process_mark_finished pid=58400 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58400 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58400 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58419 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58419 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58419 name='t4a-owner'
+[SCHED] process_mark_finished pid=58406 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58406 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58406 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58421 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58421 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58421 name='t4a-owner'
+[SCHED] process_mark_finished pid=58408 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58408 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58408 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58423 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58423 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58423 name='t4a-owner'
+[SCHED] process_mark_finished pid=58410 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58410 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58410 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58425 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58425 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58425 name='t4a-owner'
+[SCHED] process_mark_finished pid=58412 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58412 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58412 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58427 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58427 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58427 name='t4a-owner'
+[SCHED] process_mark_finished pid=58414 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58414 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58414 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58429 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58429 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58429 name='t4a-owner'
+[SCHED] process_mark_finished pid=58416 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58416 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58416 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58431 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58431 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58431 name='t4a-owner'
+[SCHED] process_mark_finished pid=58418 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58418 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58418 name='t4a-owner'
+[SCHED] process_reaped pid=58400 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58400 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58400 cleared_msgs=0
+[SCHED] process_reaped pid=58401 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58401 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58401 cleared_msgs=0
+[SCHED] process_reaped pid=58402 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58402 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58402 cleared_msgs=0
+[SCHED] process_reaped pid=58403 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58403 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58403 cleared_msgs=0
+[SCHED] process_reaped pid=58404 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58404 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58404 cleared_msgs=0
+[SCHED] process_reaped pid=58405 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58405 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58405 cleared_msgs=0
+[SCHED] process_reaped pid=58406 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58406 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58406 cleared_msgs=0
+[SCHED] process_reaped pid=58407 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58407 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58407 cleared_msgs=0
+[SCHED] process_reaped pid=58408 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58408 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58408 cleared_msgs=0
+[SCHED] process_reaped pid=58409 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58409 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58409 cleared_msgs=0
+[SCHED] process_reaped pid=58410 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58410 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58410 cleared_msgs=0
+[SCHED] process_reaped pid=58411 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58411 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58411 cleared_msgs=0
+[SCHED] process_reaped pid=58412 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58412 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58412 cleared_msgs=0
+[SCHED] process_reaped pid=58413 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58413 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58413 cleared_msgs=0
+[SCHED] process_reaped pid=58414 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58414 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58414 cleared_msgs=0
+[SCHED] process_reaped pid=58415 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58415 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58415 cleared_msgs=0
+[SCHED] process_reaped pid=58416 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58416 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58416 cleared_msgs=0
+[SCHED] process_reaped pid=58417 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58417 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58417 cleared_msgs=0
+[SCHED] process_reaped pid=58418 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58418 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58418 cleared_msgs=0
+[SCHED] process_reaped pid=58419 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58419 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58419 cleared_msgs=0
+[SCHED] process_reaped pid=58420 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58420 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58420 cleared_msgs=0
+[SCHED] process_reaped pid=58421 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58421 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58421 cleared_msgs=0
+[SCHED] process_reaped pid=58422 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58422 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58422 cleared_msgs=0
+[SCHED] process_reaped pid=58423 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58423 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58423 cleared_msgs=0
+[SCHED] process_reaped pid=58424 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58424 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58424 cleared_msgs=0
+[SCHED] process_reaped pid=58425 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58425 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58425 cleared_msgs=0
+[SCHED] process_reaped pid=58426 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58426 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58426 cleared_msgs=0
+[SCHED] process_reaped pid=58427 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58427 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58427 cleared_msgs=0
+[SCHED] process_reaped pid=58428 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58428 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58428 cleared_msgs=0
+[SCHED] process_reaped pid=58429 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58429 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58429 cleared_msgs=0
+[SCHED] process_reaped pid=58430 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58430 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58430 cleared_msgs=0
+[SCHED] process_reaped pid=58431 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58431 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58431 cleared_msgs=0
+[THREAD-LIFECYCLE] created=63 finished=63 reaped=63 borrower_reclaim_skipped=63 stale_wake_rejected=0 borrower_slots_reused=31 max_live=32
+[T4A] case=15 registered=32 completed=32 wakes=32 live_wakes=0 dispatch0=0x3 heap=2246912 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] arm case=16 address=0x406108 point=18446744073709551615
+[T4A] created case=16 role=0 tid=58432 inc=65 stack=0xffffffff901ea520 tls=0x406000
+[SYSCALL] thread_spawn: parent=58368 tid=58432 trampoline=0x400000
+[T4A] created case=16 role=1 tid=58433 inc=66 stack=0xffffffff901f2520 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58433 trampoline=0x400000
+[T4A] created case=16 role=2 tid=58434 inc=67 stack=0xffffffff901fa520 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58434 trampoline=0x400000
+[T4A] created case=16 role=3 tid=58435 inc=68 stack=0xffffffff9020a520 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58435 trampoline=0x400000
+[T4A] created case=16 role=4 tid=58436 inc=69 stack=0xffffffff90214d20 tls=0x406020
+[SYSCALL] thread_spawn: parent=58368 tid=58436 trampoline=0x400000
+[T4A] created case=16 role=5 tid=58437 inc=70 stack=0xffffffff9021f520 tls=0x406028
+[SYSCALL] thread_spawn: parent=58368 tid=58437 trampoline=0x400000
+[T4A] created case=16 role=6 tid=58438 inc=71 stack=0xffffffff90229d20 tls=0x406030
+[SYSCALL] thread_spawn: parent=58368 tid=58438 trampoline=0x400000
+[T4A] created case=16 role=7 tid=58439 inc=72 stack=0xffffffff90234520 tls=0x406038
+[SYSCALL] thread_spawn: parent=58368 tid=58439 trampoline=0x400000
+[T4A] created case=16 role=8 tid=58440 inc=73 stack=0xffffffff9023ed20 tls=0x406040
+[SYSCALL] thread_spawn: parent=58368 tid=58440 trampoline=0x400000
+[T4A] created case=16 role=9 tid=58441 inc=74 stack=0xffffffff90249520 tls=0x406048
+[SYSCALL] thread_spawn: parent=58368 tid=58441 trampoline=0x400000
+[T4A] created case=16 role=10 tid=58442 inc=75 stack=0xffffffff90253d20 tls=0x406050
+[SYSCALL] thread_spawn: parent=58368 tid=58442 trampoline=0x400000
+[T4A] created case=16 role=11 tid=58443 inc=76 stack=0xffffffff9025e520 tls=0x406058
+[SYSCALL] thread_spawn: parent=58368 tid=58443 trampoline=0x400000
+[T4A] created case=16 role=12 tid=58444 inc=77 stack=0xffffffff90268d20 tls=0x406060
+[SYSCALL] thread_spawn: parent=58368 tid=58444 trampoline=0x400000
+[T4A] created case=16 role=13 tid=58445 inc=78 stack=0xffffffff90273520 tls=0x406068
+[SYSCALL] thread_spawn: parent=58368 tid=58445 trampoline=0x400000
+[T4A] created case=16 role=14 tid=58446 inc=79 stack=0xffffffff9027dd20 tls=0x406070
+[SYSCALL] thread_spawn: parent=58368 tid=58446 trampoline=0x400000
+[T4A] created case=16 role=15 tid=58447 inc=80 stack=0xffffffff90288520 tls=0x406078
+[SYSCALL] thread_spawn: parent=58368 tid=58447 trampoline=0x400000
+[T4A] created case=16 role=16 tid=58448 inc=81 stack=0xffffffff90292d20 tls=0x406080
+[SYSCALL] thread_spawn: parent=58368 tid=58448 trampoline=0x400000
+[T4A] created case=16 role=17 tid=58449 inc=82 stack=0xffffffff9029d520 tls=0x406088
+[SYSCALL] thread_spawn: parent=58368 tid=58449 trampoline=0x400000
+[T4A] created case=16 role=18 tid=58450 inc=83 stack=0xffffffff902a7d20 tls=0x406090
+[SYSCALL] thread_spawn: parent=58368 tid=58450 trampoline=0x400000
+[T4A] created case=16 role=19 tid=58451 inc=84 stack=0xffffffff902b2520 tls=0x406098
+[SYSCALL] thread_spawn: parent=58368 tid=58451 trampoline=0x400000
+[T4A] created case=16 role=20 tid=58452 inc=85 stack=0xffffffff902bcd20 tls=0x4060a0
+[SYSCALL] thread_spawn: parent=58368 tid=58452 trampoline=0x400000
+[T4A] created case=16 role=21 tid=58453 inc=86 stack=0xffffffff902c7520 tls=0x4060a8
+[SYSCALL] thread_spawn: parent=58368 tid=58453 trampoline=0x400000
+[T4A] created case=16 role=22 tid=58454 inc=87 stack=0xffffffff902d1d20 tls=0x4060b0
+[SYSCALL] thread_spawn: parent=58368 tid=58454 trampoline=0x400000
+[T4A] created case=16 role=23 tid=58455 inc=88 stack=0xffffffff902dc520 tls=0x4060b8
+[SYSCALL] thread_spawn: parent=58368 tid=58455 trampoline=0x400000
+[T4A] created case=16 role=24 tid=58456 inc=89 stack=0xffffffff902e6d20 tls=0x4060c0
+[SYSCALL] thread_spawn: parent=58368 tid=58456 trampoline=0x400000
+[T4A] created case=16 role=25 tid=58457 inc=90 stack=0xffffffff902f1520 tls=0x4060c8
+[SYSCALL] thread_spawn: parent=58368 tid=58457 trampoline=0x400000
+[T4A] created case=16 role=26 tid=58458 inc=91 stack=0xffffffff902fbd20 tls=0x4060d0
+[SYSCALL] thread_spawn: parent=58368 tid=58458 trampoline=0x400000
+[T4A] created case=16 role=27 tid=58459 inc=92 stack=0xffffffff90306520 tls=0x4060d8
+[SYSCALL] thread_spawn: parent=58368 tid=58459 trampoline=0x400000
+[T4A] created case=16 role=28 tid=58460 inc=93 stack=0xffffffff90310d20 tls=0x4060e0
+[SYSCALL] thread_spawn: parent=58368 tid=58460 trampoline=0x400000
+[T4A] created case=16 role=29 tid=58461 inc=94 stack=0xffffffff9031b520 tls=0x4060e8
+[SYSCALL] thread_spawn: parent=58368 tid=58461 trampoline=0x400000
+[T4A] created case=16 role=30 tid=58462 inc=95 stack=0xffffffff90325d20 tls=0x4060f0
+[SYSCALL] thread_spawn: parent=58368 tid=58462 trampoline=0x400000
+[T4A] created case=16 role=31 tid=58463 inc=96 stack=0xffffffff9032dd20 tls=0x4060f8
+[SYSCALL] thread_spawn: parent=58368 tid=58463 trampoline=0x400000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58440 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58440 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58440 name='t4a-owner'
+[SCHED] process_reaped pid=58440 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58440 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58440 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58433 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58433 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58433 name='t4a-owner'
+[SCHED] process_mark_finished pid=58442 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58442 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58442 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58435 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58435 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58435 name='t4a-owner'
+[SCHED] process_mark_finished pid=58448 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58448 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58448 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58450 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58450 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58450 name='t4a-owner'
+[SCHED] process_mark_finished pid=58437 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58437 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58437 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58439 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58439 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58439 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58452 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58452 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58452 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58441 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58441 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58441 name='t4a-owner'
+[SCHED] process_mark_finished pid=58454 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58454 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58454 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58443 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58443 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58443 name='t4a-owner'
+[SCHED] process_mark_finished pid=58456 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58456 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58456 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58458 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58458 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58458 name='t4a-owner'
+[SCHED] process_mark_finished pid=58445 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58445 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58445 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58460 name='t4a-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=58460 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58460 name='t4a-owner'
+[SCHED] process_mark_finished pid=58447 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58447 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58447 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58462 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58462 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58462 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58449 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58449 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58449 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58444 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58444 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58444 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58451 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58451 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58451 name='t4a-owner'
+[SCHED] process_mark_finished pid=58446 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58446 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58446 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58453 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58453 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58453 name='t4a-owner'
+[SCHED] process_mark_finished pid=58432 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58432 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58432 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58434 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58434 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58434 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58455 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58455 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58455 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58457 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58457 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58457 name='t4a-owner'
+[SCHED] process_mark_finished pid=58436 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58436 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58436 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58459 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58459 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58459 name='t4a-owner'
+[SCHED] process_mark_finished pid=58438 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58438 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58438 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58461 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58461 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58461 name='t4a-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58463 name='t4a-owner' reason=exit code=0
+[SCHED] terminating pid=58463 name='t4a-owner' reason=exit
+[SCHED] FINISHED process pid=58463 name='t4a-owner'
+[SCHED] process_reaped pid=58432 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58432 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58432 cleared_msgs=0
+[SCHED] process_reaped pid=58433 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58433 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58433 cleared_msgs=0
+[SCHED] process_reaped pid=58434 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58434 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58434 cleared_msgs=0
+[SCHED] process_reaped pid=58435 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58435 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58435 cleared_msgs=0
+[SCHED] process_reaped pid=58436 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58436 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58436 cleared_msgs=0
+[SCHED] process_reaped pid=58437 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58437 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58437 cleared_msgs=0
+[SCHED] process_reaped pid=58438 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58438 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58438 cleared_msgs=0
+[SCHED] process_reaped pid=58439 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58439 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58439 cleared_msgs=0
+[SCHED] process_reaped pid=58441 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58441 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58441 cleared_msgs=0
+[SCHED] process_reaped pid=58442 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58442 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58442 cleared_msgs=0
+[SCHED] process_reaped pid=58443 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58443 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58443 cleared_msgs=0
+[SCHED] process_reaped pid=58444 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58444 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58444 cleared_msgs=0
+[SCHED] process_reaped pid=58445 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58445 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58445 cleared_msgs=0
+[SCHED] process_reaped pid=58446 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58446 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58446 cleared_msgs=0
+[SCHED] process_reaped pid=58447 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58447 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58447 cleared_msgs=0
+[SCHED] process_reaped pid=58448 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58448 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58448 cleared_msgs=0
+[SCHED] process_reaped pid=58449 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58449 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58449 cleared_msgs=0
+[SCHED] process_reaped pid=58450 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58450 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58450 cleared_msgs=0
+[SCHED] process_reaped pid=58451 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58451 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58451 cleared_msgs=0
+[SCHED] process_reaped pid=58452 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58452 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58452 cleared_msgs=0
+[SCHED] process_reaped pid=58453 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58453 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58453 cleared_msgs=0
+[SCHED] process_reaped pid=58454 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58454 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58454 cleared_msgs=0
+[SCHED] process_reaped pid=58455 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58455 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58455 cleared_msgs=0
+[SCHED] process_reaped pid=58456 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58456 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58456 cleared_msgs=0
+[SCHED] process_reaped pid=58457 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58457 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58457 cleared_msgs=0
+[SCHED] process_reaped pid=58458 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58458 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58458 cleared_msgs=0
+[SCHED] process_reaped pid=58459 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58459 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58459 cleared_msgs=0
+[SCHED] process_reaped pid=58460 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58460 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58460 cleared_msgs=0
+[SCHED] process_reaped pid=58461 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58461 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58461 cleared_msgs=0
+[SCHED] process_reaped pid=58462 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58462 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58462 cleared_msgs=0
+[SCHED] process_reaped pid=58463 name='t4a-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58463 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58463 cleared_msgs=0
+[THREAD-LIFECYCLE] created=95 finished=95 reaped=95 borrower_reclaim_skipped=95 stale_wake_rejected=0 borrower_slots_reused=63 max_live=32
+[T4A] case=16 registered=32 completed=32 wakes=32 live_wakes=0 dispatch0=0x3 heap=2246912 frames=332730 stale=0 pins=0 queues=0 ownership=ok
+[T4A] PASS cpus=2 cases=17 waiter_records=0 resources=stable

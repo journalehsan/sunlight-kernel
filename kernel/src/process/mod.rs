@@ -2,8 +2,8 @@ pub mod address_space;
 pub mod elf_loader;
 pub mod env;
 pub mod epoll;
-mod exec_authority;
 pub mod eventfd;
+mod exec_authority;
 pub mod fd_table;
 pub mod foreground;
 pub mod fork;
@@ -16,6 +16,7 @@ pub mod pipe;
 pub mod region;
 pub mod signal;
 pub mod spawn;
+pub(crate) mod thread_admission;
 pub mod tty_io;
 pub mod unix_socket;
 
@@ -29,6 +30,16 @@ use x86_64::VirtAddr;
 
 pub const KERNEL_STACK_SIZE: usize = 32 * 1024;
 
+pub fn try_kernel_stack(
+) -> Result<alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]>, thread_admission::Error> {
+    let mut stack = thread_admission::try_box_uninit::<[u8; KERNEL_STACK_SIZE]>()?;
+    // SAFETY: the entire allocation is initialized without a stack temporary.
+    unsafe {
+        core::ptr::write_bytes(stack.as_mut_ptr() as *mut u8, 0, KERNEL_STACK_SIZE);
+        Ok(stack.assume_init())
+    }
+}
+
 pub fn new_kernel_stack() -> alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]> {
     let mut stack = alloc::boxed::Box::<[u8; KERNEL_STACK_SIZE]>::new_uninit();
     // Avoid `Box::new([0; N])`: it builds a 32 KiB temporary on the current
@@ -39,13 +50,8 @@ pub fn new_kernel_stack() -> alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]> {
     }
 }
 
-/// A schedulable process.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IpcCallId {
-    pub pid: usize,
-    pub incarnation: u64,
-    pub generation: u64,
-}
+mod ipc_identity;
+pub use ipc_identity::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
 
 #[derive(Debug, Clone, Copy)]
 pub struct PendingIpcCall {
@@ -53,31 +59,6 @@ pub struct PendingIpcCall {
     pub endpoint_id: u32,
     pub msg: IpcMsg,
     pub generation: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IpcCallOutcome {
-    ReplyDelivered(u64),
-    DeadlineExpired(u64),
-    ExplicitlyCancelled(u64),
-    PeerClosed(u64),
-}
-
-impl IpcCallOutcome {
-    pub const fn generation(self) -> u64 {
-        match self {
-            Self::ReplyDelivered(generation)
-            | Self::DeadlineExpired(generation)
-            | Self::ExplicitlyCancelled(generation)
-            | Self::PeerClosed(generation) => generation,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IpcReplyTarget {
-    pub endpoint_id: u32,
-    pub call: IpcCallId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,6 +140,8 @@ pub struct Process {
     /// Native std compare/wait registration and absolute monotonic deadline.
     pub native_futex_wait: Option<u64>,
     pub native_futex_deadline: Option<u64>,
+    /// One-shot (address, result) receipt, owned by the waiting thread.
+    pub native_futex_result: Option<(u64, u64)>,
     /// Native pipe operation blocked on the ring becoming readable/writable.
     pub native_pipe_wait: Option<(u32, bool)>,
     /// Native bounded pipe-readiness set; wakeups recheck the supplied fds.
@@ -195,6 +178,8 @@ pub struct Process {
     pub(crate) doorbell_wait: Option<crate::sched::doorbell_state::Registration>,
     #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
     pub(crate) fastlane_bell: Option<crate::capability::channel_doorbell_native::Receipt>,
+    #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+    pub(crate) contract_service: Option<crate::capability::channel_contract::Service>,
     /// A synchronous call has exactly one terminal outcome. The scheduler lock
     /// serializes reply, deadline, cancel, and peer-close transitions; the call
     /// generation rejects stale timer entries and late replies.
@@ -379,7 +364,43 @@ pub struct Capability {
     pub can_grant: bool,
 }
 
+/// Fully owned, unpublished resources. Moving this value into a Process does
+/// not allocate; failed preparation drops it before descriptor adoption.
+pub(crate) struct ThreadResources {
+    pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
+    pub env: env::EnvMap,
+    pub capabilities: Vec<Capability>,
+    pub kernel_stack: alloc::boxed::Box<[u8; KERNEL_STACK_SIZE]>,
+    pub cwd: alloc::string::String,
+    pub uid: u32,
+    pub gid: u32,
+    pub nice: i8,
+    pub tty_tab: Option<u8>,
+    pub tty_generation: u64,
+}
+
 impl Process {
+    /// Detach a futex registration before any wake, exit or slot reuse.
+    /// The scheduler lock serializes this with registration and timeout scans.
+    pub(crate) fn clear_futex_wait(&mut self) {
+        self.complete_futex_wait(0);
+        self.native_futex_result = None;
+    }
+
+    /// The first serialized completion detaches the registration and owns its
+    /// result. Subsequent generic wake bookkeeping cannot overwrite it.
+    pub(crate) fn complete_futex_wait(&mut self, result: u64) {
+        #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+        crate::sched::t4a_fixture::completing(self);
+        if let Some(address) = self.native_futex_wait.take() {
+            self.native_futex_result = Some((address, result));
+        }
+        self.native_futex_deadline = None;
+        if let Some(state) = self.linux_state_mut() {
+            state.futex_wait = None;
+        }
+    }
+
     /// External termination can race an in-flight syscall on another CPU.
     /// Cleanup remains pending until that CPU safely releases this task.
     pub(crate) fn is_exiting(&self) -> bool {
@@ -457,6 +478,7 @@ impl Process {
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,
+            native_futex_result: None,
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
@@ -482,6 +504,8 @@ impl Process {
             doorbell_wait: None,
             #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
             fastlane_bell: None,
+            #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+            contract_service: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,
@@ -629,8 +653,46 @@ impl Process {
         tty_tab: Option<u8>,
         tty_generation: u64,
     ) -> Self {
+        Self::thread_with_resources(
+            pid,
+            ppid,
+            name,
+            shared_address_space,
+            ThreadResources {
+                fd_table,
+                env,
+                uid,
+                gid,
+                nice,
+                capabilities,
+                tty_tab,
+                tty_generation,
+                kernel_stack: new_kernel_stack(),
+                cwd: alloc::string::String::from("/"),
+            },
+        )
+    }
+
+    pub fn thread_with_resources(
+        pid: usize,
+        ppid: usize,
+        name: &str,
+        shared_address_space: address_space::SharedAddressSpaceHandle,
+        resources: ThreadResources,
+    ) -> Self {
+        let ThreadResources {
+            fd_table,
+            env,
+            capabilities,
+            kernel_stack,
+            cwd,
+            uid,
+            gid,
+            nice,
+            tty_tab,
+            tty_generation,
+        } = resources;
         let address_space = address_space::AddressSpace::from_shared(shared_address_space);
-        let kernel_stack = new_kernel_stack();
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
 
         let mut name_arr = [0u8; 32];
@@ -650,6 +712,7 @@ impl Process {
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,
+            native_futex_result: None,
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
@@ -675,6 +738,8 @@ impl Process {
             doorbell_wait: None,
             #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
             fastlane_bell: None,
+            #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+            contract_service: None,
             ipc_reply: None,
             pending_call: None,
             ipc_call_outcome: None,
@@ -743,7 +808,7 @@ impl Process {
             wake_audit: [0; 4],
             cpu_charge_since: None,
             last_start_ns: 0,
-            cwd: alloc::string::String::from("/"),
+            cwd,
             exit_cleanup_pending: false,
             service_reap_receipt: [0; 4],
             service_reap_watcher: None,

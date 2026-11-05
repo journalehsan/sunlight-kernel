@@ -1,0 +1,18 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "clippy",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--offline",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 101,
+  "seconds": 2.0021567229996435
+}

@@ -1,0 +1,11 @@
+{
+  "valid": true,
+  "build_attempt": "20261105T180439.063340Z-release-feature-exclusion-retry",
+  "elf_sha256": "34dd06492cf73e41d8909d407bb661bd24ad0e05ebac13d2ddf2ca23852b9c77",
+  "size": 252710656,
+  "absent": {
+    "[T4A]": true,
+    "T4A arm": true,
+    "t4a_fixture": true
+  }
+}

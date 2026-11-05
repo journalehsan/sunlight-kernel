@@ -1,0 +1,12 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "objcopy",
+    "--strip-debug",
+    "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/release/sunlight-kernel",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t2/20261104T201951.052227Z-suite-production/kernel.elf"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2514146220055409
+}

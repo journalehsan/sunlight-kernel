@@ -1,0 +1,17 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--features",
+    "mm2b_smp_test",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 18.76717450498836
+}

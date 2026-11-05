@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/make_hybrid_iso.sh",
+    ".threading-evidence/t2r/pilot-vm-birth-placement/kernel.elf",
+    ".threading-evidence/t2r/pilot-vm-birth-placement/boot.iso",
+    "target/limine",
+    "/home/ehsantor/Projects/sunlightos-kernel"
+  ],
+  "exit_code": 0,
+  "seconds": 3.0014812010049354
+}

@@ -1,0 +1,948 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T21:55:14Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf126c98 (61735 frames, 241 MiB)
+[PMM] 1320/1561 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11912 end_count=7910 elapsed_counts=4002 tsc_delta=8357243 tsc_hz=2491682138
+[TIME] TSC calibrated ~2491682138 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63038000 lapic_initial_count=630380 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2491682138
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x21 minute=0x56 second=0x14 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T21:56:14Z assumed_basis=UTC
+wall: utc=2026-11-04T21:56:14Z unix=1793829374 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8004747c
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8e7f2f60..0xffffffff8e802f60
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8004747c
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=289 memsz=289 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=88 memsz=88 prot=Read
+[ELF] PT_LOAD off=90 vaddr=402090 filesz=0 memsz=46020 prot=ReadWrite
+[CAP] Created endpoint 0 for pid=57344
+[SCHED] CREATED process #1 't2r-owner' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=289 memsz=289 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=88 memsz=88 prot=Read
+[ELF] PT_LOAD off=90 vaddr=402090 filesz=0 memsz=46020 prot=ReadWrite
+[CAP] Created endpoint 1 for pid=57345
+[SCHED] CREATED process #2 't2r-owner' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=289 memsz=289 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=88 memsz=88 prot=Read
+[ELF] PT_LOAD off=90 vaddr=402090 filesz=0 memsz=46020 prot=ReadWrite
+[CAP] Created endpoint 2 for pid=57346
+[SCHED] CREATED process #3 't2r-owner' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=289 memsz=289 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=88 memsz=88 prot=Read
+[ELF] PT_LOAD off=90 vaddr=402090 filesz=0 memsz=46020 prot=ReadWrite
+[CAP] Created endpoint 3 for pid=57347
+[SCHED] CREATED process #4 't2r-owner' idx=3 burst_score=256 tier=High
+[T2R] begin case=0 cpus=2 bounded_entry_spins=2000000
+[SCHED] process 0 't2r-owner' state=Ready
+[SCHED] Entering process 0 't2r-owner' at rsp=0xffffffff900087a0
+[SYSCALL] thread_spawn: parent=57345 tid=57348 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57349 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57350 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57351 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57352 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57353 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57354 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57355 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57356 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57357 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57358 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57359 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57360 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57361 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57362 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57363 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57364 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57365 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57366 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57367 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57368 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57369 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57370 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57371 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57372 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57373 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57374 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57375 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57376 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57377 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57378 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57379 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57380 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57381 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57382 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57383 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57384 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57344 tid=57385 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57386 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57387 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57388 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57389 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57390 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57391 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57392 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57393 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57394 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57395 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57396 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57397 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57398 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57399 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57400 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57401 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57402 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57403 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57404 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57405 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57406 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57346 tid=57407 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57408 trampoline=0x4001b6
+[T2R] registered actor=0 pid=57346 incarnation=3 vm=AddressSpaceIdentity { pml4_phys: 274558976, generation: 3 }
+[SYSCALL] thread_spawn: parent=57345 tid=57409 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57410 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57411 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57412 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57413 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57414 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57415 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57416 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57417 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57418 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57419 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57420 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57421 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57422 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57423 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57424 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57425 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57345 tid=57426 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57427 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57428 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57429 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57430 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57431 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57432 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57433 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57434 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57435 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57436 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57437 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57438 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57439 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57440 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57441 trampoline=0x4001b6
+[SYSCALL] thread_spawn: parent=57347 tid=57442 trampoline=0x4001b6
+[T2R] registered actor=1 pid=57347 incarnation=4 vm=AddressSpaceIdentity { pml4_phys: 276996096, generation: 4 }
+[T2R] entry actor=0 cpu=0 mask=3 outside_lifecycle_lock=1
+[T2R] entry actor=1 cpu=1 mask=3 outside_lifecycle_lock=1
+[T2R] commit actor=0 parent=57346 tid=57443 incarnation=100 slot=99 vm=AddressSpaceIdentity { pml4_phys: 274558976, generation: 3 } stack=true queued=1 workers=96
+[SYSCALL] thread_spawn: parent=57346 tid=57443 trampoline=0x4001b6
+[T2R] reject actor=1 pid=57347 incarnation=4 error=Capacity workers=96 reservation=none
+[T2R] outcome case=0 successes=1 commits=1 rejects=1 entry_mask=3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57348 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57348 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57348 name='t2r-owner'
+[SCHED] process_mark_finished pid=57349 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57349 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57349 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57350 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57350 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57350 name='t2r-owner'
+[SCHED] process_mark_finished pid=57353 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57353 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57353 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57351 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57351 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57351 name='t2r-owner'
+[SCHED] process_mark_finished pid=57359 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57359 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57359 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57352 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57352 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57352 name='t2r-owner'
+[SCHED] process_mark_finished pid=57361 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57361 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57361 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57354 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57354 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57354 name='t2r-owner'
+[SCHED] process_mark_finished pid=57368 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57368 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57368 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57355 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57355 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57355 name='t2r-owner'
+[SCHED] process_mark_finished pid=57376 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57376 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57376 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57356 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57356 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57356 name='t2r-owner'
+[SCHED] process_mark_finished pid=57386 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57386 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57386 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57357 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57357 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57357 name='t2r-owner'
+[SCHED] process_mark_finished pid=57387 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57387 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57387 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57358 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57358 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57358 name='t2r-owner'
+[SCHED] process_mark_finished pid=57388 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57388 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57388 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57360 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57360 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57360 name='t2r-owner'
+[SCHED] process_mark_finished pid=57389 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57389 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57389 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57362 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57362 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57362 name='t2r-owner'
+[SCHED] process_mark_finished pid=57390 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57390 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57390 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57363 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57363 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57363 name='t2r-owner'
+[SCHED] process_mark_finished pid=57391 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57391 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57391 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57364 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57364 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57364 name='t2r-owner'
+[SCHED] process_mark_finished pid=57393 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57393 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57393 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57365 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57365 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57365 name='t2r-owner'
+[SCHED] process_mark_finished pid=57408 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57408 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57408 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57366 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57366 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57366 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57409 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57409 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57409 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57367 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57367 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57367 name='t2r-owner'
+[SCHED] process_mark_finished pid=57410 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57410 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57410 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57369 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57369 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57369 name='t2r-owner'
+[SCHED] process_mark_finished pid=57411 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57411 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57411 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57370 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57370 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57370 name='t2r-owner'
+[SCHED] process_mark_finished pid=57412 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57412 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57412 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57371 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57371 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57371 name='t2r-owner'
+[SCHED] process_mark_finished pid=57413 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57413 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57413 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57372 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57372 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57372 name='t2r-owner'
+[SCHED] process_mark_finished pid=57414 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57414 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57414 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57415 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57415 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57415 name='t2r-owner'
+[SCHED] process_mark_finished pid=57373 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57373 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57373 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57416 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57416 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57416 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57417 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57417 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57417 name='t2r-owner'
+[SCHED] process_mark_finished pid=57374 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57374 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57374 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57418 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57418 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57418 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57375 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57375 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57375 name='t2r-owner'
+[SCHED] process_mark_finished pid=57419 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57419 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57419 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57377 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57377 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57377 name='t2r-owner'
+[SCHED] process_mark_finished pid=57420 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57420 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57420 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57378 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57378 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57378 name='t2r-owner'
+[SCHED] process_mark_finished pid=57421 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57421 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57421 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57379 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57379 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57379 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57422 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57422 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57422 name='t2r-owner'
+[SCHED] process_mark_finished pid=57380 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57380 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57380 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57423 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57423 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57423 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57381 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57381 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57381 name='t2r-owner'
+[SCHED] process_mark_finished pid=57424 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57424 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57424 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57382 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57382 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57382 name='t2r-owner'
+[SCHED] process_mark_finished pid=57425 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57425 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57425 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57383 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57383 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57383 name='t2r-owner'
+[SCHED] process_mark_finished pid=57426 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57426 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57426 name='t2r-owner'
+[SCHED] process_reaped pid=57348 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57348 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57348 cleared_msgs=0
+[SCHED] process_reaped pid=57349 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57349 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57349 cleared_msgs=0
+[SCHED] process_reaped pid=57350 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57350 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57350 cleared_msgs=0
+[SCHED] process_reaped pid=57351 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57351 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57351 cleared_msgs=0
+[SCHED] process_reaped pid=57352 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57352 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57352 cleared_msgs=0
+[SCHED] process_reaped pid=57353 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57353 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57353 cleared_msgs=0
+[SCHED] process_reaped pid=57354 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57354 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57354 cleared_msgs=0
+[SCHED] process_reaped pid=57355 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57355 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57355 cleared_msgs=0
+[SCHED] process_reaped pid=57356 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57356 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57356 cleared_msgs=0
+[SCHED] process_reaped pid=57357 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57357 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57357 cleared_msgs=0
+[SCHED] process_reaped pid=57358 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57358 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57358 cleared_msgs=0
+[SCHED] process_reaped pid=57359 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57359 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57359 cleared_msgs=0
+[SCHED] process_reaped pid=57360 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57360 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57360 cleared_msgs=0
+[SCHED] process_reaped pid=57361 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57361 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57361 cleared_msgs=0
+[SCHED] process_reaped pid=57362 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57362 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57362 cleared_msgs=0
+[SCHED] process_reaped pid=57363 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57363 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57363 cleared_msgs=0
+[SCHED] process_reaped pid=57364 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57364 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57364 cleared_msgs=0
+[SCHED] process_reaped pid=57365 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57365 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57365 cleared_msgs=0
+[SCHED] process_reaped pid=57366 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57366 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57366 cleared_msgs=0
+[SCHED] process_reaped pid=57367 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57367 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57367 cleared_msgs=0
+[SCHED] process_reaped pid=57368 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57368 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57368 cleared_msgs=0
+[SCHED] process_reaped pid=57369 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57369 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57369 cleared_msgs=0
+[SCHED] process_reaped pid=57370 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57370 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57370 cleared_msgs=0
+[SCHED] process_reaped pid=57371 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57371 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57371 cleared_msgs=0
+[SCHED] process_reaped pid=57372 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57372 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57372 cleared_msgs=0
+[SCHED] process_reaped pid=57373 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57373 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57373 cleared_msgs=0
+[SCHED] process_reaped pid=57374 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57374 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57374 cleared_msgs=0
+[SCHED] process_reaped pid=57375 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57375 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57375 cleared_msgs=0
+[SCHED] process_reaped pid=57376 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57376 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57376 cleared_msgs=0
+[SCHED] process_reaped pid=57377 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57377 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57377 cleared_msgs=0
+[SCHED] process_reaped pid=57378 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57378 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57378 cleared_msgs=0
+[SCHED] process_reaped pid=57379 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57379 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57379 cleared_msgs=0
+[SCHED] process_reaped pid=57380 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57380 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57380 cleared_msgs=0
+[SCHED] process_reaped pid=57381 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57381 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57381 cleared_msgs=0
+[SCHED] process_reaped pid=57382 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57382 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57382 cleared_msgs=0
+[SCHED] process_reaped pid=57383 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57383 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57383 cleared_msgs=0
+[SCHED] process_reaped pid=57386 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57386 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57386 cleared_msgs=0
+[SCHED] process_reaped pid=57387 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57387 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57387 cleared_msgs=0
+[SCHED] process_reaped pid=57388 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57388 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57388 cleared_msgs=0
+[SCHED] process_reaped pid=57389 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57389 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57389 cleared_msgs=0
+[SCHED] process_reaped pid=57390 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57390 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57390 cleared_msgs=0
+[SCHED] process_reaped pid=57391 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57391 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57391 cleared_msgs=0
+[SCHED] process_reaped pid=57393 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57393 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57393 cleared_msgs=0
+[SCHED] process_reaped pid=57408 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57408 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57408 cleared_msgs=0
+[SCHED] process_reaped pid=57409 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57409 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57409 cleared_msgs=0
+[SCHED] process_reaped pid=57410 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57410 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57410 cleared_msgs=0
+[SCHED] process_reaped pid=57411 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57411 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57411 cleared_msgs=0
+[SCHED] process_reaped pid=57412 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57412 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57412 cleared_msgs=0
+[SCHED] process_reaped pid=57413 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57413 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57413 cleared_msgs=0
+[SCHED] process_reaped pid=57414 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57414 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57414 cleared_msgs=0
+[SCHED] process_reaped pid=57415 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57415 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57415 cleared_msgs=0
+[SCHED] process_reaped pid=57416 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57416 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57416 cleared_msgs=0
+[SCHED] process_reaped pid=57417 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57417 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57417 cleared_msgs=0
+[SCHED] process_reaped pid=57418 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57418 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57418 cleared_msgs=0
+[SCHED] process_reaped pid=57419 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57419 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57419 cleared_msgs=0
+[SCHED] process_reaped pid=57420 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57420 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57420 cleared_msgs=0
+[SCHED] process_reaped pid=57421 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57421 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57421 cleared_msgs=0
+[SCHED] process_reaped pid=57422 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57422 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57422 cleared_msgs=0
+[SCHED] process_reaped pid=57423 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57423 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57423 cleared_msgs=0
+[SCHED] process_reaped pid=57424 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57424 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57424 cleared_msgs=0
+[SCHED] process_reaped pid=57425 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57425 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57425 cleared_msgs=0
+[SCHED] process_reaped pid=57426 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57426 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57426 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57384 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57384 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57384 name='t2r-owner'
+[SCHED] process_mark_finished pid=57427 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57427 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57427 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57385 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57385 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57385 name='t2r-owner'
+[SCHED] process_mark_finished pid=57428 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57428 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57428 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57429 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57429 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57429 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57430 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57430 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57430 name='t2r-owner'
+[SCHED] process_reaped pid=57384 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57384 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57384 cleared_msgs=0
+[SCHED] process_reaped pid=57385 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57385 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57385 cleared_msgs=0
+[SCHED] process_reaped pid=57427 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57427 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57427 cleared_msgs=0
+[SCHED] process_reaped pid=57428 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57428 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57428 cleared_msgs=0
+[SCHED] process_reaped pid=57429 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57429 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57429 cleared_msgs=0
+[SCHED] process_reaped pid=57430 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57430 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57430 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57431 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57431 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57431 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57432 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57432 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57432 name='t2r-owner'
+[SCHED] process_mark_finished pid=57392 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57392 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57392 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57433 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57433 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57433 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57394 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57394 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57394 name='t2r-owner'
+[SCHED] process_mark_finished pid=57434 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57434 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57434 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57435 name='t2r-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=57435 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57435 name='t2r-owner'
+[SCHED] process_mark_finished pid=57395 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57395 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57395 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57436 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57436 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57436 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57396 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57396 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57396 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57437 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57437 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57437 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57397 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57397 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57397 name='t2r-owner'
+[SCHED] process_mark_finished pid=57438 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57438 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57438 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57398 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57398 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57398 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57439 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57439 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57439 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57399 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57399 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57399 name='t2r-owner'
+[SCHED] process_mark_finished pid=57440 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57440 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57440 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57400 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57400 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57400 name='t2r-owner'
+[SCHED] process_mark_finished pid=57441 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57441 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57441 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57401 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57401 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57401 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57402 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57402 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57402 name='t2r-owner'
+[SCHED] process_mark_finished pid=57442 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57442 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57442 name='t2r-owner'
+[SCHED] process_reaped pid=57392 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57392 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57392 cleared_msgs=0
+[SCHED] process_reaped pid=57394 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57394 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57394 cleared_msgs=0
+[SCHED] process_reaped pid=57395 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57395 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57395 cleared_msgs=0
+[SCHED] process_reaped pid=57396 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57396 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57396 cleared_msgs=0
+[SCHED] process_reaped pid=57397 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57397 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57397 cleared_msgs=0
+[SCHED] process_reaped pid=57398 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57398 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57398 cleared_msgs=0
+[SCHED] process_reaped pid=57399 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57399 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57399 cleared_msgs=0
+[SCHED] process_reaped pid=57400 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57400 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57400 cleared_msgs=0
+[SCHED] process_reaped pid=57401 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57401 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57401 cleared_msgs=0
+[SCHED] process_reaped pid=57402 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57402 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57402 cleared_msgs=0
+[SCHED] process_reaped pid=57431 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57431 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57431 cleared_msgs=0
+[SCHED] process_reaped pid=57432 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57432 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57432 cleared_msgs=0
+[SCHED] process_reaped pid=57433 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57433 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57433 cleared_msgs=0
+[SCHED] process_reaped pid=57434 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57434 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57434 cleared_msgs=0
+[SCHED] process_reaped pid=57435 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57435 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57435 cleared_msgs=0
+[SCHED] process_reaped pid=57436 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57436 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57436 cleared_msgs=0
+[SCHED] process_reaped pid=57437 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57437 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57437 cleared_msgs=0
+[SCHED] process_reaped pid=57438 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57438 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57438 cleared_msgs=0
+[SCHED] process_reaped pid=57439 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57439 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57439 cleared_msgs=0
+[SCHED] process_reaped pid=57440 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57440 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57440 cleared_msgs=0
+[SCHED] process_reaped pid=57441 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57441 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57441 cleared_msgs=0
+[SCHED] process_reaped pid=57442 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57442 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57442 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57403 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57403 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57403 name='t2r-owner'
+[SCHED] process_reaped pid=57403 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57403 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57403 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57404 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57404 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57404 name='t2r-owner'
+[SCHED] process_reaped pid=57404 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57404 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57404 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57405 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57405 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57405 name='t2r-owner'
+[SCHED] process_reaped pid=57405 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57405 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57405 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57406 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57406 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57406 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=57406 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57406 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57406 cleared_msgs=0
+[SCHED] process_mark_finished pid=57407 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57407 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57407 name='t2r-owner'
+[SCHED] process_reaped pid=57407 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57407 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57407 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57443 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57443 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57443 name='t2r-owner'
+[SCHED] process_reaped pid=57443 name='t2r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57443 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57443 cleared_msgs=0
+[THREAD-LIFECYCLE] created=96 finished=96 reaped=96 borrower_reclaim_skipped=96 stale_wake_rejected=0 borrower_slots_reused=0 max_live=96
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57345 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57345 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57345 name='t2r-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57346 name='t2r-owner' reason=exit code=0
+[SCHED] terminating pid=57346 name='t2r-owner' reason=exit
+[SCHED] FINISHED process pid=57346 name='t2r-owner'
+[T2R] resources point=drained workers=0 occupied=4 slots=100 stacks=4 fd_refs=12 cap_entries=4 heap=3035008 reserved=0 pending=0
+[T2R] vm owner=57344 incarnation=1 identity=AddressSpaceIdentity { pml4_phys: 269684736, generation: 1 } borrowers=0
+[T2R] vm owner=57345 incarnation=2 identity=AddressSpaceIdentity { pml4_phys: 272121856, generation: 2 } borrowers=0
+[T2R] vm owner=57346 incarnation=3 identity=AddressSpaceIdentity { pml4_phys: 274558976, generation: 3 } borrowers=0
+[T2R] vm owner=57347 incarnation=4 identity=AddressSpaceIdentity { pml4_phys: 276996096, generation: 4 } borrowers=0
+[T2R] PILOT PASS case=0 cpus=2
+[SCHE

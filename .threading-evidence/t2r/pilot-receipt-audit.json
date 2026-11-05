@@ -1,0 +1,302 @@
+[
+  {
+    "attempt": "20261104T215553.722767Z-pilot-global-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "tools/helios-probes/thread-lifecycle-race-probe.S",
+      "kernel/build.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "ceaf605c0902be2513500ad9443a4143b01fa60c27006a0bf9df6703b3b9979c",
+    "iso_sha256": "d40406898077f344768736312f45ef5f444500c45ba872df0f58af386cb6a5d4",
+    "eligible_final_pilot": false,
+    "winner": null
+  },
+  {
+    "attempt": "20261104T215737.489831Z-pilot-vm-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "tools/helios-probes/thread-lifecycle-race-probe.S",
+      "kernel/build.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "94f4668b951bb81b5fc06f3b14ca0bdb21a50c6a36b93cdab8fa06de9d022316",
+    "iso_sha256": "901663cbccf039acf0c54e5a8f44cf8f483e67418be51dfa9c788accfc8005c4",
+    "eligible_final_pilot": false,
+    "winner": null
+  },
+  {
+    "attempt": "20261104T215913.641321Z-pilot-vm-placement-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "bf34e82d2dfaf1f6fedaf700bd989cfbd020f0339c39169acce37442dd80a4d6",
+    "iso_sha256": "13fec3713398585fe908d8da2ec4b2866d48898fdbcd786a562e5af99aa4acbb",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220050.671348Z-pilot-immediate-final-2cpu",
+    "case": 2,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "56e085b6d38e8fd1c3b4fe934e5ac20ddfb8888fdc90286662c2cea023b7420a",
+    "iso_sha256": "0af61aa5e0777a9eb5dfcf577979ea351a3c4b365d86157ed558c8ca90085313",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220131.601177Z-pilot-vm-diagnostic-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "156ca219aca0719767abe9e7d125f3dfc78ee869069b89f2e605eccf86ac3984",
+    "iso_sha256": "d71691a43230a871a53dede19ce42a1bd84b09dfe399b476164c9f82d722c840",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220251.610328Z-pilot-vm-diagnostic-r2-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs",
+      "kernel/src/process/fd_table.rs",
+      "kernel/src/sched/mod.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "c1fdad87835fe5f6fe2f9285071bb6cb016d666a4d872e141bcfccc0297e4232",
+    "iso_sha256": "83885c1fd02d421592a806280eeabfa5db9b8dc6c121412f2a275ffdd4944f52",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220600.503148Z-pilot-vm-birth-placement-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "5d15ac870846d2c763cc8466b9cd59e7ba846372ea1672f51425366d55ee4d1f",
+    "iso_sha256": "0208ff0d8819c95f5972f0d5876876e09b629d2e9fa0993ac407e03b30068c6c",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220739.442835Z-pilot-vm-winner0-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "798ba761853840f1cb1bc57b5f8637c3669030edb35363ed3ca53ddd87301aec",
+    "iso_sha256": "ff7e96eceb6dadec1dd0f1d0d0357c867689471eb6aba73a48484acbade73ae8",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T220905.243292Z-pilot-vm-winner1-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs",
+      "kernel/src/arch/x86_64/syscall.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "f9929cbe8b01b1b12b7311acd131d2593cf0685bc110d7a7176fd638ad0177c6",
+    "iso_sha256": "3ba6a052e803b712bd99d818399f6c5d838ab275997b95a699ea9f854efc763a",
+    "eligible_final_pilot": false,
+    "winner": "1"
+  },
+  {
+    "attempt": "20261104T220951.518972Z-pilot-global-winner0-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "53c8f9bb617df0b6eb4e0febef7f7303afa9321a025e9f22f31f66fbbd8879c6",
+    "iso_sha256": "ef5b70dd456313242cb67ccd8ac33c0c74c9cfac7fca0408c23c877e9fa1959b",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T221038.246014Z-pilot-global-winner1-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": false,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "78d7482e3997cd96d981f8cc6a08421485a5ad158a9aea56e611c85f05a9a4a5",
+    "iso_sha256": "019cfb0a73ce416c8d5a87027b1e53ed4bbf611c328a829091482d0aaedd79cb",
+    "eligible_final_pilot": false,
+    "winner": "1"
+  },
+  {
+    "attempt": "20261104T221159.499988Z-pilot-vm-winner0-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "03591142124c39e094cd03c4ab0329027c14a6a1f0beb008ccabc32b5f9eb6c0",
+    "iso_sha256": "4cc97e94c159b16948d50f21e53eba39c870a3fa5dc486b231cf2f0234fd0988",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T221243.351995Z-pilot-vm-winner1-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": false,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "95292b97053fe25f06453848d60d9914fc975e2e46c33cbeaf45bf9834312d06",
+    "iso_sha256": "d8d16ceb3bfe5de4fbe5eef0edcd934813540ad72311dd3a7cb477a7f0520e46",
+    "eligible_final_pilot": false,
+    "winner": "1"
+  },
+  {
+    "attempt": "20261104T221328.495672Z-pilot-global-winner0-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [
+      "kernel/src/sched/t2r_fixture.rs"
+    ],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "a918e3880b4344c99345ca0e67c333e5f327273e59532c9c5c56d43ce20be808",
+    "iso_sha256": "f98201295762192263f8cf9561fabfcdcab408d2e6da2cc5d28eff6262fb20fd",
+    "eligible_final_pilot": false,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T221411.159453Z-pilot-global-winner1-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "df7ad57750719f1b120e3a038cd45de26ce7c9ba0c3c1e9bad844b6638166c28",
+    "iso_sha256": "8d54e1f62bffc5ed8d0c8a92c52583f0729c021b48cafabfcfa94d04846fb161",
+    "eligible_final_pilot": true,
+    "winner": "1"
+  },
+  {
+    "attempt": "20261104T221455.478314Z-pilot-immediate-winner0-2cpu",
+    "case": 2,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "c21a23447d4ef116f4e3488c7c13123f10a8b5d767d8764e66fb99eb10fbcb72",
+    "iso_sha256": "3efc7866e1e901944390d2aaa63d84b4d10968d424f502a2f6768febd071653f",
+    "eligible_final_pilot": true,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T222024.336312Z-pilot-vm-winner0-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "5beb1f3e13ebfc5844c64f09d8a4b1294768f6350bc621582e141b8b5cb36988",
+    "iso_sha256": "4052c6e109cd9396a943103ff6d0bcb2af45489f53f3cc6db778549401efde8c",
+    "eligible_final_pilot": true,
+    "winner": "0"
+  },
+  {
+    "attempt": "20261104T222102.165739Z-pilot-vm-winner1-2cpu",
+    "case": 1,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "7eeabeb3841cacdaa66441ecba70365a28327587f065cc11c1ed0d1294705136",
+    "iso_sha256": "51c8665cdc1687d06ea154a200ec29882190fdb3f8afba074d809707798615c6",
+    "eligible_final_pilot": true,
+    "winner": "1"
+  },
+  {
+    "attempt": "20261104T222149.589348Z-pilot-global-winner0-2cpu",
+    "case": 0,
+    "cpus": 2,
+    "recorded_pass": true,
+    "strict_parser_pass": true,
+    "compiled_inputs_differences": [],
+    "serial_hash_matches_record": true,
+    "serial_sha256": "39905f0ef8428b7a6bf2e2861947fdf73fdb394da04c423e3d51f2b9332e4002",
+    "iso_sha256": "eadbe188d3d4816506ac7807346b0a0979a396e656c70913f5719cb8eec76f13",
+    "eligible_final_pilot": true,
+    "winner": "0"
+  }
+]

@@ -28,16 +28,11 @@
 //!
 //! ## Thread-safety invariants
 //!
-//! - The BSP starts APs one at a time and waits for `AP_ONLINE` to advance
-//!   before starting the next AP.  Therefore only one AP runs `ap_entry_rust`
-//!   at a time, and indexing `AP_STACKS`, `AP_TSS_STORE`, and `AP_GDTS` by
-//!   `AP_ONLINE.load()` (before incrementing) is race-free.
-//! - `AP_STACKS`, `AP_TSS_STORE`, and `AP_GDTS` are written once by the
-//!   respective AP and thereafter read-only (except that `AP_TSS_STORE[i]`
-//!   RSP0 is updated atomically by the scheduler on every context switch on
-//!   that core).
-//! - `AP_ONLINE` is `AtomicU32`; the Release fetch_add pairs with the BSP's
-//!   Acquire load in the spin-wait loop.
+//! The immutable topology is published before any per-CPU initialization.
+//! Logical CPU 0 owns the BSP TSS; logical k > 0 owns AP slot k - 1.
+//! The BSP starts APs serially in that validated logical order and waits for
+//! AP_ONLINE with Acquire/Release. AP_ONLINE is a readiness counter, never an
+//! identity source. Hotplug and dynamic topology mutation are unsupported.
 
 use core::arch::naked_asm;
 use core::sync::atomic::{AtomicU32, Ordering};
@@ -51,7 +46,7 @@ use crate::arch::x86_64::{cpu, interrupts, lapic, syscall};
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /// Maximum number of Application Processors (total logical cores − 1 BSP).
-pub const MAX_APS: usize = 63;
+pub const MAX_APS: usize = super::cpu_topology::MAX_CPUS - 1;
 
 /// Per-AP kernel stack size (64 KiB).
 const AP_STACK_SIZE: usize = 64 * 1024;
@@ -123,6 +118,11 @@ static mut AP_GDTS: [ApGdt; MAX_APS] = [const { ApGdt([0u64; 8]) }; MAX_APS];
 /// 3. `smp::start_aps()` (this function) — each AP gets its own TSS, GDT,
 ///    LAPIC, and is left running in an interrupt-enabled idle loop.
 pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
+    assert_eq!(
+        super::cpu_identity::topology().apic_id(0),
+        Some(bsp_lapic_id)
+    );
+    assert_eq!(super::cpu_identity::topology().count(), all_cpus.len());
     let mut ap_idx = 0usize;
 
     for cpu_info in all_cpus {
@@ -130,13 +130,13 @@ pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
             continue;
         }
 
-        if ap_idx >= MAX_APS {
-            crate::serial_println!(
-                "[SMP] Warning: more than {} APs; ignoring remaining cores",
-                MAX_APS
-            );
-            break;
-        }
+        let logical = super::cpu_identity::topology()
+            .logical_id(cpu_info.lapic_id)
+            .expect("unmapped AP");
+        let slot = super::cpu_identity::topology()
+            .ap_slot(logical)
+            .expect("BSP in AP startup");
+        assert_eq!(slot, ap_idx, "AP startup ownership mismatch");
 
         let stack_top: u64 = unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
 
@@ -178,10 +178,13 @@ pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
 /// - Core k (AP):  updates `AP_TSS_STORE[k-1]`.
 pub fn set_current_cpu_tss_rsp0(stack_top: u64) {
     let cpu_id = crate::sched::current_cpu_id();
+    super::syscall_stack::select(stack_top);
     if cpu_id == 0 {
         crate::arch::x86_64::interrupts::set_tss_rsp0(stack_top);
     } else {
-        let ap_idx = cpu_id - 1;
+        let ap_idx = super::cpu_identity::topology()
+            .ap_slot(cpu_id)
+            .expect("invalid AP TSS owner");
         if ap_idx < MAX_APS {
             unsafe {
                 AP_TSS_STORE[ap_idx].privilege_stack_table[0] = VirtAddr::new(stack_top);
@@ -195,7 +198,9 @@ pub fn current_cpu_tss_rsp0() -> u64 {
     if cpu_id == 0 {
         crate::arch::x86_64::interrupts::current_tss_rsp0()
     } else {
-        let ap_idx = cpu_id - 1;
+        let ap_idx = super::cpu_identity::topology()
+            .ap_slot(cpu_id)
+            .expect("invalid AP TSS owner");
         if ap_idx < MAX_APS {
             unsafe { AP_TSS_STORE[ap_idx].privilege_stack_table[0].as_u64() }
         } else {
@@ -264,6 +269,9 @@ unsafe fn ap_setup_gdt_and_tss(ap_idx: usize) {
     let tss = &mut AP_TSS_STORE[ap_idx];
     tss.privilege_stack_table[0] = VirtAddr::new(stack_top);
     tss.interrupt_stack_table[0] = VirtAddr::new(stack_top);
+    tss.interrupt_stack_table[1] = VirtAddr::new(super::syscall_stack::nmi_stack_top(
+        crate::sched::current_cpu_id(),
+    ));
 
     // Build the raw GDT.
     let (tss_lo, tss_hi) = build_tss_descriptor(tss as *const _);
@@ -303,7 +311,7 @@ unsafe fn ap_setup_gdt_and_tss(ap_idx: usize) {
 /// Execution order (mirrors BSP early boot, adding per-AP TSS + LAPIC):
 ///
 /// 1. CPU feature init (x87/SSE)
-/// 2. Read AP index from AP_ONLINE (before incrementing — BSP serialises startup)
+/// 2. Resolve logical CPU and AP storage slot through the immutable topology
 /// 3. Build and load per-AP GDT + TSS
 /// 4. Setup SYSCALL MSRs
 /// 5. Init LAPIC (enable via SVR)
@@ -316,9 +324,18 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
     cpu::init_cpu_features();
 
     // ── Step 2: Determine AP index ───────────────────────────────────────────
-    // The BSP starts APs one at a time and waits between each, so at most one
-    // AP runs this code concurrently.  AP_ONLINE.load() gives our 0-based index.
-    let ap_idx = AP_ONLINE.load(Ordering::Relaxed) as usize;
+    // Resolve hardware identity through the published mapping; startup order
+    // is checked only as a readiness invariant.
+    super::cpu_identity::validate_controller();
+    let logical = super::cpu_identity::current();
+    assert_eq!(
+        super::cpu_identity::topology().apic_id(logical),
+        Some(info.lapic_id)
+    );
+    let ap_idx = super::cpu_identity::topology()
+        .ap_slot(logical)
+        .expect("invalid AP owner");
+    assert_eq!(ap_idx, AP_ONLINE.load(Ordering::Acquire) as usize);
 
     // ── Step 3: Per-AP GDT + TSS ─────────────────────────────────────────────
     ap_setup_gdt_and_tss(ap_idx);
@@ -341,6 +358,16 @@ unsafe extern "C" fn ap_entry_rust(info: &limine::mp::MpInfo) -> ! {
     super::measurement_clock::publish_cpu();
 
     // ── Step 7: Signal BSP ───────────────────────────────────────────────────
+    crate::serial_println!(
+        "[CPU-ID] online logical={} apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
+        logical,
+        lapic::local_apic_id(),
+        core::ptr::addr_of!(AP_TSS_STORE[ap_idx]) as u64,
+        AP_TSS_STORE[ap_idx].interrupt_stack_table[0].as_u64(),
+        AP_TSS_STORE[ap_idx].interrupt_stack_table[1].as_u64()
+    );
+    assert_eq!(lapic::local_apic_id(), info.lapic_id);
+    super::cpu_identity::mark_online(logical);
     let seq = AP_ONLINE.fetch_add(1, Ordering::Release) + 1;
     crate::serial_println!(
         "[SMP] AP{} (LAPIC {}) online — TSS loaded, LAPIC timer armed",

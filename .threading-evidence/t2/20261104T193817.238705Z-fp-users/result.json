@@ -1,0 +1,24 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "env",
+    "RUSTFLAGS=-C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld",
+    "cargo",
+    "build",
+    "--manifest-path",
+    "tools/native-std-probe/Cargo.toml",
+    "--target",
+    "tools/targets/x86_64-sunlightos.json",
+    "--bin",
+    "native-fp-probe",
+    "--release",
+    "-Z",
+    "build-std=core,alloc",
+    "-Z",
+    "json-target-spec",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "seconds": 1.0008928219904192
+}

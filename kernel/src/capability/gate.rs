@@ -12,6 +12,33 @@ pub(super) static AUTH_COMMITS: core::sync::atomic::AtomicUsize =
     core::sync::atomic::AtomicUsize::new(0);
 static ACCOUNT_DENIALS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
 
+#[cfg(all(debug_assertions, feature = "syscall_stack_auth_test"))]
+static T1_PROGRESS: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// Test-only observation under the caller's existing scheduler guard. The
+/// backing belongs to the live owner SHM object allocated by run(); no user
+/// pointer is adopted here. Reader retirement cannot occur before this ack.
+#[cfg(all(debug_assertions, feature = "syscall_stack_auth_test"))]
+pub(crate) fn t1_progress(s: &Scheduler) {
+    if T1_PROGRESS.load(Ordering::Relaxed) || !s.current_process().native_thread {
+        return;
+    }
+    let Some(reader) = s.processes.iter().find(|p| p.pid == READER) else {
+        return;
+    };
+    if reader.state != ProcessState::BlockedOnIpc
+        || reader.address_space.identity() != s.current_process().address_space.identity()
+    {
+        return;
+    }
+    let address = STATE.lock().signal_address;
+    assert_ne!(address, 0);
+    unsafe {
+        ((address + 8) as *mut u64).write_volatile(1);
+    }
+    T1_PROGRESS.store(true, Ordering::Relaxed);
+}
+
 pub(crate) fn account_denied(sched: &Scheduler, error: sunlight_ipc::accounts::Error) {
     use sunlight_ipc::accounts::Error;
     assert!(matches!(
@@ -312,6 +339,11 @@ pub fn on_tick(sched: &mut Scheduler, cpu: usize) {
         assert_eq!(AUTH_COMMITS.load(Ordering::Relaxed), 17);
         assert_eq!(AUTH_CONSUMES.load(Ordering::Relaxed), 15);
         assert!(DELIVERY_BOUNDARIES.load(Ordering::Relaxed));
+        #[cfg(all(debug_assertions, feature = "syscall_stack_auth_test"))]
+        {
+            assert!(T1_PROGRESS.load(Ordering::Relaxed));
+            crate::serial_println!("[T1-AUTH] PASS sibling_progress=blocked-authenticated-ipc private_kernel_stack=checked");
+        }
         crate::serial_println!("[CAP-R41] COMPLETE delivered_auth_consumed=15 stale_incarnation=denied real_call_cancel=retired pending=0 active_auth_account=0 cpus={}", sched.online_cores);
         assert_eq!(ACCOUNT_DENIALS.load(Ordering::Relaxed), 35);
         assert!(caps.auth_session_grants.is_empty() && caps.account_grants.is_empty());

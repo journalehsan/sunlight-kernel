@@ -77,6 +77,8 @@ pub(super) struct Channel {
     pub deadline: u64,
     // Kernel-private SHM identities; never exported as bearer grants.
     pub backing: [Option<CapabilityToken>; 3],
+    #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+    pub contract: super::channel_contract::Contract,
     // M5 single use: 0 writable, 1 published, 2 acknowledged. Never reset.
     #[cfg(feature = "fastlane_transfer_test")]
     pub transfer: u8,
@@ -97,6 +99,10 @@ impl Channel {
     }
     pub(super) fn retire(&mut self, reason: Terminal) {
         if self.live() {
+            #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+            self.contract_retire(reason);
+            #[cfg(all(test, not(feature = "fastlane_contract_test")))]
+            self.contract.retire();
             #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
             crate::sched::bell_trace::event("close", self.handle.generation, self.creator.pid,
                 self.creator.incarnation, self.creator.vm_generation, reason as u64,
@@ -106,6 +112,7 @@ impl Channel {
                 self.bell_pending = bell.revoke(super::channel_doorbell::key(self.handle), super::channel_doorbell::identity(self.creator)).expect("bound channel owner").wake;
             }
             self.terminal = Some(reason);
+            self.consumer_receipt = None;
             self.state = State::Retired;
         }
     }
@@ -115,12 +122,16 @@ impl Channel {
 }
 pub(super) struct ChannelTable {
     pub rows: Vec<Channel>,
+    #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+    pub policies: super::channel_contract::PolicyCatalog,
     next_generation: u64,
 }
 impl ChannelTable {
     pub const fn new() -> Self {
         Self {
             rows: Vec::new(),
+            #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+            policies: super::channel_contract::PolicyCatalog::new(),
             next_generation: 1,
         }
     }
@@ -142,6 +153,8 @@ impl ChannelTable {
         })
     }
     pub fn retire_process(&mut self, pid: usize) {
+        #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+        self.policies.retire_process(pid);
         for row in &mut self.rows {
             if row.creator.pid == pid
                 || row.consumer.is_some_and(|p| p.pid == pid)
@@ -203,6 +216,8 @@ impl CapabilityBroker {
             return Err(Error::Duplicate);
         }
         let slot = self.channels.rows.iter().position(|r| {
+            #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+            if r.contract.hybrid_reply.is_some() { return false; }
             #[cfg(any(test, feature = "fastlane_doorbell_test"))]
             if r.bell_pending.is_some() { return false; }
             !r.live() && r.backing.iter().all(Option::is_none)
@@ -246,6 +261,8 @@ impl CapabilityBroker {
             terminal: None,
             deadline,
             backing: [None; 3],
+            #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
+            contract: super::channel_contract::Contract::new(),
             #[cfg(feature = "fastlane_transfer_test")]
             transfer: 0,
             #[cfg(feature = "fastlane_shared_ring_test")]

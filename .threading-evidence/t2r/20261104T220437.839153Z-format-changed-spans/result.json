@@ -1,0 +1,10 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/threading_t2r_format.py"
+  ],
+  "exit_code": 1,
+  "seconds": 1.0010639939864632
+}

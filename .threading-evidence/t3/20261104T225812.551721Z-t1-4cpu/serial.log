@@ -1,0 +1,693 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU-ID] logical=2 apic=2 bsp=false
+[CPU-ID] logical=3 apic=3 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 4 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T22:01:48Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf127cca (61736 frames, 241 MiB)
+[PMM] 1318/1559 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2440
+[ACPI] Found table: FACP at 0x7ffe22dc
+[ACPI] Found table: APIC at 0x7ffe2350
+[ACPI] Found table: HPET at 0x7ffe23e0
+[ACPI] Found table: WAET at 0x7ffe2418
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11799 end_count=7796 elapsed_counts=4003 tsc_delta=8313538 tsc_hz=2478032450
+[TIME] TSC calibrated ~2478032450 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6143e8 ist_df=0xffffffff8ea34d88 ist_nmi=0xffffffff8ea396a0
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62745800 lapic_initial_count=627458 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2478032450
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x22 minute=0x58 second=0x37 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T22:58:37Z assumed_basis=UTC
+wall: utc=2026-11-04T22:58:37Z unix=1793833117 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 4 logical processor(s) found, 4 usable
+[ACPI] MADT: 4 logical processor(s) detected (4 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff800426e0
+[SYSCALL] OK
+[SMP] Limine MP response: 4 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8eb37a20..0xffffffff8eb47a20
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff800426e0
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8e6ddc10 ist_df=0xffffffff8eb47a20 ist_nmi=0xffffffff8ea3d6a0
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8eb47a20..0xffffffff8eb57a20
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff800426e0
+[CPU-ID] online logical=2 apic=2 tss=0xffffffff8e6ddc78 ist_df=0xffffffff8eb57a20 ist_nmi=0xffffffff8ea416a0
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8eb57a20..0xffffffff8eb67a20
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff800426e0
+[CPU-ID] online logical=3 apic=3 tss=0xffffffff8e6ddce0 ist_df=0xffffffff8eb67a20 ist_nmi=0xffffffff8ea456a0
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 3 AP(s) online (4 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 4 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #1 'gate-worker' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #2 'gate-worker' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #3 'gate-worker' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #4 'gate-worker' idx=3 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #5 'gate-worker' idx=4 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #6 'gate-worker' idx=5 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #7 'gate-worker' idx=6 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #8 'gate-worker' idx=7 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #9 'gate-ownerr' idx=8 burst_score=256 tier=High
+[SCHED] CREATED process #10 'gate-borrower' idx=9 burst_score=256 tier=High
+[SCHED] CREATED process #11 'gate-borrower' idx=10 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED] CREATED process #12 'gate-ownerr' idx=11 burst_score=256 tier=High
+[SCHED] CREATED process #13 'gate-borrower' idx=12 burst_score=256 tier=High
+[SCHED] CREATED process #14 'gate-borrower' idx=13 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=eb memsz=eb prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=30 vaddr=402030 filesz=0 memsz=10030 prot=ReadWrite
+[SCHED] CREATED process #15 't1-linux-completion' idx=14 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=16c memsz=16c prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[SCHED-B] begin cpus=4 tasks=14 replacements=4
+[SCHED] process 0 'gate-worker' state=Ready
+[SCHED] Entering process 0 'gate-worker' at rsp=0xffffffff9006b7a0
+[SCHED] process_exit_begin external pid=57344 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57344 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57344 name='gate-worker'
+[SCHED] terminating pid=57344 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_exit_begin external pid=57346 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57346 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57346 name='gate-worker'
+[SCHED] terminating pid=57346 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_exit_begin external pid=57348 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57348 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57348 name='gate-worker'
+[SCHED] terminating pid=57348 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=57344 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57344 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57344 cleared_msgs=0
+[PMM-DIAG] pid=57344 owned_frames=0
+[SCHED] process_exit_begin external pid=57350 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57350 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57350 name='gate-worker'
+[SCHED] terminating pid=57350 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=57346 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57346 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57346 cleared_msgs=0
+[PMM-DIAG] pid=57346 owned_frames=0
+[SCHED] process_reaped pid=57348 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57348 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57348 cleared_msgs=0
+[PMM-DIAG] pid=57348 owned_frames=0
+[SCHED] process_reaped pid=57350 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57350 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57350 cleared_msgs=0
+[PMM-DIAG] pid=57350 owned_frames=0
+[SCHED] process_mark_finished pid=57357 name='gate-borrower' reason=pending-fatal-signal code=137
+[SCHED] FINISHED process pid=57357 name='gate-borrower'
+[HELIOS-THREAD] clone tgid=57358 tid=57359 tls=0x402030 stack=0x412060
+[SCHED] process_reaped pid=57357 name='gate-borrower' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57357 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57357 cleared_msgs=0
+[PMM-DIAG] pid=57357 owned_frames=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57359 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57359 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57359 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57359 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57359 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57359 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57359 cleared_msgs=0
+[PMM-DIAG] pid=57359 owned_frames=515
+[HELIOS-THREAD] clone tgid=57358 tid=57360 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57360 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57360 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57360 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57360 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57360 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57360 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57360 cleared_msgs=0
+[PMM-DIAG] pid=57360 owned_frames=515
+[SCHED] process_exit_begin external pid=57356 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57356 name='gate-borrower' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57356 name='gate-borrower'
+[SCHED] terminating pid=57356 name='gate-borrower' reason=scheduler-b-external
+[HELIOS-THREAD] clone tgid=57358 tid=57361 tls=0x402030 stack=0x412060
+[SCHED] process_reaped pid=57356 name='gate-borrower' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57356 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57356 cleared_msgs=0
+[PMM-DIAG] pid=57356 owned_frames=0
+[SCHED] process_mark_finished pid=57355 name='gate-ownerr' reason=pending-fatal-signal code=137
+[SCHED] FINISHED process pid=57355 name='gate-ownerr'
+[SCHED] process_reaped pid=57355 name='gate-ownerr' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57355 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57355 cleared_msgs=0
+[PMM-DIAG] pid=57355 owned_frames=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57361 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57361 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57361 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57361 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57361 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57361 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57361 cleared_msgs=0
+[PMM-DIAG] pid=57361 owned_frames=515
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57353 name='gate-borrower' reason=exit code=0
+[SCHED] terminating pid=57353 name='gate-borrower' reason=exit
+[SCHED] FINISHED process pid=57353 name='gate-borrower'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57354 name='gate-borrower' reason=exit code=0
+[SCHED] terminating pid=57354 name='gate-borrower' reason=exit
+[SCHED] FINISHED process pid=57354 name='gate-borrower'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin external pid=57349 reason=scheduler-b-exit-race
+[SCHED] process_mark_finished pid=57349 name='gate-worker' reason=scheduler-b-exit-race code=137 (external)
+[SCHED] FINISHED process pid=57349 name='gate-worker'
+[SCHED] terminating pid=57349 name='gate-worker' reason=scheduler-b-exit-race
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57351 name='gate-worker' reason=exit code=0
+[SCHED] terminating pid=57351 name='gate-worker' reason=exit
+[SCHED] FINISHED process pid=57351 name='gate-worker'
+[SCHED] process_reaped pid=57349 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57349 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57349 cleared_msgs=0
+[PMM-DIAG] pid=57349 owned_frames=0
+[SCHED] process_reaped pid=57351 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57351 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57351 cleared_msgs=0
+[PMM-DIAG] pid=57351 owned_frames=0
+[SCHED] process_reaped pid=57353 name='gate-borrower' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57353 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57353 cleared_msgs=0
+[PMM-DIAG] pid=57353 owned_frames=0
+[SCHED] process_reaped pid=57354 name='gate-borrower' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57354 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57354 cleared_msgs=0
+[PMM-DIAG] pid=57354 owned_frames=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=0 max_live=2
+[HELIOS-THREAD] clone tgid=57358 tid=57362 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin external pid=57352 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57352 name='gate-ownerr' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57352 name='gate-ownerr'
+[SCHED] terminating pid=57352 name='gate-ownerr' reason=scheduler-b-external
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57362 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57362 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57362 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57362 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57362 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57362 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57362 cleared_msgs=0
+[PMM-DIAG] pid=57362 owned_frames=515
+[SCHED] process_reaped pid=57352 name='gate-ownerr' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57352 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57352 cleared_msgs=0
+[PMM-DIAG] pid=57352 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57363 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57363 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57363 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57363 name='t1-linux-completion'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57345 name='gate-worker' reason=exit code=0
+[SCHED] terminating pid=57345 name='gate-worker' reason=exit
+[SCHED] FINISHED process pid=57345 name='gate-worker'
+[HELIOS-THREAD] clear_child_tid tid=57363 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57363 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57363 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57363 cleared_msgs=0
+[PMM-DIAG] pid=57363 owned_frames=0
+[SCHED] process_reaped pid=57345 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57345 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57345 cleared_msgs=0
+[PMM-DIAG] pid=57345 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57364 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57364 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57364 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57364 name='t1-linux-completion'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57347 name='gate-worker' reason=exit code=0
+[SCHED] terminating pid=57347 name='gate-worker' reason=exit
+[SCHED] FINISHED process pid=57347 name='gate-worker'
+[HELIOS-THREAD] clear_child_tid tid=57364 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57364 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57364 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57364 cleared_msgs=0
+[PMM-DIAG] pid=57364 owned_frames=0
+[SCHED] process_reaped pid=57347 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57347 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57347 cleared_msgs=0
+[PMM-DIAG] pid=57347 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57365 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57365 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57365 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57365 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57365 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57365 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57365 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57365 cleared_msgs=0
+[PMM-DIAG] pid=57365 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57366 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57366 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57366 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57366 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57366 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57366 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57366 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57366 cleared_msgs=0
+[PMM-DIAG] pid=57366 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57367 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57367 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57367 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57367 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57367 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57367 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57367 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57367 cleared_msgs=0
+[PMM-DIAG] pid=57367 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57368 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57368 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57368 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57368 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57368 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57368 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57368 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57368 cleared_msgs=0
+[PMM-DIAG] pid=57368 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57369 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57369 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57369 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57369 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57369 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57369 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57369 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57369 cleared_msgs=0
+[PMM-DIAG] pid=57369 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57370 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57370 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57370 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57370 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57370 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57370 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57370 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57370 cleared_msgs=0
+[PMM-DIAG] pid=57370 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57371 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57371 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57371 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57371 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57371 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57371 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57371 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57371 cleared_msgs=0
+[PMM-DIAG] pid=57371 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57372 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57372 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57372 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57372 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57372 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57372 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57372 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57372 cleared_msgs=0
+[PMM-DIAG] pid=57372 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57373 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57373 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57373 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57373 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57373 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57373 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57373 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57373 cleared_msgs=0
+[PMM-DIAG] pid=57373 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57374 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57374 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57374 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57374 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57374 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57374 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57374 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57374 cleared_msgs=0
+[PMM-DIAG] pid=57374 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57375 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57375 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57375 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57375 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57375 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57375 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57375 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57375 cleared_msgs=0
+[PMM-DIAG] pid=57375 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57376 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57376 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57376 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57376 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57376 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57376 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57376 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57376 cleared_msgs=0
+[PMM-DIAG] pid=57376 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57377 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57377 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57377 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57377 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57377 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57377 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57377 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57377 cleared_msgs=0
+[PMM-DIAG] pid=57377 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57378 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57378 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57378 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57378 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57378 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57378 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57378 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57378 cleared_msgs=0
+[PMM-DIAG] pid=57378 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57379 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57379 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57379 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57379 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57379 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57379 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57379 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57379 cleared_msgs=0
+[PMM-DIAG] pid=57379 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57380 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57380 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57380 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57380 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57380 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57380 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57380 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57380 cleared_msgs=0
+[PMM-DIAG] pid=57380 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57381 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57381 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57381 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57381 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57381 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57381 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57381 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57381 cleared_msgs=0
+[PMM-DIAG] pid=57381 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57382 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57382 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57382 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57382 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57382 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57382 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57382 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57382 cleared_msgs=0
+[PMM-DIAG] pid=57382 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57383 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57383 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57383 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57383 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57383 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57383 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57383 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57383 cleared_msgs=0
+[PMM-DIAG] pid=57383 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57384 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57384 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57384 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57384 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57384 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57384 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57384 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57384 cleared_msgs=0
+[PMM-DIAG] pid=57384 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57385 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57385 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57385 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57385 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57385 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57385 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57385 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57385 cleared_msgs=0
+[PMM-DIAG] pid=57385 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57386 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57386 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57386 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57386 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57386 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57386 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57386 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57386 cleared_msgs=0
+[PMM-DIAG] pid=57386 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57387 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57387 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57387 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57387 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57387 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57387 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57387 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57387 cleared_msgs=0
+[PMM-DIAG] pid=57387 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57388 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57388 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57388 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57388 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57388 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57388 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57388 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57388 cleared_msgs=0
+[PMM-DIAG] pid=57388 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57389 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57389 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57389 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57389 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57389 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57389 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57389 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57389 cleared_msgs=0
+[PMM-DIAG] pid=57389 owned_frames=0
+[HELIOS-THREAD] clone tgid=57358 tid=57390 tls=0x402030 stack=0x412060
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57390 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57390 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57390 name='t1-linux-completion'
+[HELIOS-THREAD] clear_child_tid tid=57390 addr=0x402050 woken=1
+[SCHED] process_reaped pid=57390 name='t1-linux-completion' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57390 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57390 cleared_msgs=0
+[PMM-DIAG] pid=57390 owned_frames=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57358 name='t1-linux-completion' reason=exit code=0
+[SCHED] terminating pid=57358 name='t1-linux-completion' reason=exit
+[SCHED] FINISHED process pid=57358 name='t1-linux-completion'
+[SCHED] process_reaped pid=57358 name='t1-linux-completion' user_frames=532 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57358 frames=532 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57358 cleared_msgs=0
+[PMM-DIAG] pid=57358 owned_frames=0
+[SCHED] process_slot_reused idx=0 pid=57362 (reused reaped slot)
+[SCHED] CREATED process #48 'gate-worker' idx=0 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=1 pid=57361 (reused reaped slot)
+[SCHED] CREATED process #49 'gate-worker' idx=1 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=2 pid=57360 (reused reaped slot)
+[SCHED] CREATED process #50 'gate-worker' idx=2 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=3 pid=57359 (reused reaped slot)
+[SCHED] CREATED process #51 'gate-worker' idx=3 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_exit_begin external pid=57362 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57362 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57362 name='gate-worker'
+[SCHED] terminating pid=57362 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_exit_begin external pid=57360 reason=scheduler-b-external
+[SCHED] process_mark_finished pid=57360 name='gate-worker' reason=scheduler-b-external code=137 (external)
+[SCHED] FINISHED process pid=57360 name='gate-worker'
+[SCHED] terminating pid=57360 name='gate-worker' reason=scheduler-b-external
+[SCHED] process_reaped pid=57362 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57362 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57362 cleared_msgs=0
+[PMM-DIAG] pid=57362 owned_frames=0
+[SCHED] process_reaped pid=57360 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57360 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57360 cleared_msgs=0
+[PMM-DIAG] pid=57360 owned_frames=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57361 name='gate-worker' reason=exit code=0
+[SCHED] terminating pid=57361 name='gate-worker' reason=exit
+[SCHED] FINISHED process pid=57361 name='gate-worker'
+[SCHED] process_reaped pid=57361 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57361 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57361 cleared_msgs=0
+[PMM-DIAG] pid=57361 owned_frames=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57359 name='gate-worker' reason=exit code=0
+[SCHED] terminating pid=57359 name='gate-worker' reason=exit
+[SCHED] FINISHED process pid=57359 name='gate-worker'
+[SCHED] process_reaped pid=57359 name='gate-worker' user_frames=515 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57359 frames=515 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57359 cleared_msgs=0
+[PMM-DIAG] pid=57359 owned_frames=0
+[T1] PASS invalid_rsp=unmapped,zero,noncanonical,guard-boundary sibling_iterations=32 completion_reuses=32 trusted_frames=checked
+[SCHED-B] PASS cpus=4 deferred_reaps=5 reused=4 exit_races=1

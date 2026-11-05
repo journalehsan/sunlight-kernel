@@ -1,0 +1,672 @@
+//! Kernel telemetry shared memory page.
+//! Mapped read-only into user-space processes via SYS_MAP_TELEMETRY.
+
+use crate::memory::pmm::PhysicalMemoryManager;
+use crate::sched::Scheduler;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, Ordering};
+use sunlight_ipc::cpu_accounting::CpuCounters;
+
+pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
+/// Version 4: append CPU counters and task group IDs; preserve v3 offsets.
+pub const TELEMETRY_VERSION: u32 = 4;
+pub const MAX_PROCESSES: usize = 64;
+pub const MAX_CORES: usize = 64;
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Default)]
+pub struct ProcessStat {
+    pub pid: u32,
+    pub ppid: u32,
+    pub state: u8,
+    pub _pad: [u8; 3],
+    pub name: [u8; 32],
+    pub cpu_ticks: u64,
+    pub mem_pages: u32,
+    /// Low 32 bits of address-space generation (PID reuse discrimination).
+    pub generation: u32,
+}
+
+#[repr(C, packed)]
+#[derive(Clone, Copy, Default)]
+pub struct CoreStat {
+    pub core_id: u8,
+    pub _pad: [u8; 3],
+    pub current_pid: u32,
+    pub current_ticks: u32,
+    pub nice: i8,
+    pub _pad2: [u8; 3],
+    pub local_timer_ticks: u64,
+    pub context_switches: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TelemetryPage {
+    pub magic: u64,
+    pub version: u32,
+    pub sequence: u32,
+
+    pub uptime_secs: u64,
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub zram_orig_kb: u64,
+    pub zram_comp_kb: u64,
+    pub net_rx_bytes: u64,
+    pub net_tx_bytes: u64,
+    pub tick_hz: u32,
+    pub cpu_count: u8,
+    pub gpu_count: u8,
+    pub _pad: [u8; 2],
+
+    /// Monotonic kernel time (ns) when this telemetry sample was captured.
+    /// Used by sunlight-top for accurate interval-based CPU % computation.
+    pub sample_time_ns: u64,
+
+    pub proc_count: u32,
+    pub procs: [ProcessStat; MAX_PROCESSES],
+
+    pub core_count: u32,
+    pub cores: [CoreStat; MAX_CORES],
+
+    pub timekeeper_core: u8,
+    pub drift_warning: u8,
+    pub _time_diag_pad: [u8; 6],
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub uptime_seconds: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
+
+    /// Physical memory accounting Phase 1 (versioned nested snapshot).
+    pub mem_acct_version: u32,
+    pub _mem_acct_pad: u32,
+    pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
+    /// Version 4: independently measured CPU capacity, idle, and activity.
+    pub cpu_counters: [CpuCounters; MAX_CORES],
+    pub task_groups: [u32; MAX_PROCESSES],
+}
+
+const ZERO_PROC: ProcessStat = ProcessStat {
+    pid: 0,
+    ppid: 0,
+    state: 0,
+    _pad: [0; 3],
+    name: [0; 32],
+    cpu_ticks: 0,
+    mem_pages: 0,
+    generation: 0,
+};
+
+const ZERO_CORE: CoreStat = CoreStat {
+    core_id: 0,
+    _pad: [0; 3],
+    current_pid: 0,
+    current_ticks: 0,
+    nice: 0,
+    _pad2: [0; 3],
+    local_timer_ticks: 0,
+    context_switches: 0,
+};
+
+const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 16384);
+
+static NET_RX_BYTES: AtomicU64 = AtomicU64::new(0);
+static NET_TX_BYTES: AtomicU64 = AtomicU64::new(0);
+
+#[link_section = ".telemetry"]
+pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
+    cpu_counters: [CpuCounters::ZERO; MAX_CORES],
+    task_groups: [0; MAX_PROCESSES],
+    magic: TELEMETRY_MAGIC,
+    version: TELEMETRY_VERSION,
+    sequence: 0,
+
+    uptime_secs: 0,
+    total_ram_kb: 0,
+    used_ram_kb: 0,
+    zram_orig_kb: 0,
+    zram_comp_kb: 0,
+    net_rx_bytes: 0,
+    net_tx_bytes: 0,
+    tick_hz: crate::timekeeping::TICK_HZ as u32,
+    cpu_count: 1,
+    gpu_count: 0,
+    _pad: [0; 2],
+
+    sample_time_ns: 0,
+
+    proc_count: 0,
+    procs: [ZERO_PROC; MAX_PROCESSES],
+
+    core_count: 0,
+    cores: [ZERO_CORE; MAX_CORES],
+    timekeeper_core: 0,
+    drift_warning: 0,
+    _time_diag_pad: [0; 6],
+    global_timekeeper_ticks: 0,
+    monotonic_ns: 0,
+    uptime_seconds: 0,
+    ticks_per_core: [0; MAX_CORES],
+
+    mem_acct_version: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::VERSION,
+    _mem_acct_pad: 0,
+    mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1 {
+        sample_generation: 0,
+        sampled_at_ticks: 0,
+        installed_bytes: 0,
+        usable_bytes: 0,
+        managed_bytes: 0,
+        free_bytes: 0,
+        reserved_bytes: 0,
+        active_task_count: 0,
+        active_user_task_count: 0,
+        active_service_count: 0,
+        _pad0: 0,
+        task_private_unique_bytes: 0,
+        shared_memory_unique_bytes: 0,
+        kernel_core_bytes: 0,
+        kernel_heap_bytes: 0,
+        kernel_stack_bytes: 0,
+        page_table_bytes: 0,
+        ramfs_file_data_bytes: 0,
+        ramfs_metadata_bytes: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::RAMFS_METADATA_UNAVAILABLE,
+        retained_boot_image_bytes: 0,
+        filesystem_cache_bytes: 0,
+        other_reclaimable_cache_bytes: 0,
+        graphics_buffer_bytes: 0,
+        device_dma_bytes: 0,
+        zram_physical_bytes: 0,
+        zram_logical_bytes: 0,
+        other_accounted_bytes: 0,
+        unclassified_bytes: 0,
+        flags: 0,
+        conservation_delta_bytes: 0,
+    },
+};
+
+pub fn record_net_rx(bytes: u64) {
+    NET_RX_BYTES.fetch_add(bytes, Ordering::Relaxed);
+}
+
+pub fn record_net_tx(bytes: u64) {
+    NET_TX_BYTES.fetch_add(bytes, Ordering::Relaxed);
+}
+
+// === Phase 2: telemetry snapshot for lock-free expensive work ===
+
+#[derive(Clone)]
+pub struct ProcSnap {
+    pub tgid: u32,
+    pub pid: u32,
+    pub ppid: u32,
+    pub state: u8,
+    pub name: [u8; 32],
+    pub cpu_ticks: u64,
+    pub pml4_phys: x86_64::PhysAddr,
+    pub generation: u32,
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub wake_audit: [u64; 4],
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub audit_generation: u64,
+    #[cfg(feature = "cpu_accounting_diag")]
+    pub audit_deadlines: [bool; 2],
+    pub is_finished_or_cleanup: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct CoreSnap {
+    pub counters: CpuCounters,
+    pub core_id: u8,
+    pub local_timer_ticks: u64,
+    pub context_switches: u64,
+    pub current_pid: u32,
+    pub current_ticks: u32,
+    pub nice: i8,
+}
+
+#[derive(Clone)]
+pub struct TelemetrySnapshot {
+    pub uptime_secs: u64,
+    pub uptime_seconds: u64,
+    pub total_ram_kb: u64,
+    pub used_ram_kb: u64,
+    pub zram_orig_kb: u64,
+    pub zram_comp_kb: u64,
+    pub net_rx_bytes: u64,
+    pub net_tx_bytes: u64,
+    pub sample_time_ns: u64,
+    pub cpu_count: u8,
+    pub gpu_count: u8,
+    pub procs: Vec<ProcSnap>,
+    pub cores: Vec<CoreSnap>,
+    pub core_count: u32,
+    pub timekeeper_core: u8,
+    pub drift_warning: u8,
+    pub global_timekeeper_ticks: u64,
+    pub monotonic_ns: u64,
+    pub ticks_per_core: [u64; MAX_CORES],
+    pub mem_acct: crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1,
+}
+
+/// Capture only stable scalar data while holding SCHEDULER lock (cheap copy).
+pub fn capture_telemetry_snapshot(
+    sched: &Scheduler,
+    pmm: &PhysicalMemoryManager,
+) -> TelemetrySnapshot {
+    let global_timekeeper_ticks = crate::timekeeping::global_ticks();
+    let uptime_secs = crate::timekeeping::uptime_secs();
+    let sample_now = sched.now_ns();
+
+    let (total_frames, free_frames) = pmm.stats();
+    let (_swap_total, swap_used_blocks, swap_used_bytes) = crate::memory::zram::stats();
+    let zram_agg = crate::memory::zram::aggregate_stats();
+    let net_rx = NET_RX_BYTES.load(Ordering::Relaxed);
+    let net_tx = NET_TX_BYTES.load(Ordering::Relaxed);
+
+    let cpu_count = sched.online_cores.clamp(1, MAX_CORES) as u8;
+    let gpu_count = unsafe { TELEMETRY.gpu_count };
+
+    let mut procs = Vec::new();
+    let mut active_task_count = 0u32;
+    let mut active_user_task_count = 0u32;
+    let mut active_service_count = 0u32;
+    for idx in 0..sched.processes.len() {
+        let proc = &sched.processes[idx];
+        let runtime = sched.effective_runtime_at(idx, sample_now);
+        let proc_state = match proc.state {
+            crate::process::ProcessState::Ready => 0,
+            crate::process::ProcessState::Running => 1,
+            crate::process::ProcessState::BlockedOnIpc => 2,
+            crate::process::ProcessState::Finished => 3,
+            crate::process::ProcessState::Reaped => 7,
+            crate::process::ProcessState::Suspended => 4,
+            crate::process::ProcessState::BlockedOnTimer => 5,
+            crate::process::ProcessState::BlockedOnIo => 6,
+        };
+        let is_finished_or_cleanup = proc_state == 3 || proc.exit_cleanup_pending;
+        if !is_finished_or_cleanup && proc_state != 7 {
+            active_task_count = active_task_count.saturating_add(1);
+            // Heuristic: services typically have lower PIDs and long-lived names;
+            // for Phase 1 we treat all non-finished tasks as tasks; service count
+            // is the same pool (honest: no process-name attribution required).
+            active_user_task_count = active_user_task_count.saturating_add(1);
+        }
+        if proc_state == 7 || procs.len() >= MAX_PROCESSES {
+            continue;
+        }
+        procs.push(ProcSnap {
+            tgid: proc.linux_tgid.unwrap_or(proc.pid) as u32,
+            pid: proc.pid as u32,
+            ppid: proc.ppid as u32,
+            state: proc_state,
+            name: proc.name,
+            cpu_ticks: runtime,
+            pml4_phys: proc.address_space.pml4_phys,
+            generation: (proc.address_space.identity().generation & 0xFFFF_FFFF) as u32,
+            #[cfg(feature = "cpu_accounting_diag")]
+            wake_audit: proc.wake_audit,
+            #[cfg(feature = "cpu_accounting_diag")]
+            audit_generation: proc.foreground.incarnation,
+            #[cfg(feature = "cpu_accounting_diag")]
+            audit_deadlines: [
+                proc.ipc_recv_deadline.is_some(),
+                proc.ipc_deadline.is_some(),
+            ],
+            is_finished_or_cleanup,
+        });
+    }
+    // Service count left at 0 unless we gain an honest service tag; do not
+    // invent ownership from process names (Phase 1 discipline).
+    let _ = &mut active_service_count;
+
+    let mem_acct = crate::memory::accounting::capture_snapshot(
+        total_frames as u64,
+        free_frames as u64,
+        active_task_count,
+        active_user_task_count,
+        active_service_count,
+        global_timekeeper_ticks,
+        // ZRAM logical = stored pages * page size; physical = allocator consumed.
+        zram_agg.stored_pages.saturating_mul(4096),
+        zram_agg.allocator_consumed_bytes,
+    );
+
+    let online = sched.online_cores.min(MAX_CORES);
+    let mut cores = Vec::with_capacity(online);
+    let mut ticks_per_core = [0u64; MAX_CORES];
+    for c in 0..online {
+        let mut cs = CoreSnap {
+            counters: crate::sched::accounting::snapshot(c)
+                .unwrap_or_else(|| unsafe { TELEMETRY.cpu_counters[c] }),
+            core_id: c as u8,
+            local_timer_ticks: 0,
+            context_switches: 0,
+            current_pid: 0,
+            current_ticks: 0,
+            nice: 0,
+        };
+        if crate::sched::SCHEDULER_MODE == crate::sched::SchedulerMode::RoundRobin {
+            let core = crate::sched::CORE_STATES[c].lock();
+            cs.local_timer_ticks = core.timer_ticks;
+            cs.context_switches = core.context_switches;
+            if let Some(idx) = core.current_task {
+                if idx < sched.processes.len() {
+                    let p = &sched.processes[idx];
+                    cs.current_pid = p.pid as u32;
+                    cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                    cs.nice = p.nice;
+                }
+            }
+            ticks_per_core[c] = core.timer_ticks;
+        } else {
+            let core = &sched.cores[c];
+            cs.local_timer_ticks = core.timer_ticks;
+            cs.context_switches = core.context_switches;
+            if let Some(idx) = core.current_task {
+                if idx < sched.processes.len() {
+                    let p = &sched.processes[idx];
+                    cs.current_pid = p.pid as u32;
+                    cs.current_ticks = core.current_ticks.min(u32::MAX as u64) as u32;
+                    cs.nice = p.nice;
+                }
+            }
+            ticks_per_core[c] = core.timer_ticks;
+        }
+        cs.counters.switches = cs.context_switches;
+        cs.counters.timer_irqs = cs.local_timer_ticks;
+        #[cfg(feature = "cpu_accounting_diag")]
+        {
+            cs.counters.schedules = sched.cpu_events[c][0];
+            cs.counters.wakeups = sched.cpu_events[c][1];
+            cs.counters.ipc_wakeups = sched.cpu_events[c][2];
+        }
+        cores.push(cs);
+    }
+
+    TelemetrySnapshot {
+        uptime_secs,
+        uptime_seconds: uptime_secs,
+        total_ram_kb: total_frames as u64 * 4,
+        used_ram_kb: total_frames.saturating_sub(free_frames) as u64 * 4,
+        zram_orig_kb: swap_used_blocks as u64 * 4,
+        zram_comp_kb: (swap_used_bytes as u64 + 1023) / 1024,
+        net_rx_bytes: net_rx,
+        net_tx_bytes: net_tx,
+        sample_time_ns: sample_now,
+        cpu_count,
+        gpu_count,
+        procs,
+        cores,
+        core_count: online as u32,
+        timekeeper_core: crate::timekeeping::timekeeper_core() as u8,
+        drift_warning: crate::timekeeping::drift_warning_active() as u8,
+        global_timekeeper_ticks,
+        monotonic_ns: sample_now,
+        ticks_per_core,
+        mem_acct,
+    }
+}
+
+/// Write snapshot to TELEMETRY page. Performs expensive page walks here (outside lock).
+/// SAFETY: caller must ensure no concurrent writers; typically called from timer after releasing SCHEDULER lock.
+pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
+    let seq = TELEMETRY.sequence.wrapping_add(1);
+    TELEMETRY.sequence = seq;
+    core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+
+    TELEMETRY.uptime_secs = snap.uptime_secs;
+    TELEMETRY.uptime_seconds = snap.uptime_seconds;
+    TELEMETRY.sample_time_ns = snap.sample_time_ns;
+    TELEMETRY.timekeeper_core = snap.timekeeper_core;
+    TELEMETRY.drift_warning = snap.drift_warning;
+    TELEMETRY.global_timekeeper_ticks = snap.global_timekeeper_ticks;
+    TELEMETRY.monotonic_ns = snap.monotonic_ns;
+    TELEMETRY.total_ram_kb = snap.total_ram_kb;
+    TELEMETRY.used_ram_kb = snap.used_ram_kb;
+    TELEMETRY.zram_orig_kb = snap.zram_orig_kb;
+    TELEMETRY.zram_comp_kb = snap.zram_comp_kb;
+    TELEMETRY.net_rx_bytes = snap.net_rx_bytes;
+    TELEMETRY.net_tx_bytes = snap.net_tx_bytes;
+
+    TELEMETRY.cpu_count = snap.cpu_count.max(1);
+    TELEMETRY.gpu_count = snap.gpu_count;
+
+    let hhdm_opt = crate::HHDM_REQ.response();
+
+    let mut count = 0usize;
+    for ps in &snap.procs {
+        if count >= MAX_PROCESSES {
+            break;
+        }
+        let entry = &mut TELEMETRY.procs[count];
+        entry.pid = ps.pid;
+        entry.ppid = ps.ppid;
+        entry.state = ps.state;
+        entry.name = ps.name;
+        entry.cpu_ticks = ps.cpu_ticks;
+        TELEMETRY.task_groups[count] = ps.tgid;
+
+        entry.mem_pages = if ps.is_finished_or_cleanup {
+            0
+        } else {
+            match hhdm_opt {
+                Some(resp) => {
+                    let hhdm = x86_64::VirtAddr::new(resp.offset);
+                    let aspace =
+                        crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
+                    if aspace.is_reclaimed() {
+                        0
+                    } else {
+                        // Walk happens here, outside SCHEDULER lock.
+                        // Counts present mapped user pages (shared counted per map).
+                        unsafe { aspace.count_user_pages(hhdm) }.min(u32::MAX as usize) as u32
+                    }
+                }
+                None => 0,
+            }
+        };
+        entry._pad = [0; 3];
+        entry.generation = ps.generation;
+
+        count += 1;
+    }
+
+    for i in count..MAX_PROCESSES {
+        TELEMETRY.procs[i] = ZERO_PROC;
+    }
+    TELEMETRY.proc_count = count as u32;
+
+    let online = snap.core_count as usize;
+    TELEMETRY.core_count = online as u32;
+    for c in 0..online {
+        let cs = &snap.cores[c];
+        let entry = &mut TELEMETRY.cores[c];
+        entry.core_id = cs.core_id;
+        TELEMETRY.cpu_counters[c] = cs.counters;
+        entry.local_timer_ticks = cs.local_timer_ticks;
+        entry.context_switches = cs.context_switches;
+        entry.current_pid = cs.current_pid;
+        entry.current_ticks = cs.current_ticks;
+        entry.nice = cs.nice;
+        TELEMETRY.ticks_per_core[c] = snap.ticks_per_core[c];
+    }
+    for c in online..MAX_CORES {
+        TELEMETRY.cores[c] = ZERO_CORE;
+        TELEMETRY.ticks_per_core[c] = 0;
+    }
+
+    TELEMETRY.mem_acct_version =
+        crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::VERSION;
+    TELEMETRY.mem_acct = snap.mem_acct;
+
+    core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+    TELEMETRY.sequence = seq.wrapping_add(1);
+}
+
+/// SAFETY: caller must serialize updates (timer ISR with interrupts disabled).
+/// Refactored for Phase 2: captures scalars under lock, heavy work (page walks) moved out.
+pub unsafe fn update_telemetry(
+    sched: &mut Scheduler,
+    pmm: &PhysicalMemoryManager,
+    _tick_count: u64,
+) {
+    let snap = capture_telemetry_snapshot(sched, pmm);
+    commit_telemetry_snapshot(&snap);
+}
+
+/// Opt-in, bounded five-second reports, outside scheduler/PMM locks. Rates
+/// derive from counter deltas, never from the number of log records emitted.
+#[cfg(feature = "cpu_accounting_diag")]
+pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
+    use sunlight_ipc::cpu_accounting::{rate, usage_bp};
+    static mut PREV: [CpuCounters; MAX_CORES] = [CpuCounters::ZERO; MAX_CORES];
+    static mut PIDS: [u32; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut GENERATIONS: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut RUNTIME: [u64; MAX_PROCESSES] = [0; MAX_PROCESSES];
+    static mut LAST: u64 = 0;
+    static mut REPORTS: u32 = 0;
+    static mut MEMORY_PROCESSES_REPORTED: bool = false;
+    // Single writer: BSP timer only, interrupt-disabled. No other call sites.
+    unsafe {
+        let dt = snap.sample_time_ns.saturating_sub(LAST);
+        if dt < 5_000_000_000 || REPORTS >= 120 {
+            return;
+        }
+        let report_started = crate::arch::x86_64::interrupts::now_ns();
+        let baseline = LAST == 0;
+        let (mut capacity, mut busy, mut idle, mut switches, mut wakes, mut schedules) =
+            (0u64, 0u64, 0u64, 0u64, 0u64, 0u64);
+        let (mut ipc_wakes, mut timer_irqs) = (0u64, 0u64);
+        for (i, core) in snap.cores.iter().enumerate() {
+            let c = core.counters;
+            let p = PREV[i];
+            let elapsed = c.elapsed_ns.saturating_sub(p.elapsed_ns);
+            let b = c.busy_ns.saturating_sub(p.busy_ns);
+            let d = c.idle_ns.saturating_sub(p.idle_ns);
+            capacity = capacity.saturating_add(elapsed);
+            busy = busy.saturating_add(b);
+            idle = idle.saturating_add(d);
+            switches = switches.saturating_add(c.switches.saturating_sub(p.switches));
+            wakes = wakes.saturating_add(c.wakeups.saturating_sub(p.wakeups));
+            schedules = schedules.saturating_add(c.schedules.saturating_sub(p.schedules));
+            ipc_wakes = ipc_wakes.saturating_add(c.ipc_wakeups.saturating_sub(p.ipc_wakeups));
+            timer_irqs = timer_irqs.saturating_add(c.timer_irqs.saturating_sub(p.timer_irqs));
+            if !baseline {
+                crate::serial_println!("[CPU-AUDIT] core={} pid={} elapsed_ns={} busy_ns={} idle_ns={} busy_bp={} cs_s={} sched_s={} wake_s={} ipc_wake_s={} timer_s={} idle_in={} idle_out={}",
+                    i,core.current_pid,elapsed,b,d,usage_bp(b,elapsed),rate(c.switches.saturating_sub(p.switches),dt),
+                    rate(c.schedules.saturating_sub(p.schedules),dt),rate(c.wakeups.saturating_sub(p.wakeups),dt),
+                    rate(c.ipc_wakeups.saturating_sub(p.ipc_wakeups),dt),rate(c.timer_irqs.saturating_sub(p.timer_irqs),dt),
+                    c.idle_entries.saturating_sub(p.idle_entries),c.idle_exits.saturating_sub(p.idle_exits));
+            }
+            PREV[i] = c;
+        }
+        let mut top = [(0usize, 0u64); 5];
+        let mut legacy = 0u64;
+        for (i, p) in snap.procs.iter().enumerate() {
+            let previous = (0..MAX_PROCESSES)
+                .find(|j| PIDS[*j] == p.pid && GENERATIONS[*j] == p.audit_generation);
+            let delta = previous
+                .map(|j| p.cpu_ticks.saturating_sub(RUNTIME[j]))
+                .unwrap_or(0);
+            if p.state != 3 && p.state != 7 {
+                legacy = legacy.saturating_add(delta);
+            }
+            for slot in 0..5 {
+                if delta > top[slot].1 {
+                    for k in (slot + 1..5).rev() {
+                        top[k] = top[k - 1];
+                    }
+                    top[slot] = (i, delta);
+                    break;
+                }
+            }
+        }
+        for (i, p) in snap.procs.iter().enumerate() {
+            PIDS[i] = p.pid;
+            GENERATIONS[i] = p.audit_generation;
+            RUNTIME[i] = p.cpu_ticks;
+        }
+        for i in snap.procs.len()..MAX_PROCESSES {
+            PIDS[i] = 0;
+            GENERATIONS[i] = 0;
+            RUNTIME[i] = 0;
+        }
+        if !baseline {
+            let runnable = snap.procs.iter().filter(|p| p.state <= 1).count();
+            let recv_armed = snap.procs.iter().filter(|p| p.audit_deadlines[0]).count();
+            let call_armed = snap.procs.iter().filter(|p| p.audit_deadlines[1]).count();
+            crate::serial_println!("[WAKE-AUDIT] sample at_ns={} dt_ns={} runnable={} tasks={} limit={} recv_armed={} call_armed={} wakes_delta={} switches_delta={} ipc_delta={} timer_delta={}",
+                snap.sample_time_ns, dt, runnable, snap.procs.len(), MAX_PROCESSES,
+                recv_armed, call_armed, wakes, switches, ipc_wakes, timer_irqs);
+            let ipc = crate::ipc::diagnostic_snapshot();
+            crate::serial_println!("[WAKE-AUDIT] ipc at_ns={} depth={} high={} enqueue={} dequeue={} full={} coalesced={} expired={} cancelled={} late={} peer_closed={}",
+                snap.sample_time_ns, ipc.current_queue_depth, ipc.high_watermark,
+                ipc.enqueue_count, ipc.dequeue_count, ipc.queue_full_count,
+                ipc.coalesced_notification_count, ipc.deadline_expired_count,
+                ipc.explicit_cancel_count, ipc.late_reply_drop_count, ipc.peer_closed_wake_count);
+            // Cumulative snapshots, never per-event logging; at most 64 rows
+            // every five seconds, using the existing diagnostic report budget.
+            for p in &snap.procs {
+                let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                crate::serial_println!("[WAKE-AUDIT] task at_ns={} pid={} gen={} name={} state={} wakes={} ipc={} recv_exp={} call_exp={} runtime_ns={}",
+                    snap.sample_time_ns,p.pid,p.audit_generation,
+                    core::str::from_utf8(&p.name[..n]).unwrap_or("?"),p.state,
+                    p.wake_audit[0],p.wake_audit[1],p.wake_audit[2],p.wake_audit[3],p.cpu_ticks);
+            }
+            crate::serial_println!("[CPU-AUDIT] system at_ns={} capacity_ns={} busy_ns={} idle_ns={} busy_bp={} idle_bp={} legacy_bp={} cs_s={} wake_s={} sched_s={}",
+                snap.sample_time_ns,capacity,busy,idle,usage_bp(busy,capacity),usage_bp(idle,capacity),
+                usage_bp(legacy,dt.saturating_mul(snap.core_count as u64)),rate(switches,dt),rate(wakes,dt),rate(schedules,dt));
+            let m = snap.mem_acct;
+            crate::serial_println!("[MEM-AUDIT] at_ns={} installed={} managed={} free={} tasks={} private_unique={} shared_unique={} kernel_core={} kernel_heap={} kernel_stack={} page_tables={} ramfs_data={} ramfs_metadata={} fs_cache={} reclaimable_cache={} graphics={} dma={} zram_physical={} other={} unclassified={} flags={}",
+                snap.sample_time_ns,m.installed_bytes,m.managed_bytes,m.free_bytes,m.active_task_count,
+                m.task_private_unique_bytes,m.shared_memory_unique_bytes,m.kernel_core_bytes,
+                m.kernel_heap_bytes,m.kernel_stack_bytes,m.page_table_bytes,m.ramfs_file_data_bytes,
+                m.ramfs_metadata_bytes,m.filesystem_cache_bytes,m.other_reclaimable_cache_bytes,
+                m.graphics_buffer_bytes,m.device_dma_bytes,m.zram_physical_bytes,
+                m.other_accounted_bytes,m.unclassified_bytes,m.flags);
+            if !MEMORY_PROCESSES_REPORTED {
+                if let Some(hhdm) = crate::HHDM_REQ.response() {
+                    for p in snap
+                        .procs
+                        .iter()
+                        .filter(|p| !p.is_finished_or_cleanup && p.state != 7)
+                    {
+                        let aspace =
+                            crate::process::address_space::AddressSpace::from_pml4(p.pml4_phys);
+                        let pages = if aspace.is_reclaimed() {
+                            0
+                        } else {
+                            // Same present-mapping count used by the read-only
+                            // telemetry page; shared mappings count per process.
+                            aspace.count_user_pages(x86_64::VirtAddr::new(hhdm.offset))
+                        };
+                        let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                        crate::serial_println!("[MEM-AUDIT] process pid={} name={} state={} mapped_user_pages={} mapped_bytes={}",
+                        p.pid,core::str::from_utf8(&p.name[..n]).unwrap_or("?"),p.state,pages,pages.saturating_mul(4096));
+                    }
+                }
+                MEMORY_PROCESSES_REPORTED = true;
+            }
+            for (i, delta) in top {
+                if delta == 0 {
+                    continue;
+                }
+                let p = &snap.procs[i];
+                let n = p.name.iter().position(|b| *b == 0).unwrap_or(p.name.len());
+                crate::serial_println!(
+                    "[CPU-AUDIT] task pid={} name={} state={} runtime_ns={} machine_bp={}",
+                    p.pid,
+                    core::str::from_utf8(&p.name[..n]).unwrap_or("?"),
+                    p.state,
+                    delta,
+                    usage_bp(delta, dt.saturating_mul(snap.core_count as u64))
+                );
+            }
+            REPORTS += 1;
+            crate::serial_println!("[WAKE-AUDIT] cost at_ns={} report_ns={}",
+                snap.sample_time_ns,
+                crate::arch::x86_64::interrupts::now_ns().saturating_sub(report_started));
+        }
+        LAST = snap.sample_time_ns;
+    }
+}

@@ -223,7 +223,10 @@ pub fn idle(cpu: usize) {
     }
     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
         let apic = crate::arch::x86_64::lapic::local_apic_id() as usize;
-        assert_eq!(apic, cpu);
+        assert_eq!(
+            Some(apic as u32),
+            crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
+        );
         serial_println!("[R2V] cpu cpu={} apic={}", cpu, apic);
     }
     if r2d_a_round() && cpu == 1 && PHASE.load(Ordering::Acquire) == 2 {

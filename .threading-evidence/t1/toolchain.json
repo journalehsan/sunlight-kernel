@@ -1,0 +1,74 @@
+[
+  {
+    "command": [
+      "rustc",
+      "-Vv"
+    ],
+    "exit_code": 0,
+    "stdout": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "cargo",
+      "-V"
+    ],
+    "exit_code": 0,
+    "stdout": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "rustfmt",
+      "-V"
+    ],
+    "exit_code": 0,
+    "stdout": "rustfmt 1.9.0-nightly (8954863c81 2026-06-05)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "clippy-driver",
+      "--version"
+    ],
+    "exit_code": 0,
+    "stdout": "clippy 0.1.98 (8954863c81 2026-06-05)\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "qemu-system-x86_64",
+      "--version"
+    ],
+    "exit_code": 0,
+    "stdout": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "as",
+      "--version"
+    ],
+    "exit_code": 0,
+    "stdout": "GNU assembler (GNU Binutils) 2.47\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or later.\nThis program has absolutely no warranty.\nThis assembler was configured for a target of `x86_64-pc-linux-gnu'.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "ld",
+      "--version"
+    ],
+    "exit_code": 0,
+    "stdout": "GNU ld (GNU Binutils) 2.47\nCopyright (C) 2026 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) a later version.\nThis program has absolutely no warranty.\n",
+    "stderr": ""
+  },
+  {
+    "command": [
+      "xorriso",
+      "-version"
+    ],
+    "exit_code": 0,
+    "stdout": "xorriso 1.5.8.pl02\nISO 9660 Rock Ridge filesystem manipulator and CD/DVD/BD burn program\nCopyright (C) 2026, Thomas Schmitt <scdbackup@gmx.net>, libburnia project.\nxorriso version   :  1.5.8.pl02\nVersion timestamp :  2026.05.22.150001\nBuild timestamp   :  -none-given-\nlibisofs   in use :  1.5.8  (min. 1.5.8)\nlibburn    in use :  1.5.8  (min. 1.5.8)\nlibburn OS adapter:  internal GNU/Linux SG_IO adapter sg-linux\nlibisoburn in use :  1.5.8  (min. 1.5.8)\nProvided under GNU GPL version 3 or later, due to libreadline license.\nThere is NO WARRANTY, to the extent permitted by law.\n",
+    "stderr": "xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.\n\n"
+  }
+]

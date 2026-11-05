@@ -1,0 +1,45 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "6df8be783fc8be6ca4a2e95f6499542f2ac7f254f74fe13ed84c6f8eb1a0a99c",
+  "cpus": 4,
+  "markers": [
+    "[R2V] PASS cpus=4 "
+  ],
+  "topology": "sparse",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4,maxcpus=6,sockets=2,cores=3,threads=1",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff/sunlightos.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230328.740926Z-handoff-sparse/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "observed_apic_ids": [
+    0,
+    1,
+    2,
+    4
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "ca078b925aa5c4e2b74206cc3611f6ee58b3ed5d5b00c4c196573b66a14fe8d8",
+  "seconds": 47.365504276996944
+}

@@ -1,0 +1,1562 @@
+--- a/docs/kernel/threading-t3r-topology-migration.md
++++ b/docs/kernel/threading-t3r-topology-migration.md
+@@ -0,0 +1,253 @@
++# T3R: native topology and thread migration verification
++
++Status: **T3R PARTIAL — migration verified; nonzero-BSP hardware proof unavailable**.
++
++The migration fixture is IMPLEMENTED and passes native QEMU TCG execution on
++2/4/12 CPUs. Genuine nonzero physical BSP and late firmware-enumerated BSP
++proofs are **BLOCKED / NOT_RUN**. Host topology models do not close either gap.
++T1/T2/T3 evidence and failed attempts remain under their original evidence roots.
++T2R stays PARTIAL. T4–T7 and FastLane production status are unchanged. No commit,
++push, privileged disk operation, or `cargo clean` was performed.
++
++## Initial source identity and preservation
++
++HEAD: `eeba257e4c548af61a2b2c6aeeeb734ab8b07cc6`.
++Initial canonical SHA-256:
++`83e4156e1d80e559b2c4a2cafe1500889517c299d01bd6eee95dadc5e5cc7067`.
++This exactly equals `.threading-evidence/t3/final/source.json`: no changed,
++missing or added canonical source paths at entry. The existing dirty tree
++includes T1/T2/T2R, IPC, version/manifests and other work; it was not reset.
++
++`.threading-evidence/t3r/initial/` contains the full initial hash inventory,
++HEAD comparison, dirty status/binary patch, and exact kernel/tool/doc copies.
++`implementation.patch` isolates T3R changes against that dirty source, and
++`final/` records final hashes and status. Canonical hashing follows T3: sorted
++JSON of SHA-256 hashes of tracked/unignored source, excluding the evidence root.
++Command attempts preserve source hashes, exact argv, output and exit status.
++Native attempts preserve serial, ISO hash, CPU count and validator verdict.
++Frozen kernels/ISOs are retained; later source edits never silently qualify old
++binaries as current.
++
++## Independent audit
++
++| Path | Finding / contract |
++| --- | --- |
++| Firmware enumeration | Limine `mp.cpus()` order and `processor_id`/`lapic_id` are distinct from logical indices. The fixture records original slot order before normalization. |
++| BSP and logical zero | Exact `bsp_lapic_id` lookup assigns logical zero even when its input position is later; missing/duplicate/unaddressable IDs fail. CPUID is checked against firmware, then the live LAPIC against the map. |
++| Physical APIC lookup | Immutable `spin::Once<CpuTopology>` is published before CPU-local setup. Dense logical IDs are translated only at hardware boundaries. Online readiness is a separate monotonic bitmap. |
++| CPU-local initialization | Current logical CPU derives from validated CPUID APIC identity. AP `extra_argument`, startup slot, GDT/TSS and GS entry slot resolve through that identity. |
++| TSS/RSP0/IST | BSP uses its global TSS; AP logical `n` uses validated slot `n-1`. The fixture reads STR/SGDT and decodes the actually loaded TSS, comparing RSP0 and both IST pointers with boot ownership receipts. It also checks its live kernel RSP lies in the current task's allocation. |
++| Scheduler selection | Ready placement uses existing affinity and least-loaded eligible selection. No fairness, quantum, stealing, priority, load balancing or migration policy changed. |
++| Remote wake/handoff | Native futex compare/register/wake serializes under the existing scheduler guard and exact VM identity. The fixture waits for a real blocked, unowned, unpinned child before setting its affinity. Ordinary WAKE chooses CPU 1, publishes Ready and requests rescheduling. The production physical stack pin protocol remains unchanged. |
++| TLS and FP | Switch-out saves FS_BASE and FXSAVE state; switch-in restores FXRSTOR and FS_BASE before installing TSS RSP0. No continuation retains the old CPU's temporary GS entry slot. |
++
++Audit search output is in `t3r/audit/`. The xAPIC-only boundary remains 64 logical
++CPUs, unique unicast IDs 0..254; x2APIC, broadcast 255, hotplug and topology
++mutation remain unsupported. There is no dynamic topology generation; the
++validator checks every execution/dispatch against the single boot mapping and
++firmware set. VM generations are authenticated independently.
++
++Nonzero BSP, late BSP, maximum 64-CPU capacity, APIC 254 and invalid/offline
++translations retain host-model coverage only for those exact cases. Native
++T3 high/sparse topology evidence remains historical evidence for its recorded
++source. It is never relabeled as native nonzero-BSP evidence.
++
++## Genuine nonzero-BSP investigation
++
++The installed emulator is QEMU 11.1.2. PC and Q35 paused QMP introspection shows physical
++APIC 0 after both `-cpu max,apic-id=42` and
++`-global max-x86_64-cpu.apic-id=42`. Attempting `-smp 0,maxcpus=2` to avoid the
++automatically instantiated first CPU is rejected before boot. Machine/CPU
++property help and exact QMP request/response transcripts are retained in
++`topology-environment/`.
++
++Upstream QEMU x86 machine source is retained as explanatory reference with its
++URL; it constructs boot CPUs from possible CPU topology slots, overriding the
++CPU property's initial APIC ID. This is reference source, not a claim that it
++is the installed binary's exact source revision:
++https://github.com/qemu/qemu/blob/master/hw/i386/x86-common.c
++
++A fresh boot of the frozen migration image with the requested APIC 42 property
++records the actual firmware order and BSP. The observed BSP remains APIC 0 in
++slot 0. No remapped firmware table, fake CPUID receipt, CPU logical relabeling,
++or synthetic native topology is used. This environment has not produced the
++required topology. Nonzero-BSP initialization with AP bring-up, fixed/bounded/NMI
++IPI and remote TLB validation is therefore **BLOCKED / NOT_RUN**; late-BSP
++firmware initialization is independently **BLOCKED / NOT_RUN**.
++
++## Migration mechanism and authenticated execution
++
++`thread_migration_test` plus `debug_assertions` loads a small static ring-3 ELF
++before normal services. A real parent creates two workers via ordinary native
++ThreadSpawn. Authorization uses the registered PID, nonzero thread incarnation,
++and full address-space identity, with a separately registered exact parent
++identity. Naming alone authorizes no command. Creation uses normal admission,
++publication and queue insertion. Debug placement sets both initial affinities
++to logical CPU 0 before publication.
++
++The migrating child seeds its state and reports actual source execution. It
++then blocks through the supported native futex WAIT. The independent sibling
++continues computing and polling; once the child is blocked, no longer current,
++and physically unpinned, an authenticated debug command sets only the child's
++normal affinity mask to CPU 1. The sibling invokes the ordinary native futex
++WAKE. No saved context, task state, ready queue, ownership field or physical
++handoff pin is directly manipulated to manufacture migration.
++
++The wake receipt checks publication on CPU 1 and a pending remote reschedule.
++Scheduler dispatch receipts run after architectural switch-in setup. A distinct
++ring-3 syscall observation proves the same thread actually resumed on CPU 1.
++The validator requires source execution < request < wake < destination dispatch
++< destination execution < successful state receipt. Merely requesting placement
++or observing a scheduler selection cannot pass. Destination execution may be
++triggered by the IPI or a periodic timer; the fixture does not attribute causal
++IPI delivery from the request bit alone. Separate remote wake gates test delivery.
++
++## State preservation
++
++The assembly preservation interval crosses SYSCALL and asynchronous scheduling,
++with no ordinary function calls. RAX and RCX/R11 are legitimately clobbered by
++the syscall ABI and are excluded. RBX and R12–R15 carry distinct fixed 64-bit
++patterns. RBP is a bounded rendezvous counter, not a fixed-value claim.
++
++The child checks two deterministic FS-relative TLS words, the live kernel-read
++FS base, a stack-local canary, seeded x87 control/status/tag and ten-byte ST0,
++XMM0/XMM15, and MXCSR `0x3f80`. FXSAVE comparisons exclude reserved padding and
++instruction/data pointers. The independent sibling uses different XMM/x87 state
++and repeatedly checks its own XMM value. TLS and stack allocation identities are
++unchanged at source and destination; actual loaded TSS/IST ownership changes to
++the destination CPU's distinct boot-recorded storage. These are functional TCG
++results, with no scheduler performance claim.
++
++## Lifecycle and resource reconciliation
++
++Both workers follow native creation, dispatch, exit and supported
++NativeThreadReaped polling. The fixture independently confirms their exact
++registered identities in Reaped slots, success exit codes and single retirement
++callbacks. No parent-exit, VM teardown, exec race or retained exit-status join
++claim is made.
++
++Reconciliation checks kernel stack/top/context and FS fields are retired; no
++worker is current, queued, live, futex-waiting or cleanup-pending. Every online
++CPU's handoff pin and waiter mask is empty. Admission reservations are local
++RAII values under the scheduler guard, with no persistent reservation object.
++There are zero remaining worker quota owners and exactly the parent's three FD
++description references. PMM free frames return exactly to baseline. Heap usage
++returns to baseline plus two normal cached FD-table boxes (20,480 bytes),
++explicitly accounted reusable process-slot storage.
++
++User stacks and TLS are static backing in the surviving owner's mapped ELF,
++provided by ThreadSpawn's normal ABI; the kernel allocates no separate user
++TLS/stack backing here. They remain owned by that process. This fixture does
++not claim to retire the owner's VM. The native-std compatibility gates separately
++exercise their normal dynamically allocated stack/TLS, join/detach and rollback.
++Dormant idle TSS RSP0 may retain the last selection until the next dispatch;
++CPL0 idle interrupts do not consume it. Active ring-3 ownership is verified on
++every observed switch-in; no claim of zeroing every idle hardware pointer is made.
++
++## Negative controls
++
++The positive parser transcript is explicitly a host-only synthetic unit fixture.
++It is never saved or presented as native proof. Controls reject request-only
++migration, wrong parent incarnation, wrong thread incarnation, equal physical
++APICs, missing destination execution, invalid topology mapping, wrong RSP0/IST,
++missing TLS, corrupt/missing FP/state validation, missing/duplicate retirement,
++heap drift, no independent progress, abandoned handoff waiters, stale VM
++generation, panic and truncated completion. Every control fails closed. In
++addition, 12 separately labeled HOST_ONLY mutations
++of the actual final two-CPU native transcript are rejected; their inputs and
++results are retained under `negative-controls/`.
++
++## Accepted native receipts and validation table
++
++Final frozen migration image: `0a24f0e93cbdcc34985d9c5f811e8aaa1c0d4671d4bd8ad7fef60ae06bbe7da3`; ISO: `d429226b3951232c61b9a6113c682401827e6c6279c6e97b6f321bd958bf479e`.
++The final source-bound suite is `.threading-evidence/t3r/20261105T164405.530264Z-migration`. `migration-receipts.json` extracts
++its actual serial observations; the full serial remains authoritative.
++
++| Native run | Parent PID/incarnation | Migrating TID/incarnation | Source → destination logical/APIC | Independent pulses before/during/after | Retirement |
++| --- | --- | --- | --- | --- | --- |
++| 2 CPUs | 58112/1 | 58113/2 | 0/APIC 0 → 1/APIC 1 | 1,3,1 | PASS, both exactly once |
++| 4 CPUs | 58112/1 | 58113/2 | 0/APIC 0 → 1/APIC 1 | 1,9,1 | PASS, both exactly once |
++| 12 CPUs | 58112/1 | 58113/2 | 0/APIC 0 → 1/APIC 1 | 1,6,1 | PASS, both exactly once |
++
++The two-CPU pilot's exact VM is PML4 `269684736`, generation `1`.
++The migrating thread's kernel stack top is `0xffffffff901e0520` and FS/TLS base
++is `0x4020a0` on both CPUs. Its loaded TSS changes from
++`0xffffffff8e6e7dc8` to `0xffffffff8e6e53c8`.
++
++```text
++[T3R] execution tid=58113 inc=2 cpu=0 apic=0 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e7dc8 rsp0=0xffffffff901e0520 df=0xffffffff8f124250 nmi=0xffffffff8e9b6080
++[T3R] execution tid=58113 inc=2 cpu=1 apic=1 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e53c8 rsp0=0xffffffff901e0520 df=0xffffffff8ecc4250 nmi=0xffffffff8e9ba080
++[T3R] state tid=58113 inc=2 tls=true fs=true gpr=true x87=true xmm=true mxcsr=true canary=true
++[T3R] resources heap_base=1919184 heap_final=1939664 cache_bytes=20480 frame_base=333547 frame_final=333547 workers=0 reservations=0 stacks=1 fd_refs=3 handoff_pins=0 handoff_waiters=0 user_backing=owner_static pulses=1,3,1
++[T3R] PASS cpus=2 executions=0,1 physical_distinct=true
++```
++
++| Current-source gate | 2 CPUs | 4 CPUs | 12 CPUs |
++| --- | --- | --- | --- |
++| Migration, TLS/FP/GPR/canary, exact identities | PASS | PASS | PASS |
++| Exit, reaping and exact resource reconciliation | PASS | PASS | PASS |
++| Independent progress, no retained handoff pins/waiters | PASS | PASS | PASS |
++| Remote wake and physical handoff gates | PASS | NOT_RUN (focused scope) | PASS |
++| Native-std TLS/join/detach, failure rollback and Hayro | PASS | PASS | PASS |
++| Dedicated FP preemption and PDF/vector raster compatibility | PASS | PASS | PASS |
++| Remote TLB replace/ACK/content and PMM reconciliation | NOT_RUN (focused scope) | NOT_RUN (focused scope) | PASS |
++| Ordinary release production boot | PASS | NOT_RUN (focused scope) | NOT_RUN (focused scope) |
++| Genuine nonzero or late firmware BSP | BLOCKED / NOT_RUN | BLOCKED / NOT_RUN | BLOCKED / NOT_RUN |
++
++Host checks pass: topology 7, kernel library 171, Linux compatibility 29,
++admission extraction 12, handoff 7, reschedule requests 5, scheduler state/policy
++harnesses, and 16 T1/T2/T2R/T3/T3R parser test methods (including T3R's negative
++subcases). Additional handoff/policy host harnesses were captured after the
++first native matrix; their timing is retained rather than claimed as pilot
++prerequisites. All are host evidence, not native architectural proof.
++
++## Production separation and diagnostics
++
++Ordinary debug build, ordinary release build, and a release build explicitly
++selecting `thread_migration_test` all pass. The fixture module, controls,
++callbacks, enumeration diagnostics and embedded ring-3 ELF require both the
++feature and debug assertions; the build script also excludes assembly in the
++ordinary release profile. No syscall number or production affinity API was
++added. `production-exclusion.json` checks all three stripped images for fixture
++markers, control strings and module symbols: PASS. The ordinary production
++serial contains no T3R execution.
++
++Changed Rust spans and the new module pass rustfmt. Existing full-file formatting
++differences remain listed in `formatting.json`. Direct actual-kernel Clippy with
++the fixture enabled remains **FAIL**, matching T3's diagnostic message/primary-
++file multiset exactly (155 records including the terminal summary). Zero primary
++spans intersect T3R changes. Four existing `sunlight-net` module-name warnings
++remain. Clippy argv/environment, full diagnostics and baseline comparison are
++retained under `clippy/`; neither baseline failure is relabeled PASS.
++
++The initial fixture build remains FAIL because instrumentation used the wrong
++LAPIC accessor name and had not enabled an existing FD-reference diagnostic for
++this new feature. Those integration errors were corrected before native testing.
++The dedicated FP compatibility build refreshed six native-probe lockfile
++package-version labels. The generated bytes are preserved in
++`native-std-lock-refresh/`; the exact initial lockfile was restored. Frozen
++compatibility images retain their recorded build identity. No dependency or
++manifest change remains from that refresh.
++
++The first complete native variant passed 2/4/12; its original receipts remain
++bound to that version. Final validation adds global pin/waiter reconciliation
++and removes an irrelevant counter comparison. No production correctness fix or
++scheduling-policy change was necessary. The two accepted final workers were
++reaped normally without stack/TLS/FD/frame leaks or duplicate retirement.
++
++## Reproduction and boundaries
++
++```
++python3 tools/threading_t3r_run.py
++python3 -m unittest discover -s tools -p 'test_threading_t*.py' -v
++python3 tools/threading_t3r_regressions.py std --cpus 2 4 12
++python3 tools/threading_t3r_regressions.py fp --cpus 2 4 12
++python3 tools/threading_t3r_regressions.py production --cpus 2
++```
++
++The main runner creates new timestamped attempts and stops native expansion on
++a failed two-CPU pilot. Builds sharing `target/` must be serialized; guest images
++are frozen before another feature is built. Historical failed build attempts
++remain FAIL. Native or parser results from the first fixture variant remain
++bound to their own source; final receipts additionally require empty global
++handoff pins/waiters. All formal T1/T2/T3/T2R evidence remains unchanged.
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -663,6 +663,7 @@
+ # Isolated bounded thread admission and allocation fault controls; debug only.
+ thread_admission_test = []
+ thread_lifecycle_race_test = []
++thread_migration_test = []
+ # Isolated hostile-RSP and sibling-stack controls, debug images only.
+ syscall_stack_test = ["scheduler_b_test"]
+ syscall_stack_auth_test = ["cap_issuance_test"]
+--- a/kernel/build.rs
++++ b/kernel/build.rs
+@@ -104,6 +104,27 @@
+             .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
+             .arg(out.join("syscall-linux-completion.elf"))
+             .arg(out.join("syscall-linux-completion.o"))
++            .status()
++            .unwrap()
++            .success());
++    }
++    if env::var_os("CARGO_FEATURE_THREAD_MIGRATION_TEST").is_some()
++        && env::var("PROFILE").as_deref() == Ok("debug")
++    {
++        let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
++        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
++        println!("cargo:rerun-if-changed=../tools/helios-probes/thread-migration-probe.S");
++        assert!(Command::new("as")
++            .args(["--64", "-o"])
++            .arg(out.join("t3r.o"))
++            .arg(root.join("tools/helios-probes/thread-migration-probe.S"))
++            .status()
++            .unwrap()
++            .success());
++        assert!(Command::new("ld")
++            .args(["-nostdlib", "-static", "-Ttext=0x400000", "-o"])
++            .arg(out.join("t3r.elf"))
++            .arg(out.join("t3r.o"))
+             .status()
+             .unwrap()
+             .success());
+--- a/kernel/src/arch/x86_64/cpu_identity.rs
++++ b/kernel/src/arch/x86_64/cpu_identity.rs
+@@ -29,6 +29,14 @@
+         );
+         for (slot, cpu) in cpus.iter().enumerate() {
+             ids[slot] = cpu.lapic_id;
++            #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++            crate::serial_println!(
++                "[T3R-FW] slot={} processor={} apic={} bsp={}",
++                slot,
++                cpu.processor_id,
++                cpu.lapic_id,
++                mp.bsp_lapic_id
++            );
+         }
+         (cpus.len(), mp.bsp_lapic_id)
+     } else {
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -2790,7 +2790,11 @@
+     }
+     #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+     let current_cpu = crate::sched::t2r_fixture::placement(&sched, &mut thread, arg, current_cpu);
++    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++    crate::sched::t3r_fixture::placement(&sched, &mut thread, arg);
+     let published = sched.publish_thread(slot, thread, current_cpu);
++    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++    crate::sched::t3r_fixture::created(&sched, published, arg);
+     #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+     crate::sched::t2r_fixture::committed(&sched, published);
+     let _ = published;
+@@ -2820,6 +2824,10 @@
+ 
+     // Print valid UTF-8 prefix
+     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
++        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++        if let Some(result) = crate::sched::t3r_fixture::query(s) {
++            return result;
++        }
+         #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+         if let Some(result) = crate::sched::t2r_fixture::query(s) {
+             return result;
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -762,6 +762,9 @@
+     splash.set_progress(600); // 60%
+     splash.redraw();
+ 
++    #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++    crate::sched::t3r_fixture::run(hhdm_offset);
++
+     #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+     crate::sched::t2r_fixture::run(hhdm_offset);
+ 
+--- a/kernel/src/process/fd_table.rs
++++ b/kernel/src/process/fd_table.rs
+@@ -1010,7 +1010,8 @@
+     debug_assertions,
+     any(
+         feature = "thread_admission_test",
+-        feature = "thread_lifecycle_race_test"
++        feature = "thread_lifecycle_race_test",
++        feature = "thread_migration_test"
+     )
+ ))]
+ pub(crate) fn thread_description_refs() -> usize {
+--- a/kernel/src/sched/handoff.rs
++++ b/kernel/src/sched/handoff.rs
+@@ -79,7 +79,10 @@
+         self.0[cpu].waiters.swap(0, Ordering::SeqCst)
+     }
+ 
+-    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
++    #[cfg(all(
++        debug_assertions,
++        any(feature = "pin_release_test", feature = "thread_migration_test")
++    ))]
+     pub fn waiter_snapshot(&self, cpu: usize) -> u64 {
+         self.0[cpu].waiters.load(Ordering::SeqCst)
+     }
+--- a/kernel/src/sched/mod.rs
++++ b/kernel/src/sched/mod.rs
+@@ -110,6 +110,8 @@
+ pub(crate) mod t2_fixture;
+ #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
+ pub(crate) mod t2r_fixture;
++#[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++pub(crate) mod t3r_fixture;
+ mod thread_admission;
+ const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
+ #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+@@ -1851,6 +1853,8 @@
+                     x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+                 }
+                 crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
++                #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++                t3r_fixture::dispatched(self, next, cpu_id);
+                 self.start_charging_runtime(next);
+                 self.retain_priority_request(cpu_id, next);
+                 return next_rsp;
+@@ -1987,6 +1991,8 @@
+             // delivers to the correct kernel stack.  Uses the per-core TSS
+             // (BSP → global TSS; APs → AP_TSS_STORE[cpu_id-1]).
+             crate::arch::x86_64::smp::set_current_cpu_tss_rsp0(next_stack_top);
++            #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++            t3r_fixture::dispatched(self, next, cpu_id);
+ 
+             #[cfg(feature = "scheduler_timer_trace")]
+             crate::scheduler_timer_trace::checkpoint(self, 4, self.processes[next].pid);
+@@ -2122,6 +2128,8 @@
+         } else {
+             self.enqueue_ready(idx);
+         }
++        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++        t3r_fixture::woken(self, idx);
+     }
+ 
+     pub fn cancel_native_futex_range(
+@@ -3045,6 +3053,8 @@
+ 
+         // Mark as fully reaped: slot is now safe for add_process reuse.
+         self.processes[idx].state = ProcessState::Reaped;
++        #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
++        t3r_fixture::retired(self, idx);
+         #[cfg(feature = "production_grant_test")]
+         if self.processes[idx].ppid == 0xF4F0 {
+             crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+--- a/kernel/src/sched/t3r_fixture.rs
++++ b/kernel/src/sched/t3r_fixture.rs
+@@ -0,0 +1,347 @@
++//! Opt-in ring-3 migration proof. No queue, pin or saved-context mutation.
++//! Commands require the exact registered PID, incarnation and VM identity.
++use super::*;
++use crate::process::{layout, mm2b_state::AddressSpaceIdentity};
++
++#[derive(Clone, Copy)]
++struct Identity {
++    pid: usize,
++    incarnation: u64,
++    vm: AddressSpaceIdentity,
++}
++const EMPTY: Identity = Identity {
++    pid: 0,
++    incarnation: 0,
++    vm: AddressSpaceIdentity::INVALID,
++};
++impl Identity {
++    fn of(p: &Process) -> Self {
++        Self {
++            pid: p.pid,
++            incarnation: p.foreground.incarnation,
++            vm: p.address_space.identity(),
++        }
++    }
++    fn matches(self, p: &Process) -> bool {
++        self.pid == p.pid
++            && self.incarnation == p.foreground.incarnation
++            && self.vm == p.address_space.identity()
++    }
++}
++struct Gate {
++    owner: Identity,
++    children: [Identity; 2],
++    slots: [usize; 2],
++    dispatch: [u64; 2],
++    executions: u64,
++    phase: usize,
++    pulses: [usize; 3],
++    retired: [usize; 2],
++    heap: usize,
++    frames: usize,
++    stack: u64,
++    tls: u64,
++    verified: bool,
++}
++static GATE: spin::Mutex<Gate> = spin::Mutex::new(Gate {
++    owner: EMPTY,
++    children: [EMPTY; 2],
++    slots: [0; 2],
++    dispatch: [0; 2],
++    executions: 0,
++    phase: 0,
++    pulses: [0; 3],
++    retired: [0; 2],
++    heap: 0,
++    frames: 0,
++    stack: 0,
++    tls: 0,
++    verified: false,
++});
++
++pub(crate) fn placement(s: &Scheduler, thread: &mut Process, role: u64) {
++    let g = GATE.lock();
++    assert!(g.owner.matches(s.current_process()));
++    assert!(role < 2 && g.children[role as usize].pid == 0);
++    // Existing affinity mechanism; placement happens before normal publication.
++    thread.cpu_mask = 1;
++}
++pub(crate) fn created(s: &Scheduler, idx: usize, role: u64) {
++    let mut g = GATE.lock();
++    assert!(g.owner.matches(s.current_process()));
++    let role = role as usize;
++    let p = &s.processes[idx];
++    g.children[role] = Identity::of(p);
++    g.slots[role] = idx;
++    if role == 0 {
++        g.stack = p.kernel_stack_top;
++        g.tls = p.fs_base;
++    }
++    crate::serial_println!("[T3R] created role={} owner={} owner_inc={} tid={} inc={} vm={:?} slot={} stack={:#x} tls={:#x} queued={}",role,g.owner.pid,g.owner.incarnation,p.pid,p.foreground.incarnation,p.address_space.identity(),idx,p.kernel_stack_top,p.fs_base,s.diagnostic_ready_occurrences(idx));
++}
++
++/// Read the CPU's loaded TSS, rather than trusting the logical-array accessor.
++fn loaded_tss() -> (u64, u64, u64, u64) {
++    let gdtr = x86_64::instructions::tables::sgdt();
++    let selector: u16;
++    unsafe {
++        core::arch::asm!("str {0:x}", out(reg) selector, options(nomem, nostack));
++        assert_eq!(selector & 4, 0);
++        let offset = (selector & !7) as u64;
++        assert!(offset + 15 <= gdtr.limit as u64);
++        let lo = ((gdtr.base.as_u64() + offset) as *const u64).read_unaligned();
++        let hi = ((gdtr.base.as_u64() + offset + 8) as *const u64).read_unaligned();
++        let base = ((lo >> 16) & 0xffff)
++            | ((lo >> 32) & 0xff) << 16
++            | ((lo >> 56) & 0xff) << 24
++            | (hi & 0xffff_ffff) << 32;
++        // Architectural 64-bit TSS offsets: RSP0=4, IST1=36, IST2=44.
++        (
++            base,
++            ((base + 4) as *const u64).read_unaligned(),
++            ((base + 36) as *const u64).read_unaligned(),
++            ((base + 44) as *const u64).read_unaligned(),
++        )
++    }
++}
++fn ownership(p: &Process, executing: bool) -> (u64, u64, u64, u64) {
++    let state = loaded_tss();
++    assert_eq!(state.1, p.kernel_stack_top, "loaded RSP0 owner");
++    assert_eq!(state.1, crate::arch::x86_64::smp::current_cpu_tss_rsp0());
++    assert_eq!(
++        state.3,
++        crate::arch::x86_64::syscall_stack::nmi_stack_top(current_cpu_id())
++    );
++    assert!(state.2 != 0 && state.2 != state.3 && state.2 != state.1);
++    if executing {
++        let rsp: u64;
++        unsafe {
++            core::arch::asm!("mov {}, rsp", out(reg) rsp, options(nomem, nostack));
++        }
++        assert!(
++            rsp < p.kernel_stack_top
++                && rsp >= p.kernel_stack_top - crate::process::KERNEL_STACK_SIZE as u64
++        );
++    }
++    state
++}
++pub(crate) fn dispatched(s: &Scheduler, idx: usize, cpu: usize) {
++    let mut g = GATE.lock();
++    let p = &s.processes[idx];
++    let Some(role) = g.children.iter().position(|id| id.matches(p)) else {
++        return;
++    };
++    assert_eq!(p.owning_core as usize, cpu);
++    assert!(!s.stack_is_pinned_remotely(idx, cpu));
++    let state = ownership(p, false);
++    let fs = unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
++    assert_eq!(fs, p.fs_base);
++    if g.dispatch[role] & (1 << cpu) == 0 {
++        crate::serial_println!("[T3R] dispatch role={} tid={} inc={} cpu={} apic={} stack={:#x} tls={:#x} tss={:#x} rsp0={:#x} df={:#x} nmi={:#x} remote_pin=false",role,p.pid,p.foreground.incarnation,cpu,crate::arch::x86_64::lapic::local_apic_id(),p.kernel_stack_top,fs,state.0,state.1,state.2,state.3);
++    }
++    g.dispatch[role] |= 1 << cpu;
++}
++pub(crate) fn woken(s: &Scheduler, idx: usize) {
++    let g = GATE.lock();
++    let p = &s.processes[idx];
++    if !g.children[0].matches(p) {
++        return;
++    }
++    assert_eq!(g.phase, 1);
++    assert_eq!(current_cpu_id(), 0);
++    assert_eq!(p.queued_on_core, 1);
++    assert_eq!(p.owning_core, u8::MAX);
++    assert!(peek_reschedule_on(1));
++    crate::serial_println!(
++        "[T3R] wake tid={} inc={} from=0 queued=1 request=true wait=cleared pinned={}",
++        p.pid,
++        p.foreground.incarnation,
++        s.stack_is_pinned(idx)
++    );
++}
++pub(crate) fn retired(s: &Scheduler, idx: usize) {
++    let mut g = GATE.lock();
++    let p = &s.processes[idx];
++    if let Some(role) = g.children.iter().position(|id| id.matches(p)) {
++        g.retired[role] += 1;
++        assert_eq!(g.retired[role], 1, "duplicate retirement");
++        crate::serial_println!(
++            "[T3R] retire role={} tid={} inc={} count=1",
++            role,
++            p.pid,
++            p.foreground.incarnation
++        );
++    }
++}
++
++pub(crate) fn query(command: &str) -> Option<u64> {
++    if !command.starts_with("T3R ") {
++        return None;
++    }
++    let mut s = SCHEDULER.lock();
++    let p = s.current_process();
++    let mut g = GATE.lock();
++    let owner = g.owner.matches(p);
++    let role = g.children.iter().position(|id| id.matches(p));
++    if !owner && role.is_none() {
++        return Some(u64::MAX);
++    }
++    Some(match command {
++        "T3R source" | "T3R destination" => {
++            assert_eq!(role, Some(0));
++            let cpu = usize::from(command == "T3R destination");
++            if cpu == 0 && g.pulses[0] == 0 {
++                return Some(1);
++            }
++            assert_eq!(current_cpu_id(), cpu);
++            assert_eq!(p.kernel_stack_top, g.stack);
++            assert_eq!(p.fs_base, g.tls);
++            let fs = unsafe { x86_64::registers::model_specific::Msr::new(0xC0000100).read() };
++            assert_eq!(fs, g.tls);
++            assert_ne!(g.dispatch[0] & (1 << cpu), 0);
++            let state = ownership(p, true);
++            assert_eq!(p.owning_core as usize, cpu);
++            assert_ne!(g.executions & (1 << cpu), 1 << cpu);
++            g.executions |= 1 << cpu;
++            crate::serial_println!("[T3R] execution tid={} inc={} cpu={} apic={} stack={:#x} tls={:#x} tss={:#x} rsp0={:#x} df={:#x} nmi={:#x}",p.pid,p.foreground.incarnation,cpu,crate::arch::x86_64::lapic::local_apic_id(),p.kernel_stack_top,fs,state.0,state.1,state.2,state.3);
++            if cpu == 0 {
++                g.phase = 1;
++            } else {
++                assert!(g.pulses[1] > 0);
++                g.phase = 2;
++            }
++            0
++        }
++        "T3R pulse" => {
++            assert_eq!(role, Some(1));
++            ownership(p, true);
++            assert_eq!(current_cpu_id(), 0);
++            let phase = g.phase;
++            g.pulses[phase] += 1;
++            let child = &s.processes[g.slots[0]];
++            if phase == 1
++                && child.state == ProcessState::BlockedOnIo
++                && child.native_futex_wait.is_some()
++                && child.owning_core == u8::MAX
++                && !s.stack_is_pinned(g.slots[0])
++            {
++                assert!(g.children[0].matches(child));
++                assert_eq!(s.diagnostic_ready_occurrences(g.slots[0]), 0);
++                // The registered sibling requests affinity for a quiescent task.
++                // Normal futex WAKE performs all queue placement and notification.
++                let id = g.children[0];
++                s.processes[g.slots[0]].cpu_mask = 2;
++                crate::serial_println!(
++                    "[T3R] request tid={} inc={} source=0 destination=1 blocked=true pinned=false",
++                    id.pid,
++                    id.incarnation
++                );
++                1
++            } else if phase == 2 {
++                2
++            } else {
++                0
++            }
++        }
++        "T3R state-ok" => {
++            assert_eq!(role, Some(0));
++            assert_eq!(g.executions, 3);
++            assert_eq!(g.phase, 2);
++            crate::serial_println!("[T3R] state tid={} inc={} tls=true fs=true gpr=true x87=true xmm=true mxcsr=true canary=true",p.pid,p.foreground.incarnation);
++            g.verified = true;
++            0
++        }
++        "T3R finish" => {
++            assert!(owner);
++            if g.retired != [1, 1] {
++                return Some(0);
++            }
++            assert_eq!(g.executions, 3);
++            assert!(g.verified);
++            assert!(g.pulses.iter().all(|n| *n > 0));
++            for role in 0..2 {
++                let idx = g.slots[role];
++                let p = &s.processes[idx];
++                assert!(g.children[role].matches(p));
++                assert_eq!(p.state, ProcessState::Reaped);
++                assert_eq!(p.exit_code, 0);
++                assert!(
++                    p.kernel_stack.is_none()
++                        && p.kernel_stack_top == 0
++                        && p.context_rsp == 0
++                        && p.fs_base == 0
++                );
++                assert!(!p.exit_cleanup_pending && p.native_futex_wait.is_none());
++                assert_eq!((p.owning_core, p.queued_on_core), (u8::MAX, u8::MAX));
++                assert_eq!(s.diagnostic_ready_occurrences(idx), 0);
++                assert!(!s.stack_is_pinned(idx));
++                assert!((0..s.online_cores).all(|cpu| s.core_current_task(cpu) != Some(idx)));
++                crate::serial_println!("[T3R] reaped role={} tid={} inc={} stack=0 tls=0 current=0 queued=0 pins=0 pending=0 exit=0",role,p.pid,p.foreground.incarnation);
++            }
++            assert_eq!(
++                s.processes
++                    .iter()
++                    .filter(|p| !p.owns_address_space && p.state != ProcessState::Reaped)
++                    .count(),
++                0
++            );
++            for cpu in 0..s.online_cores {
++                assert_eq!(
++                    STACK_HANDOFFS.slot(cpu).load(Ordering::Acquire),
++                    handoff::EMPTY
++                );
++                assert_eq!(STACK_HANDOFFS.waiter_snapshot(cpu), 0);
++            }
++            assert_eq!(crate::process::fd_table::thread_description_refs(), 3);
++            let cache = 2 * core::mem::size_of::<crate::process::fd_table::FdTable>();
++            assert_eq!(crate::memory::heap::heap_stats().allocated, g.heap + cache);
++            assert_eq!(crate::PMM.lock().free_page_count(), g.frames);
++            crate::serial_println!("[T3R] resources heap_base={} heap_final={} cache_bytes={} frame_base={} frame_final={} workers=0 reservations=0 stacks=1 fd_refs=3 handoff_pins=0 handoff_waiters=0 user_backing=owner_static pulses={},{},{}",g.heap,crate::memory::heap::heap_stats().allocated,cache,g.frames,crate::PMM.lock().free_page_count(),g.pulses[0],g.pulses[1],g.pulses[2]);
++            crate::serial_println!(
++                "[T3R] PASS cpus={} executions=0,1 physical_distinct=true",
++                s.online_cores
++            );
++            unsafe {
++                core::arch::asm!("out dx, eax",in("dx")0xf4u16,in("eax")0x10u32);
++            }
++            1
++        }
++        "T3R fail" => panic!("T3R user state check failed role={:?}", role),
++        _ => u64::MAX,
++    })
++}
++pub(crate) fn run(hhdm: x86_64::VirtAddr) {
++    let cpus = ONLINE_CORES.load(Ordering::Acquire);
++    assert!(cpus >= 2);
++    init_cores(cpus);
++    let mut pmm = crate::PMM.lock();
++    let mut p = unsafe { Process::new(0xE300, 0, "t3r-owner", &mut pmm, hhdm) };
++    let entry = crate::process::elf_loader::load_elf(
++        include_bytes!(concat!(env!("OUT_DIR"), "/t3r.elf")),
++        &mut p,
++        &mut pmm,
++        hhdm,
++    )
++    .unwrap();
++    crate::process::spawn::map_user_stack(&mut p, &mut pmm, hhdm).unwrap();
++    p.cpu_mask = 1;
++    p.init_context(entry, layout::USER_STACK_TOP);
++    drop(pmm);
++    let mut s = SCHEDULER.lock();
++    let idx = s.add_process_after_reaping(p);
++    s.reserve_task_storage().unwrap();
++    let mut g = GATE.lock();
++    g.owner = Identity::of(&s.processes[idx]);
++    g.heap = crate::memory::heap::heap_stats().allocated;
++    g.frames = crate::PMM.lock().free_page_count();
++    crate::serial_println!(
++        "[T3R] begin cpus={} owner={} inc={} vm={:?}",
++        cpus,
++        g.owner.pid,
++        g.owner.incarnation,
++        g.owner.vm
++    );
++    drop(g);
++    drop(s);
++    enter_first_process();
++}
+--- a/tools/helios-probes/thread-migration-probe.S
++++ b/tools/helios-probes/thread-migration-probe.S
+@@ -0,0 +1,213 @@
++.global _start
++.section .text
++.macro query name
++    mov $99,%eax
++    lea \name(%rip),%rdi
++    mov $(\name\()_end-\name),%esi
++    syscall
++.endm
++.macro yield
++    mov $21,%eax
++    syscall
++.endm
++_start:
++    xor %r15d,%r15d
++1:  mov %r15,%rsi
++    shl $14,%rsi
++    lea stacks+16352(%rip),%rax
++    add %rax,%rsi
++    lea worker(%rip),%rdi
++    mov %rdi,(%rsi)
++    mov %r15,8(%rsi)
++    mov %r15,%rdx
++    shl $5,%rdx
++    lea tls(%rip),%rax
++    add %rax,%rdx
++    mov $22,%eax
++    syscall
++    test %rax,%rax
++    js failed
++    lea tids(%rip),%rdi
++    mov %rax,(%rdi,%r15,8)
++    inc %r15d
++    cmp $2,%r15d
++    jb 1b
++    mov $200000,%ebp
++2:  lea tids(%rip),%r8
++    mov (%r8),%rdi
++    mov $156,%eax
++    syscall
++    cmp $1,%rax
++    jne 3f
++    mov tids+8(%rip),%rdi
++    mov $156,%eax
++    syscall
++    cmp $1,%rax
++    jne 3f
++    query finish
++    cmp $1,%rax
++    je 4f
++3:  yield
++    dec %ebp
++    jnz 2b
++    jmp failed
++4:  ud2
++worker:
++    test %rsi,%rsi
++    jnz observer
++    /* Only straight assembly and SYSCALL cross the preservation interval.
++       RCX/R11 and RAX are ABI-clobbered and deliberately excluded. */
++    movabs $0x123456789abcdef0,%rbx
++    movabs $0x1020304050607080,%r12
++    movabs $0x8877665544332211,%r13
++    movabs $0x1122334455667788,%r14
++    movabs $0x7162534435261708,%r15
++    push %rbx
++    fninit
++    fldcw cw(%rip)
++    fldl fp(%rip)
++    movdqu vector(%rip),%xmm0
++    movdqu vector2(%rip),%xmm15
++    ldmxcsr mxcsr(%rip)
++    fxsave64 before(%rip)
++    mov $200000,%ebp
++5:  query source
++    cmp $1,%rax
++    jne 6f
++    yield
++    dec %ebp
++    jnz 5b
++    jmp failed
++6:  test %rax,%rax
++    jne failed
++    /* The observer changes affinity only after WAIT has descheduled us. */
++    lea futex(%rip),%rdi
++    xor %esi,%esi
++    xor %edx,%edx
++    mov $-1,%r10
++    mov $155,%eax
++    syscall
++    test %rax,%rax
++    jne failed
++    fxsave64 after(%rip)
++    /* Compare only architecturally defined seeded FP state, ignoring FIP,
++       FDP and reserved FXSAVE padding. No floating point call ABI is crossed. */
++    lea before(%rip),%rsi
++    lea after(%rip),%rdi
++    mov $5,%ecx
++    repe cmpsb
++    jne failed
++    mov before+24(%rip),%eax
++    cmp after+24(%rip),%eax
++    jne failed
++    lea before+32(%rip),%rsi
++    lea after+32(%rip),%rdi
++    mov $10,%ecx
++    repe cmpsb
++    jne failed
++    lea before+160(%rip),%rsi
++    lea after+160(%rip),%rdi
++    mov $16,%ecx
++    repe cmpsb
++    jne failed
++    lea before+400(%rip),%rsi
++    lea after+400(%rip),%rdi
++    mov $16,%ecx
++    repe cmpsb
++    jne failed
++    movabs $0x123456789abcdef0,%rax
++    cmp %rax,%rbx
++    jne failed
++    cmp %rax,(%rsp)
++    jne failed
++    cmp %rax,%fs:0
++    jne failed
++    movabs $0x1020304050607080,%rax
++    cmp %rax,%r12
++    jne failed
++    cmp %rax,%fs:8
++    jne failed
++    movabs $0x8877665544332211,%rax
++    cmp %rax,%r13
++    jne failed
++    movabs $0x1122334455667788,%rax
++    cmp %rax,%r14
++    jne failed
++    movabs $0x7162534435261708,%rax
++    cmp %rax,%r15
++    jne failed
++    /* EBP is the bounded rendezvous counter, not an invariant test value. */
++    query destination
++    test %rax,%rax
++    jne failed
++    query state_ok
++    test %rax,%rax
++    jne failed
++    jmp exit_ok
++observer:
++    movabs $0xbadc0ffee0ddf00d,%rbx
++    movq %rbx,%xmm0
++    fninit
++    fld1
++    mov $200000,%ebp
++7:  query pulse
++    cmp $2,%rax
++    je observer_done
++    cmp $1,%rax
++    jne 8f
++    lea futex(%rip),%rdi
++    mov $1,%esi
++    mov $1,%edx
++    mov $155,%eax
++    syscall
++    cmp $1,%rax
++    jne failed
++8:  movq %xmm0,%rax
++    cmp %rbx,%rax
++    jne failed
++    yield
++    dec %ebp
++    jnz 7b
++    jmp failed
++observer_done:
++    movq %xmm0,%rax
++    cmp %rbx,%rax
++    jne failed
++exit_ok:
++    xor %edi,%edi
++    mov $20,%eax
++    syscall
++    ud2
++failed:
++    query fail
++    ud2
++.section .rodata
++.macro msg name,text
++\name: .ascii "T3R \text"
++\name\()_end:
++.endm
++msg source,source
++msg destination,destination
++msg pulse,pulse
++msg finish,finish
++msg state_ok,state-ok
++msg fail,fail
++cw: .word 0x027f
++mxcsr: .long 0x3f80
++fp: .double 12345.125
++.balign 16
++vector: .quad 0x1122334455667788,0x8877665544332211
++vector2: .quad 0x1020304050607080,0x0123456789abcdef
++.section .data
++.balign 32
++tls: .quad 0x123456789abcdef0,0x1020304050607080,0,0
++     .quad 0xbadc0ffee0ddf00d,0,0,0
++.section .bss
++.balign 16
++before: .skip 512
++after: .skip 512
++tids: .skip 16
++futex: .skip 4
++.balign 16
++stacks: .skip 2*16384
++.section .note.GNU-stack,"",@progbits
+--- a/tools/test_threading_t3r.py
++++ b/tools/test_threading_t3r.py
+@@ -0,0 +1,63 @@
++"""Host-only parser controls. The positive transcript is explicitly synthetic."""
++import unittest
++from threading_t3r_receipt import assess_migration
++
++
++def synthetic():
++    lines=[]
++    for c in range(2):
++        lines += [f'[T3R-FW] slot={c} processor={c} apic={c} bsp=0',
++                  f'[CPU-ID] logical={c} apic={c} bsp={str(c == 0).lower()}']
++    for c in range(2):
++        lines += [f'[CPU-ID] {"bsp" if c == 0 else "online"} logical={c} apic={c} tss=0x{100+c:x} ist_df=0x{200+c:x} ist_nmi=0x{300+c:x}']
++    def add(e,s): lines.append('[T3R] '+e+' '+s)
++    add('begin','cpus=2 owner=10 inc=10 root=4096 generation=1')
++    for r in range(2):
++        add('created',f'role={r} owner=10 owner_inc=10 tid={11+r} inc={11+r} root=4096 generation=1 slot={1+r} stack=0x{500+r:x} tls=0x{600+r:x} queued=1')
++    def location(r,c):
++        return f'tid={11+r} inc={11+r} cpu={c} apic={c} stack=0x{500+r:x} tls=0x{600+r:x} tss=0x{100+c:x} rsp0=0x{500+r:x} df=0x{200+c:x} nmi=0x{300+c:x}'
++    add('dispatch','role=0 '+location(0,0)+' remote_pin=false')
++    add('dispatch','role=1 '+location(1,0)+' remote_pin=false')
++    add('execution',location(0,0))
++    add('request','tid=11 inc=11 source=0 destination=1 blocked=true pinned=false')
++    add('wake','tid=11 inc=11 from=0 queued=1 request=true wait=cleared pinned=false')
++    add('dispatch','role=0 '+location(0,1)+' remote_pin=false')
++    add('execution',location(0,1))
++    add('state','tid=11 inc=11 tls=true fs=true gpr=true x87=true xmm=true mxcsr=true canary=true')
++    for r in range(2):
++        add('retire',f'role={r} tid={11+r} inc={11+r} count=1')
++        add('reaped',f'role={r} tid={11+r} inc={11+r} stack=0 tls=0 current=0 queued=0 pins=0 pending=0 exit=0')
++    add('resources','heap_base=1000 heap_final=1200 cache_bytes=200 frame_base=400 frame_final=400 workers=0 reservations=0 stacks=1 fd_refs=3 handoff_pins=0 handoff_waiters=0 user_backing=owner_static pulses=1,2,3')
++    add('PASS','cpus=2 executions=0,1 physical_distinct=true')
++    return '\n'.join(lines)+'\n'
++
++
++class Controls(unittest.TestCase):
++    def test_synthetic_positive(self):
++        self.assertTrue(assess_migration(synthetic(),2))
++
++    def test_fail_closed(self):
++        text=synthetic()
++        variants={
++            'request_without_execution':'\n'.join(l for l in text.splitlines() if not l.startswith('[T3R] execution'))+'\n',
++            'wrong_owner_incarnation':text.replace('owner_inc=10','owner_inc=99',1),
++            'wrong_thread_incarnation':text.replace('[T3R] execution tid=11 inc=11','[T3R] execution tid=11 inc=99',1),
++            'same_physical_cpu':text.replace('cpu=1 apic=1','cpu=1 apic=0'),
++            'missing_destination':'\n'.join(l for l in text.splitlines() if not (l.startswith('[T3R] execution') and 'cpu=1' in l))+'\n',
++            'invalid_mapping':text.replace('logical=1 apic=1 bsp=false','logical=1 apic=9 bsp=false'),
++            'wrong_rsp0':text.replace('rsp0=0x1f4','rsp0=0x1f5'),
++            'wrong_ist':text.replace('nmi=0x12d','nmi=0x12c'),
++            'missing_tls':text.replace('tls=true ',''),
++            'inconsistent_fp':text.replace('x87=true','x87=false'),
++            'missing_state':'\n'.join(l for l in text.splitlines() if not l.startswith('[T3R] state'))+'\n',
++            'missing_retirement':'\n'.join(l for l in text.splitlines() if not l.startswith('[T3R] retire'))+'\n',
++            'duplicate_retirement':text.replace('count=1','count=2',1),
++            'abandoned_handoff':text.replace('handoff_waiters=0','handoff_waiters=2'),
++            'leaked_resources':text.replace('heap_final=1200','heap_final=1201'),
++            'no_worker_progress':text.replace('pulses=1,2,3','pulses=1,0,3'),
++            'stale_vm_generation':text.replace('generation=1 slot=1','generation=2 slot=1'),
++            'panic':text+'KERNEL PANIC\n',
++            'truncated':text.rstrip('\n'),
++        }
++        for name,broken in variants.items():
++            with self.subTest(name=name): self.assertFalse(assess_migration(broken,2))
+--- a/tools/threading_t3r_receipt.py
++++ b/tools/threading_t3r_receipt.py
+@@ -0,0 +1,139 @@
++#!/usr/bin/env python3
++"""Fail-closed T3R native execution receipts. Synthetic tests are never native proof."""
++import re
++from threading_t3_validate import assess as assess_topology
++
++
++def rows(text):
++    result = []
++    for position, line in enumerate(text.splitlines()):
++        if not line.startswith('[T3R] '):
++            continue
++        line = re.sub(r'vm=AddressSpaceIdentity \{ pml4_phys: (\d+), generation: (\d+) \}',
++                      r'root=\1 generation=\2', line)
++        parts = line.split()
++        event = parts[1]
++        fields = {}
++        for part in parts[2:]:
++            k, v = part.split('=', 1)
++            if k in fields:
++                raise ValueError('duplicate field')
++            fields[k] = v
++        result.append((event, fields, position))
++    return result
++
++
++def assess_migration(text, cpus):
++    try:
++        if cpus not in (2, 4, 12) or not assess_topology(text, ['[T3R] PASS'], cpus):
++            return False
++        events = rows(text)
++        def allof(event):
++            return [(d, pos) for e, d, pos in events if e == event]
++        def one(event):
++            found = allof(event)
++            if len(found) != 1:
++                raise ValueError(event)
++            return found[0]
++        def num(d, key):
++            value = int(d[key], 0)
++            if value < 0:
++                raise ValueError('negative')
++            return value
++        def fixed(d, **expected):
++            if any(d.get(k) != str(v) for k, v in expected.items()):
++                raise ValueError('inconsistent ' + str(expected))
++        begin, begin_pos = one('begin')
++        fixed(begin, cpus=cpus)
++        owner = num(begin, 'owner'), num(begin, 'inc')
++        vm = num(begin, 'root'), num(begin, 'generation')
++        if 0 in owner + vm:
++            return False
++        mapping = {int(a): int(b) for a, b in re.findall(r'^\[CPU-ID\] logical=(\d+) apic=(\d+) bsp=(?:true|false)$',text,re.M)}
++        fw = re.findall(r'^\[T3R-FW\] slot=(\d+) processor=(\d+) apic=(\d+) bsp=(\d+)$',text,re.M)
++        if len(fw) != cpus or [int(r[0]) for r in fw] != list(range(cpus)):
++            return False
++        if {int(r[2]) for r in fw} != set(mapping.values()) or any(int(r[3]) != mapping[0] for r in fw):
++            return False
++        boot = {int(cpu): (int(tss,16),int(df,16),int(nmi,16)) for cpu,_,tss,df,nmi in re.findall(r'^\[CPU-ID\] (?:online|bsp) logical=(\d+) apic=(\d+) tss=(0x[0-9a-f]+) ist_df=(0x[0-9a-f]+) ist_nmi=(0x[0-9a-f]+)$',text,re.M)}
++        children = {}
++        for d, pos in allof('created'):
++            role = num(d,'role')
++            if role not in (0,1) or role in children or pos <= begin_pos:
++                return False
++            fixed(d, owner=owner[0], owner_inc=owner[1], queued=1)
++            if (num(d,'root'),num(d,'generation')) != vm:
++                return False
++            if not all(num(d,k) for k in ('tid','inc','stack','tls')):
++                return False
++            children[role] = d, pos
++        if len(children) != 2 or len({num(d,'tid') for d,_ in children.values()} | {owner[0]}) != 3:
++            return False
++        if any(len({num(d,k) for d,_ in children.values()}) != 2 for k in ('inc','stack','tls','slot')):
++            return False
++        def identity(d, role=0):
++            child = children[role][0]
++            fixed(d,tid=child['tid'],inc=child['inc'])
++        def ownership(d, role):
++            identity(d,role)
++            c = children[role][0]
++            fixed(d,stack=c['stack'],tls=c['tls'],rsp0=c['stack'])
++            cpu = num(d,'cpu')
++            if num(d,'apic') != mapping[cpu] or (num(d,'tss'),num(d,'df'),num(d,'nmi')) != boot[cpu]:
++                raise ValueError('topology/ownership')
++        dispatches = {}
++        for d,pos in allof('dispatch'):
++            role,cpu = num(d,'role'),num(d,'cpu')
++            ownership(d,role)
++            fixed(d,remote_pin='false')
++            if (role,cpu) in dispatches or pos <= children[role][1]:
++                return False
++            dispatches[role,cpu] = pos
++        if set(dispatches) != {(0,0),(0,1),(1,0)}:
++            return False
++        execution = {}
++        for d,pos in allof('execution'):
++            cpu = num(d,'cpu')
++            ownership(d,0)
++            if cpu not in (0,1) or cpu in execution or pos <= dispatches[0,cpu]:
++                return False
++            execution[cpu] = pos
++        if set(execution) != {0,1} or mapping[0] == mapping[1]:
++            return False
++        request,rp = one('request');identity(request)
++        fixed(request,source=0,destination=1,blocked='true',pinned='false')
++        wake,wp = one('wake');identity(wake)
++        fixed(wake,**{'from':0,'queued':1,'request':'true','wait':'cleared','pinned':'false'})
++        state,sp = one('state');identity(state)
++        fixed(state,**{k:'true' for k in ('tls','fs','gpr','x87','xmm','mxcsr','canary')})
++        if not execution[0] < rp < wp < dispatches[0,1] < execution[1] < sp:
++            return False
++        for event in ('retire','reaped'):
++            found = allof(event)
++            if len(found) != 2 or {num(d,'role') for d,_ in found} != {0,1}:
++                return False
++            for d,pos in found:
++                role = num(d,'role');identity(d,role)
++                if pos <= execution[1] or role == 0 and pos <= sp:
++                    return False
++                if event == 'retire': fixed(d,count=1)
++                else:
++                    fixed(d,stack=0,tls=0,current=0,queued=0,pins=0,pending=0,exit=0)
++                    retire_pos = next(p for r,p in allof('retire') if num(r,'role') == role)
++                    if retire_pos >= pos: return False
++        resource, resource_pos = one('resources')
++        fixed(resource,workers=0,reservations=0,stacks=1,fd_refs=3,handoff_pins=0,handoff_waiters=0,user_backing='owner_static')
++        if num(resource,'heap_final') != num(resource,'heap_base') + num(resource,'cache_bytes'):
++            return False
++        if num(resource,'frame_base') != num(resource,'frame_final'):
++            return False
++        pulses = resource['pulses'].split(',')
++        if len(pulses) != 3 or any(int(n) <= 0 for n in pulses):
++            return False
++        end,end_pos = one('PASS');fixed(end,cpus=cpus,executions='0,1',physical_distinct='true')
++        if not max(p for _,p in allof('reaped')) < resource_pos < end_pos:
++            return False
++        allowed = {'begin','created','dispatch','execution','request','wake','state','retire','reaped','resources','PASS'}
++        return all(e in allowed for e,_,_ in events)
++    except (KeyError, ValueError, TypeError, IndexError, StopIteration):
++        return False
+--- a/tools/threading_t3r_regressions.py
++++ b/tools/threading_t3r_regressions.py
+@@ -0,0 +1,80 @@
++#!/usr/bin/env python3
++"""Freeze each final-source kernel before running bounded native regressions."""
++import argparse
++from concurrent.futures import ThreadPoolExecutor
++from datetime import datetime, timezone
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++from threading_t2_validate import identity
++ROOT = Path(__file__).resolve().parents[1]
++RUNNER = ['python3', 'tools/threading_t3r_validate.py']
++p = argparse.ArgumentParser(description=__doc__)
++p.add_argument('suite', choices=['admission','t1','auth','linux','fp','std','production'])
++p.add_argument('--cpus', type=int, nargs='+', default=[1,2,4,12])
++a = p.parse_args()
++if any(c not in (1,2,4,12) for c in a.cpus): p.error('supported CPU matrix: 1/2/4/12')
++folder = ROOT / '.threading-evidence/t3r' / (datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ') + '-suite-' + a.suite)
++folder.mkdir(parents=True)
++print(folder, flush=True)
++(folder/'source.json').write_text(json.dumps(identity(), indent=2)+'\n')
++commands=[]
++def run(name, argv, timeout=900):
++    commands.append(argv)
++    subprocess.run(RUNNER+['command','--timeout',str(timeout),a.suite+'-'+name,'--']+argv, cwd=ROOT, check=True)
++kernel = ['cargo','build','-p','sunlight-kernel','--bin','sunlight-kernel','--offline']
++markers = {
++ 'admission':['[T2] PASS'],
++ 't1':['[T1] PASS'],
++ 'auth':['[T1-AUTH] PASS','[CAP-R41] COMPLETE','[CAP-P] native PASS','[EXEC-R2] eight replacements PASS; entering original /bin/true'],
++ 'linux':['THREAD_PROBE PASS','fd_table=ok eventfd=ok','child_tid_clear=ok'],
++ 'fp':['[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK','[NATIVE-STD] native PDF parser and vector raster OK'],
++ 'std':['[NATIVE-STD] T2 Hayro workers=4 concurrent render/join OK','[NATIVE-STD] T2 full-ledger TLS failure rollback cycles=3 cleanup=allocation-free OK','[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK','[NATIVE-STD] collections/clocks/locks/TLS/join OK','[NATIVE-STD] shared descriptors/OOM/group exit OK','[DOCSERV] native Hayro IPC open/render/close OK'],
++ 'production':['[SunlightOS] Foundation Complete','[SunlightOS] sunlightd OK','[LOGIN-TUI] input ready','[SunlightOS] timezone OK'],
++}[a.suite]
++result={'suite':a.suite,'pass':False,'commands':commands,'guests':{}}
++try:
++    if a.suite=='admission': run('build',kernel+['--features','thread_admission_test'])
++    elif a.suite=='t1': run('build',kernel+['--features','syscall_stack_test'])
++    elif a.suite=='auth': run('build',['env','SUNLIGHT_CAP_EXEC_PROBE=1']+kernel+['--features','syscall_stack_auth_test'])
++    elif a.suite=='linux': run('build',['env','SUNLIGHT_INJECT_PHASE=helios-thread-probe']+kernel+['--features','key_inject'])
++    elif a.suite=='fp':
++        run('users',['env',f'RUSTFLAGS=-C link-arg=-T{ROOT}/services/user-space.ld','cargo','build','--manifest-path','tools/native-std-probe/Cargo.toml','--target','tools/targets/x86_64-sunlightos.json','--bin','native-fp-probe','--release','-Z','build-std=core,alloc','-Z','json-target-spec','--offline'])
++        run('build',['env','SUNLIGHT_INJECT_PHASE=native-std']+kernel+['--features','key_inject,native_std_probe'])
++    elif a.suite=='std':
++        run('users',['bash','tools/build_native_std.sh','build','-p','sunlight-docserv','--no-default-features','--features','native-hayro-smoke','--release','--offline'])
++        run('supervisor',['env','RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone','cargo','build','-p','sunlightd','--release','--features','document-service-gate','--offline'])
++        run('build',['env','SUNLIGHT_INJECT_PHASE=document-service']+kernel+['--features','key_inject,document_service,native_document_service'])
++    else:
++        run('restore-supervisor',['env','RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static','cargo','build','-p','sunlightd','--release','--no-default-features','--offline'])
++        run('release-build',kernel+['--release','--no-default-features'])
++    elf=ROOT/'target/x86_64-unknown-none'/('release' if a.suite=='production' else 'debug')/'sunlight-kernel'
++    frozen=folder/'kernel.elf'
++    run('freeze',['objcopy','--strip-debug',str(elf),str(frozen)])
++    result['kernel_sha256']=hashlib.sha256(frozen.read_bytes()).hexdigest()
++    run('iso',['bash','tools/make_hybrid_iso.sh',str(frozen),str(folder/'boot.iso'),'target/limine',str(ROOT)])
++    run('abi',['python3','tools/check_syscall_stack_abi.py',str(frozen)])
++    if a.suite=='production':
++        raw=frozen.read_bytes()
++        forbidden=[b'[T2] begin',b'[T2-FAULT]',b'[T1] PASS',b'[T1-AUTH] PASS']
++        result['production_exclusion']={m.decode(): m not in raw for m in forbidden}
++        if not all(result['production_exclusion'].values()): raise RuntimeError('test hook in production image')
++    def guest(cpu):
++        argv=RUNNER+['guest',a.suite+f'-{cpu}cpu','--iso',str(folder/'boot.iso'),'--cpus',str(cpu),'--timeout','300']
++        if a.suite == 'linux': argv += ['--marker', f'affinity_mask={(1 << cpu)-1:016x}']
++        for marker in markers+([f'[SCHED-B] PASS cpus={cpu} '] if a.suite=='t1' else []): argv+=['--marker',marker]
++        code=subprocess.run(argv,cwd=ROOT).returncode
++        return cpu,code
++    # Admission's 2-CPU pilot must pass before expansion.
++    cpus=list(a.cpus)
++    if a.suite=='admission' and 2 in cpus:
++        cpu,code=guest(2); result['guests'][str(cpu)]=code
++        if code: raise RuntimeError('2-CPU admission pilot failed; stop before SMP expansion')
++        cpus.remove(2)
++    with ThreadPoolExecutor(max_workers=2) as pool:
++        for cpu,code in pool.map(guest,cpus): result['guests'][str(cpu)]=code
++    result['pass']=all(code==0 for code in result['guests'].values())
++finally:
++    (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n')
++raise SystemExit(0 if result['pass'] else 1)
+--- a/tools/threading_t3r_run.py
++++ b/tools/threading_t3r_run.py
+@@ -0,0 +1,49 @@
++#!/usr/bin/env python3
++"""Source-bound T3R migration fixture: host gates, 2-CPU pilot, then 4/12.
++All attempts are retained; any failed pilot stops expansion.
++"""
++from datetime import datetime, timezone
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++from threading_t3_validate import identity
++
++ROOT = Path(__file__).resolve().parents[1]
++RUNNER = ['python3','tools/threading_t3r_validate.py']
++
++def main():
++    folder=ROOT/'.threading-evidence/t3r'/(datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')+'-migration')
++    folder.mkdir(parents=True)
++    source=identity();(folder/'source.json').write_text(json.dumps(source,indent=2)+'\n')
++    result={'pass':False,'commands':[],'guests':{},'stage3':'NOT_RUN'}
++    def command(name,argv,timeout=600):
++        result['commands'].append(argv)
++        subprocess.run(RUNNER+['command','--timeout',str(timeout),name,'--']+argv,cwd=ROOT,check=True)
++    try:
++        command('topology-host-build',['rustc','--edition=2021','--test','kernel/src/arch/x86_64/cpu_topology.rs','-o','target/t3r-topology-test'])
++        command('topology-host',['target/t3r-topology-test'])
++        command('kernel-host',['cargo','test','-p','sunlight-kernel','--lib','--target','x86_64-unknown-linux-gnu','--offline'])
++        command('compat-host',['cargo','test','-p','sunlight-compat-linux','--target','x86_64-unknown-linux-gnu','--offline'])
++        command('parser-controls',['python3','-m','unittest','discover','-s','tools','-p','test_threading_t*.py','-v'])
++        command('migration-build',['cargo','build','-p','sunlight-kernel','--bin','sunlight-kernel','--features','thread_migration_test','--offline'])
++        frozen=folder/'kernel.elf'
++        command('freeze',['objcopy','--strip-debug','target/x86_64-unknown-none/debug/sunlight-kernel',str(frozen)])
++        command('abi',['python3','tools/check_syscall_stack_abi.py',str(frozen)])
++        iso=folder/'boot.iso'
++        command('iso',['bash','tools/make_hybrid_iso.sh',str(frozen),str(iso),'target/limine',str(ROOT)])
++        result.update(elf_sha256=hashlib.sha256(frozen.read_bytes()).hexdigest(),iso_sha256=hashlib.sha256(iso.read_bytes()).hexdigest())
++        if identity() != source: raise RuntimeError('source changed during build')
++        for cpu in (2,4,12):
++            argv=RUNNER+['guest',f'migration-{cpu}cpu','--iso',str(iso),'--cpus',str(cpu),'--timeout','120','--marker','[T3R] PASS']
++            result['commands'].append(argv)
++            code=subprocess.run(argv,cwd=ROOT).returncode
++            result['guests'][str(cpu)]='PASS' if code == 0 else 'FAIL'
++            if code: raise RuntimeError(f'{cpu}-CPU migration failed; expansion stopped')
++            if cpu==2: result['stage3']='RUNNING'
++        result['stage3']='PASS';result['pass']=True
++    finally:
++        (folder/'result.json').write_text(json.dumps(result,indent=2)+'\n')
++    return 0 if result['pass'] else 1
++
++if __name__=='__main__': raise SystemExit(main())
+--- a/tools/threading_t3r_validate.py
++++ b/tools/threading_t3r_validate.py
+@@ -0,0 +1,227 @@
++#!/usr/bin/env python3
++"""Bounded T3 commands/guest gates with fresh, durable attempt directories.
++
++Examples:
++  python3 tools/threading_t3_validate.py command host -- cargo test ...
++  python3 tools/threading_t3_validate.py guest pilot --iso image.iso --cpus 1 \
++      --marker '[T2] PASS'
++Every attempt records source hashes, exact argv, logs and a verdict, including
++exceptions/timeouts. No existing attempt is overwritten. TCG is functional proof.
++"""
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++import os
++import re
++from pathlib import Path
++import signal
++import subprocess
++import time
++
++
++ROOT = Path(__file__).resolve().parents[1]
++
++
++def marker_assess(text, markers, cpus=None):
++    from threading_t2r_receipt import assess_pilot
++    pilots = [re.fullmatch(r"\[T2R\] PILOT PASS case=(\d+) cpus=(\d+)", marker) for marker in markers]
++    for pilot in pilots:
++        if pilot and (int(pilot[2]) != cpus or not assess_pilot(text, int(pilot[1]), cpus)):
++            return False
++
++    if not markers or any(not m for m in markers):
++        return False
++    if any(m in text for m in ('KERNEL PANIC', '[EXCEPTION]', 'THREAD_PROBE FAIL',
++                               'FP isolation FAILED', 'probe panicked', 'parser/raster FAILED')):
++        return False
++    if not all(text.count(m) == 1 and '\n' in text.split(m, 1)[1] for m in markers):
++        return False
++    if '[T2] PASS' in markers:
++        begin = re.findall(r'^\[T2\] begin cpus=(\d+) limits=32,96,512 cycles=3$', text, re.M)
++        if len(begin) != 1 or (cpus is not None and int(begin[0]) != cpus):
++            return False
++        for abi in (0, 1):
++            faults = re.findall(rf'^\[T2-FAULT\] abi={abi} ordinal=(\d+) stage=([a-z-]+) rejected=ENOMEM$', text, re.M)
++            if [(int(n), stage) for n, stage in faults] != list(enumerate(
++                    ['task-table'] + ['run-queue'] * 64 + ['environment-entries']
++                    + ['string'] * 4 + ['capabilities', 'string', 'box', 'box', 'publication'], 1)):
++                return False
++            if text.count(f'[T2] faults abi={abi} points=75 cleanup=exact\n') != 1:
++                return False
++        pressure = re.findall(r'^\[T2\] pressure cycle=(\d+) workers=96 vm_workers=32 observer=(\d+) useful_cpus=0x([0-9a-f]+)$', text, re.M)
++        if [int(row[0]) for row in pressure] != [0, 1, 2]:
++            return False
++        if any(int(n) == 0 or int(mask, 16).bit_count() < min(2, int(begin[0]))
++               for _, n, mask in pressure):
++            return False
++        recovery = re.findall(r'^\[T2\] recovery cycle=(\d+) heap=(\d+) drift=0 unreaped_workers=0$', text, re.M)
++        if [int(n) for n, _ in recovery] != [1, 2, 3] or len({h for _, h in recovery}) != 1:
++            return False
++        if text.count('[T2] PASS faults_native=75 faults_linux=75 cycles=3 pressure=96 recovery=exact queues=unique T1_pins=preserved\n') != 1:
++            return False
++    return True
++
++
++def assess(text, markers, cpus=None):
++    if '[T3R] PASS' in markers:
++        from threading_t3r_receipt import assess_migration
++        if not assess_migration(text, cpus):
++            return False
++    if not marker_assess(text, markers, cpus):
++        return False
++    rows = re.findall(r'^\[CPU-ID\] logical=(\d+) apic=(\d+) bsp=(true|false)$', text, re.M)
++    if cpus is None or len(rows) != cpus:
++        return False
++    if [int(r[0]) for r in rows] != list(range(cpus)) or len({r[1] for r in rows}) != cpus:
++        return False
++    if [r[2] for r in rows] != ['true'] + ['false'] * (cpus - 1):
++        return False
++    if any(int(r[1]) >= 255 for r in rows):
++        return False
++    online = re.findall(r'^\[CPU-ID\] online logical=(\d+) apic=(\d+) tss=(0x[0-9a-f]+) ist_df=(0x[0-9a-f]+) ist_nmi=(0x[0-9a-f]+)$', text, re.M)
++    if len(online) != cpus - 1 or {int(r[0]) for r in online} != set(range(1, cpus)):
++        return False
++    if any(rows[int(r[0])][1] != r[1] for r in online):
++        return False
++    bsp = re.findall(r'^\[CPU-ID\] bsp logical=(0) apic=(\d+) tss=(0x[0-9a-f]+) ist_df=(0x[0-9a-f]+) ist_nmi=(0x[0-9a-f]+)$', text, re.M)
++    if len(bsp) != 1 or bsp[0][1] != rows[0][1]:
++        return False
++    online += bsp
++    for column in (2,3,4):
++        if len({r[column] for r in online}) != cpus or any(int(r[column],16) == 0 for r in online):
++            return False
++    stacks = [r[col] for r in online for col in (3,4)]
++    return len(stacks) == len(set(stacks))
++
++
++def hardware_profile(profile, observed, cpus):
++    if len(observed) != cpus or len(set(observed)) != cpus:
++        return False
++    return (profile == 'standard' or
++            profile == 'sparse' and observed != list(range(cpus)) or
++            profile == 'high' and any(apic > 63 for apic in observed) or
++            profile == 'nonzero' and observed[0] != 0)
++
++
++def identity():
++    paths = subprocess.check_output(
++        ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT
++    ).decode().split('\0')
++    files = {p: hashlib.sha256((ROOT / p).read_bytes()).hexdigest()
++             for p in paths if p and not p.startswith('.threading-evidence/')
++             and (ROOT / p).is_file()}
++    return {'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
++                                          text=True).strip(),
++            'files': files,
++            'canonical_sha256': hashlib.sha256(
++                json.dumps(files, sort_keys=True).encode()).hexdigest()}
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    sub = parser.add_subparsers(dest='mode', required=True)
++    command = sub.add_parser('command')
++    command.add_argument('name')
++    command.add_argument('--timeout', type=int, default=600)
++    command.add_argument('argv', nargs=argparse.REMAINDER)
++    guest = sub.add_parser('guest')
++    guest.add_argument('name')
++    guest.add_argument('--iso', type=Path, required=True)
++    guest.add_argument('--cpus', type=int, choices=range(1, 13), required=True)
++    guest.add_argument('--topology', choices=('standard', 'sparse', 'nonzero', 'high'), default='standard')
++    guest.add_argument('--timeout', type=int, default=180)
++    guest.add_argument('--marker', action='append', required=True)
++    args = parser.parse_args()
++    if args.timeout <= 0 or Path(args.name).name != args.name:
++        parser.error('positive timeout and plain attempt name required')
++    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
++    folder = ROOT / '.threading-evidence/t3r' / f'{stamp}-{args.name}'
++    folder.mkdir(parents=True)
++    (folder / 'source.json').write_text(json.dumps(identity(), indent=2) + '\n')
++    record = {'pass': False, 'timeout': False}
++    if args.mode == 'command':
++        argv = args.argv[1:] if args.argv[:1] == ['--'] else args.argv
++        if not argv:
++            parser.error('command required')
++    else:
++        iso = args.iso.resolve()
++        record['iso_sha256'] = hashlib.sha256(iso.read_bytes()).hexdigest()
++        argv = ['qemu-system-x86_64', '-accel', 'tcg,thread=multi', '-cpu', 'max',
++                '-smp', str(args.cpus), '-m', '2048', '-cdrom', str(iso),
++                '-serial', f'file:{folder / "serial.log"}', '-display', 'none',
++                '-nic', 'none', '-device', 'virtio-rng-pci,disable-modern=on',
++                '-device', 'isa-debug-exit,iobase=0xf4,iosize=0x04',
++                '-no-reboot', '-no-shutdown']
++        if args.topology == 'sparse':
++            if args.cpus not in (4, 12): parser.error('sparse profile requires 4 or 12 CPUs')
++            argv[argv.index('-smp') + 1] = ('4,maxcpus=6,sockets=2,cores=3,threads=1' if args.cpus == 4 else '12,maxcpus=14,sockets=2,cores=7,threads=1')
++        elif args.topology == 'nonzero':
++            if args.cpus != 1: parser.error('nonzero profile requires 1 CPU')
++            argv[argv.index('-cpu') + 1] = 'max,apic-id=42'
++        elif args.topology == 'high':
++            if args.cpus not in (2, 12): parser.error('high profile requires 2 or 12 CPUs')
++            argv[argv.index('-smp') + 1] = f'{args.cpus-1},maxcpus=128,sockets=2,cores=64,threads=1'
++            argv += ['-device', 'max-x86_64-cpu,socket-id=1,core-id=0,thread-id=0']
++        record.update(cpus=args.cpus, markers=args.marker, topology=args.topology)
++    record['command'] = argv
++    print(folder, flush=True)
++    started = time.monotonic()
++    proc = None
++    try:
++        with (folder / 'output.log').open('w') as log:
++            proc = subprocess.Popen(argv, cwd=ROOT, stdout=log,
++                                    stderr=subprocess.STDOUT, start_new_session=True)
++            deadline = started + args.timeout
++            while True:
++                if args.mode == 'guest':
++                    serial = folder / 'serial.log'
++                    text = serial.read_text(errors='replace') if serial.exists() else ''
++                    if any(m in text for m in ('KERNEL PANIC', '[EXCEPTION]',
++                                               'FP isolation FAILED', 'probe panicked')):
++                        break
++                    if assess(text, args.marker, args.cpus):
++                        record['pass'] = True
++                        break
++                code = proc.poll()
++                if code is not None:
++                    if args.mode == 'command':
++                        record['pass'] = code == 0
++                    break
++                if time.monotonic() >= deadline:
++                    record['timeout'] = True
++                    break
++                time.sleep(0.25)
++    except BaseException as error:
++        record['error'] = repr(error)
++        raise
++    finally:
++        if proc is not None:
++            if proc.poll() is None:
++                os.killpg(proc.pid, signal.SIGTERM)
++                try:
++                    proc.wait(timeout=5)
++                except subprocess.TimeoutExpired:
++                    os.killpg(proc.pid, signal.SIGKILL)
++                    proc.wait()
++            record['exit_code'] = proc.returncode
++        if args.mode == 'guest':
++            serial = folder / 'serial.log'
++            final = serial.read_text(errors='replace') if serial.exists() else ''
++            record['pass'] = not record['timeout'] and assess(final, args.marker, args.cpus)
++            observed = [int(apic) for _, apic in re.findall(r'^\[CPU-ID\] logical=(\d+) apic=(\d+) bsp=(?:true|false)$', final, re.M)]
++            record['observed_apic_ids'] = observed
++            supported = hardware_profile(args.topology, observed, args.cpus)
++            record['requested_hardware_observed'] = supported
++            if not supported:
++                record['pass'] = False
++                record['classification'] = 'NOT_RUN: requested hardware topology not observed'
++            record['serial_sha256'] = hashlib.sha256(final.encode()).hexdigest()
++        record['seconds'] = time.monotonic() - started
++        (folder / 'result.json').write_text(json.dumps(record, indent=2) + '\n')
++    print('PASS' if record['pass'] else 'FAIL', flush=True)
++    raise SystemExit(0 if record['pass'] else 1)
++
++
++if __name__ == '__main__':
++    main()

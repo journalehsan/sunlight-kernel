@@ -1,0 +1,26 @@
+     Locking 5 packages to latest compatible versions
+    Updating sun-img v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img) -> v0.2.6324-alpha.2
+    Updating sunlight-hayro-native-probe v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/hayro-native-probe) -> v0.2.6324-alpha.2
+    Updating sunlight-ipc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc) -> v0.2.6324-alpha.2
+    Updating sunlight-libc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc) -> v0.2.6324-alpha.2
+    Updating sunlight-ui v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui) -> v0.2.6324-alpha.2
+   Compiling sunlight-ipc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sun-img v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img)
+   Compiling sunlight-ui v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui)
+   Compiling sunlight-libc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:764:5
+    |
+759 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+764 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+   Compiling sunlight-hayro-native-probe v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/hayro-native-probe)
+   Compiling sunlight-native-std-probe v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/native-std-probe)
+    Finished `release` profile [optimized] target(s) in 7.04s

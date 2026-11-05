@@ -1,0 +1,13 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "cargo",
+    "fmt",
+    "--all",
+    "--",
+    "--check"
+  ],
+  "exit_code": 1,
+  "seconds": 3.5023977370001376
+}

@@ -1,0 +1,2104 @@
+{
+  "status": "COMPLETE",
+  "head": "eeba257e4c548af61a2b2c6aeeeb734ab8b07cc6",
+  "canonical_source_sha256": "5f1e59b88743046eb0ce1905cf34d0c00f7cb53893cfb7f03d7da62605077637",
+  "scope": "T1 on the supported dense-APIC x86-64 configuration, QEMU TCG functional matrix; T2-T7 remain open",
+  "native_matrix": {
+    "1": {
+      "controls": {
+        "result": "20261104T135236.502041Z-controls-pilot-1cpu/result.json",
+        "pass": true,
+        "seconds": 38.57438897500106,
+        "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+      },
+      "authenticated_ipc_exec": {
+        "result": "20261104T134854.119169Z-final-auth-1cpu/result.json",
+        "pass": true,
+        "seconds": 32.80389198199555,
+        "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+      },
+      "native_fp_hayro_parser": {
+        "result": "20261104T135514.606160Z-fp-1cpu/result.json",
+        "pass": true,
+        "seconds": 104.58223025400366,
+        "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+      },
+      "native_std_hayro_service": {
+        "result": "20261104T135814.655396Z-std-1cpu/result.json",
+        "pass": true,
+        "seconds": 45.117116910987534,
+        "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+      },
+      "pin-r2d": {
+        "result": "pin-r2d/results.json",
+        "pass": true,
+        "exit_code": 33
+      },
+      "doorbell": {
+        "result": "doorbell/results.json",
+        "pass": true,
+        "exit_code": 33
+      }
+    },
+    "2": {
+      "controls": {
+        "result": "20261104T135338.224501Z-controls-pilot-2cpu/result.json",
+        "pass": true,
+        "seconds": 56.394615604993305,
+        "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+      },
+      "authenticated_ipc_exec": {
+        "result": "20261104T134957.174945Z-final-auth-2cpu/result.json",
+        "pass": true,
+        "seconds": 24.542193191999104,
+        "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+      },
+      "native_fp_hayro_parser": {
+        "result": "20261104T135722.355214Z-fp-2cpu/result.json",
+        "pass": true,
+        "seconds": 101.11351442401065,
+        "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+      },
+      "native_std_hayro_service": {
+        "result": "20261104T135933.710572Z-std-2cpu/result.json",
+        "pass": true,
+        "seconds": 64.42685215498204,
+        "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+      },
+      "pin-r2d": {
+        "result": "pin-r2d/results.json",
+        "pass": true,
+        "exit_code": 33
+      },
+      "doorbell": {
+        "result": "doorbell/results.json",
+        "pass": true,
+        "exit_code": 33
+      }
+    },
+    "4": {
+      "controls": {
+        "result": "20261104T135514.589322Z-controls-4cpu/result.json",
+        "pass": true,
+        "seconds": 60.402084693996585,
+        "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+      },
+      "authenticated_ipc_exec": {
+        "result": "20261104T135514.585497Z-auth-4cpu/result.json",
+        "pass": true,
+        "seconds": 44.609741004998796,
+        "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+      },
+      "native_fp_hayro_parser": {
+        "result": "20261104T135933.717017Z-fp-4cpu/result.json",
+        "pass": true,
+        "seconds": 133.1117410179868,
+        "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+      },
+      "native_std_hayro_service": {
+        "result": "20261104T140145.695134Z-std-4cpu/result.json",
+        "pass": true,
+        "seconds": 37.32251426600851,
+        "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+      },
+      "pin-r2d": {
+        "result": "pin-r2d/results.json",
+        "pass": true,
+        "exit_code": 33
+      },
+      "doorbell": {
+        "result": "doorbell/results.json",
+        "pass": true,
+        "exit_code": 33
+      }
+    },
+    "12": {
+      "controls": {
+        "result": "20261104T135652.100138Z-controls-12cpu/result.json",
+        "pass": true,
+        "seconds": 50.41096297399781,
+        "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+      },
+      "authenticated_ipc_exec": {
+        "result": "20261104T135652.094963Z-auth-12cpu/result.json",
+        "pass": true,
+        "seconds": 43.65842907500337,
+        "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+      },
+      "native_fp_hayro_parser": {
+        "result": "20261104T140303.907921Z-fp-12cpu/result.json",
+        "pass": true,
+        "seconds": 114.63706467600423,
+        "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+      },
+      "native_std_hayro_service": {
+        "result": "20261104T140303.903477Z-std-12cpu/result.json",
+        "pass": true,
+        "seconds": 48.38733446598053,
+        "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+      },
+      "pin-r2d": {
+        "result": "pin-r2d/results.json",
+        "pass": true,
+        "exit_code": 33
+      },
+      "doorbell": {
+        "result": "doorbell/results.json",
+        "pass": true,
+        "exit_code": 33
+      }
+    }
+  },
+  "production_release_build": {
+    "result": "20261104T135959.804039Z-production-release/result.json",
+    "pass": true,
+    "seconds": 36.76093139799195,
+    "iso_sha256": null
+  },
+  "production_release_boot": {
+    "result": "20261104T140144.479617Z-production-release-2cpu/result.json",
+    "pass": true,
+    "seconds": 29.294638988008955,
+    "iso_sha256": "d137c1d38cd8bd97b0a2b3b9e0e1bb25a90c359a33c15c573585cae1f7730090"
+  },
+  "production_debug_build": {
+    "result": "20261104T140303.898658Z-production-debug/result.json",
+    "pass": true,
+    "seconds": 22.27432375602075,
+    "iso_sha256": null
+  },
+  "host": {
+    "kernel-host": {
+      "result": "20261104T133336.071935Z-kernel-host/result.json",
+      "pass": true,
+      "seconds": 113.3315368850017,
+      "iso_sha256": null
+    },
+    "scheduler-host": {
+      "result": "20261104T133259.466858Z-scheduler-host/result.json",
+      "pass": true,
+      "seconds": 5.503345914999954,
+      "iso_sha256": null
+    },
+    "linux-host": {
+      "result": "20261104T133630.873330Z-linux-host/result.json",
+      "pass": true,
+      "seconds": 0.2505529970076168,
+      "iso_sha256": null
+    },
+    "lifecycle-parsers": {
+      "result": "20261104T135545.760222Z-lifecycle-parsers/result.json",
+      "pass": true,
+      "seconds": 0.2508018799999263,
+      "iso_sha256": null
+    },
+    "ipc-parsers": {
+      "result": "20261104T135546.749102Z-ipc-parsers/result.json",
+      "pass": true,
+      "seconds": 0.25066746499214787,
+      "iso_sha256": null
+    },
+    "parser-final": {
+      "result": "20261104T135134.242805Z-parser-final/result.json",
+      "pass": true,
+      "seconds": 0.2506245160038816,
+      "iso_sha256": null
+    }
+  },
+  "clippy": {
+    "direct_kernel_diagnostics": 156,
+    "new_changed_line_diagnostics": 0,
+    "classification": "BASELINE_FAILURES",
+    "details": "direct-clippy-detail/classification.json"
+  },
+  "formatting": {
+    "t1_ranges": "PASS",
+    "t1_files": "PASS",
+    "workspace": "BASELINE_FAILURES"
+  },
+  "images": {
+    "pilot": {
+      "sha256": {
+        "kernel.elf": "fc389063f82d4a8ca03247d28a1ba62aa6d67dfdcaada2003ae9d9144e9072ec",
+        "boot.iso": "fba93beb6ba92248944aa9594972b282e9ff1fe48460712cd7c6c41a49be9fcf"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/pilot/kernel.elf",
+        ".threading-evidence/t1/images/pilot/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/pilot/kernel.elf"
+      ]
+    },
+    "bounded": {
+      "sha256": {
+        "kernel.elf": "fc389063f82d4a8ca03247d28a1ba62aa6d67dfdcaada2003ae9d9144e9072ec",
+        "boot.iso": "ca0f23ea50f3d41aa7c1103ed122c75719ecb87d631d22d5929399cdcc6aac63"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/bounded/kernel.elf",
+        ".threading-evidence/t1/images/bounded/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/bounded/kernel.elf"
+      ],
+      "note": "Unused stale copy after a failed intermediate build; same ELF as pilot, never accepted."
+    },
+    "r2": {
+      "sha256": {
+        "kernel.elf": "52949a4081a31fb39a02d76e6b3ffcc783c93d5479053e665663e48064c7bc76",
+        "boot.iso": "41d0b8382485a1c41ec5a0783b25990576b544d139a73159af74c91ce6f8b397"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/r2/kernel.elf",
+        ".threading-evidence/t1/images/r2/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/r2/kernel.elf"
+      ]
+    },
+    "auth": {
+      "sha256": {
+        "kernel.elf": "a5586989912ec49162df2109164190a095487965a712908ee6188fff8d5b26f8",
+        "boot.iso": "aeea637f55368f385daec9dc0cd9174de71629de861220f5512f202f751a4175"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/auth/kernel.elf",
+        ".threading-evidence/t1/images/auth/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/auth/kernel.elf"
+      ]
+    },
+    "final-rsp": {
+      "sha256": {
+        "kernel.elf": "5eb8c857a3db232ba90bfb30d72151ccdcce6afe354aefeae6b2b95cb5738222",
+        "boot.iso": "750e9318c28a9b665ae747d736035d1945ba86e17f13404d61c9c86a32c4d22c"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/final-rsp/kernel.elf",
+        ".threading-evidence/t1/images/final-rsp/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/final-rsp/kernel.elf"
+      ]
+    },
+    "final-auth": {
+      "sha256": {
+        "kernel.elf": "7083d46ebe130617b928bef80eac0dee7d1d54fb9685cb1b3950dcf788aaf330",
+        "boot.iso": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/final-auth/kernel.elf",
+        ".threading-evidence/t1/images/final-auth/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/final-auth/kernel.elf"
+      ]
+    },
+    "controls": {
+      "sha256": {
+        "kernel.elf": "a286ef5e6e658d3a5e016871c94577449cdc693a448dd6aa15d4c02f809e664b",
+        "boot.iso": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/controls/kernel.elf",
+        ".threading-evidence/t1/images/controls/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/controls/kernel.elf"
+      ]
+    },
+    "fp": {
+      "sha256": {
+        "kernel.elf": "62d44c3a571118f5b15aa49c56ecaed53f14e2b8d02c95b616d8a8eba6a41bcf",
+        "boot.iso": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/fp/kernel.elf",
+        ".threading-evidence/t1/images/fp/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/fp/kernel.elf"
+      ]
+    },
+    "std": {
+      "sha256": {
+        "kernel.elf": "2a1584761e8343ce2db6a4ff6c67c0302490b595232bf96374f3e15549d68a47",
+        "boot.iso": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/std/kernel.elf",
+        ".threading-evidence/t1/images/std/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/debug/sunlight-kernel",
+        ".threading-evidence/t1/images/std/kernel.elf"
+      ]
+    },
+    "production-release": {
+      "sha256": {
+        "kernel.elf": "da9027945fc42a7196a23c65b59fe8273a4db9c125f796d9200181fddf8a4dff",
+        "boot.iso": "d137c1d38cd8bd97b0a2b3b9e0e1bb25a90c359a33c15c573585cae1f7730090"
+      },
+      "iso_command": [
+        "bash",
+        "tools/make_hybrid_iso.sh",
+        ".threading-evidence/t1/images/production-release/kernel.elf",
+        ".threading-evidence/t1/images/production-release/boot.iso",
+        "target/limine",
+        "/home/ehsantor/Projects/sunlightos-kernel"
+      ],
+      "strip_command": [
+        "objcopy",
+        "--strip-debug",
+        "target/x86_64-unknown-none/release/sunlight-kernel",
+        ".threading-evidence/t1/images/production-release/kernel.elf"
+      ]
+    }
+  },
+  "attempts": [
+    {
+      "attempt": "20261104T133251.661329Z-build-pilot",
+      "result": "20261104T133251.661329Z-build-pilot/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 82.05490587800159
+    },
+    {
+      "attempt": "20261104T133259.466858Z-scheduler-host",
+      "result": "20261104T133259.466858Z-scheduler-host/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/test_scheduler_host.py"
+      ],
+      "exit_code": 0,
+      "seconds": 5.503345914999954
+    },
+    {
+      "attempt": "20261104T133300.732818Z-formatting-baseline",
+      "result": "20261104T133300.732818Z-formatting-baseline/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 1,
+      "seconds": 8.2546355509985,
+      "reason": "workspace baseline plus then-unformatted T1 code; final T1 formatting passes"
+    },
+    {
+      "attempt": "20261104T133336.071935Z-kernel-host",
+      "result": "20261104T133336.071935Z-kernel-host/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "test",
+        "--package",
+        "sunlight-kernel",
+        "--lib",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 113.3315368850017
+    },
+    {
+      "attempt": "20261104T133505.735543Z-clippy",
+      "result": "20261104T133505.735543Z-clippy/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "clippy",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--offline",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "seconds": 25.516580758005148,
+      "reason": "baseline dependency and kernel build-script diagnostics"
+    },
+    {
+      "attempt": "20261104T133630.873330Z-linux-host",
+      "result": "20261104T133630.873330Z-linux-host/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "test",
+        "--package",
+        "sunlight-compat-linux",
+        "--lib",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2505529970076168
+    },
+    {
+      "attempt": "20261104T133654.037543Z-build-pilot-final",
+      "result": "20261104T133654.037543Z-build-pilot-final/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 23.020255085997633
+    },
+    {
+      "attempt": "20261104T133713.783905Z-abi-superseded",
+      "result": "20261104T133713.783905Z-abi-superseded/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        "target/x86_64-unknown-none/debug/sunlight-kernel"
+      ],
+      "exit_code": 1,
+      "seconds": 0.25074974600283895,
+      "reason": "checker required uppercase symbol kind; corrected to accept local text symbols"
+    },
+    {
+      "attempt": "20261104T133744.808511Z-abi-final",
+      "result": "20261104T133744.808511Z-abi-final/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        "target/x86_64-unknown-none/debug/sunlight-kernel"
+      ],
+      "exit_code": 1,
+      "seconds": 0.25068787999043707,
+      "reason": "checker negative-control whitespace normalization defect; corrected"
+    },
+    {
+      "attempt": "20261104T133759.719706Z-abi-corrected",
+      "result": "20261104T133759.719706Z-abi-corrected/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/pilot/kernel.elf"
+      ],
+      "exit_code": 0,
+      "seconds": 0.25057824100076687
+    },
+    {
+      "attempt": "20261104T133800.325323Z-bare-metal",
+      "result": "20261104T133800.325323Z-bare-metal/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "check",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 2.2512784149876097
+    },
+    {
+      "attempt": "20261104T133801.495145Z-clippy-kernel",
+      "result": "20261104T133801.495145Z-clippy-kernel/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "clippy",
+        "--no-deps",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--offline",
+        "--",
+        "-A",
+        "clippy::manual_range_contains"
+      ],
+      "exit_code": 101,
+      "seconds": 14.011208071999135,
+      "reason": "nested native SVG std build under clippy-driver fails PAL selection"
+    },
+    {
+      "attempt": "20261104T133819.433907Z-parser",
+      "result": "20261104T133819.433907Z-parser/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_threading_t1.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2505464270070661
+    },
+    {
+      "attempt": "20261104T133820.114549Z-pilot-1cpu",
+      "result": "20261104T133820.114549Z-pilot-1cpu/result.json",
+      "pass": false,
+      "timeout": false,
+      "iso_sha256": "fba93beb6ba92248944aa9594972b282e9ff1fe48460712cd7c6c41a49be9fcf",
+      "cpus": 1,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=1 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/pilot/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T133820.114549Z-pilot-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "seconds": 137.78040508799313,
+      "reason": "256-yield hostile-stack workload exceeded existing 12000-tick fixture deadline; corrected bounded workload passes"
+    },
+    {
+      "attempt": "20261104T134025.289106Z-rebuild-pilot-bounded",
+      "result": "20261104T134025.289106Z-rebuild-pilot-bounded/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 101,
+      "seconds": 58.54368127300404,
+      "reason": "source/manifest feature addition overlapped compilation, unexpected cfg; superseded and rebuilt"
+    },
+    {
+      "attempt": "20261104T134137.982692Z-rebuild-pilot-r2",
+      "result": "20261104T134137.982692Z-rebuild-pilot-r2/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 47.035939442008385
+    },
+    {
+      "attempt": "20261104T134242.406287Z-build-auth",
+      "result": "20261104T134242.406287Z-build-auth/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "SUNLIGHT_CAP_EXEC_PROBE=1",
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_auth_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 86.31006492298911
+    },
+    {
+      "attempt": "20261104T134243.585461Z-pilot-r2-1cpu",
+      "result": "20261104T134243.585461Z-pilot-r2-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "41d0b8382485a1c41ec5a0783b25990576b544d139a73159af74c91ce6f8b397",
+      "cpus": 1,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=1 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/r2/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134243.585461Z-pilot-r2-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 56.13428623598884
+    },
+    {
+      "attempt": "20261104T134253.183104Z-abi-r2",
+      "result": "20261104T134253.183104Z-abi-r2/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/r2/kernel.elf"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2507421660120599
+    },
+    {
+      "attempt": "20261104T134504.005757Z-pilot-r2-2cpu",
+      "result": "20261104T134504.005757Z-pilot-r2-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "41d0b8382485a1c41ec5a0783b25990576b544d139a73159af74c91ce6f8b397",
+      "cpus": 2,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=2 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/r2/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134504.005757Z-pilot-r2-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 35.33510783399106
+    },
+    {
+      "attempt": "20261104T134538.584076Z-auth-pilot-1cpu",
+      "result": "20261104T134538.584076Z-auth-pilot-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "aeea637f55368f385daec9dc0cd9174de71629de861220f5512f202f751a4175",
+      "cpus": 1,
+      "markers": [
+        "[T1-AUTH] PASS",
+        "[CAP-R41] COMPLETE",
+        "[CAP-P] native PASS",
+        "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/auth/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134538.584076Z-auth-pilot-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 30.563733036004123
+    },
+    {
+      "attempt": "20261104T134539.753744Z-build-native-fp",
+      "result": "20261104T134539.753744Z-build-native-fp/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "RUSTFLAGS=-C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld",
+        "cargo",
+        "build",
+        "--manifest-path",
+        "tools/native-std-probe/Cargo.toml",
+        "--target",
+        "tools/targets/x86_64-sunlightos.json",
+        "--bin",
+        "native-fp-probe",
+        "--release",
+        "-Z",
+        "build-std=core,alloc",
+        "-Z",
+        "json-target-spec",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 7.2543655569897965
+    },
+    {
+      "attempt": "20261104T134627.507517Z-final-rsp-image",
+      "result": "20261104T134627.507517Z-final-rsp-image/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 8.509175162995234
+    },
+    {
+      "attempt": "20261104T134701.492010Z-final-auth-image",
+      "result": "20261104T134701.492010Z-final-auth-image/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "SUNLIGHT_CAP_EXEC_PROBE=1",
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_auth_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 13.01467338600196
+    },
+    {
+      "attempt": "20261104T134708.877485Z-final-rsp-1cpu",
+      "result": "20261104T134708.877485Z-final-rsp-1cpu/result.json",
+      "pass": false,
+      "timeout": true,
+      "iso_sha256": "750e9318c28a9b665ae747d736035d1945ba86e17f13404d61c9c86a32c4d22c",
+      "cpus": 1,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=1 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-rsp/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134708.877485Z-final-rsp-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 180.0912589990039,
+      "reason": "duplicate partial fixture verdict rejected by strict parser; one-time terminal publication added, final controls pass"
+    },
+    {
+      "attempt": "20261104T134708.884573Z-final-abi",
+      "result": "20261104T134708.884573Z-final-abi/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/final-rsp/kernel.elf"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2511418020003475
+    },
+    {
+      "attempt": "20261104T134708.888064Z-native-std-service-build",
+      "result": "20261104T134708.888064Z-native-std-service-build/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "bash",
+        "tools/build_native_std.sh",
+        "build",
+        "-p",
+        "sunlight-docserv",
+        "--no-default-features",
+        "--features",
+        "hayro-native,native-smoke",
+        "--release",
+        "--offline"
+      ],
+      "exit_code": 101,
+      "seconds": 142.36266318800335,
+      "reason": "wrong legacy native-smoke feature selected MuPDF; unsupported Clang C bindings; native-hayro-smoke rebuild passes"
+    },
+    {
+      "attempt": "20261104T134854.119169Z-final-auth-1cpu",
+      "result": "20261104T134854.119169Z-final-auth-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c",
+      "cpus": 1,
+      "markers": [
+        "[T1-AUTH] PASS",
+        "[CAP-R41] COMPLETE",
+        "[CAP-P] native PASS",
+        "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-auth/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134854.119169Z-final-auth-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 32.80389198199555
+    },
+    {
+      "attempt": "20261104T134943.138596Z-native-std-hayro-build",
+      "result": "20261104T134943.138596Z-native-std-hayro-build/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "bash",
+        "tools/build_native_std.sh",
+        "build",
+        "-p",
+        "sunlight-docserv",
+        "--no-default-features",
+        "--features",
+        "native-hayro-smoke",
+        "--release",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 40.017921966005815
+    },
+    {
+      "attempt": "20261104T134957.174945Z-final-auth-2cpu",
+      "result": "20261104T134957.174945Z-final-auth-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c",
+      "cpus": 2,
+      "markers": [
+        "[T1-AUTH] PASS",
+        "[CAP-R41] COMPLETE",
+        "[CAP-P] native PASS",
+        "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-auth/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T134957.174945Z-final-auth-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "seconds": 24.542193191999104
+    },
+    {
+      "attempt": "20261104T135038.479551Z-final-controls-image",
+      "result": "20261104T135038.479551Z-final-controls-image/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "syscall_stack_test",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 66.55558666199795
+    },
+    {
+      "attempt": "20261104T135134.242805Z-parser-final",
+      "result": "20261104T135134.242805Z-parser-final/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_threading_t1.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2506245160038816
+    },
+    {
+      "attempt": "20261104T135236.502041Z-controls-pilot-1cpu",
+      "result": "20261104T135236.502041Z-controls-pilot-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a",
+      "cpus": 1,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=1 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/controls/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135236.502041Z-controls-pilot-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "d71064dbdf4e4a04d7ced17cea37bee5aadd7ee45a365cc46a1e62c3a1046026",
+      "seconds": 38.57438897500106
+    },
+    {
+      "attempt": "20261104T135237.650720Z-fp-users",
+      "result": "20261104T135237.650720Z-fp-users/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "env",
+        "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static",
+        "cargo",
+        "build",
+        "-p",
+        "sunlightd",
+        "-p",
+        "sunshell",
+        "--release",
+        "--no-default-features",
+        "--offline"
+      ],
+      "exit_code": 101,
+      "seconds": 3.2515011119976407,
+      "reason": "sunshell native sunlight feature omitted; explicit native-feature rebuild passes"
+    },
+    {
+      "attempt": "20261104T135259.269005Z-final-controls-abi",
+      "result": "20261104T135259.269005Z-final-controls-abi/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/controls/kernel.elf"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2506336179940263
+    },
+    {
+      "attempt": "20261104T135307.223661Z-fp-shell",
+      "result": "20261104T135307.223661Z-fp-shell/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static",
+        "cargo",
+        "build",
+        "-p",
+        "sunshell",
+        "--release",
+        "--no-default-features",
+        "--features",
+        "sunlight",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 11.007930665000458
+    },
+    {
+      "attempt": "20261104T135337.084849Z-fp-image",
+      "result": "20261104T135337.084849Z-fp-image/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "SUNLIGHT_INJECT_PHASE=native-std",
+        "cargo",
+        "build",
+        "-p",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--no-default-features",
+        "--features",
+        "key_inject,native_std_probe",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 20.765006835004897
+    },
+    {
+      "attempt": "20261104T135338.224501Z-controls-pilot-2cpu",
+      "result": "20261104T135338.224501Z-controls-pilot-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a",
+      "cpus": 2,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=2 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/controls/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135338.224501Z-controls-pilot-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "db08cf11e0ca87ad62cb093a1adaeffc1337329c99ca27bf62751645063a9ed5",
+      "seconds": 56.394615604993305
+    },
+    {
+      "attempt": "20261104T135424.467463Z-direct-clippy",
+      "result": "20261104T135424.467463Z-direct-clippy/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "python3",
+        "/tmp/threading_t1_direct_clippy.py",
+        ".threading-evidence/t1/direct-clippy-detail"
+      ],
+      "exit_code": 1,
+      "seconds": 91.55764215599629,
+      "reason": "156 unchanged-source diagnostics; zero T1 new/changed spans"
+    },
+    {
+      "attempt": "20261104T135514.585497Z-auth-4cpu",
+      "result": "20261104T135514.585497Z-auth-4cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c",
+      "cpus": 4,
+      "markers": [
+        "[T1-AUTH] PASS",
+        "[CAP-R41] COMPLETE",
+        "[CAP-P] native PASS",
+        "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "4",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-auth/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135514.585497Z-auth-4cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "afd4af87a0a7cbf8ce4140acc8541060c13c782d8b91c122aa275df257da6b0b",
+      "seconds": 44.609741004998796
+    },
+    {
+      "attempt": "20261104T135514.589322Z-controls-4cpu",
+      "result": "20261104T135514.589322Z-controls-4cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a",
+      "cpus": 4,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=4 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "4",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/controls/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135514.589322Z-controls-4cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "b66285ee9810630dfc1d1807fee8e046fddcc3ca34418e278f4a580dff7b341e",
+      "seconds": 60.402084693996585
+    },
+    {
+      "attempt": "20261104T135514.606160Z-fp-1cpu",
+      "result": "20261104T135514.606160Z-fp-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869",
+      "cpus": 1,
+      "markers": [
+        "[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK",
+        "[NATIVE-STD] native PDF parser and vector raster OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/fp/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135514.606160Z-fp-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "5bc98f4f79b9a1bb19fa95e3e869ef0d02b76b5e74386b6b4b33a5900b73e1af",
+      "seconds": 104.58223025400366
+    },
+    {
+      "attempt": "20261104T135545.760222Z-lifecycle-parsers",
+      "result": "20261104T135545.760222Z-lifecycle-parsers/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_fastlane_account_exec.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2508018799999263
+    },
+    {
+      "attempt": "20261104T135546.749102Z-ipc-parsers",
+      "result": "20261104T135546.749102Z-ipc-parsers/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_fastlane_native_boundary.py"
+      ],
+      "exit_code": 0,
+      "seconds": 0.25066746499214787
+    },
+    {
+      "attempt": "20261104T135605.653224Z-std-supervisor",
+      "result": "20261104T135605.653224Z-std-supervisor/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static -C target-cpu=x86-64-v2 -C no-redzone",
+        "cargo",
+        "build",
+        "-p",
+        "sunlightd",
+        "--release",
+        "--features",
+        "document-service-gate",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 4.253282321995357
+    },
+    {
+      "attempt": "20261104T135652.091364Z-std-image",
+      "result": "20261104T135652.091364Z-std-image/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "SUNLIGHT_INJECT_PHASE=document-service",
+        "cargo",
+        "build",
+        "-p",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--features",
+        "key_inject,document_service,native_document_service",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 24.02052858499519
+    },
+    {
+      "attempt": "20261104T135652.094963Z-auth-12cpu",
+      "result": "20261104T135652.094963Z-auth-12cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c",
+      "cpus": 12,
+      "markers": [
+        "[T1-AUTH] PASS",
+        "[CAP-R41] COMPLETE",
+        "[CAP-P] native PASS",
+        "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "12",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-auth/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135652.094963Z-auth-12cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "5b179908ff8361cb2a59189da039eed81e5cb7d4e0910808afd3ba33ea4c1af6",
+      "seconds": 43.65842907500337
+    },
+    {
+      "attempt": "20261104T135652.100138Z-controls-12cpu",
+      "result": "20261104T135652.100138Z-controls-12cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a",
+      "cpus": 12,
+      "markers": [
+        "[T1] PASS",
+        "[SCHED-B] PASS cpus=12 "
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "12",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/controls/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135652.100138Z-controls-12cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 33,
+      "serial_sha256": "16480f5c4b0af346003ab528d5aa1ef7d1b7f8513200e0bb7c97c1bff429248c",
+      "seconds": 50.41096297399781
+    },
+    {
+      "attempt": "20261104T135722.355214Z-fp-2cpu",
+      "result": "20261104T135722.355214Z-fp-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869",
+      "cpus": 2,
+      "markers": [
+        "[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK",
+        "[NATIVE-STD] native PDF parser and vector raster OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/fp/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135722.355214Z-fp-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "3bee16543408e83709544a5e9bd334b92837cd4bd2c260cc6d9a03220fb86017",
+      "seconds": 101.11351442401065
+    },
+    {
+      "attempt": "20261104T135813.491589Z-pin-r2d-matrix",
+      "result": "20261104T135813.491589Z-pin-r2d-matrix/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/test_remote_wake_smp.py",
+        "--pin-r2d",
+        "--cpus",
+        "1",
+        "2",
+        "4",
+        "12",
+        "--timeout",
+        "180",
+        "--evidence-dir",
+        ".threading-evidence/t1/pin-r2d"
+      ],
+      "exit_code": 0,
+      "seconds": 157.57794610899873
+    },
+    {
+      "attempt": "20261104T135814.655396Z-std-1cpu",
+      "result": "20261104T135814.655396Z-std-1cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00",
+      "cpus": 1,
+      "markers": [
+        "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+        "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+        "[DOCSERV] native Hayro IPC open/render/close OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "1",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/std/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135814.655396Z-std-1cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "f46a9fce833d389035858674a192b1017fce1119a49376040bae11cedb0497aa",
+      "seconds": 45.117116910987534
+    },
+    {
+      "attempt": "20261104T135933.710572Z-std-2cpu",
+      "result": "20261104T135933.710572Z-std-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00",
+      "cpus": 2,
+      "markers": [
+        "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+        "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+        "[DOCSERV] native Hayro IPC open/render/close OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/std/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135933.710572Z-std-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "60ebf1a78ec59378d9e3f740046e817cc5d27885b46eb31bf9cf6a45b557b514",
+      "seconds": 64.42685215498204
+    },
+    {
+      "attempt": "20261104T135933.713899Z-doorbell-matrix",
+      "result": "20261104T135933.713899Z-doorbell-matrix/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/test_native_doorbell.py",
+        "--cpus",
+        "1",
+        "2",
+        "4",
+        "12",
+        "--timeout",
+        "180",
+        "--evidence-dir",
+        ".threading-evidence/t1/doorbell"
+      ],
+      "exit_code": 0,
+      "seconds": 162.80909869199968
+    },
+    {
+      "attempt": "20261104T135933.717017Z-fp-4cpu",
+      "result": "20261104T135933.717017Z-fp-4cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869",
+      "cpus": 4,
+      "markers": [
+        "[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK",
+        "[NATIVE-STD] native PDF parser and vector raster OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "4",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/fp/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135933.717017Z-fp-4cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "e8dc2cb7408c986b8435367444b845011feb7e7f41c6ea8be5c46706a0f31594",
+      "seconds": 133.1117410179868
+    },
+    {
+      "attempt": "20261104T135934.903855Z-restore-supervisor",
+      "result": "20261104T135934.903855Z-restore-supervisor/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "env",
+        "RUSTFLAGS=-C link-arg=-Tservices/user-space.ld -C relocation-model=static",
+        "cargo",
+        "build",
+        "-p",
+        "sunlightd",
+        "--release",
+        "--no-default-features",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2506516220164485
+    },
+    {
+      "attempt": "20261104T135959.804039Z-production-release",
+      "result": "20261104T135959.804039Z-production-release/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--release",
+        "--no-default-features",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 36.76093139799195
+    },
+    {
+      "attempt": "20261104T140144.479617Z-production-release-2cpu",
+      "result": "20261104T140144.479617Z-production-release-2cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "d137c1d38cd8bd97b0a2b3b9e0e1bb25a90c359a33c15c573585cae1f7730090",
+      "cpus": 2,
+      "markers": [
+        "[SunlightOS] Foundation Complete",
+        "[SunlightOS] sunlightd OK",
+        "[LOGIN-TUI] input ready",
+        "[SunlightOS] timezone OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/production-release/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T140144.479617Z-production-release-2cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "d7ad17f48fcebffe4c0ecdd958b3fd08e5cae041f40fbd2c9f312406505ac3f3",
+      "seconds": 29.294638988008955
+    },
+    {
+      "attempt": "20261104T140145.695134Z-std-4cpu",
+      "result": "20261104T140145.695134Z-std-4cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00",
+      "cpus": 4,
+      "markers": [
+        "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+        "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+        "[DOCSERV] native Hayro IPC open/render/close OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "4",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/std/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T140145.695134Z-std-4cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "54c8dbad3880562ed63d4e9813b3d2c2c7988cf19dd66693a3d0980676a016c4",
+      "seconds": 37.32251426600851
+    },
+    {
+      "attempt": "20261104T140303.898658Z-production-debug",
+      "result": "20261104T140303.898658Z-production-debug/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "build",
+        "--package",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel",
+        "--no-default-features",
+        "--offline"
+      ],
+      "exit_code": 0,
+      "seconds": 22.27432375602075
+    },
+    {
+      "attempt": "20261104T140303.903477Z-std-12cpu",
+      "result": "20261104T140303.903477Z-std-12cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00",
+      "cpus": 12,
+      "markers": [
+        "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+        "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+        "[DOCSERV] native Hayro IPC open/render/close OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "12",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/std/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T140303.903477Z-std-12cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "8fd81be58e378f12ec12adfed37318bd6a49303d377f8dc39effe20d4cd70755",
+      "seconds": 48.38733446598053
+    },
+    {
+      "attempt": "20261104T140303.907921Z-fp-12cpu",
+      "result": "20261104T140303.907921Z-fp-12cpu/result.json",
+      "pass": true,
+      "timeout": false,
+      "iso_sha256": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869",
+      "cpus": 12,
+      "markers": [
+        "[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK",
+        "[NATIVE-STD] native PDF parser and vector raster OK"
+      ],
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "12",
+        "-m",
+        "2048",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/fp/boot.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T140303.907921Z-fp-12cpu/serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-device",
+        "isa-debug-exit,iobase=0xf4,iosize=0x04",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "exit_code": 0,
+      "serial_sha256": "33086c6e651ecb58ce65ee39d71717d45033d145133e43fbda40aa721dc66ef4",
+      "seconds": 114.63706467600423
+    },
+    {
+      "attempt": "20261104T140535.957843Z-formatting-final-workspace",
+      "result": "20261104T140535.957843Z-formatting-final-workspace/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "exit_code": 1,
+      "seconds": 3.5023977370001376,
+      "reason": "pre-existing workspace formatting failures; T1 ranges/files pass"
+    },
+    {
+      "attempt": "20261104T140537.117286Z-baseline-whitespace",
+      "result": "20261104T140537.117286Z-baseline-whitespace/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 2,
+      "seconds": 0.250664424005663,
+      "reason": "pre-existing sunlight-uac manifest trailing blank line"
+    },
+    {
+      "attempt": "20261104T140614.706450Z-release-abi",
+      "result": "20261104T140614.706450Z-release-abi/result.json",
+      "pass": false,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/production-release/kernel.elf"
+      ],
+      "exit_code": 1,
+      "seconds": 0.2505042950215284,
+      "reason": "ordinary stripped release has no symbol table; unique emitted entry signature fallback passes"
+    },
+    {
+      "attempt": "20261104T140648.311492Z-release-abi-stripped",
+      "result": "20261104T140648.311492Z-release-abi-stripped/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        ".threading-evidence/t1/images/production-release/kernel.elf"
+      ],
+      "exit_code": 0,
+      "seconds": 0.5009405099845026
+    },
+    {
+      "attempt": "20261104T140649.163942Z-final-debug-abi",
+      "result": "20261104T140649.163942Z-final-debug-abi/result.json",
+      "pass": true,
+      "timeout": false,
+      "command": [
+        "python3",
+        "tools/check_syscall_stack_abi.py",
+        "target/x86_64-unknown-none/debug/sunlight-kernel"
+      ],
+      "exit_code": 0,
+      "seconds": 0.2507517719932366
+    }
+  ]
+}

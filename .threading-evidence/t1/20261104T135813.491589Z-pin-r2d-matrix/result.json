@@ -1,0 +1,20 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/test_remote_wake_smp.py",
+    "--pin-r2d",
+    "--cpus",
+    "1",
+    "2",
+    "4",
+    "12",
+    "--timeout",
+    "180",
+    "--evidence-dir",
+    ".threading-evidence/t1/pin-r2d"
+  ],
+  "exit_code": 0,
+  "seconds": 157.57794610899873
+}

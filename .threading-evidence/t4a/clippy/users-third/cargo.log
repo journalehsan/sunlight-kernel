@@ -1,0 +1,122 @@
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+       Fresh core v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/core)
+       Fresh unicode-ident v1.0.24
+       Fresh autocfg v1.5.1
+       Fresh fastrand v2.4.1
+       Fresh compiler_builtins v0.1.160 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+       Fresh rustc-std-workspace-core v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+       Fresh alloc v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/alloc)
+       Fresh proc-macro2 v1.0.106
+       Fresh phf_generator v0.13.1
+       Fresh libc v0.2.185
+       Fresh rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+       Fresh panic_abort v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_abort)
+       Fresh rustc-demangle v0.1.27
+       Fresh rustc-literal-escaper v0.0.7
+       Fresh quote v1.0.46
+       Fresh unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/unwind)
+       Fresh std_detect v0.1.5 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std_detect)
+       Fresh syn v3.0.2
+       Fresh syn v2.0.118
+       Fresh std v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std)
+       Fresh panic_unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_unwind)
+       Fresh bytemuck_derive v1.12.1
+       Fresh thiserror-impl v2.0.19
+       Fresh synstructure v0.14.0
+       Fresh phf_macros v0.13.1
+       Fresh serde_derive v1.0.228
+       Fresh proc_macro v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/proc_macro)
+       Fresh zerofrom-derive v0.1.8
+       Fresh yoke-derive v0.8.4
+       Fresh simd-adler32 v0.3.9
+       Fresh bytemuck v1.25.0
+       Fresh cfg-if v1.0.4
+       Fresh adler2 v2.0.1
+       Fresh num-traits v0.2.19
+       Fresh zlib-rs v0.6.8
+       Fresh arrayvec v0.7.8
+       Fresh smallvec v1.15.2
+       Fresh alloc-no-stdlib v2.0.4
+       Fresh bitflags v2.13.0
+       Fresh thiserror v2.0.19
+       Fresh fearless_simd v1.1.0
+       Fresh pxfm v0.1.30
+       Fresh zune-core v0.5.3
+       Fresh linebender_resource_handle v0.1.1
+       Fresh siphasher v1.0.4
+       Fresh miniz_oxide v0.8.9
+       Fresh crc32fast v1.5.0
+       Fresh polycool v0.4.0
+       Fresh fdeflate v0.3.7
+       Fresh alloc-stdlib v0.2.4
+       Fresh color v0.3.3
+       Fresh font-types v0.12.6
+       Fresh euclid v0.22.14
+       Fresh once_cell v1.21.4
+       Fresh hayro-ccitt v0.4.0
+       Fresh zune-jpeg v0.5.15
+       Fresh moxcms v0.8.1
+       Fresh hayro-jpeg2000 v0.4.1
+       Fresh phf_shared v0.13.1
+       Fresh zerofrom v0.1.8
+       Fresh stable_deref_trait v1.2.1
+       Fresh flate2 v1.1.9
+       Fresh kurbo v0.13.1
+       Fresh brotli-decompressor v5.0.3
+       Fresh read-fonts v0.43.3
+       Fresh guillotiere v0.7.0
+       Fresh hayro-jbig2 v0.3.1
+       Fresh log v0.4.33
+       Fresh hayro-postscript v0.1.0
+       Fresh memchr v2.8.2
+       Fresh rustc-hash v2.1.3
+       Fresh foldhash v0.2.0
+       Fresh fearless_simd v0.7.0
+       Fresh phf v0.13.1
+       Fresh yoke v0.8.3
+       Fresh serde_core v1.0.228
+       Fresh byteorder-lite v0.1.0
+       Fresh png v0.18.1
+       Fresh peniko v0.6.1
+       Fresh brotli v8.0.4
+       Fresh skrifa v0.46.2
+       Fresh hashbrown v0.17.1
+       Fresh hayro-syntax v0.8.0
+       Fresh serde v1.0.228
+       Fresh cobs v0.3.0
+       Fresh pic-scale v0.7.12
+       Fresh sunlight-ipc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+       Fresh anyhow v1.0.103
+       Fresh hayro-cmap v0.1.0
+       Fresh vello_common v0.3.0
+       Fresh image v0.25.10
+       Dirty sunlight-libc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc): the file `sunlight-libc/src/std_runtime.rs` has changed (1793902474.027019169s, 2m 41s after last build at 1793902313.550564526s)
+   Compiling sunlight-libc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+       Fresh postcard v1.1.3
+       Fresh vello_cpu v0.3.0
+       Fresh hayro-interpret v0.8.0
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_CRATE_NAME=sunlight_libc CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-libc CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6324-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6324 CARGO_PKG_VERSION_PRE=alpha.2 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/release/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc --crate-name sunlight_libc --edition=2021 sunlight-libc/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C opt-level=3 -C panic=abort -C linker-plugin-lto -C codegen-units=1 --cfg 'feature="default"' --cfg 'feature="dynamic-heap"' --cfg 'feature="dynamic-heap-128m"' --cfg 'feature="native-std"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "dynamic-heap", "dynamic-heap-128m", "dynamic-heap-16m", "dynamic-heap-8m", "file-ops", "global-alloc", "native-std"))' -C metadata=a1bd05d15d3cf605 -C extra-filename=-4e52e30d0b0cb441 --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps --target /home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json -Zunstable-options -C strip=symbols -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/release/deps --extern 'noprelude,nounused:alloc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/liballoc-ca66c0e6e951597f.rmeta' --extern 'noprelude,nounused:compiler_builtins=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcompiler_builtins-dcf92282aafe5a84.rmeta' --extern 'noprelude,nounused:core=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcore-c719a543827dd094.rmeta' --extern 'noprelude,nounused:panic_abort=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_abort-b5620419e46323e0.rmeta' --extern 'noprelude,nounused:panic_unwind=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_unwind-78dbd64b8c433b37.rmeta' --extern 'noprelude,nounused:proc_macro=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libproc_macro-1a8b17947cfa1113.rmeta' --extern 'noprelude,nounused:std=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libstd-857ae36b62dba215.rmeta' --extern sunlight_ipc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_ipc-01f0cafd0a340725.rmeta -Z unstable-options -C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld '--check-cfg=cfg(target_os,values("sunlightos"))' --verbose`
+       Fresh hayro v0.8.0
+warning: field `terminal` is never read
+   --> sunlight-libc/src/sun_exec.rs:764:5
+    |
+759 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+764 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+       Dirty sunlight-docserv v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv): the dependency `sunlight-libc` was rebuilt
+   Compiling sunlight-docserv v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv)
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_CRATE_NAME=sunlight_docserv CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-docserv CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6324-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6324 CARGO_PKG_VERSION_PRE=alpha.2 CARGO_PRIMARY_PACKAGE=1 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/release/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc --crate-name sunlight_docserv --edition=2021 sunlight-docserv/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C opt-level=3 -C panic=abort -C linker-plugin-lto -C codegen-units=1 --cfg 'feature="hayro-native"' --cfg 'feature="native-hayro-smoke"' --cfg 'feature="renderer"' --cfg 'feature="std"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "hayro-host", "hayro-native", "mupdf-legacy", "native-hayro-smoke", "native-postscript-smoke", "native-smoke", "renderer", "std"))' -C metadata=182924b27252d094 -C extra-filename=-55ed9a45fd9f6e5e --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps --target /home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json -Zunstable-options -C strip=symbols -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/release/deps --extern 'noprelude,nounused:alloc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/liballoc-ca66c0e6e951597f.rmeta' --extern anyhow=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libanyhow-28f31f17dda2d398.rmeta --extern 'noprelude,nounused:compiler_builtins=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcompiler_builtins-dcf92282aafe5a84.rmeta' --extern 'noprelude,nounused:core=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcore-c719a543827dd094.rmeta' --extern hayro=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libhayro-3c2824436be54ddd.rmeta --extern 'noprelude,nounused:panic_abort=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_abort-b5620419e46323e0.rmeta' --extern 'noprelude,nounused:panic_unwind=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_unwind-78dbd64b8c433b37.rmeta' --extern postcard=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpostcard-81d0100d47f7c03b.rmeta --extern 'noprelude,nounused:proc_macro=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libproc_macro-1a8b17947cfa1113.rmeta' --extern serde=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libserde-945a924a2eb08b53.rmeta --extern 'noprelude,nounused:std=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libstd-857ae36b62dba215.rmeta' --extern sunlight_ipc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_ipc-01f0cafd0a340725.rmeta --extern sunlight_libc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_libc-4e52e30d0b0cb441.rmeta -Z unstable-options -C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld '--check-cfg=cfg(target_os,values("sunlightos"))' --verbose`
+warning: `sunlight-libc` (lib) generated 1 warning
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_BIN_NAME=sunlight-docserv CARGO_CRATE_NAME=sunlight_docserv CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-docserv CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6324-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6324 CARGO_PKG_VERSION_PRE=alpha.2 CARGO_PRIMARY_PACKAGE=1 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/release/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc --crate-name sunlight_docserv --edition=2021 sunlight-docserv/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=3 -C panic=abort -C lto -C codegen-units=1 --cfg 'feature="hayro-native"' --cfg 'feature="native-hayro-smoke"' --cfg 'feature="renderer"' --cfg 'feature="std"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("default", "hayro-host", "hayro-native", "mupdf-legacy", "native-hayro-smoke", "native-postscript-smoke", "native-smoke", "renderer", "std"))' -C metadata=192d181402018af8 -C extra-filename=-be2dbd16e6676f91 --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps --target /home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json -Zunstable-options -C strip=symbols -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/release/deps --extern 'noprelude,nounused:alloc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/liballoc-ca66c0e6e951597f.rlib' --extern anyhow=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libanyhow-28f31f17dda2d398.rlib --extern 'noprelude,nounused:compiler_builtins=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcompiler_builtins-dcf92282aafe5a84.rlib' --extern 'noprelude,nounused:core=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libcore-c719a543827dd094.rlib' --extern hayro=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libhayro-3c2824436be54ddd.rlib --extern 'noprelude,nounused:panic_abort=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_abort-b5620419e46323e0.rlib' --extern 'noprelude,nounused:panic_unwind=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpanic_unwind-78dbd64b8c433b37.rlib' --extern postcard=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libpostcard-81d0100d47f7c03b.rlib --extern 'noprelude,nounused:proc_macro=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libproc_macro-1a8b17947cfa1113.rlib' --extern serde=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libserde-945a924a2eb08b53.rlib --extern 'noprelude,nounused:std=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libstd-857ae36b62dba215.rlib' --extern sunlight_docserv=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_docserv-55ed9a45fd9f6e5e.rlib --extern sunlight_ipc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_ipc-01f0cafd0a340725.rlib --extern sunlight_libc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/deps/libsunlight_libc-4e52e30d0b0cb441.rlib -Z unstable-options -C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld '--check-cfg=cfg(target_os,values("sunlightos"))' --verbose`
+    Finished `release` profile [optimized] target(s) in 53.92s

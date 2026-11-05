@@ -115,6 +115,7 @@ unsafe fn lapic_read(offset: usize) -> u32 {
 /// Caller must ensure interrupts are disabled (IF=0) during init to
 /// avoid receiving timer interrupts before the timer is fully armed.
 pub unsafe fn init_lapic() {
+    super::cpu_identity::validate_controller();
     // Enable LAPIC; set spurious vector to 0xFF.
     lapic_write(LAPIC_SVR, 0x1FF);
 }
@@ -147,17 +148,16 @@ fn wait_for_icr_idle() {
     }
 }
 
-/// Send a fixed-delivery IPI to one logical CPU/APIC ID.
-///
-/// SunlightOS currently uses xAPIC mode and its scheduler CPU index is the
-/// initial APIC ID, capped to the supported 64-core mask.
+/// Send a fixed-delivery IPI to a validated online logical CPU.
+/// Translate to a unicast xAPIC hardware destination before touching the ICR.
 pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
     assert!(
         cpu_id < crate::sched::MAX_CORES,
         "IPI target is out of range"
     );
+    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
     wait_for_icr_idle();
-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
     lapic_write(LAPIC_ICR_LOW, vector as u32);
     wait_for_icr_idle();
 }
@@ -170,6 +170,7 @@ pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
         cpu_id < crate::sched::MAX_CORES,
         "IPI target is out of range"
     );
+    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
     if crate::sched::remote_wake_test::attempt(cpu_id) {
         return false;
@@ -183,7 +184,7 @@ pub unsafe fn try_send_fixed_ipi(cpu_id: usize, vector: u8) -> bool {
         crate::sched::remote_wake_test::hardware_busy(cpu_id);
         return false;
     }
-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
     lapic_write(LAPIC_ICR_LOW, vector as u32);
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
     crate::sched::remote_wake_test::accepted(cpu_id);
@@ -241,8 +242,9 @@ pub unsafe fn send_nmi(cpu_id: usize) {
         cpu_id < crate::sched::MAX_CORES,
         "NMI target is out of range"
     );
+    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
     wait_for_icr_idle();
-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
+    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
     lapic_write(LAPIC_ICR_LOW, 0b100 << 8);
     wait_for_icr_idle();
 }

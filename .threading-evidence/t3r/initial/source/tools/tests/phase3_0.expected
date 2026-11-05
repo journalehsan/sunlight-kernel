@@ -1,0 +1,15 @@
+# Phase 3.0 Storage Bootstrap + VFS/RamFs gate
+[TIME] PIT calibration mode=2
+rtc: decoded_utc=
+timezone: zone=
+[VFS]  Registered as 'vfs'
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  Fstat OK
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[VFS]  Native stat/mkdir RAMFS OK
+[VFS]  Stat OK
+[SunlightOS] Foundation Complete
+[USB-MOUSE] boot mouse ready

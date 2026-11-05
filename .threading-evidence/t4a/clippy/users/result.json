@@ -1,0 +1,5 @@
+{
+  "pass": false,
+  "clippy_run": false,
+  "reason": "Capture command put --cfg after --; the native wrapper appended Cargo target/build-std options after that delimiter. Dependencies were compiled for the default no-std target. Retry removes the delimiter and rebuilds the unchanged bin via source mtime."
+}

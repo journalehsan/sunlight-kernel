@@ -1,0 +1,263 @@
+{
+  "pilot": {
+    "sha256": {
+      "kernel.elf": "fc389063f82d4a8ca03247d28a1ba62aa6d67dfdcaada2003ae9d9144e9072ec",
+      "boot.iso": "fba93beb6ba92248944aa9594972b282e9ff1fe48460712cd7c6c41a49be9fcf"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/pilot/kernel.elf",
+      ".threading-evidence/t1/images/pilot/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/pilot/kernel.elf"
+    ]
+  },
+  "bounded": {
+    "sha256": {
+      "kernel.elf": "fc389063f82d4a8ca03247d28a1ba62aa6d67dfdcaada2003ae9d9144e9072ec",
+      "boot.iso": "ca0f23ea50f3d41aa7c1103ed122c75719ecb87d631d22d5929399cdcc6aac63"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/bounded/kernel.elf",
+      ".threading-evidence/t1/images/bounded/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/bounded/kernel.elf"
+    ],
+    "note": "Unused stale copy after a failed intermediate build; same ELF as pilot, never accepted."
+  },
+  "r2": {
+    "sha256": {
+      "kernel.elf": "52949a4081a31fb39a02d76e6b3ffcc783c93d5479053e665663e48064c7bc76",
+      "boot.iso": "41d0b8382485a1c41ec5a0783b25990576b544d139a73159af74c91ce6f8b397"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/r2/kernel.elf",
+      ".threading-evidence/t1/images/r2/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/r2/kernel.elf"
+    ]
+  },
+  "auth": {
+    "sha256": {
+      "kernel.elf": "a5586989912ec49162df2109164190a095487965a712908ee6188fff8d5b26f8",
+      "boot.iso": "aeea637f55368f385daec9dc0cd9174de71629de861220f5512f202f751a4175"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/auth/kernel.elf",
+      ".threading-evidence/t1/images/auth/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/auth/kernel.elf"
+    ]
+  },
+  "final-rsp": {
+    "sha256": {
+      "kernel.elf": "5eb8c857a3db232ba90bfb30d72151ccdcce6afe354aefeae6b2b95cb5738222",
+      "boot.iso": "750e9318c28a9b665ae747d736035d1945ba86e17f13404d61c9c86a32c4d22c"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/final-rsp/kernel.elf",
+      ".threading-evidence/t1/images/final-rsp/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/final-rsp/kernel.elf"
+    ]
+  },
+  "final-auth": {
+    "sha256": {
+      "kernel.elf": "7083d46ebe130617b928bef80eac0dee7d1d54fb9685cb1b3950dcf788aaf330",
+      "boot.iso": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/final-auth/kernel.elf",
+      ".threading-evidence/t1/images/final-auth/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/final-auth/kernel.elf"
+    ]
+  },
+  "controls": {
+    "sha256": {
+      "kernel.elf": "a286ef5e6e658d3a5e016871c94577449cdc693a448dd6aa15d4c02f809e664b",
+      "boot.iso": "8202c6340914f835333e3ad4b514eb6a2a7a52ecd5ee2ed294b4c37e1a5aca5a"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/controls/kernel.elf",
+      ".threading-evidence/t1/images/controls/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/controls/kernel.elf"
+    ]
+  },
+  "fp": {
+    "sha256": {
+      "kernel.elf": "62d44c3a571118f5b15aa49c56ecaed53f14e2b8d02c95b616d8a8eba6a41bcf",
+      "boot.iso": "a5ce5261020fa49bb81ea757eca39cb2fe83f33c73f045d1c030d4c6f6ccf869"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/fp/kernel.elf",
+      ".threading-evidence/t1/images/fp/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/fp/kernel.elf"
+    ]
+  },
+  "std": {
+    "sha256": {
+      "kernel.elf": "2a1584761e8343ce2db6a4ff6c67c0302490b595232bf96374f3e15549d68a47",
+      "boot.iso": "e52daf975b9b52030d3ecc156175a35c7ad810a9f62a8636d9cf8247d0711e00"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/std/kernel.elf",
+      ".threading-evidence/t1/images/std/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/std/kernel.elf"
+    ]
+  },
+  "production-release": {
+    "sha256": {
+      "kernel.elf": "da9027945fc42a7196a23c65b59fe8273a4db9c125f796d9200181fddf8a4dff",
+      "boot.iso": "d137c1d38cd8bd97b0a2b3b9e0e1bb25a90c359a33c15c573585cae1f7730090"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/production-release/kernel.elf",
+      ".threading-evidence/t1/images/production-release/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/release/sunlight-kernel",
+      ".threading-evidence/t1/images/production-release/kernel.elf"
+    ]
+  },
+  "atomic-controls": {
+    "sha256": {
+      "kernel.elf": "2f1c312f137fa9f65aeb4158078458dd199084d908d0aa851e8fd1ace79fb584",
+      "boot.iso": "447c6960e86e642a350f91618cd6e4516b9cade296da1ba4bf61b4d85f2cd69b"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/atomic-controls/kernel.elf",
+      ".threading-evidence/t1/images/atomic-controls/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/atomic-controls/kernel.elf"
+    ]
+  },
+  "atomic-release": {
+    "sha256": {
+      "kernel.elf": "f0c5a50afd767034e6a26ac76343b673215b44524a5e74fbe6cf3080049238e7",
+      "boot.iso": "046accad7f537da6df9fd30fd36cb9b0820816476e7d22db055fd240fd67a974"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/atomic-release/kernel.elf",
+      ".threading-evidence/t1/images/atomic-release/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/release/sunlight-kernel",
+      ".threading-evidence/t1/images/atomic-release/kernel.elf"
+    ]
+  },
+  "linux-thread": {
+    "sha256": {
+      "kernel.elf": "c538f9f7c84cba1bf5627b8f43cda38ca3edb2299eddbbcd4eac3f9a037c365f",
+      "boot.iso": "8f0c9585f09419ea4cc69e74f73e99c2cdd6ad5059657b8d1ac9ba4d3a77bc76"
+    },
+    "iso_command": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      ".threading-evidence/t1/images/linux-thread/kernel.elf",
+      ".threading-evidence/t1/images/linux-thread/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "strip_command": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      ".threading-evidence/t1/images/linux-thread/kernel.elf"
+    ]
+  }
+}

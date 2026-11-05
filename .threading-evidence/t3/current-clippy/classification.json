@@ -1,0 +1,1700 @@
+{
+  "diagnostics": 154,
+  "changed_line_diagnostics": [],
+  "details": [
+    {
+      "code": "clippy::precedence",
+      "message": "operator precedence might not be obvious",
+      "locations": [
+        [
+          "kernel/src/memory/security.rs",
+          15
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unusual_byte_groupings",
+      "message": "digits of hex, binary or octal literal not in groups of equal size",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3903
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `ACPIRSDP` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/acpi.rs",
+          9
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `ACPIRSDT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/acpi.rs",
+          40
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `ACPIXSDT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/acpi.rs",
+          47
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `ACPIFADT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/acpi.rs",
+          55
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `ACPIMADT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/acpi.rs",
+          104
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/interrupts.rs",
+          68
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_borrow",
+      "message": "this expression borrows a value the compiler would automatically borrow",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/interrupts.rs",
+          86
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/interrupts.rs",
+          86
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/interrupts.rs",
+          832
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/rtc.rs",
+          222
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/rtc_codec.rs",
+          71
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/rtc_codec.rs",
+          71
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/rtc_codec.rs",
+          71
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          573
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          1607
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          1608
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          1609
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          3408
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          4021
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          5418
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          5418
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          5808
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6037
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6081
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6563
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6761
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6786
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6865
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          6973
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          7492
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          7652
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::if_same_then_else",
+      "message": "this `if` has identical blocks",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          8699
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          9693
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          9694
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_unwrap_or",
+      "message": "this pattern reimplements `Result::unwrap_or`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          9829
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is used to index `export`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10276
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10385
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10386
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10419
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10419
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10448
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10449
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10536
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10537
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10557
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10657
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10674
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10695
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          10713
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11035
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_return",
+      "message": "unneeded `return` statement",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11095
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11508
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11671
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11802
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11967
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          11981
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          12000
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_return",
+      "message": "unneeded `return` statement",
+      "locations": [
+        [
+          "kernel/src/arch/x86_64/syscall.rs",
+          12024
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `index` is used to index `x`",
+      "locations": [
+        [
+          "kernel/src/entropy/conditioner.rs",
+          92
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (8/7)",
+      "locations": [
+        [
+          "kernel/src/hardware_inventory.rs",
+          112
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::wrong_self_convention",
+      "message": "methods with the following characteristics: (`to_*` and `self` type is `Copy`) usually take `self` by value",
+      "locations": [
+        [
+          "kernel/src/ipc/message.rs",
+          94
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unwrap_or_default",
+      "message": "use of `or_insert_with` to construct default value",
+      "locations": [
+        [
+          "kernel/src/ipc/mod.rs",
+          483
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::question_mark",
+      "message": "this block may be rewritten with the `?` operator",
+      "locations": [
+        [
+          "kernel/src/ipc/mod.rs",
+          1281
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (8/7)",
+      "locations": [
+        [
+          "kernel/src/memory/accounting.rs",
+          331
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/memory/pmm.rs",
+          107
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/memory/pmm.rs",
+          267
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/memory/pmm.rs",
+          383
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/memory/swap.rs",
+          130
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/memory/swap.rs",
+          134
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/memory/swap.rs",
+          201
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/memory/swap.rs",
+          534
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `target_cpu` is used to index `MAILBOXES`",
+      "locations": [
+        [
+          "kernel/src/memory/tlb.rs",
+          295
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `target_cpu` is used to index `MAILBOXES`",
+      "locations": [
+        [
+          "kernel/src/memory/tlb.rs",
+          327
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_c_str_literals",
+      "message": "manually constructing a nul-terminated string",
+      "locations": [
+        [
+          "kernel/src/memory/user.rs",
+          697
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::write_with_newline",
+      "message": "using `write!()` with a format string that ends in a single newline",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          55
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is used to index `is_func`",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          583
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is only used to index `is_func`",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          589
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is only used to index `codewords`",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          617
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_memcpy",
+      "message": "it looks like you're manually copying between slices",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          634
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          695
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `RangeInclusive::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          695
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/panic.rs",
+          704
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::question_mark",
+      "message": "this `match` expression can be replaced with `?`",
+      "locations": [
+        [
+          "kernel/src/process/address_space.rs",
+          705
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_flatten",
+      "message": "unnecessary `if let` since only the `Some` variant of the iterator element is used",
+      "locations": [
+        [
+          "kernel/src/process/address_space.rs",
+          1865
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/process/epoll.rs",
+          226
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/process/epoll.rs",
+          231
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/process/fd_table.rs",
+          461
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/process/fd_table.rs",
+          509
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/process/fd_table.rs",
+          548
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/process/fd_table.rs",
+          583
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_range_contains",
+      "message": "manual `!Range::contains` implementation",
+      "locations": [
+        [
+          "kernel/src/process/fd_table.rs",
+          726
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (8/7)",
+      "locations": [
+        [
+          "kernel/src/process/mmap.rs",
+          217
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (8/7)",
+      "locations": [
+        [
+          "kernel/src/process/mmap.rs",
+          269
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is used to index `buf`",
+      "locations": [
+        [
+          "kernel/src/process/pipe.rs",
+          247
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is used to index `buf`",
+      "locations": [
+        [
+          "kernel/src/process/pipe.rs",
+          276
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGHUP` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          7
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGINT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          8
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGQUIT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          9
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGILL` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          10
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGTRAP` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          11
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGABRT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          12
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGBUS` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          13
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGFPE` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          14
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGKILL` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          15
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGSEGV` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          17
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGPIPE` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          19
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGALRM` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          20
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGTERM` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          21
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGCHLD` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          22
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGCONT` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          23
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGSTOP` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          24
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGTSTP` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          25
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGTTIN` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          26
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGTTOU` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          27
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::upper_case_acronyms",
+      "message": "name `SIGWINCH` contains a capitalized acronym",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          28
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::match_like_matches_macro",
+      "message": "match expression looks like `matches!` macro",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          75
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `i` is used to index `handlers`",
+      "locations": [
+        [
+          "kernel/src/process/signal.rs",
+          191
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/process/spawn.rs",
+          327
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (8/7)",
+      "locations": [
+        [
+          "kernel/src/process/spawn.rs",
+          612
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (9/7)",
+      "locations": [
+        [
+          "kernel/src/process/spawn.rs",
+          638
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (10/7)",
+      "locations": [
+        [
+          "kernel/src/process/spawn.rs",
+          663
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::too_many_arguments",
+      "message": "this function has too many arguments (12/7)",
+      "locations": [
+        [
+          "kernel/src/process/mod.rs",
+          618
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          545
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          554
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `c` is used to index `in_use`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          606
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          890
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          1011
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_clamp",
+      "message": "clamp-like pattern without using clamp function",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          1399
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `victim_id` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          1402
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          1994
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          2931
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          2932
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::explicit_auto_deref",
+      "message": "deref which would be done by auto-deref",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          2944
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `c` is used to index `in_use`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3153
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_contains",
+      "message": "using `contains()` instead of `iter().any()` is more efficient",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3189
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unused_enumerate_index",
+      "message": "you seem to use `.enumerate()` and immediately discard the index",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3526
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `c` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3577
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `oc` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3608
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          3635
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `core_id` is used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          4642
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `core_id` is only used to index `CORE_STATES`",
+      "locations": [
+        [
+          "kernel/src/sched/mod.rs",
+          4647
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::needless_range_loop",
+      "message": "the loop variable `c` is used to index `ticks_per_core`",
+      "locations": [
+        [
+          "kernel/src/telemetry.rs",
+          337
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_div_ceil",
+      "message": "manually reimplementing `div_ceil`",
+      "locations": [
+        [
+          "kernel/src/telemetry.rs",
+          392
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_is_multiple_of",
+      "message": "manual implementation of `.is_multiple_of()`",
+      "locations": [
+        [
+          "kernel/src/thermal_hw.rs",
+          189
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::collapsible_if",
+      "message": "this `if` statement can be collapsed",
+      "locations": [
+        [
+          "kernel/src/thermal_hw.rs",
+          223
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          959
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          960
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          965
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          966
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::unnecessary_cast",
+      "message": "casting to the same type is unnecessary (`u64` -> `u64`)",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          967
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::drop_non_drop",
+      "message": "call to `std::mem::drop` with a value that does not implement `Drop`. Dropping such a type only extends its contained lifetimes",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          2113
+        ]
+      ],
+      "t3_changed_line": false
+    },
+    {
+      "code": "clippy::manual_checked_ops",
+      "message": "manual checked division",
+      "locations": [
+        [
+          "kernel/src/main.rs",
+          2224
+        ]
+      ],
+      "t3_changed_line": false
+    }
+  ]
+}

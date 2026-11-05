@@ -1,0 +1,7 @@
+# Wise Owl Phase 3.75 native ISO integration evidence
+[WISEOWL] registered wiseowl-memoryd
+[WISEOWL-DB] registered
+[WISEOWL-INDEX] registered
+[WISEOWL-INDEX] discovered wiseowl.memorydb.v1
+[WISEOWL-INDEX] content digest SHA-256 v1; manifest v2; no embedded MemoryDB
+[WISEOWL-3.75] native gate PASS

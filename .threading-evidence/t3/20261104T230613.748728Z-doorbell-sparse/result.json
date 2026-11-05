@@ -1,0 +1,45 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "329934d48cc0b30acb8e39202a7b6cf96d8e26079bb7ba06195b8fbc9760edb3",
+  "cpus": 4,
+  "markers": [
+    "[F13NA] PASS cpus=4 "
+  ],
+  "topology": "sparse",
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4,maxcpus=6,sockets=2,cores=3,threads=1",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/doorbell/sunlightos.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/20261104T230613.748728Z-doorbell-sparse/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "observed_apic_ids": [
+    0,
+    1,
+    2,
+    4
+  ],
+  "requested_hardware_observed": true,
+  "serial_sha256": "838dfaec8e35cc74364badb6f4ac8288f61c743285131e142d2656035f981113",
+  "seconds": 72.46227469100268
+}

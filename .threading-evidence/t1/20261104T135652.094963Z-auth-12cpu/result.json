@@ -1,0 +1,40 @@
+{
+  "pass": true,
+  "timeout": false,
+  "iso_sha256": "8feb40db4f3c5c6a648364d9914544d3b86edce14cf41f4cb17c2a12f8878a1c",
+  "cpus": 12,
+  "markers": [
+    "[T1-AUTH] PASS",
+    "[CAP-R41] COMPLETE",
+    "[CAP-P] native PASS",
+    "[EXEC-R2] eight replacements PASS; entering original /bin/true"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "12",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/images/final-auth/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/20261104T135652.094963Z-auth-12cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 33,
+  "serial_sha256": "5b179908ff8361cb2a59189da039eed81e5cb7d4e0910808afd3ba33ea4c1af6",
+  "seconds": 43.65842907500337
+}

@@ -358,6 +358,36 @@ pub fn validate_process_read(
 
 /// Read one aligned userspace atomic word through its validated physical
 /// mapping. The caller holds the scheduler lock against VM mutation.
+pub fn read_process_futex_u32(
+    process: &Process,
+    hhdm: VirtAddr,
+    address: u64,
+) -> Result<u32, UserMemoryError> {
+    use crate::process::region::MappingKind;
+    // These private storage classes are either immutable for the VM's life
+    // or retired by the mmap/brk transactions that cancel futex registrations.
+    // SHM/device/borrowed views have separate teardown and alias contracts;
+    // a VM+VA key does not establish shared-backing futex identity for them.
+    if !process
+        .address_space
+        .lookup_region(address)
+        .is_some_and(|region| {
+            matches!(
+                region.kind,
+                MappingKind::Anonymous
+                    | MappingKind::Brk
+                    | MappingKind::UserStack
+                    | MappingKind::ElfSegment
+            )
+        })
+    {
+        return Err(UserMemoryError::NotUserAccessible);
+    }
+    read_process_atomic_u32(process, hhdm, address)
+}
+
+/// Read one aligned userspace atomic word through its validated physical
+/// mapping. The caller holds the scheduler lock against VM mutation.
 pub fn read_process_atomic_u32(
     process: &Process,
     hhdm: VirtAddr,
@@ -373,6 +403,32 @@ pub fn read_process_atomic_u32(
     let pointer = (hhdm.as_u64() + physical.as_u64() + (address & 0xfff))
         as *const core::sync::atomic::AtomicU32;
     Ok(unsafe { (*pointer).load(Ordering::Acquire) })
+}
+
+/// Publish one aligned userspace completion word with a single release store.
+/// The caller holds the scheduler lock against VM mutation, or exclusively
+/// owns an unpublished Process. Alignment also keeps all four bytes on one
+/// page, so publication cannot precede a trailing byte-copy to retired TLS.
+pub fn write_process_atomic_u32(
+    process: &Process,
+    hhdm: VirtAddr,
+    address: u64,
+    value: u32,
+) -> Result<(), UserMemoryError> {
+    if address & 3 != 0 {
+        return Err(UserMemoryError::InvalidAddress);
+    }
+    validate_process_write(process, hhdm, address, 4)?;
+    let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
+    let (physical, _) = unsafe { process.address_space.lookup_entry(page, hhdm) }
+        .ok_or(UserMemoryError::Unmapped)?;
+    let pointer = (hhdm.as_u64() + physical.as_u64() + (address & 0xfff))
+        as *const core::sync::atomic::AtomicU32;
+    // SAFETY: validated writable user mapping, retained backing and aligned
+    // single-page AtomicU32. No non-atomic reference to the word is created.
+    // This store is the final memory access to the completion word.
+    unsafe { (*pointer).store(value, Ordering::Release) };
+    Ok(())
 }
 
 pub fn validate_process_write(

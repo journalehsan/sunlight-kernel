@@ -10,7 +10,7 @@ pub mod shared;
 #[cfg(any(feature = "fastlane_f11_audit", feature = "cap_issuance_test"))]
 pub mod shared_authority_gate;
 pub mod shared_lifetime;
-#[cfg(feature = "fastlane_f1_audit")]
+#[cfg(any(feature = "fastlane_f1_audit", feature = "fastlane_hybrid_lifecycle_test"))]
 pub mod shared_lifetime_gate;
 pub mod swap;
 pub mod swap_slot;

@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "git",
+    "-C",
+    "/tmp/threading-t1-original",
+    "apply",
+    "--check",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t1/final/t1.patch"
+  ],
+  "exit_code": 0,
+  "seconds": 0.2507499049825128
+}

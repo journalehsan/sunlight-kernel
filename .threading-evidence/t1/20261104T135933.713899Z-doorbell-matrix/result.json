@@ -1,0 +1,19 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/test_native_doorbell.py",
+    "--cpus",
+    "1",
+    "2",
+    "4",
+    "12",
+    "--timeout",
+    "180",
+    "--evidence-dir",
+    ".threading-evidence/t1/doorbell"
+  ],
+  "exit_code": 0,
+  "seconds": 162.80909869199968
+}

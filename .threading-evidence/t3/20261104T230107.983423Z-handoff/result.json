@@ -1,0 +1,15 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/test_remote_wake_smp.py",
+    "--pin-release",
+    "--evidence-dir",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff",
+    "--timeout",
+    "180"
+  ],
+  "exit_code": 0,
+  "seconds": 139.55388419801602
+}

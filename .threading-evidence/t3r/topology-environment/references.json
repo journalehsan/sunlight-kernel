@@ -1,0 +1,20 @@
+[
+  {
+    "path": ".threading-evidence/t3r/topology-environment/hw_i386_x86-common.c",
+    "url": "https://raw.githubusercontent.com/qemu/qemu/master/hw/i386/x86-common.c",
+    "sha256": "ecd75f74be95d0adcfce5e5d9cb82571aec86ea95a5d154276e1cf9787728dea",
+    "scope": "unversioned upstream reference, not binary-matched installed source"
+  },
+  {
+    "path": ".threading-evidence/t3r/topology-environment/hw_i386_x86.c",
+    "url": "https://raw.githubusercontent.com/qemu/qemu/master/hw/i386/x86.c",
+    "sha256": "4de69aa458076dc442f30a240c0cc5741deb621b842f51fd32ec642cb4e49597",
+    "scope": "unversioned upstream reference, not binary-matched installed source"
+  },
+  {
+    "path": ".threading-evidence/t3r/topology-environment/target_i386_cpu-system.c",
+    "url": "https://raw.githubusercontent.com/qemu/qemu/master/target/i386/cpu-system.c",
+    "sha256": "fed18cb40fce255bc0be6b7cbc476ab81ddfa42e63dfcd8c0c6dd8c8a062a4db",
+    "scope": "unversioned upstream reference, not binary-matched installed source"
+  }
+]

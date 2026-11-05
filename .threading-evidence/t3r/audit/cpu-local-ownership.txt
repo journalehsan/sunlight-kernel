@@ -1,0 +1,83 @@
+kernel/src/arch/x86_64/interrupts.rs:26:static TSS: spin::Lazy<TaskStateSegment> = spin::Lazy::new(|| {
+kernel/src/arch/x86_64/interrupts.rs:28:    // RSP0: kernel stack used when entering ring 0 from ring 3.
+kernel/src/arch/x86_64/interrupts.rs:35:    // IST[0]: dedicated stack for double fault handler.
+kernel/src/arch/x86_64/interrupts.rs:42:    tss.interrupt_stack_table[1] = VirtAddr::new(super::syscall_stack::nmi_stack_top(0));
+kernel/src/arch/x86_64/interrupts.rs:68:    let tss_selector = gdt.append(Descriptor::tss_segment(&*TSS));
+kernel/src/arch/x86_64/interrupts.rs:78:pub fn set_tss_rsp0(stack_top: u64) {
+kernel/src/arch/x86_64/interrupts.rs:80:        let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
+kernel/src/arch/x86_64/interrupts.rs:85:pub fn current_tss_rsp0() -> u64 {
+kernel/src/arch/x86_64/interrupts.rs:86:    (&*TSS).privilege_stack_table[0].as_u64()
+kernel/src/arch/x86_64/interrupts.rs:98:/// **TSS is deliberately not loaded here.**  The BSP's TSS descriptor in the
+kernel/src/arch/x86_64/interrupts.rs:100:/// same TSS selector on another CPU raises #GP.  Per-AP TSSes are a phase-1
+kernel/src/arch/x86_64/interrupts.rs:102:/// so RSP0 / IST stacks are not needed yet.
+kernel/src/arch/x86_64/interrupts.rs:213:            "[CPU-ID] bsp logical=0 apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
+kernel/src/arch/x86_64/interrupts.rs:215:            &*TSS as *const TaskStateSegment as u64,
+kernel/src/arch/x86_64/interrupts.rs:216:            TSS.interrupt_stack_table[0].as_u64(),
+kernel/src/arch/x86_64/interrupts.rs:217:            TSS.interrupt_stack_table[1].as_u64()
+kernel/src/arch/x86_64/interrupts.rs:1298:    // address spaces, and update the TSS RSP0.
+kernel/src/arch/x86_64/syscall_stack.rs:6://! any call or scheduling. NMI uses IST[1], never this slot, and cannot schedule.
+kernel/src/arch/x86_64/syscall_stack.rs:50:/// Publish only while IRQs are disabled, together with local TSS RSP0.
+kernel/src/arch/x86_64/syscall_stack.rs:53:pub fn select(stack_top: u64) {
+kernel/src/arch/x86_64/syscall_stack.rs:67:pub fn nmi_stack_top(cpu: usize) -> u64 {
+kernel/src/arch/x86_64/smp.rs:10://! 1. **Per-AP TSS** — each AP gets its own `TaskStateSegment` with RSP0
+kernel/src/arch/x86_64/smp.rs:11://!    pointing to the top of its kernel stack.  RSP0 is updated by the
+kernel/src/arch/x86_64/smp.rs:15://! 2. **Per-AP GDT** — because the BSP's TSS descriptor has its Busy bit set
+kernel/src/arch/x86_64/smp.rs:16://!    by the processor (`ltr` makes a TSS busy), loading the same selector on
+kernel/src/arch/x86_64/smp.rs:18://!    a freshly constructed (not-busy) TSS descriptor pointing to its own TSS.
+kernel/src/arch/x86_64/smp.rs:32://! Logical CPU 0 owns the BSP TSS; logical k > 0 owns AP slot k - 1.
+kernel/src/arch/x86_64/smp.rs:33://! The BSP starts APs serially in that validated logical order and waits for
+kernel/src/arch/x86_64/smp.rs:48:/// Maximum number of Application Processors (total logical cores − 1 BSP).
+kernel/src/arch/x86_64/smp.rs:63://   index 6 → TSS low      (selector 0x30)
+kernel/src/arch/x86_64/smp.rs:64://   index 7 → TSS high
+kernel/src/arch/x86_64/smp.rs:75:/// TSS selector: index 6, RPL 0 → 6 × 8 = 0x30.
+kernel/src/arch/x86_64/smp.rs:76:const AP_TSS_SELECTOR: u16 = 0x30;
+kernel/src/arch/x86_64/smp.rs:91:/// `AP_TSS_STORE[i]` is the TSS for the (i+1)-th logical CPU (i.e. AP #i).
+kernel/src/arch/x86_64/smp.rs:92:/// Core 0 = BSP uses the global `TSS` in interrupts.rs.
+kernel/src/arch/x86_64/smp.rs:93:/// Core k (k ≥ 1) uses `AP_TSS_STORE[k-1]`.
+kernel/src/arch/x86_64/smp.rs:95:/// RSP0 is updated by `set_current_cpu_tss_rsp0` on every context switch so
+kernel/src/arch/x86_64/smp.rs:98:static mut AP_TSS_STORE: [TaskStateSegment; MAX_APS] = [const { TaskStateSegment::new() }; MAX_APS];
+kernel/src/arch/x86_64/smp.rs:103:/// TSS descriptor which points to that AP's `AP_TSS_STORE` entry).
+kernel/src/arch/x86_64/smp.rs:118:/// 3. `smp::start_aps()` (this function) — each AP gets its own TSS, GDT,
+kernel/src/arch/x86_64/smp.rs:133:        let logical = super::cpu_identity::topology()
+kernel/src/arch/x86_64/smp.rs:134:            .logical_id(cpu_info.lapic_id)
+kernel/src/arch/x86_64/smp.rs:137:            .ap_slot(logical)
+kernel/src/arch/x86_64/smp.rs:166:        "[SMP] Phase-1 bring-up complete: {} AP(s) online ({} total logical CPUs)",
+kernel/src/arch/x86_64/smp.rs:172:/// Update RSP0 in the TSS belonging to the currently-executing CPU.
+kernel/src/arch/x86_64/smp.rs:177:/// - Core 0 (BSP): updates the global `TSS` in interrupts.rs.
+kernel/src/arch/x86_64/smp.rs:178:/// - Core k (AP):  updates `AP_TSS_STORE[k-1]`.
+kernel/src/arch/x86_64/smp.rs:179:pub fn set_current_cpu_tss_rsp0(stack_top: u64) {
+kernel/src/arch/x86_64/smp.rs:181:    super::syscall_stack::select(stack_top);
+kernel/src/arch/x86_64/smp.rs:183:        crate::arch::x86_64::interrupts::set_tss_rsp0(stack_top);
+kernel/src/arch/x86_64/smp.rs:186:            .ap_slot(cpu_id)
+kernel/src/arch/x86_64/smp.rs:187:            .expect("invalid AP TSS owner");
+kernel/src/arch/x86_64/smp.rs:190:                AP_TSS_STORE[ap_idx].privilege_stack_table[0] = VirtAddr::new(stack_top);
+kernel/src/arch/x86_64/smp.rs:196:pub fn current_cpu_tss_rsp0() -> u64 {
+kernel/src/arch/x86_64/smp.rs:199:        crate::arch::x86_64::interrupts::current_tss_rsp0()
+kernel/src/arch/x86_64/smp.rs:202:            .ap_slot(cpu_id)
+kernel/src/arch/x86_64/smp.rs:203:            .expect("invalid AP TSS owner");
+kernel/src/arch/x86_64/smp.rs:205:            unsafe { AP_TSS_STORE[ap_idx].privilege_stack_table[0].as_u64() }
+kernel/src/arch/x86_64/smp.rs:231:/// Compute the 16-byte (two u64) 64-bit TSS descriptor for a given TSS.
+kernel/src/arch/x86_64/smp.rs:237:/// lo[47:40] = type/access = 0x89 (Present, Available 64-bit TSS)
+kernel/src/arch/x86_64/smp.rs:259:/// Fill `AP_GDTS[ap_idx]` with the kernel GDT entries and a fresh TSS
+kernel/src/arch/x86_64/smp.rs:260:/// descriptor for `AP_TSS_STORE[ap_idx]`, then load it and the IDT on
+kernel/src/arch/x86_64/smp.rs:261:/// the calling AP, and execute `ltr` to load the AP's TSS.
+kernel/src/arch/x86_64/smp.rs:266:    // Initialise TSS: RSP0 and IST[0] both point to the top of the AP's
+kernel/src/arch/x86_64/smp.rs:267:    // kernel stack.  IST[0] is used only by the double-fault handler.
+kernel/src/arch/x86_64/smp.rs:269:    let tss = &mut AP_TSS_STORE[ap_idx];
+kernel/src/arch/x86_64/smp.rs:272:    tss.interrupt_stack_table[1] = VirtAddr::new(super::syscall_stack::nmi_stack_top(
+kernel/src/arch/x86_64/smp.rs:305:    // Load our TSS.  The descriptor we just wrote is not Busy, so ltr succeeds.
+kernel/src/arch/x86_64/smp.rs:306:    x86_64::instructions::tables::load_tss(SegmentSelector(AP_TSS_SELECTOR));
+kernel/src/arch/x86_64/smp.rs:311:/// Execution order (mirrors BSP early boot, adding per-AP TSS + LAPIC):
+kernel/src/arch/x86_64/smp.rs:314:/// 2. Resolve logical CPU and AP storage slot through the immutable topology
+kernel/src/arch/x86_64/smp.rs:315:/// 3. Build and load per-AP GDT + TSS
+kernel/src/arch/x86_64/smp.rs:330:    let logical = super::cpu_identity::current();
+kernel/src/arch/x86_64/smp.rs:332:        super::cpu_identity::topology().apic_id(logical),
+kernel/src/arch/x86_64/smp.rs:336:        .ap_slot(logical)
+kernel/src/arch/x86_64/smp.rs:340:    // ── Step 3: Per-AP GDT + TSS ─────────────────────────────────────────────
+kernel/src/arch/x86_64/smp.rs:362:        "[CPU-ID] online logical={} apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
+kernel/src/arch/x86_64/smp.rs:363:        logical,
+kernel/src/arch/x86_64/smp.rs:365:        core::ptr::addr_of!(AP_TSS_STORE[ap_idx]) as u64,
+kernel/src/arch/x86_64/smp.rs:366:        AP_TSS_STORE[ap_idx].interrupt_stack_table[0].as_u64(),
+kernel/src/arch/x86_64/smp.rs:367:        AP_TSS_STORE[ap_idx].interrupt_stack_table[1].as_u64()
+kernel/src/arch/x86_64/smp.rs:370:    super::cpu_identity::mark_online(logical);
+kernel/src/arch/x86_64/smp.rs:373:        "[SMP] AP{} (LAPIC {}) online — TSS loaded, LAPIC timer armed",

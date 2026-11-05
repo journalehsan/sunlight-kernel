@@ -11,12 +11,15 @@ pub const MAP_SHARED: u32 = 0x01;
 pub const MAP_PRIVATE: u32 = 0x02;
 pub const MAP_FIXED: u32 = 0x10;
 pub const MAP_ANONYMOUS: u32 = 0x20;
+/// Keep an anonymous resource's exact boundaries for allocation-free release.
+/// Used by native thread stack/TLS storage; requires the T2 kernel ABI.
+pub const MAP_NATIVE_THREAD: u32 = 0x4000_0000;
 
 pub const MAP_FAILED: *mut u8 = !0 as *mut u8;
 
 const PAGE_SIZE: usize = 4096;
 const SUPPORTED_PROT: u32 = PROT_READ | PROT_WRITE | PROT_EXEC;
-const SUPPORTED_FLAGS: u32 = MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS;
+const SUPPORTED_FLAGS: u32 = MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_NATIVE_THREAD;
 
 /// Validate the deliberately narrow native mapping contract before entering
 /// the kernel.  Native SunlightOS currently implements only private,
@@ -46,6 +49,9 @@ fn validate_mmap_request(
         return Err(Errno::Inval);
     }
 
+    if flags & MAP_NATIVE_THREAD != 0 && flags & MAP_FIXED != 0 {
+        return Err(Errno::Inval);
+    }
     if flags & MAP_FIXED != 0 {
         if addr.is_null() || (addr as usize) & (PAGE_SIZE - 1) != 0 {
             return Err(Errno::Inval);
@@ -138,6 +144,33 @@ pub unsafe extern "C" fn c_mmap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thread_storage_keeps_boundaries_and_rejects_fixed_address_combinations() {
+        let flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD;
+        assert_eq!(
+            validate_mmap_request(
+                core::ptr::null_mut(),
+                4096,
+                PROT_READ | PROT_WRITE,
+                flags,
+                -1,
+                0
+            ),
+            Ok(4096)
+        );
+        assert_eq!(
+            validate_mmap_request(
+                0x1000usize as *mut u8,
+                4096,
+                PROT_READ | PROT_WRITE,
+                flags | MAP_FIXED,
+                -1,
+                0
+            ),
+            Err(Errno::Inval)
+        );
+    }
 
     #[test]
     fn anonymous_request_validation_is_checked_and_fail_closed() {

@@ -1,0 +1,8 @@
+{
+  "classification": "NOT_RUN",
+  "requested_bsp_apic_id": 42,
+  "observed_bsp_apic_id": 0,
+  "attempt": "20261104T223836.847136Z-topology-nonzero",
+  "reason": "QEMU pc CPU construction overrides the requested apic-id. The guest completed functional gates with hardware BSP ID zero. This supplies no nonzero-BSP hardware proof.",
+  "validator_correction": "Original attempt passed functional markers without checking the requested profile. The runner now checks observed hardware IDs and records NOT_RUN when the requested topology was not produced. Original evidence is retained unchanged."
+}

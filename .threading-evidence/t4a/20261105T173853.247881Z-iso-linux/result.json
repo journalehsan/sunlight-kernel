@@ -1,0 +1,15 @@
+{
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/make_hybrid_iso.sh",
+    ".threading-evidence/t4a/pilot-linux.elf",
+    ".threading-evidence/t4a/pilot-linux.iso",
+    "target/limine",
+    "/home/ehsantor/Projects/sunlightos-kernel"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 1.276082589989528
+}

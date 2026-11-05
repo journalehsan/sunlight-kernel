@@ -1,0 +1,2778 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T14:51:13Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf128ca0 (61737 frames, 241 MiB)
+[PMM] 1320/1561 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11897 end_count=7897 elapsed_counts=4000 tsc_delta=8306149 tsc_hz=2477686869
+[TIME] TSC calibrated ~2477686869 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63057900 lapic_initial_count=630579 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2477686869
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x14 minute=0x51 second=0x49 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T14:51:49Z assumed_basis=UTC
+wall: utc=2026-11-04T14:51:49Z unix=1793803909 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8eab8720..0xffffffff8eac8720
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8002b074
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #1 't2-owner' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=37d memsz=37d prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #2 't2-owner' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #3 't2-owner' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=32a memsz=32a prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=30 memsz=30 prot=Read
+[ELF] PT_LOAD off=2030 vaddr=402030 filesz=78 memsz=42120 prot=ReadWrite
+[SCHED] CREATED process #4 't2-owner' idx=3 burst_score=256 tier=High
+[T2] begin cpus=2 limits=32,96,512 cycles=3
+[SCHED] process 0 't2-owner' state=Ready
+[SCHED] Entering process 0 't2-owner' at rsp=0xffffffff900087a0
+[SYSCALL] thread_spawn: parent=53248 tid=53252 trampoline=0x4002c1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53252 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53252 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53252 name='t2-owner'
+[SCHED] process_reaped pid=53252 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53252 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53252 cleared_msgs=0
+[THREAD-LIFECYCLE] created=1 finished=1 reaped=1 borrower_reclaim_skipped=1 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[T2-FAULT] abi=0 ordinal=1 stage=task-table rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=2 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=3 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=4 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=5 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=6 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=7 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=8 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=9 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=10 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=11 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=12 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=13 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=14 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=15 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=16 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=17 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=18 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=19 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=20 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=21 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=22 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=23 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=24 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=25 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=26 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=27 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=28 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=29 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=30 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=31 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=32 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=33 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=34 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=35 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=36 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=37 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=38 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=39 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=40 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=41 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=42 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=43 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=44 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=45 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=46 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=47 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=48 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=49 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=50 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=51 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=52 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=53 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=54 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=55 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=56 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=57 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=58 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=59 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=60 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=61 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=62 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=63 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=64 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=65 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=66 stage=environment-entries rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=67 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=68 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=69 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=70 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=71 stage=capabilities rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=72 stage=string rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=73 stage=box rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=74 stage=box rejected=ENOMEM
+[T2-FAULT] abi=0 ordinal=75 stage=publication rejected=ENOMEM
+[SYSCALL] thread_spawn: parent=53248 tid=53253 trampoline=0x4002c1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53253 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53253 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53253 name='t2-owner'
+[SCHED] process_reaped pid=53253 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53253 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53253 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[T2] faults abi=0 points=75 cleanup=exact
+[HELIOS-THREAD] clone tgid=53249 tid=53254 tls=0x4020b0 stack=0x404130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53254 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53254 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53254 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53254 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53254 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53254 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53254 cleared_msgs=0
+[T2-FAULT] abi=1 ordinal=1 stage=task-table rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=2 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=3 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=4 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=5 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=6 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=7 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=8 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=9 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=10 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=11 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=12 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=13 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=14 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=15 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=16 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=17 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=18 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=19 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=20 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=21 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=22 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=23 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=24 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=25 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=26 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=27 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=28 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=29 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=30 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=31 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=32 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=33 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=34 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=35 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=36 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=37 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=38 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=39 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=40 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=41 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=42 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=43 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=44 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=45 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=46 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=47 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=48 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=49 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=50 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=51 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=52 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=53 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=54 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=55 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=56 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=57 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=58 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=59 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=60 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=61 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=62 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=63 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=64 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=65 stage=run-queue rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=66 stage=environment-entries rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=67 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=68 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=69 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=70 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=71 stage=capabilities rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=72 stage=string rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=73 stage=box rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=74 stage=box rejected=ENOMEM
+[T2-FAULT] abi=1 ordinal=75 stage=publication rejected=ENOMEM
+[HELIOS-THREAD] clone tgid=53249 tid=53255 tls=0x4020b0 stack=0x404130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53255 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53255 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53255 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53255 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53255 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53255 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53255 cleared_msgs=0
+[T2] faults abi=1 points=75 cleanup=exact
+[HELIOS-THREAD] clone tgid=53249 tid=53256 tls=0x4020b0 stack=0x404130
+[SYSCALL] thread_spawn: parent=53250 tid=53257 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53258 tls=0x4020b0 stack=0x406130
+[HELIOS-THREAD] clone tgid=53249 tid=53259 tls=0x4020b0 stack=0x408130
+[SYSCALL] thread_spawn: parent=53250 tid=53260 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53261 tls=0x4020b0 stack=0x40a130
+[SYSCALL] thread_spawn: parent=53250 tid=53262 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53263 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53264 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53265 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53266 tls=0x4020b0 stack=0x40c130
+[SYSCALL] thread_spawn: parent=53250 tid=53267 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53268 tls=0x4020b0 stack=0x40e130
+[HELIOS-THREAD] clone tgid=53249 tid=53269 tls=0x4020b0 stack=0x410130
+[HELIOS-THREAD] clone tgid=53249 tid=53270 tls=0x4020b0 stack=0x412130
+[SYSCALL] thread_spawn: parent=53250 tid=53271 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53272 tls=0x4020b0 stack=0x414130
+[SYSCALL] thread_spawn: parent=53250 tid=53273 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53274 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53275 tls=0x4020b0 stack=0x416130
+[HELIOS-THREAD] clone tgid=53249 tid=53276 tls=0x4020b0 stack=0x418130
+[SYSCALL] thread_spawn: parent=53250 tid=53277 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53278 tls=0x4020b0 stack=0x41a130
+[HELIOS-THREAD] clone tgid=53249 tid=53279 tls=0x4020b0 stack=0x41c130
+[SYSCALL] thread_spawn: parent=53250 tid=53280 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53281 tls=0x4020b0 stack=0x41e130
+[HELIOS-THREAD] clone tgid=53249 tid=53282 tls=0x4020b0 stack=0x420130
+[HELIOS-THREAD] clone tgid=53249 tid=53283 tls=0x4020b0 stack=0x422130
+[HELIOS-THREAD] clone tgid=53249 tid=53284 tls=0x4020b0 stack=0x424130
+[HELIOS-THREAD] clone tgid=53249 tid=53285 tls=0x4020b0 stack=0x426130
+[HELIOS-THREAD] clone tgid=53249 tid=53286 tls=0x4020b0 stack=0x428130
+[HELIOS-THREAD] clone tgid=53249 tid=53287 tls=0x4020b0 stack=0x42a130
+[SYSCALL] thread_spawn: parent=53250 tid=53288 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53289 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53290 tls=0x4020b0 stack=0x42c130
+[HELIOS-THREAD] clone tgid=53249 tid=53291 tls=0x4020b0 stack=0x42e130
+[HELIOS-THREAD] clone tgid=53249 tid=53292 tls=0x4020b0 stack=0x430130
+[HELIOS-THREAD] clone tgid=53249 tid=53293 tls=0x4020b0 stack=0x432130
+[HELIOS-THREAD] clone tgid=53249 tid=53294 tls=0x4020b0 stack=0x434130
+[HELIOS-THREAD] clone tgid=53249 tid=53295 tls=0x4020b0 stack=0x436130
+[HELIOS-THREAD] clone tgid=53249 tid=53296 tls=0x4020b0 stack=0x438130
+[SYSCALL] thread_spawn: parent=53250 tid=53297 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53298 tls=0x4020b0 stack=0x43a130
+[HELIOS-THREAD] clone tgid=53249 tid=53299 tls=0x4020b0 stack=0x43c130
+[HELIOS-THREAD] clone tgid=53249 tid=53300 tls=0x4020b0 stack=0x43e130
+[HELIOS-THREAD] clone tgid=53249 tid=53301 tls=0x4020b0 stack=0x440130
+[HELIOS-THREAD] clone tgid=53249 tid=53302 tls=0x4020b0 stack=0x442130
+[SYSCALL] thread_spawn: parent=53250 tid=53303 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53304 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53305 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53306 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53307 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53308 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53309 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53310 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53311 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53312 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53313 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53314 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53315 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53316 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53317 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53318 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53319 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53320 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53321 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53322 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53323 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53324 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53325 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53326 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53327 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53328 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53329 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53330 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53331 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53332 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53333 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53334 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53335 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53336 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53337 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53338 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53339 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53340 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53341 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53342 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53343 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53344 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53345 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53346 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53347 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53348 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53349 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53350 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53351 trampoline=0x4002c1
+[T2] pressure cycle=0 workers=96 vm_workers=32 observer=24 useful_cpus=0x3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53256 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53256 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53256 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53256 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53256 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53256 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53256 cleared_msgs=0
+[SCHED] process_mark_finished pid=53258 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53258 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53258 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53259 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53259 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53259 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53258 addr=0x4020d4 woken=0
+[SCHED] process_reaped pid=53258 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53258 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53258 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53259 addr=0x4020d8 woken=0
+[SCHED] process_reaped pid=53259 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53259 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53259 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53261 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53261 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53261 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53261 addr=0x4020dc woken=0
+[SCHED] process_reaped pid=53261 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53261 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53261 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53266 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53266 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53266 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53268 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53268 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53268 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53266 addr=0x4020e0 woken=0
+[SCHED] process_reaped pid=53266 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53266 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53266 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53268 addr=0x4020e4 woken=0
+[SCHED] process_reaped pid=53268 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53268 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53268 cleared_msgs=0
+[SCHED] process_mark_finished pid=53269 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53269 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53269 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53270 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53270 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53270 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53269 addr=0x4020e8 woken=0
+[SCHED] process_reaped pid=53269 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53269 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53269 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53270 addr=0x4020ec woken=0
+[SCHED] process_reaped pid=53270 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53270 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53270 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53272 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53272 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53272 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53272 addr=0x4020f0 woken=0
+[SCHED] process_reaped pid=53272 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53272 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53272 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53275 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53275 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53275 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53275 addr=0x4020f4 woken=0
+[SCHED] process_reaped pid=53275 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53275 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53275 cleared_msgs=0
+[SCHED] process_mark_finished pid=53276 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53276 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53276 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53278 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53278 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53278 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53276 addr=0x4020f8 woken=0
+[SCHED] process_reaped pid=53276 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53276 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53276 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53278 addr=0x4020fc woken=0
+[SCHED] process_reaped pid=53278 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53278 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53278 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53279 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53279 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53279 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53279 addr=0x402100 woken=0
+[SCHED] process_reaped pid=53279 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53279 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53279 cleared_msgs=0
+[SCHED] process_mark_finished pid=53281 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53281 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53281 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53281 addr=0x402104 woken=0
+[SCHED] process_reaped pid=53281 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53281 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53281 cleared_msgs=0
+[SCHED] process_mark_finished pid=53282 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53282 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53282 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53283 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53283 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53283 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53282 addr=0x402108 woken=0
+[SCHED] process_reaped pid=53282 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53282 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53282 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53283 addr=0x40210c woken=0
+[SCHED] process_reaped pid=53283 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53283 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53283 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53284 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53284 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53284 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53285 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53285 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53285 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53284 addr=0x402110 woken=0
+[SCHED] process_reaped pid=53284 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53284 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53284 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53285 addr=0x402114 woken=0
+[SCHED] process_reaped pid=53285 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53285 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53285 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53286 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53286 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53286 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53286 addr=0x402118 woken=0
+[SCHED] process_reaped pid=53286 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53286 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53286 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53287 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53287 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53287 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53287 addr=0x40211c woken=0
+[SCHED] process_reaped pid=53287 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53287 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53287 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53290 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53290 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53290 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53290 addr=0x402120 woken=0
+[SCHED] process_reaped pid=53290 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53290 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53290 cleared_msgs=0
+[SCHED] process_mark_finished pid=53291 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53291 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53291 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53292 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53292 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53292 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53291 addr=0x402124 woken=0
+[SCHED] process_reaped pid=53291 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53291 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53291 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53292 addr=0x402128 woken=0
+[SCHED] process_reaped pid=53292 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53292 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53292 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53293 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53293 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53293 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53293 addr=0x40212c woken=0
+[SCHED] process_reaped pid=53293 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53293 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53293 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53294 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53294 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53294 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53295 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53295 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53295 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53296 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53296 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53296 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53294 addr=0x402130 woken=0
+[SCHED] process_reaped pid=53294 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53294 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53294 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53295 addr=0x402134 woken=0
+[SCHED] process_reaped pid=53295 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53295 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53295 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53296 addr=0x402138 woken=0
+[SCHED] process_reaped pid=53296 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53296 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53296 cleared_msgs=0
+[SCHED] process_mark_finished pid=53298 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53298 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53298 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53299 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53299 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53299 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53320 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53320 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53320 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53321 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53321 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53321 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53300 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53300 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53300 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53322 name='t2-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=53322 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53322 name='t2-owner'
+[SCHED] process_mark_finished pid=53301 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53301 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53301 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53323 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53323 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53323 name='t2-owner'
+[SCHED] process_mark_finished pid=53302 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53302 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53302 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53324 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53324 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53324 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53298 addr=0x40213c woken=0
+[SCHED] process_reaped pid=53298 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53298 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53298 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53299 addr=0x402140 woken=0
+[SCHED] process_reaped pid=53299 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53299 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53299 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53300 addr=0x402144 woken=0
+[SCHED] process_reaped pid=53300 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53300 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53300 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53301 addr=0x402148 woken=0
+[SCHED] process_reaped pid=53301 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53301 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53301 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53302 addr=0x40214c woken=0
+[SCHED] process_reaped pid=53302 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53302 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53302 cleared_msgs=0
+[SCHED] process_reaped pid=53320 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53320 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53320 cleared_msgs=0
+[SCHED] process_reaped pid=53321 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53321 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53321 cleared_msgs=0
+[SCHED] process_reaped pid=53322 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53322 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53322 cleared_msgs=0
+[SCHED] process_reaped pid=53323 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53323 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53323 cleared_msgs=0
+[SCHED] process_reaped pid=53324 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53324 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53324 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53325 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53325 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53325 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53326 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53326 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53326 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53325 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53325 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53325 cleared_msgs=0
+[SCHED] process_reaped pid=53326 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53326 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53326 cleared_msgs=0
+[SCHED] process_mark_finished pid=53327 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53327 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53327 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53327 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53327 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53327 cleared_msgs=0
+[SCHED] process_mark_finished pid=53328 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53328 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53328 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53329 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53329 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53329 name='t2-owner'
+[SCHED] process_reaped pid=53328 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53328 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53328 cleared_msgs=0
+[SCHED] process_reaped pid=53329 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53329 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53329 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53330 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53330 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53330 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53330 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53330 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53330 cleared_msgs=0
+[SCHED] process_mark_finished pid=53331 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53331 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53331 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53332 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53332 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53332 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53331 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53331 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53331 cleared_msgs=0
+[SCHED] process_reaped pid=53332 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53332 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53332 cleared_msgs=0
+[SCHED] process_mark_finished pid=53333 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53333 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53333 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53334 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53334 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53334 name='t2-owner'
+[SCHED] process_reaped pid=53333 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53333 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53333 cleared_msgs=0
+[SCHED] process_reaped pid=53334 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53334 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53334 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53335 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53335 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53335 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53335 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53335 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53335 cleared_msgs=0
+[SCHED] process_mark_finished pid=53336 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53336 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53336 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53336 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53336 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53336 cleared_msgs=0
+[SCHED] process_mark_finished pid=53337 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53337 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53337 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53338 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53338 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53338 name='t2-owner'
+[SCHED] process_reaped pid=53337 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53337 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53337 cleared_msgs=0
+[SCHED] process_reaped pid=53338 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53338 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53338 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53339 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53339 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53339 name='t2-owner'
+[SCHED] process_reaped pid=53339 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53339 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53339 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53340 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53340 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53340 name='t2-owner'
+[SCHED] process_reaped pid=53340 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53340 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53340 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53341 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53341 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53341 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53341 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53341 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53341 cleared_msgs=0
+[SCHED] process_mark_finished pid=53342 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53342 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53342 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53342 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53342 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53342 cleared_msgs=0
+[SCHED] process_mark_finished pid=53343 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53343 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53343 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53344 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53344 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53344 name='t2-owner'
+[SCHED] process_reaped pid=53343 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53343 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53343 cleared_msgs=0
+[SCHED] process_reaped pid=53344 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53344 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53344 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53345 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53345 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53345 name='t2-owner'
+[SCHED] process_reaped pid=53345 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53345 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53345 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53346 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53346 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53346 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53346 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53346 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53346 cleared_msgs=0
+[SCHED] process_mark_finished pid=53347 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53347 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53347 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53347 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53347 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53347 cleared_msgs=0
+[SCHED] process_mark_finished pid=53348 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53348 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53348 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53348 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53348 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53348 cleared_msgs=0
+[SCHED] process_mark_finished pid=53349 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53349 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53349 name='t2-owner'
+[SCHED] process_reaped pid=53349 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53349 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53349 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53350 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53350 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53350 name='t2-owner'
+[SCHED] process_reaped pid=53350 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53350 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53350 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53351 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53351 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53351 name='t2-owner'
+[SCHED] process_reaped pid=53351 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53351 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53351 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53257 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53257 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53257 name='t2-owner'
+[SCHED] process_reaped pid=53257 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53257 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53257 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53260 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53260 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53260 name='t2-owner'
+[SCHED] process_reaped pid=53260 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53260 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53260 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53262 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53262 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53262 name='t2-owner'
+[SCHED] process_reaped pid=53262 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53262 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53262 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53263 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53263 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53263 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53264 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53264 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53264 name='t2-owner'
+[SCHED] process_reaped pid=53263 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53263 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53263 cleared_msgs=0
+[SCHED] process_reaped pid=53264 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53264 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53264 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53265 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53265 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53265 name='t2-owner'
+[SCHED] process_reaped pid=53265 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53265 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53265 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53267 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53267 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53267 name='t2-owner'
+[SCHED] process_reaped pid=53267 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53267 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53267 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53271 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53271 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53271 name='t2-owner'
+[SCHED] process_reaped pid=53271 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53271 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53271 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53273 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53273 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53273 name='t2-owner'
+[SCHED] process_reaped pid=53273 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53273 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53273 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53274 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53274 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53274 name='t2-owner'
+[SCHED] process_reaped pid=53274 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53274 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53274 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53277 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53277 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53277 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53280 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53280 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53280 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53277 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53277 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53277 cleared_msgs=0
+[SCHED] process_reaped pid=53280 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53280 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53280 cleared_msgs=0
+[SCHED] process_mark_finished pid=53288 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53288 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53288 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53289 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53289 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53289 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53297 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53297 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53297 name='t2-owner'
+[SCHED] process_reaped pid=53288 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53288 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53288 cleared_msgs=0
+[SCHED] process_reaped pid=53289 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53289 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53289 cleared_msgs=0
+[SCHED] process_reaped pid=53297 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53297 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53297 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53303 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53303 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53303 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53303 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53303 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53303 cleared_msgs=0
+[SCHED] process_mark_finished pid=53304 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53304 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53304 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53305 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53305 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53305 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53306 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53306 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53306 name='t2-owner'
+[SCHED] process_reaped pid=53304 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53304 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53304 cleared_msgs=0
+[SCHED] process_reaped pid=53305 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53305 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53305 cleared_msgs=0
+[SCHED] process_reaped pid=53306 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53306 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53306 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53307 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53307 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53307 name='t2-owner'
+[SCHED] process_reaped pid=53307 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53307 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53307 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53308 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53308 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53308 name='t2-owner'
+[SCHED] process_reaped pid=53308 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53308 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53308 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53309 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53309 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53309 name='t2-owner'
+[SCHED] process_reaped pid=53309 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53309 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53309 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53310 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53310 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53310 name='t2-owner'
+[SCHED] process_reaped pid=53310 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53310 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53310 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53311 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53311 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53311 name='t2-owner'
+[SCHED] process_reaped pid=53311 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53311 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53311 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53312 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53312 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53312 name='t2-owner'
+[SCHED] process_reaped pid=53312 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53312 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53312 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53313 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53313 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53313 name='t2-owner'
+[SCHED] process_reaped pid=53313 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53313 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53313 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53314 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53314 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53314 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53315 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53315 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53315 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53316 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53316 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53316 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53314 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53314 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53314 cleared_msgs=0
+[SCHED] process_reaped pid=53315 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53315 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53315 cleared_msgs=0
+[SCHED] process_reaped pid=53316 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53316 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53316 cleared_msgs=0
+[SCHED] process_mark_finished pid=53317 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53317 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53317 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53318 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53318 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53318 name='t2-owner'
+[SCHED] process_reaped pid=53317 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53317 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53317 cleared_msgs=0
+[SCHED] process_reaped pid=53318 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53318 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53318 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53319 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53319 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53319 name='t2-owner'
+[SCHED] process_reaped pid=53319 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53319 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53319 cleared_msgs=0
+[THREAD-LIFECYCLE] created=66 finished=66 reaped=66 borrower_reclaim_skipped=66 stale_wake_rejected=0 borrower_slots_reused=0 max_live=64
+[T2] recovery cycle=1 heap=3032704 drift=0 unreaped_workers=0
+[SYSCALL] thread_spawn: parent=53250 tid=53352 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53353 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53354 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53355 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53356 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53357 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53358 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53359 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53360 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53361 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53362 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53363 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53364 tls=0x4020b0 stack=0x404130
+[SYSCALL] thread_spawn: parent=53250 tid=53365 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53366 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53367 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53368 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53369 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53370 tls=0x4020b0 stack=0x406130
+[HELIOS-THREAD] clone tgid=53249 tid=53371 tls=0x4020b0 stack=0x408130
+[SYSCALL] thread_spawn: parent=53250 tid=53372 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53373 tls=0x4020b0 stack=0x40a130
+[HELIOS-THREAD] clone tgid=53249 tid=53374 tls=0x4020b0 stack=0x40c130
+[SYSCALL] thread_spawn: parent=53250 tid=53375 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53376 tls=0x4020b0 stack=0x40e130
+[SYSCALL] thread_spawn: parent=53250 tid=53377 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53378 tls=0x4020b0 stack=0x410130
+[SYSCALL] thread_spawn: parent=53250 tid=53379 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53380 tls=0x4020b0 stack=0x412130
+[HELIOS-THREAD] clone tgid=53249 tid=53381 tls=0x4020b0 stack=0x414130
+[HELIOS-THREAD] clone tgid=53249 tid=53382 tls=0x4020b0 stack=0x416130
+[SYSCALL] thread_spawn: parent=53250 tid=53383 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53384 tls=0x4020b0 stack=0x418130
+[HELIOS-THREAD] clone tgid=53249 tid=53385 tls=0x4020b0 stack=0x41a130
+[HELIOS-THREAD] clone tgid=53249 tid=53386 tls=0x4020b0 stack=0x41c130
+[HELIOS-THREAD] clone tgid=53249 tid=53387 tls=0x4020b0 stack=0x41e130
+[HELIOS-THREAD] clone tgid=53249 tid=53388 tls=0x4020b0 stack=0x420130
+[SYSCALL] thread_spawn: parent=53250 tid=53389 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53390 tls=0x4020b0 stack=0x422130
+[SYSCALL] thread_spawn: parent=53250 tid=53391 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53392 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53393 tls=0x4020b0 stack=0x424130
+[HELIOS-THREAD] clone tgid=53249 tid=53394 tls=0x4020b0 stack=0x426130
+[HELIOS-THREAD] clone tgid=53249 tid=53395 tls=0x4020b0 stack=0x428130
+[SYSCALL] thread_spawn: parent=53250 tid=53396 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53397 tls=0x4020b0 stack=0x42a130
+[HELIOS-THREAD] clone tgid=53249 tid=53398 tls=0x4020b0 stack=0x42c130
+[HELIOS-THREAD] clone tgid=53249 tid=53399 tls=0x4020b0 stack=0x42e130
+[HELIOS-THREAD] clone tgid=53249 tid=53400 tls=0x4020b0 stack=0x430130
+[HELIOS-THREAD] clone tgid=53249 tid=53401 tls=0x4020b0 stack=0x432130
+[HELIOS-THREAD] clone tgid=53249 tid=53402 tls=0x4020b0 stack=0x434130
+[HELIOS-THREAD] clone tgid=53249 tid=53403 tls=0x4020b0 stack=0x436130
+[HELIOS-THREAD] clone tgid=53249 tid=53404 tls=0x4020b0 stack=0x438130
+[HELIOS-THREAD] clone tgid=53249 tid=53405 tls=0x4020b0 stack=0x43a130
+[SYSCALL] thread_spawn: parent=53250 tid=53406 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53407 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53408 tls=0x4020b0 stack=0x43c130
+[SYSCALL] thread_spawn: parent=53250 tid=53409 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53410 tls=0x4020b0 stack=0x43e130
+[SYSCALL] thread_spawn: parent=53250 tid=53411 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53412 tls=0x4020b0 stack=0x440130
+[HELIOS-THREAD] clone tgid=53249 tid=53413 tls=0x4020b0 stack=0x442130
+[SYSCALL] thread_spawn: parent=53250 tid=53414 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53415 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53416 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53417 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53418 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53419 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53420 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53421 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53422 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53423 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53424 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53425 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53426 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53427 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53428 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53429 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53430 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53431 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53432 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53433 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53434 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53435 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53436 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53437 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53438 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53439 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53440 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53441 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53442 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53443 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53444 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53445 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53446 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53447 trampoline=0x4002c1
+[T2] pressure cycle=1 workers=96 vm_workers=32 observer=68 useful_cpus=0x3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53364 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53364 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53364 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53370 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53370 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53370 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53364 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53364 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53364 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53364 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53370 addr=0x4020d4 woken=0
+[SCHED] process_reaped pid=53370 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53370 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53370 cleared_msgs=0
+[SCHED] process_mark_finished pid=53371 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53371 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53371 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53373 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53373 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53373 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53371 addr=0x4020d8 woken=0
+[SCHED] process_reaped pid=53371 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53371 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53371 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53373 addr=0x4020dc woken=0
+[SCHED] process_reaped pid=53373 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53373 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53373 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53374 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53374 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53374 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53374 addr=0x4020e0 woken=0
+[SCHED] process_reaped pid=53374 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53374 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53374 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53376 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53376 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53376 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53378 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53378 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53378 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53376 addr=0x4020e4 woken=0
+[SCHED] process_reaped pid=53376 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53376 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53376 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53378 addr=0x4020e8 woken=0
+[SCHED] process_reaped pid=53378 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53378 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53378 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53380 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53380 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53380 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53380 addr=0x4020ec woken=0
+[SCHED] process_reaped pid=53380 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53380 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53380 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53381 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53381 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53381 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53382 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53382 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53382 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53381 addr=0x4020f0 woken=0
+[SCHED] process_reaped pid=53381 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53381 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53381 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53382 addr=0x4020f4 woken=0
+[SCHED] process_reaped pid=53382 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53382 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53382 cleared_msgs=0
+[SCHED] process_mark_finished pid=53384 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53384 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53384 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53385 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53385 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53385 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53384 addr=0x4020f8 woken=0
+[SCHED] process_reaped pid=53384 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53384 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53384 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53385 addr=0x4020fc woken=0
+[SCHED] process_reaped pid=53385 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53385 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53385 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53386 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53386 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53386 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53386 addr=0x402100 woken=0
+[SCHED] process_reaped pid=53386 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53386 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53386 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53387 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53387 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53387 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53387 addr=0x402104 woken=0
+[SCHED] process_reaped pid=53387 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53387 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53387 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53388 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53388 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53388 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53390 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53390 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53390 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53388 addr=0x402108 woken=0
+[SCHED] process_reaped pid=53388 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53388 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53388 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53390 addr=0x40210c woken=0
+[SCHED] process_reaped pid=53390 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53390 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53390 cleared_msgs=0
+[SCHED] process_mark_finished pid=53393 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53393 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53393 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53393 addr=0x402110 woken=0
+[SCHED] process_reaped pid=53393 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53393 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53393 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53394 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53394 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53394 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53395 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53395 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53395 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53394 addr=0x402114 woken=0
+[SCHED] process_reaped pid=53394 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53394 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53394 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53395 addr=0x402118 woken=0
+[SCHED] process_reaped pid=53395 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53395 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53395 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53397 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53397 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53397 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53397 addr=0x40211c woken=0
+[SCHED] process_reaped pid=53397 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53397 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53397 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53398 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53398 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53398 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53398 addr=0x402120 woken=0
+[SCHED] process_reaped pid=53398 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53398 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53398 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53399 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53399 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53399 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53399 addr=0x402124 woken=0
+[SCHED] process_reaped pid=53399 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53399 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53399 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53400 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53400 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53400 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53400 addr=0x402128 woken=0
+[SCHED] process_reaped pid=53400 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53400 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53400 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53401 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53401 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53401 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53401 addr=0x40212c woken=0
+[SCHED] process_reaped pid=53401 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53401 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53401 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53402 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53402 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53402 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53402 addr=0x402130 woken=0
+[SCHED] process_reaped pid=53402 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53402 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53402 cleared_msgs=0
+[SCHED] process_mark_finished pid=53403 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53403 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53403 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53403 addr=0x402134 woken=0
+[SCHED] process_reaped pid=53403 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53403 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53403 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53404 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53404 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53404 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53404 addr=0x402138 woken=0
+[SCHED] process_reaped pid=53404 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53404 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53404 cleared_msgs=0
+[SCHED] process_mark_finished pid=53405 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53405 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53405 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53408 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53408 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53408 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53405 addr=0x40213c woken=0
+[SCHED] process_reaped pid=53405 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53405 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53405 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53408 addr=0x402140 woken=0
+[SCHED] process_reaped pid=53408 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53408 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53408 cleared_msgs=0
+[SCHED] process_mark_finished pid=53410 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53410 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53410 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53412 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53412 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53412 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53410 addr=0x402144 woken=0
+[SCHED] process_reaped pid=53410 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53410 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53410 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53412 addr=0x402148 woken=0
+[SCHED] process_reaped pid=53412 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53412 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53412 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53413 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53413 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53413 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53413 addr=0x40214c woken=0
+[SCHED] process_reaped pid=53413 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53413 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53413 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53416 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53416 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53416 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53416 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53416 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53416 cleared_msgs=0
+[SCHED] process_mark_finished pid=53417 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53417 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53417 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53417 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53417 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53417 cleared_msgs=0
+[SCHED] process_mark_finished pid=53418 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53418 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53418 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53419 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53419 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53419 name='t2-owner'
+[SCHED] process_reaped pid=53418 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53418 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53418 cleared_msgs=0
+[SCHED] process_reaped pid=53419 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53419 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53419 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53420 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53420 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53420 name='t2-owner'
+[SCHED] process_reaped pid=53420 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53420 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53420 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53421 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53421 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53421 name='t2-owner'
+[SCHED] process_reaped pid=53421 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53421 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53421 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53422 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53422 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53422 name='t2-owner'
+[SCHED] process_reaped pid=53422 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53422 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53422 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53423 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53423 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53423 name='t2-owner'
+[SCHED] process_reaped pid=53423 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53423 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53423 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53424 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53424 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53424 name='t2-owner'
+[SCHED] process_reaped pid=53424 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53424 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53424 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53425 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53425 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53425 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53426 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53426 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53426 name='t2-owner'
+[SCHED] process_reaped pid=53425 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53425 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53425 cleared_msgs=0
+[SCHED] process_reaped pid=53426 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53426 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53426 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53427 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53427 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53427 name='t2-owner'
+[SCHED] process_reaped pid=53427 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53427 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53427 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53428 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53428 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53428 name='t2-owner'
+[SCHED] process_reaped pid=53428 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53428 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53428 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53429 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53429 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53429 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53430 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53430 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53430 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53429 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53429 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53429 cleared_msgs=0
+[SCHED] process_reaped pid=53430 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53430 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53430 cleared_msgs=0
+[SCHED] process_mark_finished pid=53431 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53431 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53431 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53431 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53431 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53431 cleared_msgs=0
+[SCHED] process_mark_finished pid=53432 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53432 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53432 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53433 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53433 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53433 name='t2-owner'
+[SCHED] process_reaped pid=53432 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53432 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53432 cleared_msgs=0
+[SCHED] process_reaped pid=53433 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53433 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53433 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53434 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53434 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53434 name='t2-owner'
+[SCHED] process_reaped pid=53434 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53434 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53434 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53435 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53435 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53435 name='t2-owner'
+[SCHED] process_reaped pid=53435 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53435 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53435 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53436 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53436 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53436 name='t2-owner'
+[SCHED] process_reaped pid=53436 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53436 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53436 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53437 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53437 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53437 name='t2-owner'
+[SCHED] process_reaped pid=53437 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53437 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53437 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53438 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53438 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53438 name='t2-owner'
+[SCHED] process_reaped pid=53438 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53438 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53438 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53439 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53439 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53439 name='t2-owner'
+[SCHED] process_reaped pid=53439 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53439 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53439 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53440 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53440 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53440 name='t2-owner'
+[SCHED] process_reaped pid=53440 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53440 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53440 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53441 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53441 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53441 name='t2-owner'
+[SCHED] process_reaped pid=53441 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53441 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53441 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53442 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53442 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53442 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53443 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53443 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53443 name='t2-owner'
+[SCHED] process_reaped pid=53442 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53442 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53442 cleared_msgs=0
+[SCHED] process_reaped pid=53443 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53443 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53443 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53444 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53444 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53444 name='t2-owner'
+[SCHED] process_reaped pid=53444 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53444 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53444 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53445 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53445 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53445 name='t2-owner'
+[SCHED] process_reaped pid=53445 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53445 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53445 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53446 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53446 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53446 name='t2-owner'
+[SCHED] process_reaped pid=53446 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53446 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53446 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53447 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53447 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53447 name='t2-owner'
+[SCHED] process_reaped pid=53447 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53447 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53447 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53352 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53352 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53352 name='t2-owner'
+[SCHED] process_reaped pid=53352 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53352 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53352 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53353 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53353 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53353 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53354 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53354 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53354 name='t2-owner'
+[SCHED] process_reaped pid=53353 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53353 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53353 cleared_msgs=0
+[SCHED] process_reaped pid=53354 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53354 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53354 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53355 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53355 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53355 name='t2-owner'
+[SCHED] process_reaped pid=53355 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53355 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53355 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53356 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53356 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53356 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53357 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53357 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53357 name='t2-owner'
+[SCHED] process_reaped pid=53356 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53356 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53356 cleared_msgs=0
+[SCHED] process_reaped pid=53357 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53357 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53357 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53358 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53358 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53358 name='t2-owner'
+[SCHED] process_reaped pid=53358 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53358 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53358 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53359 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53359 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53359 name='t2-owner'
+[SCHED] process_reaped pid=53359 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53359 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53359 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53360 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53360 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53360 name='t2-owner'
+[SCHED] process_reaped pid=53360 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53360 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53360 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53361 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53361 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53361 name='t2-owner'
+[SCHED] process_reaped pid=53361 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53361 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53361 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53362 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53362 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53362 name='t2-owner'
+[SCHED] process_reaped pid=53362 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53362 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53362 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53363 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53363 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53363 name='t2-owner'
+[SCHED] process_reaped pid=53363 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53363 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53363 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53365 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53365 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53365 name='t2-owner'
+[SCHED] process_reaped pid=53365 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53365 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53365 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53366 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53366 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53366 name='t2-owner'
+[SCHED] process_reaped pid=53366 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53366 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53366 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53367 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53367 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53367 name='t2-owner'
+[SCHED] process_reaped pid=53367 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53367 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53367 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53368 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53368 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53368 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53369 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53369 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53369 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53368 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53368 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53368 cleared_msgs=0
+[SCHED] process_reaped pid=53369 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53369 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53369 cleared_msgs=0
+[SCHED] process_mark_finished pid=53372 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53372 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53372 name='t2-owner'
+[SCHED] process_reaped pid=53372 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53372 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53372 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53375 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53375 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53375 name='t2-owner'
+[SCHED] process_reaped pid=53375 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53375 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53375 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53377 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53377 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53377 name='t2-owner'
+[SCHED] process_reaped pid=53377 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53377 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53377 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53379 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53379 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53379 name='t2-owner'
+[SCHED] process_reaped pid=53379 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53379 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53379 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53383 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53383 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53383 name='t2-owner'
+[SCHED] process_reaped pid=53383 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53383 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53383 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53389 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53389 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53389 name='t2-owner'
+[SCHED] process_reaped pid=53389 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53389 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53389 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53391 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53391 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53391 name='t2-owner'
+[SCHED] process_reaped pid=53391 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53391 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53391 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53392 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53392 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53392 name='t2-owner'
+[SCHED] process_reaped pid=53392 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53392 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53392 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53396 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53396 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53396 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53396 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53396 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53396 cleared_msgs=0
+[SCHED] process_mark_finished pid=53406 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53406 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53406 name='t2-owner'
+[SCHED] process_reaped pid=53406 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53406 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53406 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53407 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53407 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53407 name='t2-owner'
+[SCHED] process_reaped pid=53407 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53407 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53407 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53409 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53409 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53409 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53411 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53411 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53411 name='t2-owner'
+[SCHED] process_reaped pid=53409 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53409 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53409 cleared_msgs=0
+[SCHED] process_reaped pid=53411 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53411 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53411 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53414 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53414 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53414 name='t2-owner'
+[SCHED] process_reaped pid=53414 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53414 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53414 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53415 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53415 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53415 name='t2-owner'
+[SCHED] process_reaped pid=53415 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53415 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53415 cleared_msgs=0
+[THREAD-LIFECYCLE] created=130 finished=130 reaped=130 borrower_reclaim_skipped=130 stale_wake_rejected=0 borrower_slots_reused=0 max_live=64
+[T2] recovery cycle=2 heap=3032704 drift=0 unreaped_workers=0
+[SYSCALL] thread_spawn: parent=53250 tid=53448 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53449 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53450 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53451 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53452 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53453 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53454 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53455 tls=0x4020b0 stack=0x404130
+[HELIOS-THREAD] clone tgid=53249 tid=53456 tls=0x4020b0 stack=0x406130
+[HELIOS-THREAD] clone tgid=53249 tid=53457 tls=0x4020b0 stack=0x408130
+[HELIOS-THREAD] clone tgid=53249 tid=53458 tls=0x4020b0 stack=0x40a130
+[HELIOS-THREAD] clone tgid=53249 tid=53459 tls=0x4020b0 stack=0x40c130
+[HELIOS-THREAD] clone tgid=53249 tid=53460 tls=0x4020b0 stack=0x40e130
+[HELIOS-THREAD] clone tgid=53249 tid=53461 tls=0x4020b0 stack=0x410130
+[HELIOS-THREAD] clone tgid=53249 tid=53462 tls=0x4020b0 stack=0x412130
+[HELIOS-THREAD] clone tgid=53249 tid=53463 tls=0x4020b0 stack=0x414130
+[SYSCALL] thread_spawn: parent=53250 tid=53464 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53465 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53466 tls=0x4020b0 stack=0x416130
+[HELIOS-THREAD] clone tgid=53249 tid=53467 tls=0x4020b0 stack=0x418130
+[SYSCALL] thread_spawn: parent=53250 tid=53468 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53469 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53470 tls=0x4020b0 stack=0x41a130
+[SYSCALL] thread_spawn: parent=53250 tid=53471 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53472 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53473 tls=0x4020b0 stack=0x41c130
+[HELIOS-THREAD] clone tgid=53249 tid=53474 tls=0x4020b0 stack=0x41e130
+[HELIOS-THREAD] clone tgid=53249 tid=53475 tls=0x4020b0 stack=0x420130
+[HELIOS-THREAD] clone tgid=53249 tid=53476 tls=0x4020b0 stack=0x422130
+[HELIOS-THREAD] clone tgid=53249 tid=53477 tls=0x4020b0 stack=0x424130
+[SYSCALL] thread_spawn: parent=53250 tid=53478 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53479 tls=0x4020b0 stack=0x426130
+[HELIOS-THREAD] clone tgid=53249 tid=53480 tls=0x4020b0 stack=0x428130
+[HELIOS-THREAD] clone tgid=53249 tid=53481 tls=0x4020b0 stack=0x42a130
+[SYSCALL] thread_spawn: parent=53250 tid=53482 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53483 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53484 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53485 tls=0x4020b0 stack=0x42c130
+[SYSCALL] thread_spawn: parent=53250 tid=53486 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53487 tls=0x4020b0 stack=0x42e130
+[SYSCALL] thread_spawn: parent=53250 tid=53488 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53489 tls=0x4020b0 stack=0x430130
+[SYSCALL] thread_spawn: parent=53250 tid=53490 trampoline=0x4002c1
+[HELIOS-THREAD] clone tgid=53249 tid=53491 tls=0x4020b0 stack=0x432130
+[HELIOS-THREAD] clone tgid=53249 tid=53492 tls=0x4020b0 stack=0x434130
+[HELIOS-THREAD] clone tgid=53249 tid=53493 tls=0x4020b0 stack=0x436130
+[HELIOS-THREAD] clone tgid=53249 tid=53494 tls=0x4020b0 stack=0x438130
+[HELIOS-THREAD] clone tgid=53249 tid=53495 tls=0x4020b0 stack=0x43a130
+[HELIOS-THREAD] clone tgid=53249 tid=53496 tls=0x4020b0 stack=0x43c130
+[HELIOS-THREAD] clone tgid=53249 tid=53497 tls=0x4020b0 stack=0x43e130
+[HELIOS-THREAD] clone tgid=53249 tid=53498 tls=0x4020b0 stack=0x440130
+[HELIOS-THREAD] clone tgid=53249 tid=53499 tls=0x4020b0 stack=0x442130
+[SYSCALL] thread_spawn: parent=53250 tid=53500 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53501 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53502 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53503 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53504 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53505 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53506 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53507 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53508 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53509 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53510 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53250 tid=53511 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53512 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53513 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53514 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53515 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53516 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53517 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53518 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53519 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53520 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53521 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53522 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53523 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53524 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53525 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53526 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53527 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53528 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53529 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53530 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53531 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53532 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53533 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53534 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53535 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53536 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53537 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53538 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53539 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53540 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53541 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53542 trampoline=0x4002c1
+[SYSCALL] thread_spawn: parent=53248 tid=53543 trampoline=0x4002c1
+[T2] pressure cycle=2 workers=96 vm_workers=32 observer=105 useful_cpus=0x3
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53455 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53455 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53455 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53455 addr=0x4020d0 woken=0
+[SCHED] process_reaped pid=53455 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53455 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53455 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53456 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53456 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53456 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53456 addr=0x4020d4 woken=0
+[SCHED] process_reaped pid=53456 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53456 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53456 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53457 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53457 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53457 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53457 addr=0x4020d8 woken=0
+[SCHED] process_reaped pid=53457 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53457 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53457 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53458 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53458 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53458 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53459 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53459 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53459 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53458 addr=0x4020dc woken=0
+[SCHED] process_reaped pid=53458 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53458 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53458 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53459 addr=0x4020e0 woken=0
+[SCHED] process_reaped pid=53459 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53459 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53459 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53460 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53460 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53460 name='t2-owner'
+[HELIOS-THREAD] clear_child_tid tid=53460 addr=0x4020e4 woken=0
+[SCHED] process_reaped pid=53460 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53460 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53460 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53461 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53461 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53461 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53462 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53462 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53462 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[HELIOS-THREAD] clear_child_tid tid=53461 addr=0x4020e8 woken=0
+[SCHED] process_reaped pid=53461 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53461 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53461 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53462 addr=0x4020ec woken=0
+[SCHED] process_reaped pid=53462 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53462 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53462 cleared_msgs=0
+[SCHED] process_mark_finished pid=53463 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53463 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53463 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53448 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53448 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53448 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53466 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53466 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53466 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53449 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53449 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53449 name='t2-owner'
+[SCHED] process_mark_finished pid=53467 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53467 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53467 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53450 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53450 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53450 name='t2-owner'
+[SCHED] process_mark_finished pid=53470 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53470 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53470 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53451 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53451 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53451 name='t2-owner'
+[SCHED] process_mark_finished pid=53473 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53473 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53473 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53474 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53474 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53474 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53452 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53452 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53452 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53453 name='t2-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=53453 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53453 name='t2-owner'
+[SCHED] process_mark_finished pid=53475 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53475 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53475 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53454 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53454 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53454 name='t2-owner'
+[SCHED] process_mark_finished pid=53476 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53476 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53476 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53464 name='t2-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=53464 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53464 name='t2-owner'
+[SCHED] process_mark_finished pid=53477 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53477 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53477 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53479 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53479 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53479 name='t2-owner'
+[SCHED] process_mark_finished pid=53465 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53465 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53465 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53468 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53468 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53468 name='t2-owner'
+[SCHED] process_mark_finished pid=53480 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53480 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53480 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53469 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53469 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53469 name='t2-owner'
+[SCHED] process_mark_finished pid=53481 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53481 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53481 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53485 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53485 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53485 name='t2-owner'
+[SCHED] process_mark_finished pid=53471 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53471 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53471 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53487 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53487 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53487 name='t2-owner'
+[SCHED] process_mark_finished pid=53472 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53472 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53472 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53478 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53478 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53478 name='t2-owner'
+[SCHED] process_mark_finished pid=53489 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53489 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53489 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53482 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53482 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53482 name='t2-owner'
+[SCHED] process_mark_finished pid=53491 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53491 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53491 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53483 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53483 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53483 name='t2-owner'
+[SCHED] process_mark_finished pid=53492 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53492 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53492 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53493 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53493 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53493 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53484 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53484 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53484 name='t2-owner'
+[SCHED] process_mark_finished pid=53494 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53494 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53494 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53486 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53486 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53486 name='t2-owner'
+[SCHED] process_mark_finished pid=53495 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53495 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53495 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53488 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53488 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53488 name='t2-owner'
+[SCHED] process_mark_finished pid=53496 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53496 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53496 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53490 name='t2-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=53490 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53490 name='t2-owner'
+[SCHED] process_mark_finished pid=53497 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53497 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53497 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53500 name='t2-owner' reason=exit code=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] terminating pid=53500 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53500 name='t2-owner'
+[SCHED] process_mark_finished pid=53498 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53498 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53498 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53499 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53499 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53499 name='t2-owner'
+[SCHED] process_mark_finished pid=53501 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53501 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53501 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53502 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53502 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53502 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53448 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53448 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53448 cleared_msgs=0
+[SCHED] process_reaped pid=53449 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53449 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53449 cleared_msgs=0
+[SCHED] process_reaped pid=53450 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53450 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53450 cleared_msgs=0
+[SCHED] process_reaped pid=53451 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53451 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53451 cleared_msgs=0
+[SCHED] process_reaped pid=53452 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53452 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53452 cleared_msgs=0
+[SCHED] process_reaped pid=53453 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53453 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53453 cleared_msgs=0
+[SCHED] process_reaped pid=53454 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53454 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53454 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53463 addr=0x4020f0 woken=0
+[SCHED] process_reaped pid=53463 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53463 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53463 cleared_msgs=0
+[SCHED] process_reaped pid=53464 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53464 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53464 cleared_msgs=0
+[SCHED] process_reaped pid=53465 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53465 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53465 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53466 addr=0x4020f4 woken=0
+[SCHED] process_reaped pid=53466 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53466 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53466 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53467 addr=0x4020f8 woken=0
+[SCHED] process_reaped pid=53467 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53467 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53467 cleared_msgs=0
+[SCHED] process_reaped pid=53468 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53468 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53468 cleared_msgs=0
+[SCHED] process_reaped pid=53469 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53469 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53469 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53470 addr=0x4020fc woken=0
+[SCHED] process_reaped pid=53470 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53470 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53470 cleared_msgs=0
+[SCHED] process_reaped pid=53471 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53471 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53471 cleared_msgs=0
+[SCHED] process_reaped pid=53472 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53472 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53472 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53473 addr=0x402100 woken=0
+[SCHED] process_reaped pid=53473 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53473 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53473 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53474 addr=0x402104 woken=0
+[SCHED] process_reaped pid=53474 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53474 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53474 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53475 addr=0x402108 woken=0
+[SCHED] process_reaped pid=53475 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53475 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53475 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53476 addr=0x40210c woken=0
+[SCHED] process_reaped pid=53476 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53476 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53476 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53477 addr=0x402110 woken=0
+[SCHED] process_reaped pid=53477 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53477 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53477 cleared_msgs=0
+[SCHED] process_reaped pid=53478 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53478 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53478 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53479 addr=0x402114 woken=0
+[SCHED] process_reaped pid=53479 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53479 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53479 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53480 addr=0x402118 woken=0
+[SCHED] process_reaped pid=53480 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53480 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53480 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53481 addr=0x40211c woken=0
+[SCHED] process_reaped pid=53481 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53481 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53481 cleared_msgs=0
+[SCHED] process_reaped pid=53482 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53482 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53482 cleared_msgs=0
+[SCHED] process_reaped pid=53483 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53483 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53483 cleared_msgs=0
+[SCHED] process_reaped pid=53484 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53484 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53484 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53485 addr=0x402120 woken=0
+[SCHED] process_reaped pid=53485 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53485 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53485 cleared_msgs=0
+[SCHED] process_reaped pid=53486 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53486 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53486 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53487 addr=0x402124 woken=0
+[SCHED] process_reaped pid=53487 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53487 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53487 cleared_msgs=0
+[SCHED] process_reaped pid=53488 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53488 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53488 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53489 addr=0x402128 woken=0
+[SCHED] process_reaped pid=53489 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53489 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53489 cleared_msgs=0
+[SCHED] process_reaped pid=53490 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53490 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53490 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53491 addr=0x40212c woken=0
+[SCHED] process_reaped pid=53491 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53491 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53491 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53492 addr=0x402130 woken=0
+[SCHED] process_reaped pid=53492 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53492 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53492 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53493 addr=0x402134 woken=0
+[SCHED] process_reaped pid=53493 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53493 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53493 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53494 addr=0x402138 woken=0
+[SCHED] process_reaped pid=53494 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53494 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53494 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53495 addr=0x40213c woken=0
+[SCHED] process_reaped pid=53495 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53495 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53495 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53496 addr=0x402140 woken=0
+[SCHED] process_reaped pid=53496 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53496 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53496 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53497 addr=0x402144 woken=0
+[SCHED] process_reaped pid=53497 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53497 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53497 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53498 addr=0x402148 woken=0
+[SCHED] process_reaped pid=53498 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53498 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53498 cleared_msgs=0
+[HELIOS-THREAD] clear_child_tid tid=53499 addr=0x40214c woken=0
+[SCHED] process_reaped pid=53499 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53499 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53499 cleared_msgs=0
+[SCHED] process_reaped pid=53500 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53500 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53500 cleared_msgs=0
+[SCHED] process_reaped pid=53501 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53501 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53501 cleared_msgs=0
+[SCHED] process_reaped pid=53502 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53502 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53502 cleared_msgs=0
+[SCHED] process_mark_finished pid=53503 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53503 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53503 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53504 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53504 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53504 name='t2-owner'
+[SCHED] process_reaped pid=53503 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53503 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53503 cleared_msgs=0
+[SCHED] process_reaped pid=53504 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53504 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53504 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53505 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53505 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53505 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53506 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53506 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53506 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53505 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53505 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53505 cleared_msgs=0
+[SCHED] process_reaped pid=53506 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53506 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53506 cleared_msgs=0
+[SCHED] process_mark_finished pid=53507 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53507 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53507 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53507 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53507 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53507 cleared_msgs=0
+[SCHED] process_mark_finished pid=53508 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53508 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53508 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53509 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53509 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53509 name='t2-owner'
+[SCHED] process_reaped pid=53508 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53508 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53508 cleared_msgs=0
+[SCHED] process_reaped pid=53509 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53509 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53509 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53510 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53510 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53510 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53511 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53511 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53511 name='t2-owner'
+[SCHED] process_reaped pid=53510 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53510 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53510 cleared_msgs=0
+[SCHED] process_reaped pid=53511 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53511 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53511 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53512 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53512 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53512 name='t2-owner'
+[SCHED] process_reaped pid=53512 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53512 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53512 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53513 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53513 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53513 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53514 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53514 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53514 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53513 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53513 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53513 cleared_msgs=0
+[SCHED] process_reaped pid=53514 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53514 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53514 cleared_msgs=0
+[SCHED] process_mark_finished pid=53515 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53515 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53515 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53516 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53516 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53516 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53515 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53515 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53515 cleared_msgs=0
+[SCHED] process_reaped pid=53516 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53516 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53516 cleared_msgs=0
+[SCHED] process_mark_finished pid=53517 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53517 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53517 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53518 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53518 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53518 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53519 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53519 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53519 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53520 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53520 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53520 name='t2-owner'
+[SCHED] process_reaped pid=53517 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53517 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53517 cleared_msgs=0
+[SCHED] process_reaped pid=53518 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53518 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53518 cleared_msgs=0
+[SCHED] process_reaped pid=53519 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53519 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53519 cleared_msgs=0
+[SCHED] process_reaped pid=53520 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53520 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53520 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53521 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53521 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53521 name='t2-owner'
+[SCHED] process_reaped pid=53521 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53521 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53521 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53522 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53522 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53522 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53523 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53523 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53523 name='t2-owner'
+[SCHED] process_reaped pid=53522 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53522 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53522 cleared_msgs=0
+[SCHED] process_reaped pid=53523 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53523 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53523 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53524 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53524 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53524 name='t2-owner'
+[SCHED] process_reaped pid=53524 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53524 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53524 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53525 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53525 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53525 name='t2-owner'
+[SCHED] process_reaped pid=53525 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53525 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53525 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53526 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53526 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53526 name='t2-owner'
+[SCHED] process_reaped pid=53526 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53526 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53526 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53527 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53527 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53527 name='t2-owner'
+[SCHED] process_reaped pid=53527 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53527 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53527 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53528 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53528 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53528 name='t2-owner'
+[SCHED] process_reaped pid=53528 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53528 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53528 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53529 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53529 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53529 name='t2-owner'
+[SCHED] process_reaped pid=53529 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53529 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53529 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53530 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53530 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53530 name='t2-owner'
+[SCHED] process_reaped pid=53530 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53530 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53530 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53531 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53531 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53531 name='t2-owner'
+[SCHED] process_reaped pid=53531 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53531 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53531 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53532 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53532 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53532 name='t2-owner'
+[SCHED] process_reaped pid=53532 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53532 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53532 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53533 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53533 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53533 name='t2-owner'
+[SCHED] process_reaped pid=53533 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53533 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53533 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53534 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53534 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53534 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53535 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53535 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53535 name='t2-owner'
+[SCHED] process_reaped pid=53534 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53534 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53534 cleared_msgs=0
+[SCHED] process_reaped pid=53535 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53535 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53535 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53536 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53536 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53536 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53536 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53536 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53536 cleared_msgs=0
+[SCHED] process_mark_finished pid=53537 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53537 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53537 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=53537 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53537 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53537 cleared_msgs=0
+[SCHED] process_mark_finished pid=53538 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53538 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53538 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53539 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53539 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53539 name='t2-owner'
+[SCHED] process_reaped pid=53538 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53538 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53538 cleared_msgs=0
+[SCHED] process_reaped pid=53539 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53539 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53539 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53540 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53540 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53540 name='t2-owner'
+[SCHED] process_reaped pid=53540 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53540 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53540 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53541 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53541 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53541 name='t2-owner'
+[SCHED] process_reaped pid=53541 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53541 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53541 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53542 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53542 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53542 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53543 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53543 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53543 name='t2-owner'
+[SCHED] process_reaped pid=53542 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53542 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53542 cleared_msgs=0
+[SCHED] process_reaped pid=53543 name='t2-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53543 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53543 cleared_msgs=0
+[THREAD-LIFECYCLE] created=194 finished=194 reaped=194 borrower_reclaim_skipped=194 stale_wake_rejected=0 borrower_slots_reused=0 max_live=64
+[T2] recovery cycle=3 heap=3032704 drift=0 unreaped_workers=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53250 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53250 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53250 name='t2-owner'
+[SCHED] process_mark_finished pid=53249 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53249 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53249 name='t2-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53248 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53248 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53248 name='t2-owner'
+[SCHED] process_mark_finished pid=53251 name='t2-owner' reason=exit code=0
+[SCHED] terminating pid=53251 name='t2-owner' reason=exit
+[SCHED] FINISHED process pid=53251 name='t2-owner'
+[SCHED] process_reaped pid=53248 name='t2-owner' user_frames=582 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53248 frames=582 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53248 cleared_msgs=0
+[SCHED] process_reaped pid=53249 name='t2-owner' user_frames=582 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53249 frames=582 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53249 cleared_msgs=0
+[SCHED] process_reaped pid=53250 name='t2-owner' user_frames=582 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53250 frames=582 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53250 cleared_msgs=0
+[SCHED] process_reaped pid=53251 name='t2-owner' user_frames=582 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53251 frames=582 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53251 cleared_msgs=0
+[T2] PASS faults_native=75 faults_linux=75 cycles=3 pressure=96 recovery=exact queues=unique T1_pins=preserved

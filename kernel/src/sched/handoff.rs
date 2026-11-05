@@ -79,7 +79,10 @@ impl<const N: usize> Handoffs<N> {
         self.0[cpu].waiters.swap(0, Ordering::SeqCst)
     }
 
-    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    #[cfg(all(
+        debug_assertions,
+        any(feature = "pin_release_test", feature = "thread_migration_test", feature = "atomic_futex_test")
+    ))]
     pub fn waiter_snapshot(&self, cpu: usize) -> u64 {
         self.0[cpu].waiters.load(Ordering::SeqCst)
     }

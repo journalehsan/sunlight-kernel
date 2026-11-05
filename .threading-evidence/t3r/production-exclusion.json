@@ -1,0 +1,38 @@
+{
+  "images": [
+    {
+      "path": ".threading-evidence/t3r/ordinary-debug.elf",
+      "sha256": "8e24d63238f6aebce43da9a2e55da257ca482faa7dd0e120a9c9bcaf1fac4fd5",
+      "forbidden": {
+        "[T3R]": true,
+        "[T3R-FW]": true,
+        "T3R source": true,
+        "t3r_fixture": true
+      },
+      "pass": true
+    },
+    {
+      "path": ".threading-evidence/t3r/20261105T165443.557425Z-suite-production/kernel.elf",
+      "sha256": "60ef613f0ba268e4fee8036e2bd4e558271b81bee0676f73836074377999410d",
+      "forbidden": {
+        "[T3R]": true,
+        "[T3R-FW]": true,
+        "T3R source": true,
+        "t3r_fixture": true
+      },
+      "pass": true
+    },
+    {
+      "path": ".threading-evidence/t3r/release-feature.elf",
+      "sha256": "7e09a30d92a0c7c2d2a8b9949fb38f0c6704b867015b2a72f068ef48683bdea3",
+      "forbidden": {
+        "[T3R]": true,
+        "[T3R-FW]": true,
+        "T3R source": true,
+        "t3r_fixture": true
+      },
+      "pass": true
+    }
+  ],
+  "pass": true
+}

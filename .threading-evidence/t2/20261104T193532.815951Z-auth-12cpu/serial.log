@@ -1,0 +1,4091 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 12 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T19:34:42Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf132be9 (61747 frames, 241 MiB)
+[PMM] 1310/1551 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2731
+[ACPI] Found table: FACP at 0x7ffe258d
+[ACPI] Found table: APIC at 0x7ffe2601
+[ACPI] Found table: HPET at 0x7ffe26d1
+[ACPI] Found table: WAET at 0x7ffe2709
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11816 end_count=7816 elapsed_counts=4000 tsc_delta=8260730 tsc_hz=2464138585
+[TIME] TSC calibrated ~2464138585 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63293500 lapic_initial_count=632935 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2464138585
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x19 minute=0x36 second=0x01 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T19:36:01Z assumed_basis=UTC
+wall: utc=2026-11-04T19:36:01Z unix=1793820961 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  4  apic_id=  4  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  5  apic_id=  5  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  6  apic_id=  6  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  7  apic_id=  7  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  8  apic_id=  8  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  9  apic_id=  9  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid= 10  apic_id= 10  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid= 11  apic_id= 11  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 12 logical processor(s) found, 12 usable
+[ACPI] MADT: 12 logical processor(s) detected (12 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SYSCALL] OK
+[SMP] Limine MP response: 12 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8ebc02a0..0xffffffff8ebd02a0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8ebd02a0..0xffffffff8ebe02a0
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8ebe02a0..0xffffffff8ebf02a0
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP3  proc_id=4  lapic_id=4  stack=0xffffffff8ebf02a0..0xffffffff8ec002a0
+[CPU] x87/SSE enabled; NXE active cpu_count=5
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP4 (LAPIC 4) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP4  proc_id=5  lapic_id=5  stack=0xffffffff8ec002a0..0xffffffff8ec102a0
+[CPU] x87/SSE enabled; NXE active cpu_count=6
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP5 (LAPIC 5) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP5  proc_id=6  lapic_id=6  stack=0xffffffff8ec102a0..0xffffffff8ec202a0
+[CPU] x87/SSE enabled; NXE active cpu_count=7
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP6 (LAPIC 6) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP6  proc_id=7  lapic_id=7  stack=0xffffffff8ec202a0..0xffffffff8ec302a0
+[CPU] x87/SSE enabled; NXE active cpu_count=8
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP7 (LAPIC 7) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP7  proc_id=8  lapic_id=8  stack=0xffffffff8ec302a0..0xffffffff8ec402a0
+[CPU] x87/SSE enabled; NXE active cpu_count=9
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP8 (LAPIC 8) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP8  proc_id=9  lapic_id=9  stack=0xffffffff8ec402a0..0xffffffff8ec502a0
+[CPU] x87/SSE enabled; NXE active cpu_count=10
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP9 (LAPIC 9) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP9  proc_id=10  lapic_id=10  stack=0xffffffff8ec502a0..0xffffffff8ec602a0
+[CPU] x87/SSE enabled; NXE active cpu_count=11
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP10 (LAPIC 10) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP10  proc_id=11  lapic_id=11  stack=0xffffffff8ec602a0..0xffffffff8ec702a0
+[CPU] x87/SSE enabled; NXE active cpu_count=12
+[SYSCALL] LSTAR = 0xffffffff8003a3a0
+[SMP] AP11 (LAPIC 11) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 11 AP(s) online (12 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 12 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 12 CPU(s)
+[CAP]  Capability broker initialized
+[CAP] Created endpoint 0 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 1 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 2 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 3 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 4 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 5 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 6 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 7 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 8 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 9 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 10 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 11 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 12 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 13 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 14 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 15 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 16 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 17 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 18 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 19 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 20 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 21 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 22 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 23 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 24 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 25 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 26 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 27 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 28 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 29 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 30 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 31 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 32 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 33 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 34 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 35 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 36 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 37 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 38 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 39 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 40 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 41 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 42 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 43 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 44 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 45 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 46 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 47 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 48 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 49 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 50 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 51 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 52 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 53 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 54 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 55 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 56 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 57 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 58 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 59 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 60 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 61 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 62 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 63 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 64 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 65 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 66 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 67 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 68 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 69 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 70 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 71 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 72 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 73 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 74 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 75 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 76 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 77 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 78 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 79 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 80 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 81 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 82 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 83 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 84 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 85 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 86 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 87 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 88 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 89 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 90 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 91 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 92 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 93 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 94 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 95 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 96 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 97 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 98 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 99 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 100 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 101 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 102 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 103 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 104 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 105 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 106 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 107 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 108 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 109 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 110 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 111 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 112 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 113 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 114 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 115 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 116 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 117 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 118 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 119 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 120 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 121 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 122 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 123 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 124 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 125 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 126 for pid=1
+[CAP] Revoked IPC capability
+[CAP] Created endpoint 127 for pid=1
+[CAP] Revoked IPC capability
+[CAP-P] issuance samples=endpoint_create_including_uart count=128 units=guest_tsc p50=796902 p95=1143254 p99=1431798 max=9482244 collisions=0 scope=local_broker_no_contention
+[CAP-P] issuance samples=mint count=128 units=guest_tsc p50=10270 p95=26232 p99=108055 max=1837526 collisions=0 scope=local_broker_no_contention
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[CAP] Created endpoint 2 for pid=3
+[HISTORY-E] boundary capacity=65536 history=65536 active=0 oldest=denied newest=denied extra=TokenHistoryFull existing=usable partial=0 entropy_after_full=unchanged restart=UNSUPPORTED scope=isolated-production-broker cpu=0
+[SESSION-E2] sequential case=0 epoch=1 session=1 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=1 epoch=1 session=2 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=2 epoch=1 session=3 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] sequential case=3 epoch=1 session=4 issuer_inc=60 owner_inc=80 recipient_inc=70 vm=71 authority=retired live=0 cpu=0 scope=isolated-production-broker authentication=NOT_TESTED
+[SESSION-E2] boundary PASS registrations=4 revoked=2 expired=1 owner_retired=1 live=0 receipts=0 grants=0 capacity=4 pending_commit=0 consumption_refs=0 revocation_ops=0 ipc_completions=0 epoch_allocations=2 exhausted=denied old_epoch=denied cpu=0 scope=isolated-production-broker remote_races=NOT_FORCED
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[GRANT-D] retired-token local_broker recycled_storage=observed repeated_candidate=rejected stuck_source=failed_closed old_lookup=denied active=0 scope=isolated_production_broker
+[CAP-P] shm-cycle=0 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=1 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=2 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=3 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=4 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=5 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=6 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=7 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=8 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=9 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=10 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=11 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=12 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=13 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=14 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=15 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=16 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=17 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=18 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=19 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=20 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=21 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=22 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=23 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=24 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=25 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=26 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=27 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=28 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=29 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=30 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] shm-cycle=31 free_before=331464 free_after=331464 data_before=0 data_after=0 pt_before=0 pt_after=0 views=0 objects=0
+[CAP-P] SHM prediction regression: 1984 denied; 32 delegated legacy maps; zero frame drift
+[CAP] Created endpoint 0 for pid=1
+[CAP] Created endpoint 1 for pid=2
+[CAP-P] local fault injection: entropy/reservation/SHM rollback/collision/retry bound OK
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[CAP] Created endpoint 0 for pid=61953
+[CAP] Created endpoint 1 for pid=61952
+[SCHED] CREATED process #1 'cap-probe' idx=0 burst_score=256 tier=High
+[SCHED] CREATED process #2 'cap-probe' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #3 'cap-probe' idx=2 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #4 'cap-probe' idx=3 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #5 'cap-probe' idx=4 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #6 'cap-probe' idx=5 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #7 'cap-probe' idx=6 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #8 'cap-probe' idx=7 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #9 'cap-probe' idx=8 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #10 'cap-probe' idx=9 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #11 'cap-probe' idx=10 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #12 'cap-probe' idx=11 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #13 'cap-probe' idx=12 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #14 'cap-probe' idx=13 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #15 'cap-probe' idx=14 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #16 'cap-probe' idx=15 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #17 'cap-probe' idx=16 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #18 'cap-probe' idx=17 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #19 'cap-probe' idx=18 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #20 'cap-probe' idx=19 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #21 'cap-probe' idx=20 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #22 'cap-probe' idx=21 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #23 'cap-probe' idx=22 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #24 'cap-probe' idx=23 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #25 'cap-probe' idx=24 burst_score=256 tier=High
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4be memsz=4be prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=b0 memsz=b0 prot=Read
+[ELF] PT_LOAD off=20b0 vaddr=4020b0 filesz=2040 memsz=2048 prot=ReadWrite
+[SCHED] CREATED process #26 'cap-probe' idx=25 burst_score=256 tier=High
+[CAP-P] native begin cpus=12 workers=24 predictions_per_worker=124 issuance_cycles_per_worker=128
+[SCHED] process 0 'cap-probe' state=Ready
+[SCHED] Entering process 0 'cap-probe' at rsp=0xffffffff9000b120
+[CAP] Created endpoint 2 for pid=61965
+[CAP] Created endpoint 3 for pid=61957
+[CAP] Created endpoint 4 for pid=61956
+[CAP] Created endpoint 5 for pid=61964
+[CAP] Created endpoint 6 for pid=61961
+[CAP] Created endpoint 7 for pid=61960
+[CAP] Created endpoint 8 for pid=61962
+[CAP] Created endpoint 9 for pid=61959
+[CAP] Created endpoint 10 for pid=61963
+[SHM]  map_shared_page: OK
+[CAP] Created endpoint 11 for pid=61958
+[CAP] Created endpoint 12 for pid=61954
+[SYSCALL] thread_spawn: parent=61953 tid=61978 trampoline=0x40032f
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 13 for pid=61963
+[MM-0] exec rejected while address-space borrowers are live
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 14 for pid=61957
+[CAP] Created endpoint 15 for pid=61963
+[CAP] Created endpoint 16 for pid=61963
+[CAP] Created endpoint 17 for pid=61955
+[CAP] Created endpoint 18 for pid=61963
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 19 for pid=61958
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 20 for pid=61963
+[CAP] Created endpoint 21 for pid=61960
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 22 for pid=61963
+[CAP] Created endpoint 23 for pid=61963
+[CAP] Created endpoint 24 for pid=61962
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 25 for pid=61958
+[CAP] Created endpoint 26 for pid=61959
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 27 for pid=61958
+[CAP] Created endpoint 28 for pid=61963
+[CAP] Created endpoint 29 for pid=61963
+[CAP] Created endpoint 30 for pid=61954
+[CAP] Created endpoint 31 for pid=61957
+[CAP] Created endpoint 32 for pid=61963
+[CAP] Created endpoint 33 for pid=61960
+[CAP] Created endpoint 34 for pid=61958
+[SHM]  shm_free: page unmapped OK
+[CAP] Created endpoint 35 for pid=61956
+[CAP] Created endpoint 36 for pid=61962
+[CAP] Created endpoint 37 for pid=61959
+[CAP] Created endpoint 38 for pid=61959
+[CAP] Created endpoint 39 for pid=61962
+[CAP] Created endpoint 40 for pid=61954
+[CAP] Created endpoint 41 for pid=61963
+[CAP] Created endpoint 42 for pid=61957
+[CAP] Created endpoint 43 for pid=61962
+[CAP] Created endpoint 44 for pid=61959
+[CAP] Created endpoint 45 for pid=61963
+[CAP] Created endpoint 46 for pid=61963
+[CAP] Created endpoint 47 for pid=61963
+[CAP] Created endpoint 48 for pid=61963
+[CAP] Created endpoint 49 for pid=61957
+[CAP] Created endpoint 50 for pid=61959
+[CAP] Created endpoint 51 for pid=61954
+[CAP] Created endpoint 52 for pid=61954
+[CAP] Created endpoint 53 for pid=61954
+[CAP] Created endpoint 54 for pid=61964
+[CAP] Created endpoint 55 for pid=61961
+[CAP] Created endpoint 56 for pid=61956
+[CAP] Created endpoint 57 for pid=61962
+[CAP] Created endpoint 58 for pid=61958
+[CAP] Created endpoint 59 for pid=61958
+[CAP] Created endpoint 60 for pid=61957
+[CAP] Created endpoint 61 for pid=61959
+[CAP] Created endpoint 62 for pid=61957
+[CAP] Created endpoint 63 for pid=61957
+[CAP] Created endpoint 64 for pid=61963
+[CAP] Created endpoint 65 for pid=61957
+[CAP] Created endpoint 66 for pid=61954
+[CAP] Created endpoint 67 for pid=61960
+[CAP] Created endpoint 68 for pid=61960
+[CAP] Created endpoint 69 for pid=61956
+[CAP] Created endpoint 70 for pid=61962
+[CAP] Created endpoint 71 for pid=61959
+[CAP] Created endpoint 72 for pid=61959
+[CAP] Created endpoint 73 for pid=61961
+[CAP] Created endpoint 74 for pid=61956
+[CAP] Created endpoint 75 for pid=61959
+[CAP] Created endpoint 76 for pid=61957
+[CAP] Created endpoint 77 for pid=61957
+[CAP] Created endpoint 78 for pid=61957
+[CAP] Created endpoint 79 for pid=61957
+[CAP] Created endpoint 80 for pid=61957
+[CAP] Created endpoint 81 for pid=61964
+[CAP] Created endpoint 82 for pid=61957
+[CAP] Created endpoint 83 for pid=61958
+[CAP] Created endpoint 84 for pid=61958
+[CAP] Created endpoint 85 for pid=61958
+[CAP] Created endpoint 86 for pid=61963
+[CAP] Created endpoint 87 for pid=61965
+[CAP] Created endpoint 88 for pid=61962
+[CAP] Created endpoint 89 for pid=61962
+[CAP] Created endpoint 90 for pid=61962
+[CAP] Created endpoint 91 for pid=61954
+[CAP] Created endpoint 92 for pid=61958
+[CAP] Created endpoint 93 for pid=61960
+[CAP] Created endpoint 94 for pid=61964
+[CAP] Created endpoint 95 for pid=61957
+[CAP] Created endpoint 96 for pid=61956
+[CAP] Created endpoint 97 for pid=61960
+[CAP] Created endpoint 98 for pid=61961
+[CAP] Created endpoint 99 for pid=61963
+[CAP] Created endpoint 100 for pid=61958
+[CAP] Created endpoint 101 for pid=61954
+[CAP] Created endpoint 102 for pid=61954
+[CAP] Created endpoint 103 for pid=61954
+[CAP] Created endpoint 104 for pid=61954
+[CAP] Created endpoint 105 for pid=61961
+[CAP] Created endpoint 106 for pid=61963
+[CAP] Created endpoint 107 for pid=61965
+[CAP] Created endpoint 108 for pid=61965
+[CAP] Created endpoint 109 for pid=61956
+[CAP] Created endpoint 110 for pid=61963
+[CAP] Created endpoint 111 for pid=61956
+[CAP] Created endpoint 112 for pid=61960
+[CAP] Created endpoint 113 for pid=61962
+[CAP] Created endpoint 114 for pid=61957
+[CAP] Created endpoint 115 for pid=61957
+[CAP] Created endpoint 116 for pid=61961
+[CAP] Created endpoint 117 for pid=61964
+[CAP] Created endpoint 118 for pid=61965
+[CAP] Created endpoint 119 for pid=61965
+[CAP] Created endpoint 120 for pid=61954
+[CAP] Created endpoint 121 for pid=61958
+[CAP] Created endpoint 122 for pid=61962
+[CAP] Created endpoint 123 for pid=61977
+[CAP] Created endpoint 124 for pid=61962
+[CAP] Created endpoint 125 for pid=61972
+[CAP] Created endpoint 126 for pid=61970
+[CAP] Created endpoint 127 for pid=61969
+[CAP] Created endpoint 128 for pid=61971
+[CAP] Created endpoint 129 for pid=61976
+[CAP] Created endpoint 130 for pid=61975
+[CAP] Created endpoint 131 for pid=61961
+[CAP] Created endpoint 132 for pid=61954
+[CAP] Created endpoint 133 for pid=61962
+[CAP] Created endpoint 134 for pid=61962
+[CAP] Created endpoint 135 for pid=61962
+[CAP] Created endpoint 136 for pid=61968
+[CAP] Created endpoint 137 for pid=61973
+[CAP] Created endpoint 138 for pid=61954
+[CAP] Created endpoint 139 for pid=61955
+[CAP] Created endpoint 140 for pid=61974
+[CAP] Created endpoint 141 for pid=61954
+[CAP] Created endpoint 142 for pid=61954
+[CAP] Created endpoint 143 for pid=61954
+[CAP] Created endpoint 144 for pid=61954
+[CAP] Created endpoint 145 for pid=61955
+[CAP] Created endpoint 146 for pid=61954
+[CAP] Created endpoint 147 for pid=61954
+[CAP] Created endpoint 148 for pid=61955
+[CAP] Created endpoint 149 for pid=61954
+[CAP] Created endpoint 150 for pid=61955
+[CAP] Created endpoint 151 for pid=61955
+[CAP] Created endpoint 152 for pid=61955
+[CAP] Created endpoint 153 for pid=61954
+[CAP] Created endpoint 154 for pid=61954
+[CAP] Created endpoint 155 for pid=61955
+[CAP] Created endpoint 156 for pid=61954
+[CAP] Created endpoint 157 for pid=61955
+[CAP] Created endpoint 158 for pid=61970
+[CAP] Created endpoint 159 for pid=61966
+[CAP] Created endpoint 160 for pid=61955
+[CAP] Created endpoint 161 for pid=61970
+[CAP] Created endpoint 162 for pid=61971
+[CAP] Created endpoint 163 for pid=61955
+[CAP] Created endpoint 164 for pid=61977
+[CAP] Created endpoint 165 for pid=61968
+[CAP] Created endpoint 166 for pid=61955
+[CAP] Created endpoint 167 for pid=61955
+[CAP] Created endpoint 168 for pid=61955
+[CAP] Created endpoint 169 for pid=61976
+[CAP] Created endpoint 170 for pid=61955
+[CAP] Created endpoint 171 for pid=61971
+[CAP] Created endpoint 172 for pid=61971
+[CAP] Created endpoint 173 for pid=61970
+[CAP] Created endpoint 174 for pid=61968
+[CAP] Created endpoint 175 for pid=61975
+[CAP] Created endpoint 176 for pid=61969
+[CAP] Created endpoint 177 for pid=61971
+[CAP] Created endpoint 178 for pid=61955
+[CAP] Created endpoint 179 for pid=61974
+[CAP] Created endpoint 180 for pid=61977
+[CAP] Created endpoint 181 for pid=61976
+[CAP] Created endpoint 182 for pid=61955
+[CAP] Created endpoint 183 for pid=61977
+[CAP] Created endpoint 184 for pid=61970
+[CAP] Created endpoint 185 for pid=61971
+[CAP] Created endpoint 186 for pid=61971
+[CAP] Created endpoint 187 for pid=61976
+[CAP] Created endpoint 188 for pid=61976
+[CAP] Created endpoint 189 for pid=61971
+[CAP] Created endpoint 190 for pid=61975
+[CAP] Created endpoint 191 for pid=61976
+[CAP] Created endpoint 192 for pid=61955
+[CAP] Created endpoint 193 for pid=61974
+[CAP] Created endpoint 194 for pid=61970
+[CAP] Created endpoint 195 for pid=61973
+[CAP] Created endpoint 196 for pid=61955
+[CAP] Created endpoint 197 for pid=61969
+[CAP] Created endpoint 198 for pid=61970
+[CAP] Created endpoint 199 for pid=61977
+[CAP] Created endpoint 200 for pid=61955
+[CAP] Created endpoint 201 for pid=61971
+[CAP] Created endpoint 202 for pid=61971
+[CAP] Created endpoint 203 for pid=61968
+[CAP] Created endpoint 204 for pid=61975
+[CAP] Created endpoint 205 for pid=61976
+[CAP] Created endpoint 206 for pid=61968
+[CAP] Created endpoint 207 for pid=61973
+[CAP] Created endpoint 208 for pid=61971
+[CAP] Created endpoint 209 for pid=61955
+[CAP] Created endpoint 210 for pid=61955
+[CAP] Created endpoint 211 for pid=61975
+[CAP] Created endpoint 212 for pid=61975
+[CAP] Created endpoint 213 for pid=61971
+[CAP] Created endpoint 214 for pid=61977
+[CAP] Created endpoint 215 for pid=61968
+[CAP] Created endpoint 216 for pid=61970
+[CAP] Created endpoint 217 for pid=61976
+[CAP] Created endpoint 218 for pid=61975
+[CAP] Created endpoint 219 for pid=61970
+[CAP] Created endpoint 220 for pid=61977
+[CAP] Created endpoint 221 for pid=61955
+[CAP] Created endpoint 222 for pid=61955
+[CAP] Created endpoint 223 for pid=61971
+[CAP] Created endpoint 224 for pid=61973
+[CAP] Created endpoint 225 for pid=61969
+[CAP] Created endpoint 226 for pid=61974
+[CAP] Created endpoint 227 for pid=61955
+[CAP] Created endpoint 228 for pid=61955
+[CAP] Created endpoint 229 for pid=61977
+[CAP] Created endpoint 230 for pid=61977
+[CAP] Created endpoint 231 for pid=61975
+[CAP] Created endpoint 232 for pid=61972
+[CAP] Created endpoint 233 for pid=61969
+[CAP] Created endpoint 234 for pid=61969
+[CAP] Created endpoint 235 for pid=61974
+[CAP] Created endpoint 236 for pid=61955
+[CAP] Created endpoint 237 for pid=61970
+[CAP] Created endpoint 238 for pid=61971
+[CAP] Created endpoint 239 for pid=61971
+[CAP] Created endpoint 240 for pid=61977
+[CAP] Created endpoint 241 for pid=61968
+[CAP] Created endpoint 242 for pid=61974
+[CAP] Created endpoint 243 for pid=61974
+[CAP] Created endpoint 244 for pid=61977
+[CAP] Created endpoint 245 for pid=61971
+[CAP] Created endpoint 246 for pid=61975
+[CAP] Created endpoint 247 for pid=61976
+[CAP] Created endpoint 248 for pid=61976
+[CAP] Created endpoint 249 for pid=61975
+[CAP] Created endpoint 250 for pid=61975
+[CAP] Created endpoint 251 for pid=61973
+[CAP] Created endpoint 252 for pid=61973
+[CAP] Created endpoint 253 for pid=61969
+[CAP] Created endpoint 254 for pid=61974
+[CAP] Created endpoint 255 for pid=61968
+[CAP] Created endpoint 256 for pid=61974
+[CAP] Created endpoint 257 for pid=61971
+[CAP] Created endpoint 258 for pid=61974
+[CAP] Created endpoint 259 for pid=61973
+[CAP] Created endpoint 260 for pid=61970
+[CAP] Created endpoint 261 for pid=61972
+[CAP] Created endpoint 262 for pid=61976
+[CAP] Created endpoint 263 for pid=61967
+[CAP] Created endpoint 264 for pid=61972
+[CAP] Created endpoint 265 for pid=61974
+[CAP] Created endpoint 266 for pid=61969
+[CAP] Created endpoint 267 for pid=61977
+[CAP] Created endpoint 268 for pid=61968
+[CAP] Created endpoint 269 for pid=61977
+[CAP] Created endpoint 270 for pid=61972
+[CAP] Created endpoint 271 for pid=61970
+[CAP] Created endpoint 272 for pid=61971
+[CAP] Created endpoint 273 for pid=61976
+[CAP] Created endpoint 274 for pid=61975
+[CAP] Created endpoint 275 for pid=61969
+[CAP] Created endpoint 276 for pid=61969
+[CAP] Created endpoint 277 for pid=61976
+[CAP] Created endpoint 278 for pid=61976
+[CAP] Created endpoint 279 for pid=61974
+[CAP] Created endpoint 280 for pid=61975
+[CAP] Created endpoint 281 for pid=61973
+[CAP] Created endpoint 282 for pid=61970
+[CAP] Created endpoint 283 for pid=61974
+[CAP] Created endpoint 284 for pid=61975
+[CAP] Created endpoint 285 for pid=61977
+[CAP] Created endpoint 286 for pid=61971
+[CAP] Created endpoint 287 for pid=61975
+[CAP] Created endpoint 288 for pid=61968
+[CAP] Created endpoint 289 for pid=61972
+[CAP] Created endpoint 290 for pid=61975
+[CAP] Created endpoint 291 for pid=61974
+[CAP] Created endpoint 292 for pid=61969
+[CAP] Created endpoint 293 for pid=61970
+[CAP] Created endpoint 294 for pid=61970
+[CAP] Created endpoint 295 for pid=61976
+[CAP] Created endpoint 296 for pid=61977
+[CAP] Created endpoint 297 for pid=61972
+[CAP] Created endpoint 298 for pid=61968
+[CAP] Created endpoint 299 for pid=61976
+[CAP] Created endpoint 300 for pid=61973
+[CAP] Created endpoint 301 for pid=61969
+[CAP] Created endpoint 302 for pid=61977
+[CAP] Created endpoint 303 for pid=61974
+[CAP] Created endpoint 304 for pid=61975
+[CAP] Created endpoint 305 for pid=61972
+[CAP] Created endpoint 306 for pid=61971
+[CAP] Created endpoint 307 for pid=61976
+[CAP] Created endpoint 308 for pid=61972
+[CAP] Created endpoint 309 for pid=61974
+[CAP] Created endpoint 310 for pid=61970
+[CAP] Created endpoint 311 for pid=61969
+[CAP] Created endpoint 312 for pid=61977
+[CAP] Created endpoint 313 for pid=61976
+[CAP] Created endpoint 314 for pid=61968
+[CAP] Created endpoint 315 for pid=61974
+[CAP] Created endpoint 316 for pid=61975
+[CAP] Created endpoint 317 for pid=61976
+[CAP] Created endpoint 318 for pid=61972
+[CAP] Created endpoint 319 for pid=61974
+[CAP] Created endpoint 320 for pid=61968
+[CAP] Created endpoint 321 for pid=61977
+[CAP] Created endpoint 322 for pid=61971
+[CAP] Created endpoint 323 for pid=61966
+[CAP] Created endpoint 324 for pid=61969
+[CAP] Created endpoint 325 for pid=61969
+[CAP] Created endpoint 326 for pid=61972
+[CAP] Created endpoint 327 for pid=61973
+[CAP] Created endpoint 328 for pid=61975
+[CAP] Created endpoint 329 for pid=61969
+[CAP] Created endpoint 330 for pid=61973
+[CAP] Created endpoint 331 for pid=61973
+[CAP] Created endpoint 332 for pid=61973
+[CAP] Created endpoint 333 for pid=61968
+[CAP] Created endpoint 334 for pid=61968
+[CAP] Created endpoint 335 for pid=61977
+[CAP] Created endpoint 336 for pid=61974
+[CAP] Created endpoint 337 for pid=61974
+[CAP] Created endpoint 338 for pid=61969
+[CAP] Created endpoint 339 for pid=61975
+[CAP] Created endpoint 340 for pid=61972
+[CAP] Created endpoint 341 for pid=61971
+[CAP] Created endpoint 342 for pid=61975
+[CAP] Created endpoint 343 for pid=61976
+[CAP] Created endpoint 344 for pid=61970
+[CAP] Created endpoint 345 for pid=61970
+[CAP] Created endpoint 346 for pid=61970
+[CAP] Created endpoint 347 for pid=61970
+[CAP] Created endpoint 348 for pid=61971
+[CAP] Created endpoint 349 for pid=61971
+[CAP] Created endpoint 350 for pid=61972
+[CAP] Created endpoint 351 for pid=61972
+[CAP] Created endpoint 352 for pid=61974
+[CAP] Created endpoint 353 for pid=61968
+[CAP] Created endpoint 354 for pid=61957
+[CAP] Created endpoint 355 for pid=61972
+[CAP] Created endpoint 356 for pid=61975
+[CAP] Created endpoint 357 for pid=61973
+[CAP] Created endpoint 358 for pid=61966
+[CAP] Created endpoint 359 for pid=61960
+[CAP] Created endpoint 360 for pid=61963
+[CAP] Created endpoint 361 for pid=61957
+[CAP] Created endpoint 362 for pid=61974
+[CAP] Created endpoint 363 for pid=61959
+[CAP] Created endpoint 364 for pid=61960
+[CAP] Created endpoint 365 for pid=61960
+[CAP] Created endpoint 366 for pid=61964
+[CAP] Created endpoint 367 for pid=61964
+[CAP] Created endpoint 368 for pid=61958
+[CAP] Created endpoint 369 for pid=61958
+[CAP] Created endpoint 370 for pid=61956
+[CAP] Created endpoint 371 for pid=61965
+[CAP] Created endpoint 372 for pid=61959
+[CAP] Created endpoint 373 for pid=61959
+[CAP] Created endpoint 374 for pid=61960
+[CAP] Created endpoint 375 for pid=61959
+[CAP] Created endpoint 376 for pid=61959
+[CAP] Created endpoint 377 for pid=61965
+[CAP] Created endpoint 378 for pid=61967
+[CAP] Created endpoint 379 for pid=61957
+[CAP] Created endpoint 380 for pid=61957
+[CAP] Created endpoint 381 for pid=61964
+[CAP] Created endpoint 382 for pid=61961
+[CAP] Created endpoint 383 for pid=61963
+[CAP] Created endpoint 384 for pid=61966
+[CAP] Created endpoint 385 for pid=61958
+[CAP] Created endpoint 386 for pid=61956
+[CAP] Created endpoint 387 for pid=61959
+[CAP] Created endpoint 388 for pid=61954
+[CAP] Created endpoint 389 for pid=61965
+[CAP] Created endpoint 390 for pid=61959
+[CAP] Created endpoint 391 for pid=61957
+[CAP] Created endpoint 392 for pid=61964
+[CAP] Created endpoint 393 for pid=61961
+[CAP] Created endpoint 394 for pid=61960
+[CAP] Created endpoint 395 for pid=61957
+[CAP] Created endpoint 396 for pid=61957
+[CAP] Created endpoint 397 for pid=61959
+[CAP] Created endpoint 398 for pid=61954
+[CAP] Created endpoint 399 for pid=61954
+[CAP] Created endpoint 400 for pid=61962
+[CAP] Created endpoint 401 for pid=61960
+[CAP] Created endpoint 402 for pid=61960
+[CAP] Created endpoint 403 for pid=61960
+[CAP] Created endpoint 404 for pid=61960
+[CAP] Created endpoint 405 for pid=61967
+[CAP] Created endpoint 406 for pid=61958
+[CAP] Created endpoint 407 for pid=61956
+[CAP] Created endpoint 408 for pid=61959
+[CAP] Created endpoint 409 for pid=61959
+[CAP] Created endpoint 410 for pid=61960
+[CAP] Created endpoint 411 for pid=61961
+[CAP] Created endpoint 412 for pid=61962
+[CAP] Created endpoint 413 for pid=61957
+[CAP] Created endpoint 414 for pid=61964
+[CAP] Created endpoint 415 for pid=61954
+[CAP] Created endpoint 416 for pid=61967
+[CAP] Created endpoint 417 for pid=61963
+[CAP] Created endpoint 418 for pid=61956
+[CAP] Created endpoint 419 for pid=61965
+[CAP] Created endpoint 420 for pid=61959
+[CAP] Created endpoint 421 for pid=61963
+[CAP] Created endpoint 422 for pid=61964
+[CAP] Created endpoint 423 for pid=61961
+[CAP] Created endpoint 424 for pid=61962
+[CAP] Created endpoint 425 for pid=61956
+[CAP] Created endpoint 426 for pid=61960
+[CAP] Created endpoint 427 for pid=61967
+[CAP] Created endpoint 428 for pid=61954
+[CAP] Created endpoint 429 for pid=61954
+[CAP] Created endpoint 430 for pid=61958
+[CAP] Created endpoint 431 for pid=61958
+[CAP] Created endpoint 432 for pid=61962
+[CAP] Created endpoint 433 for pid=61959
+[CAP] Created endpoint 434 for pid=61967
+[CAP] Created endpoint 435 for pid=61962
+[CAP] Created endpoint 436 for pid=61960
+[CAP] Created endpoint 437 for pid=61964
+[CAP] Created endpoint 438 for pid=61956
+[CAP] Created endpoint 439 for pid=61961
+[CAP] Created endpoint 440 for pid=61958
+[CAP] Created endpoint 441 for pid=61965
+[CAP] Created endpoint 442 for pid=61967
+[CAP] Created endpoint 443 for pid=61957
+[CAP] Created endpoint 444 for pid=61963
+[CAP] Created endpoint 445 for pid=61960
+[CAP] Created endpoint 446 for pid=61962
+[CAP] Created endpoint 447 for pid=61963
+[CAP] Created endpoint 448 for pid=61967
+[CAP] Created endpoint 449 for pid=61967
+[CAP] Created endpoint 450 for pid=61959
+[CAP] Created endpoint 451 for pid=61959
+[CAP] Created endpoint 452 for pid=61967
+[CAP] Created endpoint 453 for pid=61957
+[CAP] Created endpoint 454 for pid=61963
+[CAP] Created endpoint 455 for pid=61964
+[CAP] Created endpoint 456 for pid=61958
+[CAP] Created endpoint 457 for pid=61962
+[CAP] Created endpoint 458 for pid=61965
+[CAP] Created endpoint 459 for pid=61964
+[CAP] Created endpoint 460 for pid=61967
+[CAP] Created endpoint 461 for pid=61965
+[CAP] Created endpoint 462 for pid=61960
+[CAP] Created endpoint 463 for pid=61954
+[CAP] Created endpoint 464 for pid=61958
+[CAP] Created endpoint 465 for pid=61965
+[CAP] Created endpoint 466 for pid=61962
+[CAP] Created endpoint 467 for pid=61961
+[CAP] Created endpoint 468 for pid=61956
+[CAP] Created endpoint 469 for pid=61963
+[CAP] Created endpoint 470 for pid=61963
+[CAP] Created endpoint 471 for pid=61959
+[CAP] Created endpoint 472 for pid=61957
+[CAP] Created endpoint 473 for pid=61959
+[CAP] Created endpoint 474 for pid=61963
+[CAP] Created endpoint 475 for pid=61962
+[CAP] Created endpoint 476 for pid=61960
+[CAP] Created endpoint 477 for pid=61967
+[CAP] Created endpoint 478 for pid=61964
+[CAP] Created endpoint 479 for pid=61961
+[CAP] Created endpoint 480 for pid=61965
+[CAP] Created endpoint 481 for pid=61959
+[CAP] Created endpoint 482 for pid=61956
+[CAP] Created endpoint 483 for pid=61954
+[CAP] Created endpoint 484 for pid=61954
+[CAP] Created endpoint 485 for pid=61960
+[CAP] Created endpoint 486 for pid=61960
+[CAP] Created endpoint 487 for pid=61962
+[CAP] Created endpoint 488 for pid=61957
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 489 for pid=61956
+[CAP] Created endpoint 490 for pid=61959
+[CAP] Created endpoint 491 for pid=61963
+[CAP] Created endpoint 492 for pid=61960
+[CAP] Created endpoint 493 for pid=61964
+[CAP] Created endpoint 494 for pid=61958
+[CAP] Created endpoint 495 for pid=61962
+[CAP] Created endpoint 496 for pid=61962
+[SCHED] process_mark_finished pid=61978 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61978 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61978 name='cap-probe'
+[CAP] Created endpoint 497 for pid=61965
+[CAP] Created endpoint 498 for pid=61965
+[CAP] Created endpoint 499 for pid=61956
+[CAP] Created endpoint 500 for pid=61954
+[CAP] Created endpoint 501 for pid=61961
+[CAP] Created endpoint 502 for pid=61964
+[CAP] Created endpoint 503 for pid=61965
+[CAP] Created endpoint 504 for pid=61961
+[CAP] Created endpoint 505 for pid=61965
+[CAP] Created endpoint 506 for pid=61964
+[CAP] Created endpoint 507 for pid=61964
+[CAP] Created endpoint 508 for pid=61964
+[CAP] Created endpoint 509 for pid=61962
+[CAP] Created endpoint 510 for pid=61959
+[CAP] Created endpoint 511 for pid=61963
+[CAP] Created endpoint 512 for pid=61957
+[CAP] Created endpoint 513 for pid=61959
+[CAP] Created endpoint 514 for pid=61956
+[CAP] Created endpoint 515 for pid=61956
+[CAP] Created endpoint 516 for pid=61964
+[CAP] Created endpoint 517 for pid=61965
+[CAP] Created endpoint 518 for pid=61963
+[CAP] Created endpoint 519 for pid=61957
+[CAP] Created endpoint 520 for pid=61962
+[CAP] Created endpoint 521 for pid=61961
+[CAP] Created endpoint 522 for pid=61956
+[CAP] Created endpoint 523 for pid=61960
+[CAP] Created endpoint 524 for pid=61957
+[CAP] Created endpoint 525 for pid=61957
+[CAP] Created endpoint 526 for pid=61964
+[CAP] Created endpoint 527 for pid=61956
+[CAP] Created endpoint 528 for pid=61960
+[CAP] Created endpoint 529 for pid=61959
+[CAP] Created endpoint 530 for pid=61958
+[CAP] Created endpoint 531 for pid=61964
+[CAP] Created endpoint 532 for pid=61955
+[CAP] Created endpoint 533 for pid=61957
+[CAP] Created endpoint 534 for pid=61962
+[CAP] Created endpoint 535 for pid=61955
+[CAP] Created endpoint 536 for pid=61958
+[CAP] Created endpoint 537 for pid=61954
+[CAP] Created endpoint 538 for pid=61961
+[CAP] Created endpoint 539 for pid=61959
+[CAP] Created endpoint 540 for pid=61962
+[CAP] Created endpoint 541 for pid=61960
+[CAP] Created endpoint 542 for pid=61957
+[CAP] Created endpoint 543 for pid=61964
+[CAP] Created endpoint 544 for pid=61956
+[CAP] Created endpoint 545 for pid=61963
+[CAP] Created endpoint 546 for pid=61960
+[CAP] Created endpoint 547 for pid=61962
+[CAP] Created endpoint 548 for pid=61963
+[CAP] Created endpoint 549 for pid=61961
+[CAP] Created endpoint 550 for pid=61954
+[CAP] Created endpoint 551 for pid=61960
+[CAP] Created endpoint 552 for pid=61958
+[CAP] Created endpoint 553 for pid=61960
+[CAP] Created endpoint 554 for pid=61965
+[CAP] Created endpoint 555 for pid=61962
+[CAP] Created endpoint 556 for pid=61957
+[CAP] Created endpoint 557 for pid=61957
+[CAP] Created endpoint 558 for pid=61960
+[CAP] Created endpoint 559 for pid=61959
+[CAP] Created endpoint 560 for pid=61961
+[CAP] Created endpoint 561 for pid=61955
+[CAP] Created endpoint 562 for pid=61956
+[CAP] Created endpoint 563 for pid=61964
+[CAP] Created endpoint 564 for pid=61961
+[SCHED] process_reaped pid=61978 name='cap-probe' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61978 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61978 cleared_msgs=0
+[THREAD-LIFECYCLE] created=1 finished=1 reaped=1 borrower_reclaim_skipped=1 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[CAP] Created endpoint 565 for pid=61969
+[CAP] Created endpoint 566 for pid=61972
+[CAP] Created endpoint 567 for pid=61959
+[CAP] Created endpoint 568 for pid=61976
+[CAP] Created endpoint 569 for pid=61977
+[CAP] Created endpoint 570 for pid=61955
+[CAP] Created endpoint 571 for pid=61955
+[CAP] Created endpoint 572 for pid=61955
+[CAP] Created endpoint 573 for pid=61972
+[CAP] Created endpoint 574 for pid=61954
+[CAP] Created endpoint 575 for pid=61970
+[CAP] Created endpoint 576 for pid=61969
+[CAP] Created endpoint 577 for pid=61961
+[CAP] Created endpoint 578 for pid=61968
+[CAP] Created endpoint 579 for pid=61962
+[CAP] Created endpoint 580 for pid=61962
+[CAP] Created endpoint 581 for pid=61962
+[CAP] Created endpoint 582 for pid=61955
+[CAP] Created endpoint 583 for pid=61969
+[CAP] Created endpoint 584 for pid=61975
+[CAP] Created endpoint 585 for pid=61971
+[CAP] Created endpoint 586 for pid=61970
+[CAP] Created endpoint 587 for pid=61976
+[CAP] Created endpoint 588 for pid=61972
+[CAP] Created endpoint 589 for pid=61971
+[CAP] Created endpoint 590 for pid=61975
+[CAP] Created endpoint 591 for pid=61970
+[CAP] Created endpoint 592 for pid=61976
+[CAP] Created endpoint 593 for pid=61970
+[CAP] Created endpoint 594 for pid=61955
+[CAP] Created endpoint 595 for pid=61970
+[CAP] Created endpoint 596 for pid=61973
+[CAP] Created endpoint 597 for pid=61972
+[CAP] Created endpoint 598 for pid=61972
+[CAP] Created endpoint 599 for pid=61976
+[CAP] Created endpoint 600 for pid=61976
+[CAP] Created endpoint 601 for pid=61975
+[CAP] Created endpoint 602 for pid=61969
+[CAP] Created endpoint 603 for pid=61954
+[CAP] Created endpoint 604 for pid=61954
+[CAP] Created endpoint 605 for pid=61973
+[CAP] Created endpoint 606 for pid=61973
+[CAP] Created endpoint 607 for pid=61968
+[CAP] Created endpoint 608 for pid=61972
+[CAP] Created endpoint 609 for pid=61971
+[CAP] Created endpoint 610 for pid=61962
+[CAP] Created endpoint 611 for pid=61962
+[CAP] Created endpoint 612 for pid=61977
+[CAP] Created endpoint 613 for pid=61977
+[CAP] Created endpoint 614 for pid=61968
+[CAP] Created endpoint 615 for pid=61970
+[CAP] Created endpoint 616 for pid=61970
+[CAP] Created endpoint 617 for pid=61970
+[CAP] Created endpoint 618 for pid=61972
+[CAP] Created endpoint 619 for pid=61972
+[CAP] Created endpoint 620 for pid=61973
+[CAP] Created endpoint 621 for pid=61972
+[CAP] Created endpoint 622 for pid=61975
+[CAP] Created endpoint 623 for pid=61973
+[CAP] Created endpoint 624 for pid=61972
+[CAP] Created endpoint 625 for pid=61969
+[CAP] Created endpoint 626 for pid=61977
+[CAP] Created endpoint 627 for pid=61955
+[CAP] Created endpoint 628 for pid=61972
+[CAP] Created endpoint 629 for pid=61968
+[CAP] Created endpoint 630 for pid=61955
+[CAP] Created endpoint 631 for pid=61975
+[CAP] Created endpoint 632 for pid=61976
+[CAP] Created endpoint 633 for pid=61966
+[CAP] Created endpoint 634 for pid=61973
+[CAP] Created endpoint 635 for pid=61977
+[CAP] Created endpoint 636 for pid=61977
+[CAP] Created endpoint 637 for pid=61972
+[CAP] Created endpoint 638 for pid=61970
+[CAP] Created endpoint 639 for pid=61977
+[CAP] Created endpoint 640 for pid=61972
+[CAP] Created endpoint 641 for pid=61973
+[CAP] Created endpoint 642 for pid=61966
+[CAP] Created endpoint 643 for pid=61969
+[CAP] Created endpoint 644 for pid=61971
+[CAP] Created endpoint 645 for pid=61973
+[CAP] Created endpoint 646 for pid=61975
+[CAP] Created endpoint 647 for pid=61971
+[CAP] Created endpoint 648 for pid=61969
+[CAP] Created endpoint 649 for pid=61974
+[CAP] Created endpoint 650 for pid=61976
+[CAP] Created endpoint 651 for pid=61968
+[CAP] Created endpoint 652 for pid=61977
+[CAP] Created endpoint 653 for pid=61977
+[CAP] Created endpoint 654 for pid=61972
+[CAP] Created endpoint 655 for pid=61972
+[CAP] Created endpoint 656 for pid=61973
+[CAP] Created endpoint 657 for pid=61969
+[CAP] Created endpoint 658 for pid=61974
+[CAP] Created endpoint 659 for pid=61972
+[CAP] Created endpoint 660 for pid=61972
+[CAP] Created endpoint 661 for pid=61972
+[CAP] Created endpoint 662 for pid=61972
+[CAP] Created endpoint 663 for pid=61969
+[CAP] Created endpoint 664 for pid=61966
+[CAP] Created endpoint 665 for pid=61971
+[CAP] Created endpoint 666 for pid=61975
+[CAP] Created endpoint 667 for pid=61968
+[CAP] Created endpoint 668 for pid=61969
+[CAP] Created endpoint 669 for pid=61971
+[CAP] Created endpoint 670 for pid=61975
+[CAP] Created endpoint 671 for pid=61976
+[CAP] Created endpoint 672 for pid=61970
+[CAP] Created endpoint 673 for pid=61968
+[CAP] Created endpoint 674 for pid=61971
+[CAP] Created endpoint 675 for pid=61969
+[CAP] Created endpoint 676 for pid=61972
+[CAP] Created endpoint 677 for pid=61966
+[CAP] Created endpoint 678 for pid=61955
+[CAP] Created endpoint 679 for pid=61977
+[CAP] Created endpoint 680 for pid=61955
+[CAP] Created endpoint 681 for pid=61955
+[CAP] Created endpoint 682 for pid=61969
+[CAP] Created endpoint 683 for pid=61969
+[CAP] Created endpoint 684 for pid=61975
+[CAP] Created endpoint 685 for pid=61975
+[CAP] Created endpoint 686 for pid=61955
+[CAP] Created endpoint 687 for pid=61973
+[CAP] Created endpoint 688 for pid=61968
+[CAP] Created endpoint 689 for pid=61966
+[CAP] Created endpoint 690 for pid=61974
+[CAP] Created endpoint 691 for pid=61970
+[CAP] Created endpoint 692 for pid=61971
+[CAP] Created endpoint 693 for pid=61976
+[CAP] Created endpoint 694 for pid=61974
+[CAP] Created endpoint 695 for pid=61972
+[CAP] Created endpoint 696 for pid=61970
+[CAP] Created endpoint 697 for pid=61971
+[CAP] Created endpoint 698 for pid=61974
+[CAP] Created endpoint 699 for pid=61970
+[CAP] Created endpoint 700 for pid=61969
+[CAP] Created endpoint 701 for pid=61977
+[CAP] Created endpoint 702 for pid=61972
+[CAP] Created endpoint 703 for pid=61968
+[CAP] Created endpoint 704 for pid=61976
+[CAP] Created endpoint 705 for pid=61977
+[CAP] Created endpoint 706 for pid=61975
+[CAP] Created endpoint 707 for pid=61966
+[CAP] Created endpoint 708 for pid=61969
+[CAP] Created endpoint 709 for pid=61970
+[CAP] Created endpoint 710 for pid=61955
+[CAP] Created endpoint 711 for pid=61974
+[CAP] Created endpoint 712 for pid=61973
+[CAP] Created endpoint 713 for pid=61971
+[CAP] Created endpoint 714 for pid=61976
+[CAP] Created endpoint 715 for pid=61972
+[CAP] Created endpoint 716 for pid=61968
+[CAP] Created endpoint 717 for pid=61968
+[CAP] Created endpoint 718 for pid=61976
+[CAP] Created endpoint 719 for pid=61976
+[CAP] Created endpoint 720 for pid=61976
+[CAP] Created endpoint 721 for pid=61976
+[CAP] Created endpoint 722 for pid=61970
+[CAP] Created endpoint 723 for pid=61974
+[CAP] Created endpoint 724 for pid=61975
+[CAP] Created endpoint 725 for pid=61968
+[CAP] Created endpoint 726 for pid=61971
+[CAP] Created endpoint 727 for pid=61977
+[CAP] Created endpoint 728 for pid=61976
+[CAP] Created endpoint 729 for pid=61973
+[CAP] Created endpoint 730 for pid=61975
+[CAP] Created endpoint 731 for pid=61975
+[CAP] Created endpoint 732 for pid=61971
+[CAP] Created endpoint 733 for pid=61969
+[CAP] Created endpoint 734 for pid=61955
+[CAP] Created endpoint 735 for pid=61970
+[CAP] Created endpoint 736 for pid=61977
+[CAP] Created endpoint 737 for pid=61976
+[CAP] Created endpoint 738 for pid=61975
+[CAP] Created endpoint 739 for pid=61976
+[CAP] Created endpoint 740 for pid=61977
+[CAP] Created endpoint 741 for pid=61977
+[CAP] Created endpoint 742 for pid=61977
+[CAP] Created endpoint 743 for pid=61969
+[CAP] Created endpoint 744 for pid=61973
+[CAP] Created endpoint 745 for pid=61970
+[CAP] Created endpoint 746 for pid=61977
+[CAP] Created endpoint 747 for pid=61968
+[CAP] Created endpoint 748 for pid=61966
+[CAP] Created endpoint 749 for pid=61975
+[CAP] Created endpoint 750 for pid=61970
+[CAP] Created endpoint 751 for pid=61972
+[CAP] Created endpoint 752 for pid=61973
+[CAP] Created endpoint 753 for pid=61968
+[CAP] Created endpoint 754 for pid=61970
+[CAP] Created endpoint 755 for pid=61975
+[CAP] Created endpoint 756 for pid=61975
+[CAP] Created endpoint 757 for pid=61974
+[CAP] Created endpoint 758 for pid=61977
+[CAP] Created endpoint 759 for pid=61971
+[CAP] Created endpoint 760 for pid=61974
+[CAP] Created endpoint 761 for pid=61966
+[CAP] Created endpoint 762 for pid=61966
+[CAP] Created endpoint 763 for pid=61976
+[CAP] Created endpoint 764 for pid=61976
+[CAP] Created endpoint 765 for pid=61967
+[CAP] Created endpoint 766 for pid=61969
+[CAP] Created endpoint 767 for pid=61977
+[CAP] Created endpoint 768 for pid=61977
+[CAP] Created endpoint 769 for pid=61975
+[CAP] Created endpoint 770 for pid=61974
+[CAP] Created endpoint 771 for pid=61974
+[CAP] Created endpoint 772 for pid=61971
+[CAP] Created endpoint 773 for pid=61974
+[CAP] Created endpoint 774 for pid=61970
+[CAP] Created endpoint 775 for pid=61972
+[CAP] Created endpoint 776 for pid=61977
+[CAP] Created endpoint 777 for pid=61967
+[CAP] Created endpoint 778 for pid=61969
+[CAP] Created endpoint 779 for pid=61967
+[CAP] Created endpoint 780 for pid=61971
+[CAP] Created endpoint 781 for pid=61975
+[CAP] Created endpoint 782 for pid=61976
+[CAP] Created endpoint 783 for pid=61970
+[CAP] Created endpoint 784 for pid=61970
+[CAP] Created endpoint 785 for pid=61970
+[CAP] Created endpoint 786 for pid=61970
+[CAP] Created endpoint 787 for pid=61973
+[CAP] Created endpoint 788 for pid=61974
+[CAP] Created endpoint 789 for pid=61968
+[CAP] Created endpoint 790 for pid=61972
+[CAP] Created endpoint 791 for pid=61977
+[CAP] Created endpoint 792 for pid=61972
+[CAP] Created endpoint 793 for pid=61968
+[CAP] Created endpoint 794 for pid=61971
+[CAP] Created endpoint 795 for pid=61969
+[CAP] Created endpoint 796 for pid=61974
+[CAP] Created endpoint 797 for pid=61967
+[CAP] Created endpoint 798 for pid=61969
+[CAP] Created endpoint 799 for pid=61976
+[CAP] Created endpoint 800 for pid=61972
+[CAP] Created endpoint 801 for pid=61966
+[CAP] Created endpoint 802 for pid=61973
+[CAP] Created endpoint 803 for pid=61977
+[CAP] Created endpoint 804 for pid=61977
+[CAP] Created endpoint 805 for pid=61968
+[CAP] Created endpoint 806 for pid=61974
+[CAP] Created endpoint 807 for pid=61957
+[CAP] Created endpoint 808 for pid=61971
+[CAP] Created endpoint 809 for pid=61971
+[CAP] Created endpoint 810 for pid=61966
+[CAP] Created endpoint 811 for pid=61966
+[CAP] Created endpoint 812 for pid=61963
+[CAP] Created endpoint 813 for pid=61960
+[CAP] Created endpoint 814 for pid=61958
+[CAP] Created endpoint 815 for pid=61967
+[CAP] Created endpoint 816 for pid=61973
+[CAP] Created endpoint 817 for pid=61965
+[CAP] Created endpoint 818 for pid=61960
+[CAP] Created endpoint 819 for pid=61974
+[CAP] Created endpoint 820 for pid=61966
+[CAP] Created endpoint 821 for pid=61957
+[CAP] Created endpoint 822 for pid=61963
+[CAP] Created endpoint 823 for pid=61961
+[CAP] Created endpoint 824 for pid=61956
+[CAP] Created endpoint 825 for pid=61960
+[CAP] Created endpoint 826 for pid=61974
+[CAP] Created endpoint 827 for pid=61964
+[CAP] Created endpoint 828 for pid=61967
+[CAP] Created endpoint 829 for pid=61960
+[CAP] Created endpoint 830 for pid=61974
+[CAP] Created endpoint 831 for pid=61963
+[CAP] Created endpoint 832 for pid=61965
+[CAP] Created endpoint 833 for pid=61966
+[CAP] Created endpoint 834 for pid=61961
+[CAP] Created endpoint 835 for pid=61957
+[CAP] Created endpoint 836 for pid=61956
+[CAP] Created endpoint 837 for pid=61967
+[CAP] Created endpoint 838 for pid=61960
+[CAP] Created endpoint 839 for pid=61961
+[CAP] Created endpoint 840 for pid=61964
+[CAP] Created endpoint 841 for pid=61964
+[CAP] Created endpoint 842 for pid=61961
+[CAP] Created endpoint 843 for pid=61974
+[CAP] Created endpoint 844 for pid=61959
+[CAP] Created endpoint 845 for pid=61958
+[CAP] Created endpoint 846 for pid=61965
+[CAP] Created endpoint 847 for pid=61957
+[CAP] Created endpoint 848 for pid=61958
+[CAP] Created endpoint 849 for pid=61961
+[CAP] Created endpoint 850 for pid=61964
+[CAP] Created endpoint 851 for pid=61964
+[CAP] Created endpoint 852 for pid=61964
+[CAP] Created endpoint 853 for pid=61960
+[CAP] Created endpoint 854 for pid=61966
+[CAP] Created endpoint 855 for pid=61966
+[CAP] Created endpoint 856 for pid=61964
+[CAP] Created endpoint 857 for pid=61964
+[CAP] Created endpoint 858 for pid=61974
+[CAP] Created endpoint 859 for pid=61974
+[CAP] Created endpoint 860 for pid=61974
+[CAP] Created endpoint 861 for pid=61965
+[CAP] Created endpoint 862 for pid=61959
+[CAP] Created endpoint 863 for pid=61961
+[CAP] Created endpoint 864 for pid=61967
+[CAP] Created endpoint 865 for pid=61956
+[CAP] Created endpoint 866 for pid=61957
+[CAP] Created endpoint 867 for pid=61964
+[CAP] Created endpoint 868 for pid=61963
+[CAP] Created endpoint 869 for pid=61960
+[CAP] Created endpoint 870 for pid=61956
+[CAP] Created endpoint 871 for pid=61961
+[CAP] Created endpoint 872 for pid=61967
+[CAP] Created endpoint 873 for pid=61965
+[CAP] Created endpoint 874 for pid=61956
+[CAP] Created endpoint 875 for pid=61960
+[EXEC-R3] live borrower rejected exec; borrower exited PASS
+[CAP] Created endpoint 876 for pid=61963
+[CAP] Created endpoint 877 for pid=61963
+[CAP] Created endpoint 878 for pid=61957
+[CAP] Created endpoint 879 for pid=61959
+[CAP] Created endpoint 880 for pid=61956
+[CAP] Created endpoint 881 for pid=61964
+[CAP] Created endpoint 882 for pid=61962
+[CAP] Created endpoint 883 for pid=61958
+[CAP] Created endpoint 884 for pid=61958
+[CAP] Created endpoint 885 for pid=61958
+[CAP] Created endpoint 886 for pid=61958
+[CAP] Created endpoint 887 for pid=61958
+[CAP] Created endpoint 888 for pid=61958
+[CAP] Created endpoint 889 for pid=61958
+[CAP] Created endpoint 890 for pid=61958
+[CAP] Created endpoint 891 for pid=61958
+[CAP] Created endpoint 892 for pid=61958
+[CAP] Created endpoint 893 for pid=61963
+[CAP] Created endpoint 894 for pid=61965
+[CAP] Created endpoint 895 for pid=61964
+[CAP] Created endpoint 896 for pid=61961
+[CAP] Created endpoint 897 for pid=61961
+[CAP] Created endpoint 898 for pid=61961
+[SYSCALL] thread_spawn: parent=61953 tid=61979 trampoline=0x40032f
+[CAP] Created endpoint 899 for pid=61961
+[CAP] Created endpoint 900 for pid=61964
+[CAP] Created endpoint 901 for pid=61956
+[CAP] Created endpoint 902 for pid=61964
+[CAP] Created endpoint 903 for pid=61963
+[CAP] Created endpoint 904 for pid=61958
+[CAP] Created endpoint 905 for pid=61962
+[CAP] Created endpoint 906 for pid=61967
+[CAP] Created endpoint 907 for pid=61957
+[CAP] Created endpoint 908 for pid=61965
+[CAP] Created endpoint 909 for pid=61963
+[CAP] Created endpoint 910 for pid=61963
+[CAP] Created endpoint 911 for pid=61964
+[CAP] Created endpoint 912 for pid=61960
+[CAP] Created endpoint 913 for pid=61964
+[CAP] Created endpoint 914 for pid=61956
+[CAP] Created endpoint 915 for pid=61961
+[CAP] Created endpoint 916 for pid=61961
+[CAP] Created endpoint 917 for pid=61964
+[CAP] Created endpoint 918 for pid=61965
+[CAP] Created endpoint 919 for pid=61958
+[CAP] Created endpoint 920 for pid=61963
+[CAP] Created endpoint 921 for pid=61962
+[CAP] Created endpoint 922 for pid=61964
+[CAP] Created endpoint 923 for pid=61958
+[CAP] Created endpoint 924 for pid=61960
+[CAP] Created endpoint 925 for pid=61956
+[CAP] Created endpoint 926 for pid=61957
+[CAP] Created endpoint 927 for pid=61967
+[CAP] Created endpoint 928 for pid=61965
+[CAP] Created endpoint 929 for pid=61954
+[CAP] Created endpoint 930 for pid=61959
+[CAP] Created endpoint 931 for pid=61963
+[CAP] Created endpoint 932 for pid=61961
+[CAP] Created endpoint 933 for pid=61960
+[CAP] Created endpoint 934 for pid=61960
+[CAP] Created endpoint 935 for pid=61960
+[CAP] Created endpoint 936 for pid=61960
+[CAP] Created endpoint 937 for pid=61960
+[CAP] Created endpoint 938 for pid=61960
+[CAP] Created endpoint 939 for pid=61965
+[CAP] Created endpoint 940 for pid=61965
+[CAP] Created endpoint 941 for pid=61967
+[CAP] Created endpoint 942 for pid=61959
+[CAP] Created endpoint 943 for pid=61965
+[CAP] Created endpoint 944 for pid=61964
+[CAP] Created endpoint 945 for pid=61956
+[CAP] Created endpoint 946 for pid=61961
+[CAP] Created endpoint 947 for pid=61963
+[CAP] Created endpoint 948 for pid=61963
+[CAP] Created endpoint 949 for pid=61958
+[CAP] Created endpoint 950 for pid=61962
+[CAP] Created endpoint 951 for pid=61960
+[CAP] Created endpoint 952 for pid=61962
+[CAP] Created endpoint 953 for pid=61959
+[CAP] Created endpoint 954 for pid=61961
+[CAP] Created endpoint 955 for pid=61959
+[CAP] Created endpoint 956 for pid=61956
+[CAP] Created endpoint 957 for pid=61967
+[CAP] Created endpoint 958 for pid=61957
+[CAP] Created endpoint 959 for pid=61963
+[CAP] Created endpoint 960 for pid=61954
+[CAP] Created endpoint 961 for pid=61961
+[CAP] Created endpoint 962 for pid=61962
+[CAP] Created endpoint 963 for pid=61965
+[CAP] Created endpoint 964 for pid=61960
+[CAP] Created endpoint 965 for pid=61958
+[CAP] Created endpoint 966 for pid=61963
+[CAP] Created endpoint 967 for pid=61963
+[CAP] Created endpoint 968 for pid=61964
+[CAP] Created endpoint 969 for pid=61956
+[CAP] Created endpoint 970 for pid=61954
+[CAP] Created endpoint 971 for pid=61958
+[CAP] Created endpoint 972 for pid=61959
+[CAP] Created endpoint 973 for pid=61957
+[CAP] Created endpoint 974 for pid=61955
+[CAP] Created endpoint 975 for pid=61960
+[CAP] Created endpoint 976 for pid=61963
+[CAP] Created endpoint 977 for pid=61954
+[CAP] Created endpoint 978 for pid=61962
+[CAP] Created endpoint 979 for pid=61959
+[CAP] Created endpoint 980 for pid=61960
+[CAP] Created endpoint 981 for pid=61956
+[CAP] Created endpoint 982 for pid=61965
+[CAP] Created endpoint 983 for pid=61955
+[CAP] Created endpoint 984 for pid=61954
+[CAP] Created endpoint 985 for pid=61957
+[CAP] Created endpoint 986 for pid=61961
+[CAP] Created endpoint 987 for pid=61964
+[CAP] Created endpoint 988 for pid=61962
+[CAP] Created endpoint 989 for pid=61961
+[CAP] Created endpoint 990 for pid=61958
+[CAP] Created endpoint 991 for pid=61959
+[CAP] Created endpoint 992 for pid=61965
+[CAP] Created endpoint 993 for pid=61964
+[CAP] Created endpoint 994 for pid=61961
+[CAP] Created endpoint 995 for pid=61963
+[CAP] Created endpoint 996 for pid=61955
+[CAP] Created endpoint 997 for pid=61958
+[CAP] Created endpoint 998 for pid=61958
+[CAP] Created endpoint 999 for pid=61958
+[CAP] Created endpoint 1000 for pid=61958
+[CAP] Created endpoint 1001 for pid=61960
+[CAP] Created endpoint 1002 for pid=61956
+[CAP] Created endpoint 1003 for pid=61965
+[CAP] Created endpoint 1004 for pid=61954
+[CAP] Created endpoint 1005 for pid=61957
+[CAP] Created endpoint 1006 for pid=61957
+[CAP] Created endpoint 1007 for pid=61955
+[CAP] Created endpoint 1008 for pid=61962
+[CAP] Created endpoint 1009 for pid=61963
+[CAP] Created endpoint 1010 for pid=61958
+[CAP] Created endpoint 1011 for pid=61962
+[CAP] Created endpoint 1012 for pid=61956
+[CAP] Created endpoint 1013 for pid=61960
+[CAP] Created endpoint 1014 for pid=61965
+[CAP] Created endpoint 1015 for pid=61954
+[CAP] Created endpoint 1016 for pid=61955
+[CAP] Created endpoint 1017 for pid=61958
+[CAP] Created endpoint 1018 for pid=61959
+[CAP] Created endpoint 1019 for pid=61962
+[CAP] Created endpoint 1020 for pid=61963
+[CAP] Created endpoint 1021 for pid=61956
+[CAP] Created endpoint 1022 for pid=61954
+[CAP] Created endpoint 1023 for pid=61965
+[CAP] Created endpoint 1024 for pid=61960
+[CAP] Created endpoint 1025 for pid=61956
+[CAP] Created endpoint 1026 for pid=61958
+[CAP] Created endpoint 1027 for pid=61957
+[CAP] Created endpoint 1028 for pid=61960
+[CAP] Created endpoint 1029 for pid=61961
+[CAP] Created endpoint 1030 for pid=61955
+[CAP] Created endpoint 1031 for pid=61961
+[CAP] Created endpoint 1032 for pid=61964
+[CAP] Created endpoint 1033 for pid=61959
+[CAP] Created endpoint 1034 for pid=61962
+[CAP] Created endpoint 1035 for pid=61961
+[CAP] Created endpoint 1036 for pid=61963
+[CAP] Created endpoint 1037 for pid=61955
+[CAP] Created endpoint 1038 for pid=61957
+[CAP] Created endpoint 1039 for pid=61962
+[CAP] Created endpoint 1040 for pid=61955
+[CAP] Created endpoint 1041 for pid=61955
+[CAP] Created endpoint 1042 for pid=61955
+[CAP] Created endpoint 1043 for pid=61965
+[CAP] Created endpoint 1044 for pid=61954
+[CAP] Created endpoint 1045 for pid=61959
+[CAP] Created endpoint 1046 for pid=61965
+[CAP] Created endpoint 1047 for pid=61969
+[CAP] Created endpoint 1048 for pid=61962
+[CAP] Created endpoint 1049 for pid=61955
+[CAP] Created endpoint 1050 for pid=61970
+[CAP] Created endpoint 1051 for pid=61956
+[CAP] Created endpoint 1052 for pid=61975
+[CAP] Created endpoint 1053 for pid=61975
+[CAP] Created endpoint 1054 for pid=61961
+[CAP] Created endpoint 1055 for pid=61976
+[CAP] Created endpoint 1056 for pid=61976
+[CAP] Created endpoint 1057 for pid=61972
+[CAP] Created endpoint 1058 for pid=61976
+[CAP] Created endpoint 1059 for pid=61962
+[CAP] Created endpoint 1060 for pid=61969
+[CAP] Created endpoint 1061 for pid=61965
+[CAP] Created endpoint 1062 for pid=61955
+[CAP] Created endpoint 1063 for pid=61970
+[CAP] Created endpoint 1064 for pid=61971
+[CAP] Created endpoint 1065 for pid=61961
+[CAP] Created endpoint 1066 for pid=61968
+[CAP] Created endpoint 1067 for pid=61968
+[CAP] Created endpoint 1068 for pid=61975
+[CAP] Created endpoint 1069 for pid=61972
+[CAP] Created endpoint 1070 for pid=61954
+[CAP] Created endpoint 1071 for pid=61976
+[CAP] Created endpoint 1072 for pid=61962
+[CAP] Created endpoint 1073 for pid=61971
+[CAP] Created endpoint 1074 for pid=61955
+[CAP] Created endpoint 1075 for pid=61968
+[CAP] Created endpoint 1076 for pid=61970
+[CAP] Created endpoint 1077 for pid=61969
+[CAP] Created endpoint 1078 for pid=61976
+[CAP] Created endpoint 1079 for pid=61954
+[CAP] Created endpoint 1080 for pid=61954
+[CAP] Created endpoint 1081 for pid=61973
+[CAP] Created endpoint 1082 for pid=61972
+[CAP] Created endpoint 1083 for pid=61955
+[CAP] Created endpoint 1084 for pid=61962
+[CAP] Created endpoint 1085 for pid=61977
+[CAP] Created endpoint 1086 for pid=61975
+[CAP] Created endpoint 1087 for pid=61968
+[CAP] Created endpoint 1088 for pid=61972
+[CAP] Created endpoint 1089 for pid=61969
+[CAP] Created endpoint 1090 for pid=61955
+[CAP] Created endpoint 1091 for pid=61970
+[CAP] Created endpoint 1092 for pid=61962
+[CAP] Created endpoint 1093 for pid=61976
+[CAP] Created endpoint 1094 for pid=61975
+[CAP] Created endpoint 1095 for pid=61962
+[CAP] Created endpoint 1096 for pid=61977
+[CAP] Created endpoint 1097 for pid=61954
+[CAP] Created endpoint 1098 for pid=61973
+[CAP] Created endpoint 1099 for pid=61971
+[CAP] Created endpoint 1100 for pid=61968
+[CAP] Created endpoint 1101 for pid=61972
+[CAP] Created endpoint 1102 for pid=61975
+[CAP] Created endpoint 1103 for pid=61972
+[CAP] Created endpoint 1104 for pid=61962
+[CAP] Created endpoint 1105 for pid=61962
+[CAP] Created endpoint 1106 for pid=61962
+[CAP] Created endpoint 1107 for pid=61973
+[CAP] Created endpoint 1108 for pid=61955
+[CAP] Created endpoint 1109 for pid=61976
+[CAP] Created endpoint 1110 for pid=61973
+[CAP] Created endpoint 1111 for pid=61970
+[CAP] Created endpoint 1112 for pid=61968
+[CAP] Created endpoint 1113 for pid=61977
+[CAP] Created endpoint 1114 for pid=61954
+[CAP] Created endpoint 1115 for pid=61962
+[CAP] Created endpoint 1116 for pid=61977
+[CAP] Created endpoint 1117 for pid=61971
+[CAP] Created endpoint 1118 for pid=61955
+[CAP] Created endpoint 1119 for pid=61975
+[CAP] Created endpoint 1120 for pid=61969
+[CAP] Created endpoint 1121 for pid=61976
+[CAP] Created endpoint 1122 for pid=61973
+[CAP] Created endpoint 1123 for pid=61977
+[CAP] Created endpoint 1124 for pid=61971
+[CAP] Created endpoint 1125 for pid=61969
+[CAP] Created endpoint 1126 for pid=61973
+[CAP] Created endpoint 1127 for pid=61971
+[CAP] Created endpoint 1128 for pid=61976
+[CAP] Created endpoint 1129 for pid=61972
+[CAP] Created endpoint 1130 for pid=61954
+[CAP] Created endpoint 1131 for pid=61976
+[CAP] Created endpoint 1132 for pid=61970
+[CAP] Created endpoint 1133 for pid=61955
+[CAP] Created endpoint 1134 for pid=61974
+[CAP] Created endpoint 1135 for pid=61974
+[CAP] Created endpoint 1136 for pid=61975
+[CAP] Created endpoint 1137 for pid=61973
+[CAP] Created endpoint 1138 for pid=61972
+[CAP] Created endpoint 1139 for pid=61969
+[CAP] Created endpoint 1140 for pid=61969
+[CAP] Created endpoint 1141 for pid=61974
+[CAP] Created endpoint 1142 for pid=61971
+[CAP] Created endpoint 1143 for pid=61968
+[CAP] Created endpoint 1144 for pid=61977
+[CAP] Created endpoint 1145 for pid=61955
+[CAP] Created endpoint 1146 for pid=61970
+[CAP] Created endpoint 1147 for pid=61975
+[CAP] Created endpoint 1148 for pid=61976
+[CAP] Created endpoint 1149 for pid=61955
+[CAP] Created endpoint 1150 for pid=61976
+[CAP] Created endpoint 1151 for pid=61968
+[CAP] Created endpoint 1152 for pid=61970
+[CAP] Created endpoint 1153 for pid=61955
+[CAP] Created endpoint 1154 for pid=61977
+[CAP] Created endpoint 1155 for pid=61969
+[CAP] Created endpoint 1156 for pid=61976
+[CAP] Created endpoint 1157 for pid=61976
+[CAP] Created endpoint 1158 for pid=61976
+[CAP] Created endpoint 1159 for pid=61954
+[CAP] Created endpoint 1160 for pid=61972
+[CAP] Created endpoint 1161 for pid=61973
+[CAP] Created endpoint 1162 for pid=61971
+[CAP] Created endpoint 1163 for pid=61972
+[CAP] Created endpoint 1164 for pid=61955
+[CAP] Created endpoint 1165 for pid=61954
+[CAP] Created endpoint 1166 for pid=61975
+[CAP] Created endpoint 1167 for pid=61969
+[CAP] Created endpoint 1168 for pid=61977
+[CAP] Created endpoint 1169 for pid=61974
+[CAP] Created endpoint 1170 for pid=61972
+[CAP] Created endpoint 1171 for pid=61977
+[CAP] Created endpoint 1172 for pid=61970
+[CAP] Created endpoint 1173 for pid=61973
+[CAP] Created endpoint 1174 for pid=61972
+[CAP] Created endpoint 1175 for pid=61970
+[CAP] Created endpoint 1176 for pid=61973
+[CAP] Created endpoint 1177 for pid=61976
+[CAP] Created endpoint 1178 for pid=61972
+[CAP] Created endpoint 1179 for pid=61954
+[CAP] Created endpoint 1180 for pid=61970
+[CAP] Created endpoint 1181 for pid=61970
+[CAP] Created endpoint 1182 for pid=61977
+[CAP] Created endpoint 1183 for pid=61968
+[CAP] Created endpoint 1184 for pid=61971
+[CAP] Created endpoint 1185 for pid=61972
+[CAP] Created endpoint 1186 for pid=61973
+[CAP] Created endpoint 1187 for pid=61976
+[CAP] Created endpoint 1188 for pid=61969
+[CAP] Created endpoint 1189 for pid=61975
+[CAP] Created endpoint 1190 for pid=61977
+[CAP] Created endpoint 1191 for pid=61974
+[CAP] Created endpoint 1192 for pid=61973
+[CAP] Created endpoint 1193 for pid=61970
+[CAP] Created endpoint 1194 for pid=61969
+[CAP] Created endpoint 1195 for pid=61955
+[CAP] Created endpoint 1196 for pid=61955
+[CAP] Created endpoint 1197 for pid=61955
+[CAP] Created endpoint 1198 for pid=61975
+[CAP] Created endpoint 1199 for pid=61971
+[CAP] Created endpoint 1200 for pid=61975
+[CAP] Created endpoint 1201 for pid=61969
+[CAP] Created endpoint 1202 for pid=61969
+[CAP] Created endpoint 1203 for pid=61971
+[CAP] Created endpoint 1204 for pid=61969
+[CAP] Created endpoint 1205 for pid=61955
+[CAP] Created endpoint 1206 for pid=61968
+[CAP] Created endpoint 1207 for pid=61972
+[CAP] Created endpoint 1208 for pid=61966
+[CAP] Created endpoint 1209 for pid=61966
+[CAP] Created endpoint 1210 for pid=61974
+[CAP] Created endpoint 1211 for pid=61974
+[CAP] Created endpoint 1212 for pid=61971
+[CAP] Created endpoint 1213 for pid=61972
+[CAP] Created endpoint 1214 for pid=61977
+[CAP] Created endpoint 1215 for pid=61972
+[CAP] Created endpoint 1216 for pid=61955
+[CAP] Created endpoint 1217 for pid=61977
+[CAP] Created endpoint 1218 for pid=61976
+[CAP] Created endpoint 1219 for pid=61969
+[CAP] Created endpoint 1220 for pid=61970
+[CAP] Created endpoint 1221 for pid=61955
+[CAP] Created endpoint 1222 for pid=61973
+[CAP] Created endpoint 1223 for pid=61973
+[CAP] Created endpoint 1224 for pid=61968
+[CAP] Created endpoint 1225 for pid=61975
+[CAP] Created endpoint 1226 for pid=61976
+[CAP] Created endpoint 1227 for pid=61976
+[CAP] Created endpoint 1228 for pid=61971
+[CAP] Created endpoint 1229 for pid=61977
+[CAP] Created endpoint 1230 for pid=61972
+[CAP] Created endpoint 1231 for pid=61970
+[CAP] Created endpoint 1232 for pid=61973
+[CAP] Created endpoint 1233 for pid=61971
+[CAP] Created endpoint 1234 for pid=61955
+[CAP] Created endpoint 1235 for pid=61973
+[CAP] Created endpoint 1236 for pid=61976
+[CAP] Created endpoint 1237 for pid=61977
+[CAP] Created endpoint 1238 for pid=61971
+[CAP] Created endpoint 1239 for pid=61968
+[CAP] Created endpoint 1240 for pid=61969
+[CAP] Created endpoint 1241 for pid=61972
+[CAP] Created endpoint 1242 for pid=61970
+[CAP] Created endpoint 1243 for pid=61973
+[CAP] Created endpoint 1244 for pid=61968
+[CAP] Created endpoint 1245 for pid=61966
+[CAP] Created endpoint 1246 for pid=61976
+[CAP] Created endpoint 1247 for pid=61974
+[CAP] Created endpoint 1248 for pid=61975
+[CAP] Created endpoint 1249 for pid=61973
+[CAP] Created endpoint 1250 for pid=61976
+[CAP] Created endpoint 1251 for pid=61968
+[CAP] Created endpoint 1252 for pid=61977
+[CAP] Created endpoint 1253 for pid=61975
+[CAP] Created endpoint 1254 for pid=61970
+[CAP] Created endpoint 1255 for pid=61974
+[CAP] Created endpoint 1256 for pid=61966
+[CAP] Created endpoint 1257 for pid=61971
+[CAP] Created endpoint 1258 for pid=61976
+[CAP] Created endpoint 1259 for pid=61969
+[CAP] Created endpoint 1260 for pid=61972
+[CAP] Created endpoint 1261 for pid=61966
+[CAP] Created endpoint 1262 for pid=61974
+[CAP] Created endpoint 1263 for pid=61977
+[CAP] Created endpoint 1264 for pid=61968
+[CAP] Created endpoint 1265 for pid=61966
+[CAP] Created endpoint 1266 for pid=61972
+[CAP] Created endpoint 1267 for pid=61972
+[CAP] Created endpoint 1268 for pid=61972
+[CAP] Created endpoint 1269 for pid=61970
+[CAP] Created endpoint 1270 for pid=61968
+[CAP] Created endpoint 1271 for pid=61971
+[CAP] Created endpoint 1272 for pid=61973
+[CAP] Created endpoint 1273 for pid=61975
+[CAP] Created endpoint 1274 for pid=61969
+[CAP] Created endpoint 1275 for pid=61977
+[CAP] Created endpoint 1276 for pid=61969
+[CAP] Created endpoint 1277 for pid=61966
+[CAP] Created endpoint 1278 for pid=61976
+[CAP] Created endpoint 1279 for pid=61976
+[CAP] Created endpoint 1280 for pid=61970
+[CAP] Created endpoint 1281 for pid=61977
+[CAP] Created endpoint 1282 for pid=61967
+[CAP] Created endpoint 1283 for pid=61973
+[CAP] Created endpoint 1284 for pid=61976
+[CAP] Created endpoint 1285 for pid=61974
+[CAP] Created endpoint 1286 for pid=61968
+[CAP] Created endpoint 1287 for pid=61971
+[CAP] Created endpoint 1288 for pid=61967
+[CAP] Created endpoint 1289 for pid=61967
+[CAP] Created endpoint 1290 for pid=61974
+[CAP] Created endpoint 1291 for pid=61968
+[CAP] Created endpoint 1292 for pid=61975
+[CAP] Created endpoint 1293 for pid=61974
+[CAP] Created endpoint 1294 for pid=61966
+[CAP] Created endpoint 1295 for pid=61966
+[CAP] Created endpoint 1296 for pid=61966
+[CAP] Created endpoint 1297 for pid=61973
+[CAP] Created endpoint 1298 for pid=61970
+[CAP] Created endpoint 1299 for pid=61970
+[CAP] Created endpoint 1300 for pid=61970
+[CAP] Created endpoint 1301 for pid=61970
+[CAP] Created endpoint 1302 for pid=61970
+[CAP] Created endpoint 1303 for pid=61970
+[CAP] Created endpoint 1304 for pid=61971
+[CAP] Created endpoint 1305 for pid=61971
+[CAP] Created endpoint 1306 for pid=61973
+[CAP] Created endpoint 1307 for pid=61973
+[CAP] Created endpoint 1308 for pid=61972
+[CAP] Created endpoint 1309 for pid=61967
+[CAP] Created endpoint 1310 for pid=61967
+[CAP] Created endpoint 1311 for pid=61972
+[CAP] Created endpoint 1312 for pid=61969
+[CAP] Created endpoint 1313 for pid=61969
+[CAP] Created endpoint 1314 for pid=61976
+[CAP] Created endpoint 1315 for pid=61975
+[CAP] Created endpoint 1316 for pid=61972
+[CAP] Created endpoint 1317 for pid=61966
+[CAP] Created endpoint 1318 for pid=61973
+[CAP] Created endpoint 1319 for pid=61969
+[CAP] Created endpoint 1320 for pid=61974
+[CAP] Created endpoint 1321 for pid=61970
+[CAP] Created endpoint 1322 for pid=61967
+[CAP] Created endpoint 1323 for pid=61976
+[CAP] Created endpoint 1324 for pid=61976
+[CAP] Created endpoint 1325 for pid=61975
+[CAP] Created endpoint 1326 for pid=61971
+[CAP] Created endpoint 1327 for pid=61971
+[CAP] Created endpoint 1328 for pid=61969
+[CAP] Created endpoint 1329 for pid=61977
+[CAP] Created endpoint 1330 for pid=61973
+[CAP] Created endpoint 1331 for pid=61966
+[CAP] Created endpoint 1332 for pid=61977
+[CAP] Created endpoint 1333 for pid=61973
+[CAP] Created endpoint 1334 for pid=61973
+[CAP] Created endpoint 1335 for pid=61957
+[CAP] Created endpoint 1336 for pid=61973
+[CAP] Created endpoint 1337 for pid=61967
+[CAP] Created endpoint 1338 for pid=61968
+[CAP] Created endpoint 1339 for pid=61960
+[CAP] Created endpoint 1340 for pid=61977
+[CAP] Created endpoint 1341 for pid=61957
+[CAP] Created endpoint 1342 for pid=61958
+[CAP] Created endpoint 1343 for pid=61971
+[CAP] Created endpoint 1344 for pid=61958
+[CAP] Created endpoint 1345 for pid=61974
+[CAP] Created endpoint 1346 for pid=61967
+[CAP] Created endpoint 1347 for pid=61967
+[CAP] Created endpoint 1348 for pid=61963
+[CAP] Created endpoint 1349 for pid=61964
+[CAP] Created endpoint 1350 for pid=61966
+[CAP] Created endpoint 1351 for pid=61960
+[CAP] Created endpoint 1352 for pid=61977
+[CAP] Created endpoint 1353 for pid=61957
+[CAP] Created endpoint 1354 for pid=61956
+[CAP] Created endpoint 1355 for pid=61971
+[CAP] Created endpoint 1356 for pid=61958
+[CAP] Created endpoint 1357 for pid=61958
+[CAP] Created endpoint 1358 for pid=61957
+[CAP] Created endpoint 1359 for pid=61957
+[CAP] Created endpoint 1360 for pid=61957
+[CAP] Created endpoint 1361 for pid=61957
+[CAP] Created endpoint 1362 for pid=61957
+[CAP] Created endpoint 1363 for pid=61966
+[CAP] Created endpoint 1364 for pid=61959
+[CAP] Created endpoint 1365 for pid=61959
+[CAP] Created endpoint 1366 for pid=61959
+[CAP] Created endpoint 1367 for pid=61974
+[CAP] Created endpoint 1368 for pid=61960
+[CAP] Created endpoint 1369 for pid=61959
+[CAP] Created endpoint 1370 for pid=61964
+[CAP] Created endpoint 1371 for pid=61964
+[CAP] Created endpoint 1372 for pid=61957
+[CAP] Created endpoint 1373 for pid=61964
+[CAP] Created endpoint 1374 for pid=61961
+[CAP] Created endpoint 1375 for pid=61956
+[CAP] Created endpoint 1376 for pid=61974
+[CAP] Created endpoint 1377 for pid=61966
+[CAP] Created endpoint 1378 for pid=61963
+[CAP] Created endpoint 1379 for pid=61958
+[CAP] Created endpoint 1380 for pid=61974
+[CAP] Created endpoint 1381 for pid=61965
+[CAP] Created endpoint 1382 for pid=61960
+[CAP] Created endpoint 1383 for pid=61967
+[CAP] Created endpoint 1384 for pid=61960
+[CAP] Created endpoint 1385 for pid=61974
+[CAP] Created endpoint 1386 for pid=61956
+[CAP] Created endpoint 1387 for pid=61957
+[CAP] Created endpoint 1388 for pid=61965
+[CAP] Created endpoint 1389 for pid=61959
+[CAP] Created endpoint 1390 for pid=61957
+[CAP] Created endpoint 1391 for pid=61966
+[CAP] Created endpoint 1392 for pid=61974
+[CAP] Created endpoint 1393 for pid=61959
+[CAP] Created endpoint 1394 for pid=61960
+[CAP] Created endpoint 1395 for pid=61958
+[CAP] Created endpoint 1396 for pid=61965
+[CAP] Created endpoint 1397 for pid=61964
+[CAP] Created endpoint 1398 for pid=61961
+[CAP] Created endpoint 1399 for pid=61958
+[CAP] Created endpoint 1400 for pid=61960
+[CAP] Created endpoint 1401 for pid=61960
+[CAP] Created endpoint 1402 for pid=61963
+[CAP] Created endpoint 1403 for pid=61959
+[CAP] Created endpoint 1404 for pid=61966
+[CAP] Created endpoint 1405 for pid=61958
+[CAP] Created endpoint 1406 for pid=61964
+[CAP] Created endpoint 1407 for pid=61956
+[CAP] Created endpoint 1408 for pid=61957
+[CAP] Created endpoint 1409 for pid=61967
+[CAP] Created endpoint 1410 for pid=61959
+[CAP] Created endpoint 1411 for pid=61965
+[CAP] Created endpoint 1412 for pid=61974
+[CAP] Created endpoint 1413 for pid=61957
+[CAP] Created endpoint 1414 for pid=61967
+[CAP] Created endpoint 1415 for pid=61960
+[CAP] Created endpoint 1416 for pid=61964
+[CAP] Created endpoint 1417 for pid=61963
+[CAP] Created endpoint 1418 for pid=61966
+[CAP] Created endpoint 1419 for pid=61965
+[CAP] Created endpoint 1420 for pid=61956
+[CAP] Created endpoint 1421 for pid=61957
+[CAP] Created endpoint 1422 for pid=61964
+[CAP] Created endpoint 1423 for pid=61958
+[CAP] Created endpoint 1424 for pid=61962
+[CAP] Created endpoint 1425 for pid=61961
+[CAP] Created endpoint 1426 for pid=61965
+[CAP] Created endpoint 1427 for pid=61964
+[CAP] Created endpoint 1428 for pid=61965
+[CAP] Created endpoint 1429 for pid=61959
+[CAP] Created endpoint 1430 for pid=61957
+[CAP] Created endpoint 1431 for pid=61958
+[CAP] Created endpoint 1432 for pid=61967
+[CAP] Created endpoint 1433 for pid=61960
+[CAP] Created endpoint 1434 for pid=61966
+[CAP] Created endpoint 1435 for pid=61960
+[CAP] Created endpoint 1436 for pid=61958
+[CAP] Created endpoint 1437 for pid=61965
+[CAP] Created endpoint 1438 for pid=61963
+[CAP] Created endpoint 1439 for pid=61958
+[CAP] Created endpoint 1440 for pid=61962
+[CAP] Created endpoint 1441 for pid=61959
+[CAP] Created endpoint 1442 for pid=61959
+[CAP] Created endpoint 1443 for pid=61959
+[CAP] Created endpoint 1444 for pid=61959
+[CAP] Created endpoint 1445 for pid=61961
+[CAP] Created endpoint 1446 for pid=61965
+[CAP] Created endpoint 1447 for pid=61956
+[CAP] Created endpoint 1448 for pid=61958
+[CAP] Created endpoint 1449 for pid=61959
+[CAP] Created endpoint 1450 for pid=61963
+[CAP] Created endpoint 1451 for pid=61966
+[CAP] Created endpoint 1452 for pid=61967
+[CAP] Created endpoint 1453 for pid=61965
+[CAP] Created endpoint 1454 for pid=61964
+[CAP] Created endpoint 1455 for pid=61957
+[CAP] Created endpoint 1456 for pid=61961
+[CAP] Created endpoint 1457 for pid=61958
+[CAP] Created endpoint 1458 for pid=61958
+[CAP] Created endpoint 1459 for pid=61961
+[CAP] Created endpoint 1460 for pid=61962
+[CAP] Created endpoint 1461 for pid=61967
+[CAP] Created endpoint 1462 for pid=61967
+[CAP] Created endpoint 1463 for pid=61967
+[CAP] Created endpoint 1464 for pid=61964
+[CAP] Created endpoint 1465 for pid=61960
+[CAP] Created endpoint 1466 for pid=61957
+[CAP] Created endpoint 1467 for pid=61961
+[CAP] Created endpoint 1468 for pid=61965
+[CAP] Created endpoint 1469 for pid=61956
+[CAP] Created endpoint 1470 for pid=61967
+[CAP] Created endpoint 1471 for pid=61960
+[CAP] Created endpoint 1472 for pid=61960
+[CAP] Created endpoint 1473 for pid=61963
+[CAP] Created endpoint 1474 for pid=61962
+[CAP] Created endpoint 1475 for pid=61966
+[CAP] Created endpoint 1476 for pid=61964
+[CAP] Created endpoint 1477 for pid=61958
+[CAP] Created endpoint 1478 for pid=61958
+[CAP] Created endpoint 1479 for pid=61964
+[CAP] Created endpoint 1480 for pid=61957
+[CAP] Created endpoint 1481 for pid=61963
+[CAP] Created endpoint 1482 for pid=61963
+[CAP] Created endpoint 1483 for pid=61956
+[CAP] Created endpoint 1484 for pid=61956
+[CAP] Created endpoint 1485 for pid=61956
+[CAP] Created endpoint 1486 for pid=61959
+[CAP] Created endpoint 1487 for pid=61959
+[CAP] Created endpoint 1488 for pid=61963
+[CAP] Created endpoint 1489 for pid=61964
+[CAP] Created endpoint 1490 for pid=61956
+[CAP] Created endpoint 1491 for pid=61959
+[CAP] Created endpoint 1492 for pid=61960
+[CAP] Created endpoint 1493 for pid=61965
+[CAP] Created endpoint 1494 for pid=61965
+[CAP] Created endpoint 1495 for pid=61967
+[CAP] Created endpoint 1496 for pid=61956
+[CAP] Created endpoint 1497 for pid=61963
+[CAP] Created endpoint 1498 for pid=61958
+[CAP] Created endpoint 1499 for pid=61967
+[CAP] Created endpoint 1500 for pid=61959
+[CAP] Created endpoint 1501 for pid=61959
+[CAP] Created endpoint 1502 for pid=61956
+[CAP] Created endpoint 1503 for pid=61956
+[CAP] Created endpoint 1504 for pid=61957
+[CAP] Created endpoint 1505 for pid=61957
+[CAP] Created endpoint 1506 for pid=61966
+[CAP] Created endpoint 1507 for pid=61959
+[CAP] Created endpoint 1508 for pid=61959
+[CAP] Created endpoint 1509 for pid=61963
+[CAP] Created endpoint 1510 for pid=61965
+[CAP] Created endpoint 1511 for pid=61957
+[CAP] Created endpoint 1512 for pid=61961
+[CAP] Created endpoint 1513 for pid=61965
+[CAP] Created endpoint 1514 for pid=61960
+[CAP] Created endpoint 1515 for pid=61956
+[CAP] Created endpoint 1516 for pid=61964
+[CAP] Created endpoint 1517 for pid=61964
+[CAP] Created endpoint 1518 for pid=61956
+[CAP] Created endpoint 1519 for pid=61954
+[CAP] Created endpoint 1520 for pid=61967
+[CAP] Created endpoint 1521 for pid=61960
+[CAP] Created endpoint 1522 for pid=61962
+[CAP] Created endpoint 1523 for pid=61962
+[CAP] Created endpoint 1524 for pid=61958
+[CAP] Created endpoint 1525 for pid=61960
+[CAP] Created endpoint 1526 for pid=61962
+[CAP] Created endpoint 1527 for pid=61962
+[CAP] Created endpoint 1528 for pid=61963
+[CAP] Created endpoint 1529 for pid=61965
+[CAP] Created endpoint 1530 for pid=61964
+[CAP] Created endpoint 1531 for pid=61965
+[CAP] Created endpoint 1532 for pid=61964
+[CAP] Created endpoint 1533 for pid=61958
+[CAP] Created endpoint 1534 for pid=61959
+[CAP] Created endpoint 1535 for pid=61963
+[CAP] Created endpoint 1536 for pid=61963
+[CAP] Created endpoint 1537 for pid=61963
+[CAP] Created endpoint 1538 for pid=61963
+[CAP] Created endpoint 1539 for pid=61960
+[CAP] Created endpoint 1540 for pid=61960
+[CAP] Created endpoint 1541 for pid=61962
+[CAP] Created endpoint 1542 for pid=61958
+[CAP] Created endpoint 1543 for pid=61958
+[CAP] Created endpoint 1544 for pid=61958
+[CAP] Created endpoint 1545 for pid=61964
+[CAP] Created endpoint 1546 for pid=61960
+[CAP] Created endpoint 1547 for pid=61961
+[CAP] Created endpoint 1548 for pid=61956
+[CAP] Created endpoint 1549 for pid=61957
+[CAP] Created endpoint 1550 for pid=61959
+[CAP] Created endpoint 1551 for pid=61958
+[CAP] Created endpoint 1552 for pid=61963
+[CAP] Created endpoint 1553 for pid=61954
+[CAP] Created endpoint 1554 for pid=61962
+[CAP] Created endpoint 1555 for pid=61961
+[CAP] Created endpoint 1556 for pid=61962
+[CAP] Created endpoint 1557 for pid=61967
+[CAP] Created endpoint 1558 for pid=61965
+[CAP] Created endpoint 1559 for pid=61959
+[CAP] Created endpoint 1560 for pid=61960
+[CAP] Created endpoint 1561 for pid=61958
+[CAP] Created endpoint 1562 for pid=61963
+[CAP] Created endpoint 1563 for pid=61963
+[CAP] Created endpoint 1564 for pid=61957
+[CAP] Created endpoint 1565 for pid=61956
+[CAP] Created endpoint 1566 for pid=61964
+[CAP] Created endpoint 1567 for pid=61961
+[CAP] Created endpoint 1568 for pid=61954
+[CAP] Created endpoint 1569 for pid=61961
+[CAP] Created endpoint 1570 for pid=61959
+[CAP] Created endpoint 1571 for pid=61962
+[CAP] Created endpoint 1572 for pid=61965
+[CAP] Created endpoint 1573 for pid=61967
+[CAP] Created endpoint 1574 for pid=61963
+[CAP] Created endpoint 1575 for pid=61954
+[CAP] Created endpoint 1576 for pid=61957
+[CAP] Created endpoint 1577 for pid=61959
+[CAP] Created endpoint 1578 for pid=61963
+[CAP] Created endpoint 1579 for pid=61960
+[CAP] Created endpoint 1580 for pid=61964
+[CAP] Created endpoint 1581 for pid=61962
+[CAP] Created endpoint 1582 for pid=61959
+[CAP] Created endpoint 1583 for pid=61962
+[CAP] Created endpoint 1584 for pid=61955
+[CAP] Created endpoint 1585 for pid=61957
+[CAP] Created endpoint 1586 for pid=61963
+[CAP] Created endpoint 1587 for pid=61961
+[CAP] Created endpoint 1588 for pid=61965
+[CAP] Created endpoint 1589 for pid=61963
+[CAP] Created endpoint 1590 for pid=61956
+[CAP] Created endpoint 1591 for pid=61958
+[CAP] Created endpoint 1592 for pid=61964
+[CAP] Created endpoint 1593 for pid=61954
+[CAP] Created endpoint 1594 for pid=61962
+[CAP] Created endpoint 1595 for pid=61960
+[CAP] Created endpoint 1596 for pid=61961
+[CAP] Created endpoint 1597 for pid=61957
+[CAP] Created endpoint 1598 for pid=61960
+[CAP] Created endpoint 1599 for pid=61963
+[CAP] Created endpoint 1600 for pid=61955
+[CAP] Created endpoint 1601 for pid=61955
+[CAP] Created endpoint 1602 for pid=61961
+[CAP] Created endpoint 1603 for pid=61962
+[CAP] Created endpoint 1604 for pid=61961
+[CAP] Created endpoint 1605 for pid=61964
+[CAP] Created endpoint 1606 for pid=61964
+[CAP] Created endpoint 1607 for pid=61964
+[CAP] Created endpoint 1608 for pid=61964
+[CAP] Created endpoint 1609 for pid=61964
+[CAP] Created endpoint 1610 for pid=61956
+[CAP] Created endpoint 1611 for pid=61954
+[CAP] Created endpoint 1612 for pid=61965
+[CAP] Created endpoint 1613 for pid=61963
+[CAP] Created endpoint 1614 for pid=61955
+[CAP] Created endpoint 1615 for pid=61959
+[CAP] Created endpoint 1616 for pid=61958
+[CAP] Created endpoint 1617 for pid=61956
+[CAP] Created endpoint 1618 for pid=61960
+[CAP] Created endpoint 1619 for pid=61957
+[CAP] Created endpoint 1620 for pid=61962
+[CAP] Created endpoint 1621 for pid=61963
+[CAP] Created endpoint 1622 for pid=61960
+[CAP] Created endpoint 1623 for pid=61964
+[CAP] Created endpoint 1624 for pid=61965
+[CAP] Created endpoint 1625 for pid=61955
+[CAP] Created endpoint 1626 for pid=61961
+[CAP] Created endpoint 1627 for pid=61964
+[CAP] Created endpoint 1628 for pid=61954
+[CAP] Created endpoint 1629 for pid=61958
+[CAP] Created endpoint 1630 for pid=61962
+[CAP] Created endpoint 1631 for pid=61958
+[CAP] Created endpoint 1632 for pid=61963
+[CAP] Created endpoint 1633 for pid=61958
+[CAP] Created endpoint 1634 for pid=61955
+[CAP] Created endpoint 1635 for pid=61960
+[CAP] Created endpoint 1636 for pid=61960
+[CAP] Created endpoint 1637 for pid=61960
+[CAP] Created endpoint 1638 for pid=61959
+[CAP] Created endpoint 1639 for pid=61957
+[CAP] Created endpoint 1640 for pid=61957
+[CAP] Created endpoint 1641 for pid=61965
+[CAP] Created endpoint 1642 for pid=61962
+[CAP] Created endpoint 1643 for pid=61954
+[CAP] Created endpoint 1644 for pid=61964
+[CAP] Created endpoint 1645 for pid=61963
+[CAP] Created endpoint 1646 for pid=61958
+[CAP] Created endpoint 1647 for pid=61959
+[CAP] Created endpoint 1648 for pid=61957
+[CAP] Created endpoint 1649 for pid=61961
+[CAP] Created endpoint 1650 for pid=61962
+[CAP] Created endpoint 1651 for pid=61956
+[CAP] Created endpoint 1652 for pid=61965
+[CAP] Created endpoint 1653 for pid=61960
+[CAP] Created endpoint 1654 for pid=61959
+[CAP] Created endpoint 1655 for pid=61958
+[CAP] Created endpoint 1656 for pid=61962
+[CAP] Created endpoint 1657 for pid=61954
+[CAP] Created endpoint 1658 for pid=61954
+[CAP] Created endpoint 1659 for pid=61964
+[CAP] Created endpoint 1660 for pid=61958
+[CAP] Created endpoint 1661 for pid=61954
+[CAP] Created endpoint 1662 for pid=61965
+[CAP] Created endpoint 1663 for pid=61965
+[CAP] Created endpoint 1664 for pid=61960
+[CAP] Created endpoint 1665 for pid=61962
+[CAP] Created endpoint 1666 for pid=61959
+[CAP] Created endpoint 1667 for pid=61965
+[CAP] Created endpoint 1668 for pid=61965
+[CAP] Created endpoint 1669 for pid=61960
+[CAP] Created endpoint 1670 for pid=61965
+[CAP] Created endpoint 1671 for pid=61957
+[CAP] Created endpoint 1672 for pid=61961
+[CAP] Created endpoint 1673 for pid=61963
+[CAP] Created endpoint 1674 for pid=61964
+[CAP] Created endpoint 1675 for pid=61964
+[CAP] Created endpoint 1676 for pid=61956
+[CAP] Created endpoint 1677 for pid=61955
+[CAP] Created endpoint 1678 for pid=61957
+[CAP] Created endpoint 1679 for pid=61961
+[CAP] Created endpoint 1680 for pid=61960
+[CAP] Created endpoint 1681 for pid=61962
+[CAP] Created endpoint 1682 for pid=61959
+[CAP] Created endpoint 1683 for pid=61955
+[CAP] Created endpoint 1684 for pid=61963
+[CAP] Created endpoint 1685 for pid=61954
+[CAP] Created endpoint 1686 for pid=61956
+[CAP] Created endpoint 1687 for pid=61970
+[CAP] Created endpoint 1688 for pid=61959
+[CAP] Created endpoint 1689 for pid=61955
+[CAP] Created endpoint 1690 for pid=61959
+[CAP] Created endpoint 1691 for pid=61965
+[CAP] Created endpoint 1692 for pid=61970
+[CAP] Created endpoint 1693 for pid=61972
+[CAP] Created endpoint 1694 for pid=61963
+[CAP] Created endpoint 1695 for pid=61969
+[CAP] Created endpoint 1696 for pid=61962
+[CAP] Created endpoint 1697 for pid=61970
+[CAP] Created endpoint 1698 for pid=61962
+[CAP] Created endpoint 1699 for pid=61969
+[CAP] Created endpoint 1700 for pid=61954
+[CAP] Created endpoint 1701 for pid=61975
+[CAP] Created endpoint 1702 for pid=61959
+[CAP] Created endpoint 1703 for pid=61968
+[CAP] Created endpoint 1704 for pid=61970
+[CAP] Created endpoint 1705 for pid=61975
+[CAP] Created endpoint 1706 for pid=61962
+[CAP] Created endpoint 1707 for pid=61965
+[CAP] Created endpoint 1708 for pid=61965
+[CAP] Created endpoint 1709 for pid=61975
+[CAP] Created endpoint 1710 for pid=61954
+[CAP] Created endpoint 1711 for pid=61955
+[CAP] Created endpoint 1712 for pid=61959
+[CAP] Created endpoint 1713 for pid=61961
+[CAP] Created endpoint 1714 for pid=61961
+[CAP] Created endpoint 1715 for pid=61976
+[CAP] Created endpoint 1716 for pid=61965
+[CAP] Created endpoint 1717 for pid=61971
+[CAP] Created endpoint 1718 for pid=61961
+[CAP] Created endpoint 1719 for pid=61970
+[CAP] Created endpoint 1720 for pid=61969
+[CAP] Created endpoint 1721 for pid=61972
+[CAP] Created endpoint 1722 for pid=61954
+[CAP] Created endpoint 1723 for pid=61962
+[CAP] Created endpoint 1724 for pid=61965
+[CAP] Created endpoint 1725 for pid=61969
+[CAP] Created endpoint 1726 for pid=61975
+[CAP] Created endpoint 1727 for pid=61968
+[CAP] Created endpoint 1728 for pid=61962
+[CAP] Created endpoint 1729 for pid=61971
+[CAP] Created endpoint 1730 for pid=61955
+[CAP] Created endpoint 1731 for pid=61975
+[CAP] Created endpoint 1732 for pid=61971
+[CAP] Created endpoint 1733 for pid=61969
+[CAP] Created endpoint 1734 for pid=61971
+[CAP] Created endpoint 1735 for pid=61975
+[CAP] Created endpoint 1736 for pid=61975
+[CAP] Created endpoint 1737 for pid=61975
+[CAP] Created endpoint 1738 for pid=61955
+[CAP] Created endpoint 1739 for pid=61955
+[CAP] Created endpoint 1740 for pid=61965
+[CAP] Created endpoint 1741 for pid=61972
+[CAP] Created endpoint 1742 for pid=61962
+[CAP] Created endpoint 1743 for pid=61969
+[CAP] Created endpoint 1744 for pid=61969
+[CAP] Created endpoint 1745 for pid=61973
+[CAP] Created endpoint 1746 for pid=61955
+[CAP] Created endpoint 1747 for pid=61971
+[CAP] Created endpoint 1748 for pid=61971
+[CAP] Created endpoint 1749 for pid=61976
+[CAP] Created endpoint 1750 for pid=61977
+[CAP] Created endpoint 1751 for pid=61972
+[CAP] Created endpoint 1752 for pid=61955
+[CAP] Created endpoint 1753 for pid=61973
+[CAP] Created endpoint 1754 for pid=61954
+[CAP] Created endpoint 1755 for pid=61970
+[CAP] Created endpoint 1756 for pid=61975
+[CAP] Created endpoint 1757 for pid=61968
+[CAP] Created endpoint 1758 for pid=61962
+[CAP] Created endpoint 1759 for pid=61955
+[CAP] Created endpoint 1760 for pid=61973
+[CAP] Created endpoint 1761 for pid=61977
+[CAP] Created endpoint 1762 for pid=61977
+[CAP] Created endpoint 1763 for pid=61970
+[CAP] Created endpoint 1764 for pid=61971
+[CAP] Created endpoint 1765 for pid=61972
+[CAP] Created endpoint 1766 for pid=61970
+[CAP] Created endpoint 1767 for pid=61976
+[CAP] Created endpoint 1768 for pid=61955
+[CAP] Created endpoint 1769 for pid=61976
+[CAP] Created endpoint 1770 for pid=61954
+[CAP] Created endpoint 1771 for pid=61975
+[CAP] Created endpoint 1772 for pid=61969
+[CAP] Created endpoint 1773 for pid=61971
+[CAP] Created endpoint 1774 for pid=61962
+[CAP] Created endpoint 1775 for pid=61970
+[CAP] Created endpoint 1776 for pid=61969
+[CAP] Created endpoint 1777 for pid=61955
+[CAP] Created endpoint 1778 for pid=61972
+[CAP] Created endpoint 1779 for pid=61977
+[CAP] Created endpoint 1780 for pid=61971
+[CAP] Created endpoint 1781 for pid=61969
+[CAP] Created endpoint 1782 for pid=61975
+[CAP] Created endpoint 1783 for pid=61977
+[CAP] Created endpoint 1784 for pid=61972
+[CAP] Created endpoint 1785 for pid=61970
+[CAP] Created endpoint 1786 for pid=61954
+[CAP] Created endpoint 1787 for pid=61962
+[CAP] Created endpoint 1788 for pid=61969
+[CAP] Created endpoint 1789 for pid=61968
+[CAP] Created endpoint 1790 for pid=61976
+[CAP] Created endpoint 1791 for pid=61955
+[CAP] Created endpoint 1792 for pid=61971
+[CAP] Created endpoint 1793 for pid=61975
+[CAP] Created endpoint 1794 for pid=61954
+[CAP] Created endpoint 1795 for pid=61962
+[CAP] Created endpoint 1796 for pid=61962
+[CAP] Created endpoint 1797 for pid=61969
+[CAP] Created endpoint 1798 for pid=61976
+[CAP] Created endpoint 1799 for pid=61955
+[CAP] Created endpoint 1800 for pid=61973
+[CAP] Created endpoint 1801 for pid=61976
+[CAP] Created endpoint 1802 for pid=61954
+[CAP] Created endpoint 1803 for pid=61972
+[CAP] Created endpoint 1804 for pid=61968
+[CAP] Created endpoint 1805 for pid=61970
+[CAP] Created endpoint 1806 for pid=61973
+[CAP] Created endpoint 1807 for pid=61962
+[CAP] Created endpoint 1808 for pid=61977
+[CAP] Created endpoint 1809 for pid=61954
+[CAP] Created endpoint 1810 for pid=61969
+[CAP] Created endpoint 1811 for pid=61968
+[CAP] Created endpoint 1812 for pid=61971
+[CAP] Created endpoint 1813 for pid=61962
+[CAP] Created endpoint 1814 for pid=61973
+[CAP] Created endpoint 1815 for pid=61971
+[CAP] Created endpoint 1816 for pid=61976
+[CAP] Created endpoint 1817 for pid=61976
+[CAP] Created endpoint 1818 for pid=61972
+[CAP] Created endpoint 1819 for pid=61968
+[CAP] Created endpoint 1820 for pid=61968
+[CAP] Created endpoint 1821 for pid=61955
+[CAP] Created endpoint 1822 for pid=61955
+[CAP] Created endpoint 1823 for pid=61955
+[CAP] Created endpoint 1824 for pid=61954
+[CAP] Created endpoint 1825 for pid=61973
+[CAP] Created endpoint 1826 for pid=61969
+[CAP] Created endpoint 1827 for pid=61975
+[CAP] Created endpoint 1828 for pid=61970
+[CAP] Created endpoint 1829 for pid=61977
+[CAP] Created endpoint 1830 for pid=61970
+[CAP] Created endpoint 1831 for pid=61955
+[CAP] Created endpoint 1832 for pid=61977
+[CAP] Created endpoint 1833 for pid=61971
+[CAP] Created endpoint 1834 for pid=61972
+[CAP] Created endpoint 1835 for pid=61976
+[CAP] Created endpoint 1836 for pid=61968
+[CAP] Created endpoint 1837 for pid=61969
+[CAP] Created endpoint 1838 for pid=61974
+[CAP] Created endpoint 1839 for pid=61975
+[CAP] Created endpoint 1840 for pid=61975
+[CAP] Created endpoint 1841 for pid=61975
+[CAP] Created endpoint 1842 for pid=61977
+[CAP] Created endpoint 1843 for pid=61973
+[CAP] Created endpoint 1844 for pid=61975
+[CAP] Created endpoint 1845 for pid=61975
+[CAP] Created endpoint 1846 for pid=61975
+[CAP] Created endpoint 1847 for pid=61977
+[CAP] Created endpoint 1848 for pid=61976
+[CAP] Created endpoint 1849 for pid=61974
+[CAP] Created endpoint 1850 for pid=61973
+[CAP] Created endpoint 1851 for pid=61970
+[CAP] Created endpoint 1852 for pid=61968
+[CAP] Created endpoint 1853 for pid=61973
+[CAP] Created endpoint 1854 for pid=61977
+[CAP] Created endpoint 1855 for pid=61977
+[CAP] Created endpoint 1856 for pid=61977
+[CAP] Created endpoint 1857 for pid=61971
+[CAP] Created endpoint 1858 for pid=61972
+[CAP] Created endpoint 1859 for pid=61969
+[CAP] Created endpoint 1860 for pid=61975
+[CAP] Created endpoint 1861 for pid=61974
+[CAP] Created endpoint 1862 for pid=61955
+[CAP] Created endpoint 1863 for pid=61955
+[CAP] Created endpoint 1864 for pid=61970
+[CAP] Created endpoint 1865 for pid=61975
+[CAP] Created endpoint 1866 for pid=61975
+[CAP] Created endpoint 1867 for pid=61971
+[CAP] Created endpoint 1868 for pid=61976
+[CAP] Created endpoint 1869 for pid=61954
+[CAP] Created endpoint 1870 for pid=61955
+[CAP] Created endpoint 1871 for pid=61976
+[CAP] Created endpoint 1872 for pid=61955
+[CAP] Created endpoint 1873 for pid=61969
+[CAP] Created endpoint 1874 for pid=61954
+[CAP] Created endpoint 1875 for pid=61973
+[CAP] Created endpoint 1876 for pid=61968
+[CAP] Created endpoint 1877 for pid=61972
+[CAP] Created endpoint 1878 for pid=61972
+[CAP] Created endpoint 1879 for pid=61970
+[CAP] Created endpoint 1880 for pid=61970
+[CAP] Created endpoint 1881 for pid=61968
+[CAP] Created endpoint 1882 for pid=61971
+[CAP] Created endpoint 1883 for pid=61976
+[CAP] Created endpoint 1884 for pid=61968
+[CAP] Created endpoint 1885 for pid=61969
+[CAP] Created endpoint 1886 for pid=61968
+[CAP] Created endpoint 1887 for pid=61954
+[CAP] Created endpoint 1888 for pid=61976
+[CAP] Created endpoint 1889 for pid=61976
+[CAP] Created endpoint 1890 for pid=61976
+[CAP] Created endpoint 1891 for pid=61968
+[CAP] Created endpoint 1892 for pid=61955
+[CAP] Created endpoint 1893 for pid=61970
+[CAP] Created endpoint 1894 for pid=61975
+[CAP] Created endpoint 1895 for pid=61974
+[CAP] Created endpoint 1896 for pid=61977
+[CAP] Created endpoint 1897 for pid=61976
+[CAP] Created endpoint 1898 for pid=61971
+[CAP] Created endpoint 1899 for pid=61971
+[CAP] Created endpoint 1900 for pid=61975
+[CAP] Created endpoint 1901 for pid=61973
+[CAP] Created endpoint 1902 for pid=61971
+[CAP] Created endpoint 1903 for pid=61968
+[CAP] Created endpoint 1904 for pid=61971
+[CAP] Created endpoint 1905 for pid=61970
+[CAP] Created endpoint 1906 for pid=61972
+[CAP] Created endpoint 1907 for pid=61954
+[CAP] Created endpoint 1908 for pid=61969
+[CAP] Created endpoint 1909 for pid=61968
+[CAP] Created endpoint 1910 for pid=61974
+[CAP] Created endpoint 1911 for pid=61977
+[CAP] Created endpoint 1912 for pid=61972
+[CAP] Created endpoint 1913 for pid=61972
+[CAP] Created endpoint 1914 for pid=61955
+[CAP] Created endpoint 1915 for pid=61972
+[CAP] Created endpoint 1916 for pid=61977
+[CAP] Created endpoint 1917 for pid=61970
+[CAP] Created endpoint 1918 for pid=61969
+[CAP] Created endpoint 1919 for pid=61974
+[CAP] Created endpoint 1920 for pid=61976
+[CAP] Created endpoint 1921 for pid=61955
+[CAP] Created endpoint 1922 for pid=61970
+[CAP] Created endpoint 1923 for pid=61972
+[CAP] Created endpoint 1924 for pid=61977
+[CAP] Created endpoint 1925 for pid=61973
+[CAP] Created endpoint 1926 for pid=61971
+[CAP] Created endpoint 1927 for pid=61976
+[CAP] Created endpoint 1928 for pid=61954
+[CAP] Created endpoint 1929 for pid=61977
+[CAP] Created endpoint 1930 for pid=61975
+[CAP] Created endpoint 1931 for pid=61968
+[CAP] Created endpoint 1932 for pid=61955
+[CAP] Created endpoint 1933 for pid=61954
+[CAP] Created endpoint 1934 for pid=61954
+[CAP] Created endpoint 1935 for pid=61954
+[CAP] Created endpoint 1936 for pid=61974
+[CAP] Created endpoint 1937 for pid=61974
+[CAP] Created endpoint 1938 for pid=61968
+[CAP] Created endpoint 1939 for pid=61971
+[CAP] Created endpoint 1940 for pid=61970
+[CAP] Created endpoint 1941 for pid=61975
+[CAP] Created endpoint 1942 for pid=61976
+[CAP] Created endpoint 1943 for pid=61977
+[CAP] Created endpoint 1944 for pid=61955
+[CAP] Created endpoint 1945 for pid=61970
+[CAP] Created endpoint 1946 for pid=61974
+[CAP] Created endpoint 1947 for pid=61973
+[CAP] Created endpoint 1948 for pid=61972
+[CAP] Created endpoint 1949 for pid=61975
+[CAP] Created endpoint 1950 for pid=61975
+[CAP] Created endpoint 1951 for pid=61975
+[CAP] Created endpoint 1952 for pid=61966
+[CAP] Created endpoint 1953 for pid=61970
+[CAP] Created endpoint 1954 for pid=61955
+[CAP] Created endpoint 1955 for pid=61969
+[CAP] Created endpoint 1956 for pid=61976
+[CAP] Created endpoint 1957 for pid=61976
+[CAP] Created endpoint 1958 for pid=61968
+[CAP] Created endpoint 1959 for pid=61977
+[CAP] Created endpoint 1960 for pid=61976
+[CAP] Created endpoint 1961 for pid=61970
+[CAP] Created endpoint 1962 for pid=61966
+[CAP] Created endpoint 1963 for pid=61973
+[CAP] Created endpoint 1964 for pid=61976
+[CAP] Created endpoint 1965 for pid=61971
+[CAP] Created endpoint 1966 for pid=61955
+[CAP] Created endpoint 1967 for pid=61972
+[CAP] Created endpoint 1968 for pid=61971
+[CAP] Created endpoint 1969 for pid=61974
+[CAP] Created endpoint 1970 for pid=61976
+[CAP] Created endpoint 1971 for pid=61975
+[CAP] Created endpoint 1972 for pid=61977
+[CAP] Created endpoint 1973 for pid=61976
+[CAP] Created endpoint 1974 for pid=61973
+[CAP] Created endpoint 1975 for pid=61972
+[CAP] Created endpoint 1976 for pid=61970
+[CAP] Created endpoint 1977 for pid=61969
+[CAP] Created endpoint 1978 for pid=61968
+[CAP] Created endpoint 1979 for pid=61955
+[CAP] Created endpoint 1980 for pid=61970
+[CAP] Created endpoint 1981 for pid=61972
+[CAP] Created endpoint 1982 for pid=61974
+[CAP] Created endpoint 1983 for pid=61976
+[CAP] Created endpoint 1984 for pid=61970
+[CAP] Created endpoint 1985 for pid=61970
+[CAP] Created endpoint 1986 for pid=61970
+[CAP] Created endpoint 1987 for pid=61973
+[CAP] Created endpoint 1988 for pid=61977
+[CAP] Created endpoint 1989 for pid=61968
+[CAP] Created endpoint 1990 for pid=61977
+[CAP] Created endpoint 1991 for pid=61977
+[CAP] Created endpoint 1992 for pid=61971
+[CAP] Created endpoint 1993 for pid=61971
+[CAP] Created endpoint 1994 for pid=61975
+[CAP] Created endpoint 1995 for pid=61970
+[CAP] Created endpoint 1996 for pid=61976
+[CAP] Created endpoint 1997 for pid=61969
+[CAP] Created endpoint 1998 for pid=61975
+[CAP] Created endpoint 1999 for pid=61977
+[CAP] Created endpoint 2000 for pid=61974
+[CAP] Created endpoint 2001 for pid=61955
+[CAP] Created endpoint 2002 for pid=61968
+[CAP] Created endpoint 2003 for pid=61974
+[CAP] Created endpoint 2004 for pid=61966
+[CAP] Created endpoint 2005 for pid=61970
+[CAP] Created endpoint 2006 for pid=61971
+[CAP] Created endpoint 2007 for pid=61972
+[CAP] Created endpoint 2008 for pid=61969
+[CAP] Created endpoint 2009 for pid=61973
+[CAP] Created endpoint 2010 for pid=61975
+[CAP] Created endpoint 2011 for pid=61966
+[CAP] Created endpoint 2012 for pid=61955
+[CAP] Created endpoint 2013 for pid=61973
+[CAP] Created endpoint 2014 for pid=61970
+[CAP] Created endpoint 2015 for pid=61969
+[CAP] Created endpoint 2016 for pid=61970
+[CAP] Created endpoint 2017 for pid=61977
+[CAP] Created endpoint 2018 for pid=61975
+[CAP] Created endpoint 2019 for pid=61968
+[CAP] Created endpoint 2020 for pid=61966
+[CAP] Created endpoint 2021 for pid=61973
+[CAP] Created endpoint 2022 for pid=61970
+[CAP] Created endpoint 2023 for pid=61971
+[CAP] Created endpoint 2024 for pid=61968
+[CAP] Created endpoint 2025 for pid=61966
+[CAP] Created endpoint 2026 for pid=61975
+[CAP] Created endpoint 2027 for pid=61974
+[CAP] Created endpoint 2028 for pid=61968
+[CAP] Created endpoint 2029 for pid=61976
+[CAP] Created endpoint 2030 for pid=61972
+[CAP] Created endpoint 2031 for pid=61969
+[CAP] Created endpoint 2032 for pid=61971
+[CAP] Created endpoint 2033 for pid=61971
+[CAP] Created endpoint 2034 for pid=61973
+[CAP] Created endpoint 2035 for pid=61971
+[CAP] Created endpoint 2036 for pid=61968
+[CAP] Created endpoint 2037 for pid=61975
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 2038 for pid=61968
+[CAP] Created endpoint 2039 for pid=61977
+[CAP] Created endpoint 2040 for pid=61971
+[CAP] Created endpoint 2041 for pid=61968
+[CAP] Created endpoint 2042 for pid=61970
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 2043 for pid=61966
+[CAP] Created endpoint 2044 for pid=61975
+[CAP] Created endpoint 2045 for pid=61971
+[CAP-R41] START op=real-auth-reply-account-denied pid=61953 incarnation=2 vm=67 request=1 pending=1
+[CAP-R41] boundary stale-incarnation=denied real-call-cancel=retired duplicate=stable pending=0
+[CAP] Created endpoint 2046 for pid=61976
+[CAP] Created endpoint 2047 for pid=61969
+[CAP] Created endpoint 2048 for pid=61972
+[CAP] Created endpoint 2049 for pid=61975
+[CAP] Created endpoint 2050 for pid=61970
+[CAP] Created endpoint 2051 for pid=61974
+[CAP] Created endpoint 2052 for pid=61966
+[CAP] Created endpoint 2053 for pid=61973
+[CAP] Created endpoint 2054 for pid=61974
+[CAP] Created endpoint 2055 for pid=61977
+[CAP] Created endpoint 2056 for pid=61969
+[CAP] Created endpoint 2057 for pid=61970
+[CAP] Created endpoint 2058 for pid=61976
+[CAP] Created endpoint 2059 for pid=61969
+[CAP] Created endpoint 2060 for pid=61974
+[CAP] Created endpoint 2061 for pid=61975
+[CAP] Created endpoint 2062 for pid=61972
+[CAP] Created endpoint 2063 for pid=61975
+[CAP] Created endpoint 2064 for pid=61975
+[CAP] Created endpoint 2065 for pid=61969
+[CAP] Created endpoint 2066 for pid=61975
+[CAP] Created endpoint 2067 for pid=61969
+[CAP] Created endpoint 2068 for pid=61969
+[CAP] Created endpoint 2069 for pid=61968
+[CAP] Created endpoint 2070 for pid=61971
+[CAP] Created endpoint 2071 for pid=61969
+[CAP] Created endpoint 2072 for pid=61976
+[CAP] Created endpoint 2073 for pid=61976
+[CAP] Created endpoint 2074 for pid=61976
+[CAP] Created endpoint 2075 for pid=61976
+[CAP] Created endpoint 2076 for pid=61977
+[CAP] Created endpoint 2077 for pid=61973
+[CAP] Created endpoint 2078 for pid=61972
+[CAP] Created endpoint 2079 for pid=61970
+[CAP] Created endpoint 2080 for pid=61974
+[CAP] Created endpoint 2081 for pid=61974
+[CAP] Created endpoint 2082 for pid=61974
+[CAP] Created endpoint 2083 for pid=61976
+[CAP] Created endpoint 2084 for pid=61971
+[CAP] Created endpoint 2085 for pid=61969
+[CAP] Created endpoint 2086 for pid=61972
+[CAP] Created endpoint 2087 for pid=61968
+[CAP] Created endpoint 2088 for pid=61966
+[CAP] Created endpoint 2089 for pid=61969
+[CAP] Created endpoint 2090 for pid=61975
+[CAP] Created endpoint 2091 for pid=61967
+[CAP] Created endpoint 2092 for pid=61974
+[CAP] Created endpoint 2093 for pid=61974
+[CAP] Created endpoint 2094 for pid=61972
+[CAP] Created endpoint 2095 for pid=61973
+[CAP] Created endpoint 2096 for pid=61976
+[CAP] Created endpoint 2097 for pid=61971
+[CAP] Created endpoint 2098 for pid=61973
+[CAP] Created endpoint 2099 for pid=61977
+[CAP] Created endpoint 2100 for pid=61966
+[CAP] Created endpoint 2101 for pid=61971
+[CAP] Created endpoint 2102 for pid=61967
+[CAP] Created endpoint 2103 for pid=61973
+[CAP] Created endpoint 2104 for pid=61968
+[CAP] Created endpoint 2105 for pid=61976
+[CAP] Created endpoint 2106 for pid=61976
+[CAP] Created endpoint 2107 for pid=61975
+[CAP] Created endpoint 2108 for pid=61974
+[CAP] Created endpoint 2109 for pid=61976
+[CAP] Created endpoint 2110 for pid=61976
+[CAP] Created endpoint 2111 for pid=61966
+[CAP] Created endpoint 2112 for pid=61957
+[CAP] Created endpoint 2113 for pid=61977
+[CAP] Created endpoint 2114 for pid=61966
+[CAP] Created endpoint 2115 for pid=61966
+[CAP] Created endpoint 2116 for pid=61957
+[CAP] Created endpoint 2117 for pid=61967
+[CAP] Created endpoint 2118 for pid=61966
+[CAP] Created endpoint 2119 for pid=61977
+[CAP] Created endpoint 2120 for pid=61973
+[CAP] Created endpoint 2121 for pid=61974
+[CAP] Created endpoint 2122 for pid=61971
+[CAP] Created endpoint 2123 for pid=61974
+[CAP] Created endpoint 2124 for pid=61966
+[CAP] Created endpoint 2125 for pid=61966
+[CAP] Created endpoint 2126 for pid=61958
+[CAP] Created endpoint 2127 for pid=61960
+[CAP] Created endpoint 2128 for pid=61977
+[CAP] Created endpoint 2129 for pid=61967
+[CAP] Created endpoint 2130 for pid=61960
+[CAP] Created endpoint 2131 for pid=61966
+[CAP] Created endpoint 2132 for pid=61974
+[CAP] Created endpoint 2133 for pid=61963
+[CAP] Created endpoint 2134 for pid=61958
+[CAP] Created endpoint 2135 for pid=61964
+[CAP] Created endpoint 2136 for pid=61971
+[CAP] Created endpoint 2137 for pid=61960
+[CAP] Created endpoint 2138 for pid=61973
+[CAP] Created endpoint 2139 for pid=61967
+[CAP] Created endpoint 2140 for pid=61958
+[CAP] Created endpoint 2141 for pid=61964
+[CAP] Created endpoint 2142 for pid=61957
+[CAP] Created endpoint 2143 for pid=61977
+[CAP] Created endpoint 2144 for pid=61967
+[CAP] Created endpoint 2145 for pid=61967
+[CAP] Created endpoint 2146 for pid=61956
+[CAP] Created endpoint 2147 for pid=61963
+[CAP] Created endpoint 2148 for pid=61963
+[CAP] Created endpoint 2149 for pid=61959
+[CAP] Created endpoint 2150 for pid=61963
+[CAP] Created endpoint 2151 for pid=61960
+[CAP] Created endpoint 2152 for pid=61959
+[CAP] Created endpoint 2153 for pid=61959
+[CAP] Created endpoint 2154 for pid=61957
+[CAP] Created endpoint 2155 for pid=61963
+[CAP] Created endpoint 2156 for pid=61964
+[CAP] Created endpoint 2157 for pid=61959
+[CAP] Created endpoint 2158 for pid=61959
+[CAP] Created endpoint 2159 for pid=61959
+[CAP] Created endpoint 2160 for pid=61959
+[CAP] Created endpoint 2161 for pid=61957
+[CAP] Created endpoint 2162 for pid=61977
+[CAP] Created endpoint 2163 for pid=61977
+[CAP] Created endpoint 2164 for pid=61973
+[CAP] Created endpoint 2165 for pid=61967
+[CAP] Created endpoint 2166 for pid=61960
+[CAP] Created endpoint 2167 for pid=61967
+[CAP] Created endpoint 2168 for pid=61974
+[CAP] Created endpoint 2169 for pid=61964
+[CAP] Created endpoint 2170 for pid=61960
+[CAP] Created endpoint 2171 for pid=61958
+[CAP] Created endpoint 2172 for pid=61957
+[CAP] Created endpoint 2173 for pid=61956
+[CAP] Created endpoint 2174 for pid=61959
+[CAP] Created endpoint 2175 for pid=61974
+[CAP] Created endpoint 2176 for pid=61959
+[CAP] Created endpoint 2177 for pid=61966
+[CAP] Created endpoint 2178 for pid=61960
+[CAP] Created endpoint 2179 for pid=61960
+[CAP] Created endpoint 2180 for pid=61958
+[CAP] Created endpoint 2181 for pid=61967
+[CAP] Created endpoint 2182 for pid=61963
+[CAP] Created endpoint 2183 for pid=61956
+[CAP] Created endpoint 2184 for pid=61974
+[CAP] Created endpoint 2185 for pid=61977
+[CAP] Created endpoint 2186 for pid=61967
+[CAP] Created endpoint 2187 for pid=61964
+[CAP] Created endpoint 2188 for pid=61974
+[CAP] Created endpoint 2189 for pid=61959
+[CAP] Created endpoint 2190 for pid=61967
+[CAP] Created endpoint 2191 for pid=61965
+[CAP] Created endpoint 2192 for pid=61959
+[CAP] Created endpoint 2193 for pid=61966
+[CAP] Created endpoint 2194 for pid=61967
+[CAP] Created endpoint 2195 for pid=61965
+[CAP] Created endpoint 2196 for pid=61965
+[CAP] Created endpoint 2197 for pid=61960
+[CAP] Created endpoint 2198 for pid=61974
+[CAP] Created endpoint 2199 for pid=61967
+[CAP] Created endpoint 2200 for pid=61956
+[CAP] Created endpoint 2201 for pid=61974
+[CAP] Created endpoint 2202 for pid=61963
+[CAP] Created endpoint 2203 for pid=61958
+[CAP] Created endpoint 2204 for pid=61965
+[CAP] Created endpoint 2205 for pid=61957
+[CAP] Created endpoint 2206 for pid=61961
+[CAP] Created endpoint 2207 for pid=61966
+[CAP] Created endpoint 2208 for pid=61964
+[CAP] Created endpoint 2209 for pid=61967
+[CAP] Created endpoint 2210 for pid=61959
+[CAP] Created endpoint 2211 for pid=61958
+[CAP] Created endpoint 2212 for pid=61966
+[CAP] Created endpoint 2213 for pid=61960
+[CAP] Created endpoint 2214 for pid=61974
+[CAP] Created endpoint 2215 for pid=61959
+[CAP] Created endpoint 2216 for pid=61963
+[CAP] Created endpoint 2217 for pid=61957
+[CAP] Created endpoint 2218 for pid=61960
+[CAP] Created endpoint 2219 for pid=61964
+[CAP] Created endpoint 2220 for pid=61966
+[CAP] Created endpoint 2221 for pid=61958
+[CAP] Created endpoint 2222 for pid=61965
+[CAP] Created endpoint 2223 for pid=61974
+[CAP] Created endpoint 2224 for pid=61960
+[CAP] Created endpoint 2225 for pid=61964
+[CAP] Created endpoint 2226 for pid=61966
+[CAP] Created endpoint 2227 for pid=61965
+[CAP] Created endpoint 2228 for pid=61959
+[CAP] Created endpoint 2229 for pid=61956
+[CAP] Created endpoint 2230 for pid=61960
+[CAP] Created endpoint 2231 for pid=61957
+[CAP] Created endpoint 2232 for pid=61967
+[CAP] Created endpoint 2233 for pid=61966
+[CAP] Created endpoint 2234 for pid=61961
+[CAP] Created endpoint 2235 for pid=61956
+[CAP] Created endpoint 2236 for pid=61966
+[CAP] Created endpoint 2237 for pid=61964
+[CAP] Created endpoint 2238 for pid=61958
+[CAP] Created endpoint 2239 for pid=61961
+[CAP] Created endpoint 2240 for pid=61963
+[CAP] Created endpoint 2241 for pid=61960
+[CAP] Created endpoint 2242 for pid=61963
+[CAP] Created endpoint 2243 for pid=61963
+[CAP] Created endpoint 2244 for pid=61963
+[CAP] Created endpoint 2245 for pid=61963
+[CAP] Created endpoint 2246 for pid=61965
+[CAP] Created endpoint 2247 for pid=61964
+[CAP] Created endpoint 2248 for pid=61959
+[CAP] Created endpoint 2249 for pid=61963
+[CAP] Created endpoint 2250 for pid=61958
+[CAP] Created endpoint 2251 for pid=61958
+[CAP] Created endpoint 2252 for pid=61956
+[CAP] Created endpoint 2253 for pid=61966
+[CAP] Created endpoint 2254 for pid=61965
+[CAP] Created endpoint 2255 for pid=61967
+[CAP] Created endpoint 2256 for pid=61957
+[CAP] Created endpoint 2257 for pid=61963
+[CAP] Created endpoint 2258 for pid=61956
+[CAP] Created endpoint 2259 for pid=61961
+[CAP] Created endpoint 2260 for pid=61957
+[CAP] Created endpoint 2261 for pid=61956
+[CAP] Created endpoint 2262 for pid=61959
+[CAP] Created endpoint 2263 for pid=61958
+[CAP] Created endpoint 2264 for pid=61963
+[CAP] Created endpoint 2265 for pid=61963
+[CAP] Created endpoint 2266 for pid=61957
+[CAP] Created endpoint 2267 for pid=61962
+[CAP] Created endpoint 2268 for pid=61967
+[CAP] Created endpoint 2269 for pid=61964
+[CAP] Created endpoint 2270 for pid=61956
+[CAP] Created endpoint 2271 for pid=61963
+[CAP] Created endpoint 2272 for pid=61966
+[CAP] Created endpoint 2273 for pid=61959
+[CAP] Created endpoint 2274 for pid=61967
+[CAP] Created endpoint 2275 for pid=61959
+[CAP] Created endpoint 2276 for pid=61958
+[CAP] Created endpoint 2277 for pid=61960
+[CAP] Created endpoint 2278 for pid=61962
+[CAP] Created endpoint 2279 for pid=61965
+[CAP] Created endpoint 2280 for pid=61958
+[CAP] Created endpoint 2281 for pid=61958
+[CAP] Created endpoint 2282 for pid=61958
+[CAP] Created endpoint 2283 for pid=61966
+[CAP] Created endpoint 2284 for pid=61964
+[CAP] Created endpoint 2285 for pid=61961
+[CAP] Created endpoint 2286 for pid=61963
+[CAP] Created endpoint 2287 for pid=61960
+[CAP] Created endpoint 2288 for pid=61962
+[CAP] Created endpoint 2289 for pid=61958
+[CAP] Created endpoint 2290 for pid=61956
+[CAP] Created endpoint 2291 for pid=61962
+[CAP] Created endpoint 2292 for pid=61966
+[CAP] Created endpoint 2293 for pid=61963
+[CAP] Created endpoint 2294 for pid=61964
+[CAP] Created endpoint 2295 for pid=61957
+[CAP] Created endpoint 2296 for pid=61962
+[CAP] Created endpoint 2297 for pid=61964
+[CAP] Created endpoint 2298 for pid=61959
+[CAP] Created endpoint 2299 for pid=61958
+[CAP] Created endpoint 2300 for pid=61961
+[CAP] Created endpoint 2301 for pid=61967
+[CAP] Created endpoint 2302 for pid=61967
+[CAP] Created endpoint 2303 for pid=61966
+[CAP] Created endpoint 2304 for pid=61961
+[CAP] Created endpoint 2305 for pid=61961
+[CAP] Created endpoint 2306 for pid=61958
+[CAP] Created endpoint 2307 for pid=61956
+[CAP] Created endpoint 2308 for pid=61958
+[CAP] Created endpoint 2309 for pid=61964
+[CAP] Created endpoint 2310 for pid=61960
+[CAP] Created endpoint 2311 for pid=61959
+[CAP] Created endpoint 2312 for pid=61964
+[CAP] Created endpoint 2313 for pid=61962
+[CAP] Created endpoint 2314 for pid=61965
+[CAP] Created endpoint 2315 for pid=61963
+[CAP] Created endpoint 2316 for pid=61963
+[CAP] Created endpoint 2317 for pid=61956
+[CAP] Created endpoint 2318 for pid=61965
+[CAP] Created endpoint 2319 for pid=61958
+[CAP] Created endpoint 2320 for pid=61960
+[CAP] Created endpoint 2321 for pid=61957
+[CAP] Created endpoint 2322 for pid=61960
+[CAP] Created endpoint 2323 for pid=61967
+[CAP] Created endpoint 2324 for pid=61964
+[CAP] Created endpoint 2325 for pid=61958
+[CAP] Created endpoint 2326 for pid=61962
+[CAP] Created endpoint 2327 for pid=61959
+[CAP] Created endpoint 2328 for pid=61961
+[CAP] Created endpoint 2329 for pid=61966
+[CAP] Created endpoint 2330 for pid=61965
+[CAP] Created endpoint 2331 for pid=61962
+[CAP] Created endpoint 2332 for pid=61959
+[CAP] Created endpoint 2333 for pid=61959
+[CAP] Created endpoint 2334 for pid=61965
+[CAP] Created endpoint 2335 for pid=61959
+[CAP] Created endpoint 2336 for pid=61964
+[CAP] Created endpoint 2337 for pid=61963
+[CAP] Created endpoint 2338 for pid=61960
+[CAP] Created endpoint 2339 for pid=61962
+[CAP] Created endpoint 2340 for pid=61967
+[CAP] Created endpoint 2341 for pid=61963
+[CAP] Created endpoint 2342 for pid=61956
+[CAP] Created endpoint 2343 for pid=61958
+[CAP] Created endpoint 2344 for pid=61958
+[CAP] Created endpoint 2345 for pid=61958
+[CAP] Created endpoint 2346 for pid=61958
+[CAP] Created endpoint 2347 for pid=61958
+[CAP] Created endpoint 2348 for pid=61965
+[CAP] Created endpoint 2349 for pid=61961
+[CAP] Created endpoint 2350 for pid=61960
+[CAP] Created endpoint 2351 for pid=61961
+[CAP] Created endpoint 2352 for pid=61957
+[CAP] Created endpoint 2353 for pid=61957
+[CAP] Created endpoint 2354 for pid=61960
+[CAP] Created endpoint 2355 for pid=61964
+[CAP] Created endpoint 2356 for pid=61962
+[CAP] Created endpoint 2357 for pid=61966
+[CAP] Created endpoint 2358 for pid=61965
+[CAP] Created endpoint 2359 for pid=61959
+[CAP] Created endpoint 2360 for pid=61963
+[CAP] Created endpoint 2361 for pid=61957
+[CAP] Created endpoint 2362 for pid=61967
+[CAP] Created endpoint 2363 for pid=61960
+[CAP] Created endpoint 2364 for pid=61964
+[CAP] Created endpoint 2365 for pid=61964
+[CAP] Created endpoint 2366 for pid=61964
+[CAP] Created endpoint 2367 for pid=61962
+[CAP] Created endpoint 2368 for pid=61957
+[CAP] Created endpoint 2369 for pid=61954
+[CAP] Created endpoint 2370 for pid=61963
+[CAP] Created endpoint 2371 for pid=61967
+[CAP] Created endpoint 2372 for pid=61959
+[CAP] Created endpoint 2373 for pid=61956
+[CAP] Created endpoint 2374 for pid=61957
+[CAP] Created endpoint 2375 for pid=61960
+[CAP] Created endpoint 2376 for pid=61957
+[CAP] Created endpoint 2377 for pid=61967
+[CAP] Created endpoint 2378 for pid=61967
+[CAP] Created endpoint 2379 for pid=61967
+[CAP] Created endpoint 2380 for pid=61967
+[CAP] Created endpoint 2381 for pid=61962
+[CAP] Created endpoint 2382 for pid=61964
+[CAP] Created endpoint 2383 for pid=61957
+[CAP] Created endpoint 2384 for pid=61958
+[CAP] Created endpoint 2385 for pid=61965
+[CAP] Created endpoint 2386 for pid=61957
+[CAP] Created endpoint 2387 for pid=61954
+[CAP] Created endpoint 2388 for pid=61959
+[CAP] Created endpoint 2389 for pid=61959
+[CAP] Created endpoint 2390 for pid=61962
+[CAP] Created endpoint 2391 for pid=61961
+[CAP] Created endpoint 2392 for pid=61963
+[CAP] Created endpoint 2393 for pid=61954
+[CAP] Created endpoint 2394 for pid=61967
+[CAP] Created endpoint 2395 for pid=61956
+[CAP] Created endpoint 2396 for pid=61963
+[CAP] Created endpoint 2397 for pid=61962
+[CAP] Created endpoint 2398 for pid=61964
+[CAP] Created endpoint 2399 for pid=61965
+[CAP] Created endpoint 2400 for pid=61960
+[CAP] Created endpoint 2401 for pid=61957
+[CAP] Created endpoint 2402 for pid=61959
+[CAP] Created endpoint 2403 for pid=61958
+[CAP] Created endpoint 2404 for pid=61963
+[CAP] Created endpoint 2405 for pid=61965
+[CAP] Created endpoint 2406 for pid=61967
+[CAP] Created endpoint 2407 for pid=61964
+[CAP] Created endpoint 2408 for pid=61956
+[CAP] Created endpoint 2409 for pid=61958
+[CAP] Created endpoint 2410 for pid=61959
+[CAP] Created endpoint 2411 for pid=61954
+[CAP] Created endpoint 2412 for pid=61959
+[CAP] Created endpoint 2413 for pid=61960
+[CAP] Created endpoint 2414 for pid=61963
+[CAP] Created endpoint 2415 for pid=61959
+[CAP] Created endpoint 2416 for pid=61967
+[CAP] Created endpoint 2417 for pid=61956
+[CAP] Created endpoint 2418 for pid=61961
+[CAP] Created endpoint 2419 for pid=61964
+[CAP] Created endpoint 2420 for pid=61962
+[CAP] Created endpoint 2421 for pid=61957
+[CAP] Created endpoint 2422 for pid=61954
+[CAP] Created endpoint 2423 for pid=61954
+[CAP] Created endpoint 2424 for pid=61963
+[CAP] Created endpoint 2425 for pid=61958
+[CAP] Created endpoint 2426 for pid=61965
+[CAP] Created endpoint 2427 for pid=61960
+[CAP] Created endpoint 2428 for pid=61956
+[CAP] Created endpoint 2429 for pid=61964
+[CAP] Created endpoint 2430 for pid=61959
+[CAP] Created endpoint 2431 for pid=61956
+[CAP] Created endpoint 2432 for pid=61956
+[CAP] Created endpoint 2433 for pid=61962
+[CAP] Created endpoint 2434 for pid=61957
+[CAP] Created endpoint 2435 for pid=61954
+[CAP] Created endpoint 2436 for pid=61959
+[CAP] Created endpoint 2437 for pid=61967
+[CAP] Created endpoint 2438 for pid=61964
+[CAP] Created endpoint 2439 for pid=61961
+[CAP] Created endpoint 2440 for pid=61959
+[CAP] Created endpoint 2441 for pid=61967
+[CAP] Created endpoint 2442 for pid=61954
+[CAP] Created endpoint 2443 for pid=61956
+[CAP] Created endpoint 2444 for pid=61962
+[CAP] Created endpoint 2445 for pid=61957
+[CAP] Created endpoint 2446 for pid=61963
+[CAP] Created endpoint 2447 for pid=61961
+[CAP] Created endpoint 2448 for pid=61967
+[CAP] Created endpoint 2449 for pid=61967
+[CAP] Created endpoint 2450 for pid=61961
+[CAP] Created endpoint 2451 for pid=61958
+[CAP] Created endpoint 2452 for pid=61963
+[CAP] Created endpoint 2453 for pid=61954
+[CAP] Created endpoint 2454 for pid=61959
+[CAP] Created endpoint 2455 for pid=61956
+[CAP] Created endpoint 2456 for pid=61962
+[CAP] Created endpoint 2457 for pid=61965
+[CAP] Created endpoint 2458 for pid=61964
+[CAP] Created endpoint 2459 for pid=61963
+[CAP] Created endpoint 2460 for pid=61960
+[CAP] Created endpoint 2461 for pid=61957
+[CAP] Created endpoint 2462 for pid=61957
+[CAP] Created endpoint 2463 for pid=61956
+[CAP] Created endpoint 2464 for pid=61959
+[CAP] Created endpoint 2465 for pid=61965
+[CAP] Created endpoint 2466 for pid=61957
+[CAP] Created endpoint 2467 for pid=61961
+[CAP] Created endpoint 2468 for pid=61967
+[CAP] Created endpoint 2469 for pid=61958
+[CAP] Created endpoint 2470 for pid=61963
+[CAP] Created endpoint 2471 for pid=61962
+[CAP] Created endpoint 2472 for pid=61960
+[CAP] Created endpoint 2473 for pid=61961
+[CAP] Created endpoint 2474 for pid=61962
+[CAP] Created endpoint 2475 for pid=61962
+[CAP] Created endpoint 2476 for pid=61964
+[CAP] Created endpoint 2477 for pid=61961
+[CAP] Created endpoint 2478 for pid=61962
+[CAP] Created endpoint 2479 for pid=61965
+[CAP] Created endpoint 2480 for pid=61960
+[CAP] Created endpoint 2481 for pid=61962
+[CAP] Created endpoint 2482 for pid=61963
+[CAP] Created endpoint 2483 for pid=61957
+[CAP] Created endpoint 2484 for pid=61962
+[CAP] Created endpoint 2485 for pid=61965
+[CAP] Created endpoint 2486 for pid=61960
+[CAP] Created endpoint 2487 for pid=61965
+[CAP] Created endpoint 2488 for pid=61963
+[CAP] Created endpoint 2489 for pid=61959
+[CAP] Created endpoint 2490 for pid=61965
+[CAP] Created endpoint 2491 for pid=61956
+[CAP] Created endpoint 2492 for pid=61957
+[CAP] Created endpoint 2493 for pid=61961
+[CAP] Created endpoint 2494 for pid=61962
+[CAP] Created endpoint 2495 for pid=61967
+[CAP] Created endpoint 2496 for pid=61961
+[CAP] Created endpoint 2497 for pid=61961
+[CAP] Created endpoint 2498 for pid=61964
+[CAP] Created endpoint 2499 for pid=61960
+[CAP] Created endpoint 2500 for pid=61965
+[CAP] Created endpoint 2501 for pid=61963
+[CAP] Created endpoint 2502 for pid=61958
+[CAP] Created endpoint 2503 for pid=61959
+[CAP] Created endpoint 2504 for pid=61960
+[CAP] Created endpoint 2505 for pid=61954
+[CAP] Created endpoint 2506 for pid=61964
+[CAP] Created endpoint 2507 for pid=61956
+[CAP] Created endpoint 2508 for pid=61964
+[CAP] Created endpoint 2509 for pid=61957
+[CAP] Created endpoint 2510 for pid=61959
+[CAP] Created endpoint 2511 for pid=61957
+[CAP] Created endpoint 2512 for pid=61957
+[CAP] Created endpoint 2513 for pid=61965
+[CAP] Created endpoint 2514 for pid=61962
+[CAP] Created endpoint 2515 for pid=61962
+[CAP] Created endpoint 2516 for pid=61961
+[CAP] Created endpoint 2517 for pid=61958
+[CAP] Created endpoint 2518 for pid=61957
+[CAP] Created endpoint 2519 for pid=61957
+[CAP] Created endpoint 2520 for pid=61957
+[CAP] Created endpoint 2521 for pid=61956
+[CAP] Created endpoint 2522 for pid=61957
+[CAP] Created endpoint 2523 for pid=61963
+[CAP] Created endpoint 2524 for pid=61954
+[CAP] Created endpoint 2525 for pid=61960
+[CAP] Created endpoint 2526 for pid=61961
+[CAP] Created endpoint 2527 for pid=61964
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2528 for pid=61955
+[CAP] Created endpoint 2529 for pid=61959
+[CAP] Created endpoint 2530 for pid=61957
+[CAP] Created endpoint 2531 for pid=61956
+[CAP] Created endpoint 2532 for pid=61965
+[CAP] Created endpoint 2533 for pid=61960
+[SCHED] process_mark_finished pid=61963 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61963 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61963 name='cap-probe'
+[CAP] Created endpoint 2534 for pid=61962
+[CAP] Created endpoint 2535 for pid=61956
+[CAP] Created endpoint 2536 for pid=61957
+[CAP] Created endpoint 2537 for pid=61957
+[CAP] Created endpoint 2538 for pid=61957
+[CAP] Created endpoint 2539 for pid=61959
+[CAP] Created endpoint 2540 for pid=61964
+[CAP] Created endpoint 2541 for pid=61964
+[CAP] Created endpoint 2542 for pid=61965
+[CAP] Created endpoint 2543 for pid=61962
+[SCHED] process_reaped pid=61963 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61963 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61963 cleared_msgs=0
+[CAP] Created endpoint 2544 for pid=61969
+[CAP] Created endpoint 2545 for pid=61962
+[CAP] Created endpoint 2546 for pid=61975
+[CAP] Created endpoint 2547 for pid=61954
+[CAP] Created endpoint 2548 for pid=61959
+[CAP] Created endpoint 2549 for pid=61961
+[CAP] Created endpoint 2550 for pid=61955
+[CAP] Created endpoint 2551 for pid=61970
+[CAP] Created endpoint 2552 for pid=61969
+[CAP] Created endpoint 2553 for pid=61969
+[CAP] Created endpoint 2554 for pid=61965
+[CAP] Created endpoint 2555 for pid=61959
+[CAP] Created endpoint 2556 for pid=61955
+[CAP] Created endpoint 2557 for pid=61972
+[CAP] Created endpoint 2558 for pid=61975
+[CAP] Created endpoint 2559 for pid=61969
+[CAP] Created endpoint 2560 for pid=61954
+[CAP] Created endpoint 2561 for pid=61969
+[CAP] Created endpoint 2562 for pid=61962
+[CAP] Created endpoint 2563 for pid=61961
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2564 for pid=61961
+[SCHED] process_mark_finished pid=61962 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61962 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61962 name='cap-probe'
+[CAP] Created endpoint 2565 for pid=61968
+[CAP] Created endpoint 2566 for pid=61969
+[CAP] Created endpoint 2567 for pid=61961
+[CAP] Created endpoint 2568 for pid=61965
+[SCHED] process_reaped pid=61962 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61962 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61962 cleared_msgs=0
+[CAP] Created endpoint 2569 for pid=61976
+[CAP] Created endpoint 2570 for pid=61970
+[CAP] Created endpoint 2571 for pid=61968
+[CAP] Created endpoint 2572 for pid=61976
+[CAP] Created endpoint 2573 for pid=61961
+[CAP] Created endpoint 2574 for pid=61974
+[CAP] Created endpoint 2575 for pid=61972
+[CAP] Created endpoint 2576 for pid=61970
+[CAP] Created endpoint 2577 for pid=61961
+[CAP] Created endpoint 2578 for pid=61961
+[CAP] Created endpoint 2579 for pid=61961
+[CAP] Created endpoint 2580 for pid=61965
+[CAP] Created endpoint 2581 for pid=61976
+[CAP] Created endpoint 2582 for pid=61955
+[CAP] Created endpoint 2583 for pid=61955
+[CAP] Created endpoint 2584 for pid=61969
+[CAP] Created endpoint 2585 for pid=61954
+[CAP] Created endpoint 2586 for pid=61954
+[CAP] Created endpoint 2587 for pid=61975
+[CAP] Created endpoint 2588 for pid=61955
+[CAP] Created endpoint 2589 for pid=61955
+[CAP] Created endpoint 2590 for pid=61955
+[CAP] Created endpoint 2591 for pid=61968
+[CAP] Created endpoint 2592 for pid=61974
+[CAP] Created endpoint 2593 for pid=61961
+[CAP] Created endpoint 2594 for pid=61968
+[CAP] Created endpoint 2595 for pid=61971
+[CAP] Created endpoint 2596 for pid=61954
+[CAP] Created endpoint 2597 for pid=61955
+[CAP] Created endpoint 2598 for pid=61968
+[CAP] Created endpoint 2599 for pid=61965
+[CAP] Created endpoint 2600 for pid=61972
+[CAP] Created endpoint 2601 for pid=61974
+[CAP] Created endpoint 2602 for pid=61969
+[CAP] Created endpoint 2603 for pid=61969
+[CAP] Created endpoint 2604 for pid=61970
+[CAP] Created endpoint 2605 for pid=61970
+[CAP] Created endpoint 2606 for pid=61976
+[CAP] Created endpoint 2607 for pid=61961
+[CAP] Created endpoint 2608 for pid=61971
+[CAP] Created endpoint 2609 for pid=61969
+[CAP] Created endpoint 2610 for pid=61970
+[CAP] Created endpoint 2611 for pid=61965
+[CAP] Created endpoint 2612 for pid=61954
+[CAP] Created endpoint 2613 for pid=61971
+[CAP] Created endpoint 2614 for pid=61955
+[CAP] Created endpoint 2615 for pid=61974
+[CAP] Created endpoint 2616 for pid=61974
+[CAP] Created endpoint 2617 for pid=61976
+[CAP] Created endpoint 2618 for pid=61968
+[CAP] Created endpoint 2619 for pid=61971
+[CAP] Created endpoint 2620 for pid=61955
+[CAP] Created endpoint 2621 for pid=61975
+[CAP] Created endpoint 2622 for pid=61970
+[CAP] Created endpoint 2623 for pid=61972
+[CAP] Created endpoint 2624 for pid=61973
+[CAP] Created endpoint 2625 for pid=61969
+[CAP] Created endpoint 2626 for pid=61974
+[CAP] Created endpoint 2627 for pid=61976
+[CAP] Created endpoint 2628 for pid=61976
+[CAP] Created endpoint 2629 for pid=61955
+[CAP] Created endpoint 2630 for pid=61971
+[CAP] Created endpoint 2631 for pid=61968
+[CAP] Created endpoint 2632 for pid=61970
+[CAP] Created endpoint 2633 for pid=61975
+[CAP] Created endpoint 2634 for pid=61976
+[CAP] Created endpoint 2635 for pid=61969
+[CAP] Created endpoint 2636 for pid=61973
+[CAP] Created endpoint 2637 for pid=61977
+[CAP] Created endpoint 2638 for pid=61974
+[CAP] Created endpoint 2639 for pid=61954
+[CAP] Created endpoint 2640 for pid=61970
+[CAP] Created endpoint 2641 for pid=61969
+[CAP] Created endpoint 2642 for pid=61968
+[CAP] Created endpoint 2643 for pid=61971
+[CAP] Created endpoint 2644 for pid=61977
+[CAP] Created endpoint 2645 for pid=61975
+[CAP] Created endpoint 2646 for pid=61973
+[CAP] Created endpoint 2647 for pid=61955
+[CAP] Created endpoint 2648 for pid=61968
+[CAP] Created endpoint 2649 for pid=61976
+[CAP] Created endpoint 2650 for pid=61973
+[CAP] Created endpoint 2651 for pid=61974
+[CAP] Created endpoint 2652 for pid=61972
+[CAP] Created endpoint 2653 for pid=61977
+[CAP] Created endpoint 2654 for pid=61954
+[CAP] Created endpoint 2655 for pid=61969
+[CAP] Created endpoint 2656 for pid=61971
+[CAP] Created endpoint 2657 for pid=61970
+[CAP] Created endpoint 2658 for pid=61976
+[CAP] Created endpoint 2659 for pid=61969
+[CAP] Created endpoint 2660 for pid=61955
+[CAP] Created endpoint 2661 for pid=61977
+[CAP] Created endpoint 2662 for pid=61968
+[CAP] Created endpoint 2663 for pid=61975
+[CAP] Created endpoint 2664 for pid=61969
+[CAP] Created endpoint 2665 for pid=61971
+[CAP] Created endpoint 2666 for pid=61970
+[CAP] Created endpoint 2667 for pid=61954
+[CAP] Created endpoint 2668 for pid=61975
+[CAP] Created endpoint 2669 for pid=61974
+[CAP] Created endpoint 2670 for pid=61976
+[CAP] Created endpoint 2671 for pid=61968
+[CAP] Created endpoint 2672 for pid=61975
+[CAP] Created endpoint 2673 for pid=61972
+[CAP] Created endpoint 2674 for pid=61970
+[CAP] Created endpoint 2675 for pid=61973
+[CAP] Created endpoint 2676 for pid=61972
+[CAP] Created endpoint 2677 for pid=61977
+[CAP] Created endpoint 2678 for pid=61954
+[CAP] Created endpoint 2679 for pid=61972
+[CAP] Created endpoint 2680 for pid=61954
+[CAP] Created endpoint 2681 for pid=61976
+[CAP] Created endpoint 2682 for pid=61975
+[CAP] Created endpoint 2683 for pid=61970
+[CAP] Created endpoint 2684 for pid=61955
+[CAP] Created endpoint 2685 for pid=61973
+[CAP] Created endpoint 2686 for pid=61955
+[CAP] Created endpoint 2687 for pid=61974
+[CAP] Created endpoint 2688 for pid=61971
+[CAP] Created endpoint 2689 for pid=61968
+[CAP] Created endpoint 2690 for pid=61969
+[CAP] Created endpoint 2691 for pid=61970
+[CAP] Created endpoint 2692 for pid=61954
+[CAP] Created endpoint 2693 for pid=61972
+[CAP] Created endpoint 2694 for pid=61973
+[CAP] Created endpoint 2695 for pid=61977
+[CAP] Created endpoint 2696 for pid=61976
+[CAP] Created endpoint 2697 for pid=61975
+[CAP] Created endpoint 2698 for pid=61971
+[CAP] Created endpoint 2699 for pid=61970
+[CAP] Created endpoint 2700 for pid=61968
+[CAP] Created endpoint 2701 for pid=61954
+[CAP] Created endpoint 2702 for pid=61969
+[CAP] Created endpoint 2703 for pid=61973
+[CAP] Created endpoint 2704 for pid=61955
+[CAP] Created endpoint 2705 for pid=61977
+[CAP] Created endpoint 2706 for pid=61974
+[CAP] Created endpoint 2707 for pid=61973
+[CAP] Created endpoint 2708 for pid=61954
+[CAP] Created endpoint 2709 for pid=61968
+[CAP] Created endpoint 2710 for pid=61971
+[CAP] Created endpoint 2711 for pid=61955
+[CAP] Created endpoint 2712 for pid=61955
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61955 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61955 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61955 name='cap-probe'
+[CAP] Created endpoint 2713 for pid=61977
+[CAP] Created endpoint 2714 for pid=61976
+[CAP] Created endpoint 2715 for pid=61972
+[CAP] Created endpoint 2716 for pid=61970
+[CAP] Created endpoint 2717 for pid=61971
+[CAP] Created endpoint 2718 for pid=61954
+[CAP] Created endpoint 2719 for pid=61967
+[CAP] Created endpoint 2720 for pid=61969
+[CAP] Created endpoint 2721 for pid=61968
+[CAP] Created endpoint 2722 for pid=61954
+[CAP] Created endpoint 2723 for pid=61973
+[CAP] Created endpoint 2724 for pid=61954
+[CAP] Created endpoint 2725 for pid=61975
+[CAP] Created endpoint 2726 for pid=61973
+[CAP] Created endpoint 2727 for pid=61977
+[CAP] Created endpoint 2728 for pid=61954
+[CAP] Created endpoint 2729 for pid=61976
+[CAP] Created endpoint 2730 for pid=61973
+[CAP] Created endpoint 2731 for pid=61975
+[CAP] Created endpoint 2732 for pid=61974
+[CAP] Created endpoint 2733 for pid=61967
+[CAP] Created endpoint 2734 for pid=61954
+[CAP] Created endpoint 2735 for pid=61954
+[CAP] Created endpoint 2736 for pid=61973
+[CAP] Created endpoint 2737 for pid=61971
+[CAP] Created endpoint 2738 for pid=61954
+[CAP] Created endpoint 2739 for pid=61977
+[CAP] Created endpoint 2740 for pid=61969
+[CAP] Created endpoint 2741 for pid=61974
+[CAP] Created endpoint 2742 for pid=61954
+[CAP] Created endpoint 2743 for pid=61970
+[CAP] Created endpoint 2744 for pid=61975
+[CAP] Created endpoint 2745 for pid=61972
+[CAP] Created endpoint 2746 for pid=61968
+[CAP] Created endpoint 2747 for pid=61969
+[CAP] Created endpoint 2748 for pid=61977
+[CAP] Created endpoint 2749 for pid=61972
+[CAP] Created endpoint 2750 for pid=61954
+[CAP] Created endpoint 2751 for pid=61974
+[CAP] Created endpoint 2752 for pid=61975
+[CAP] Created endpoint 2753 for pid=61975
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2754 for pid=61973
+[CAP] Created endpoint 2755 for pid=61967
+[CAP] Created endpoint 2756 for pid=61971
+[CAP] Created endpoint 2757 for pid=61969
+[CAP] Created endpoint 2758 for pid=61972
+[CAP] Created endpoint 2759 for pid=61973
+[SCHED] process_mark_finished pid=61976 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61976 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61976 name='cap-probe'
+[CAP] Created endpoint 2760 for pid=61971
+[CAP] Created endpoint 2761 for pid=61970
+[CAP] Created endpoint 2762 for pid=61974
+[CAP] Created endpoint 2763 for pid=61974
+[CAP] Created endpoint 2764 for pid=61975
+[CAP] Created endpoint 2765 for pid=61968
+[CAP] Created endpoint 2766 for pid=61968
+[CAP] Created endpoint 2767 for pid=61977
+[CAP] Created endpoint 2768 for pid=61973
+[CAP] Created endpoint 2769 for pid=61970
+[CAP] Created endpoint 2770 for pid=61970
+[CAP] Created endpoint 2771 for pid=61954
+[CAP] Created endpoint 2772 for pid=61977
+[CAP] Created endpoint 2773 for pid=61972
+[CAP] Created endpoint 2774 for pid=61968
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2775 for pid=61964
+[CAP] Created endpoint 2776 for pid=61968
+[CAP] Created endpoint 2777 for pid=61969
+[SCHED] process_mark_finished pid=61970 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61970 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61970 name='cap-probe'
+[CAP] Created endpoint 2778 for pid=61954
+[CAP] Created endpoint 2779 for pid=61967
+[CAP] Created endpoint 2780 for pid=61967
+[CAP] Created endpoint 2781 for pid=61972
+[CAP] Created endpoint 2782 for pid=61972
+[CAP] Created endpoint 2783 for pid=61974
+[CAP] Created endpoint 2784 for pid=61958
+[CAP] Created endpoint 2785 for pid=61973
+[CAP] Created endpoint 2786 for pid=61975
+[CAP] Created endpoint 2787 for pid=61972
+[CAP] Created endpoint 2788 for pid=61968
+[CAP] Created endpoint 2789 for pid=61971
+[CAP] Created endpoint 2790 for pid=61977
+[CAP] Created endpoint 2791 for pid=61977
+[CAP] Created endpoint 2792 for pid=61969
+[CAP] Created endpoint 2793 for pid=61974
+[CAP] Created endpoint 2794 for pid=61974
+[CAP] Created endpoint 2795 for pid=61972
+[CAP] Created endpoint 2796 for pid=61975
+[CAP] Created endpoint 2797 for pid=61964
+[CAP] Created endpoint 2798 for pid=61967
+[CAP] Created endpoint 2799 for pid=61958
+[CAP] Created endpoint 2800 for pid=61958
+[CAP] Created endpoint 2801 for pid=61964
+[CAP] Created endpoint 2802 for pid=61958
+[CAP] Created endpoint 2803 for pid=61968
+[CAP] Created endpoint 2804 for pid=61969
+[CAP] Created endpoint 2805 for pid=61954
+[CAP] Created endpoint 2806 for pid=61973
+[CAP] Created endpoint 2807 for pid=61967
+[CAP] Created endpoint 2808 for pid=61975
+[CAP] Created endpoint 2809 for pid=61975
+[CAP] Created endpoint 2810 for pid=61975
+[CAP] Created endpoint 2811 for pid=61975
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2812 for pid=61967
+[CAP] Created endpoint 2813 for pid=61967
+[CAP] Created endpoint 2814 for pid=61964
+[CAP] Created endpoint 2815 for pid=61964
+[CAP] Created endpoint 2816 for pid=61968
+[CAP] Created endpoint 2817 for pid=61972
+[CAP] Created endpoint 2818 for pid=61973
+[CAP] Created endpoint 2819 for pid=61971
+[SCHED] process_mark_finished pid=61975 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61975 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61975 name='cap-probe'
+[CAP] Created endpoint 2820 for pid=61974
+[CAP] Created endpoint 2821 for pid=61972
+[CAP] Created endpoint 2822 for pid=61958
+[CAP] Created endpoint 2823 for pid=61964
+[CAP] Created endpoint 2824 for pid=61974
+[SCHED] process_reaped pid=61955 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61955 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61955 cleared_msgs=0
+[SCHED] process_reaped pid=61970 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61970 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61970 cleared_msgs=0
+[SCHED] process_reaped pid=61976 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61976 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61976 cleared_msgs=0
+[CAP] Created endpoint 2825 for pid=61969
+[CAP] Created endpoint 2826 for pid=61967
+[CAP] Created endpoint 2827 for pid=61968
+[CAP] Created endpoint 2828 for pid=61971
+[CAP] Created endpoint 2829 for pid=61958
+[CAP] Created endpoint 2830 for pid=61977
+[CAP] Created endpoint 2831 for pid=61969
+[CAP] Created endpoint 2832 for pid=61964
+[CAP] Created endpoint 2833 for pid=61974
+[CAP] Created endpoint 2834 for pid=61973
+[CAP] Created endpoint 2835 for pid=61958
+[CAP] Created endpoint 2836 for pid=61969
+[CAP] Created endpoint 2837 for pid=61971
+[CAP] Created endpoint 2838 for pid=61964
+[CAP] Created endpoint 2839 for pid=61967
+[CAP] Created endpoint 2840 for pid=61977
+[CAP] Created endpoint 2841 for pid=61973
+[CAP] Created endpoint 2842 for pid=61971
+[CAP] Created endpoint 2843 for pid=61972
+[CAP] Created endpoint 2844 for pid=61964
+[CAP] Created endpoint 2845 for pid=61974
+[CAP] Created endpoint 2846 for pid=61968
+[CAP] Created endpoint 2847 for pid=61967
+[CAP] Created endpoint 2848 for pid=61973
+[CAP] Created endpoint 2849 for pid=61969
+[CAP] Created endpoint 2850 for pid=61972
+[CAP] Created endpoint 2851 for pid=61971
+[CAP] Created endpoint 2852 for pid=61958
+[CAP] Created endpoint 2853 for pid=61964
+[CAP] Created endpoint 2854 for pid=61974
+[CAP] Created endpoint 2855 for pid=61967
+[CAP] Created endpoint 2856 for pid=61977
+[CAP] Created endpoint 2857 for pid=61968
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2858 for pid=61974
+[SCHED] process_mark_finished pid=61958 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61958 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61958 name='cap-probe'
+[CAP] Created endpoint 2859 for pid=61977
+[CAP] Created endpoint 2860 for pid=61964
+[CAP] Created endpoint 2861 for pid=61971
+[CAP] Created endpoint 2862 for pid=61974
+[CAP] Created endpoint 2863 for pid=61973
+[CAP] Created endpoint 2864 for pid=61964
+[CAP] Created endpoint 2865 for pid=61964
+[CAP] Created endpoint 2866 for pid=61968
+[CAP] Created endpoint 2867 for pid=61967
+[CAP] Created endpoint 2868 for pid=61974
+[CAP] Created endpoint 2869 for pid=61969
+[CAP] Created endpoint 2870 for pid=61972
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2871 for pid=61977
+[SCHED] process_mark_finished pid=61964 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61964 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61964 name='cap-probe'
+[CAP] Created endpoint 2872 for pid=61972
+[CAP] Created endpoint 2873 for pid=61967
+[CAP] Created endpoint 2874 for pid=61966
+[CAP] Created endpoint 2875 for pid=61972
+[CAP] Created endpoint 2876 for pid=61967
+[CAP] Created endpoint 2877 for pid=61969
+[CAP] Created endpoint 2878 for pid=61973
+[CAP] Created endpoint 2879 for pid=61974
+[CAP] Created endpoint 2880 for pid=61967
+[CAP] Created endpoint 2881 for pid=61966
+[CAP] Created endpoint 2882 for pid=61973
+[CAP] Created endpoint 2883 for pid=61967
+[CAP] Created endpoint 2884 for pid=61977
+[CAP] Created endpoint 2885 for pid=61971
+[CAP] Created endpoint 2886 for pid=61974
+[CAP] Created endpoint 2887 for pid=61967
+[CAP] Created endpoint 2888 for pid=61968
+[CAP] Created endpoint 2889 for pid=61969
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2890 for pid=61967
+[CAP] Created endpoint 2891 for pid=61968
+[SCHED] process_mark_finished pid=61971 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61971 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61971 name='cap-probe'
+[CAP] Created endpoint 2892 for pid=61966
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2893 for pid=61974
+[SCHED] process_mark_finished pid=61969 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61969 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61969 name='cap-probe'
+[CAP] Created endpoint 2894 for pid=61968
+[CAP] Created endpoint 2895 for pid=61968
+[CAP] Created endpoint 2896 for pid=61957
+[CAP] Created endpoint 2897 for pid=61972
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2898 for pid=61968
+[CAP] Created endpoint 2899 for pid=61968
+[CAP] Created endpoint 2900 for pid=61968
+[CAP] Created endpoint 2901 for pid=61959
+[CAP] Created endpoint 2902 for pid=61968
+[CAP] Created endpoint 2903 for pid=61968
+[SCHED] process_mark_finished pid=61974 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61974 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61974 name='cap-probe'
+[CAP] Created endpoint 2904 for pid=61967
+[CAP] Created endpoint 2905 for pid=61973
+[CAP] Created endpoint 2906 for pid=61977
+[CAP] Created endpoint 2907 for pid=61977
+[CAP] Created endpoint 2908 for pid=61977
+[CAP] Created endpoint 2909 for pid=61977
+[CAP] Created endpoint 2910 for pid=61957
+[CAP] Created endpoint 2911 for pid=61967
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2912 for pid=61972
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2913 for pid=61966
+[SCHED] process_mark_finished pid=61957 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61957 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61957 name='cap-probe'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61977 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61977 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61977 name='cap-probe'
+[CAP] Created endpoint 2914 for pid=61968
+[CAP] Created endpoint 2915 for pid=61973
+[CAP] Created endpoint 2916 for pid=61967
+[SCHED] process_mark_finished pid=61959 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61959 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61959 name='cap-probe'
+[CAP] Created endpoint 2917 for pid=61968
+[CAP] Created endpoint 2918 for pid=61965
+[CAP] Created endpoint 2919 for pid=61968
+[CAP] Created endpoint 2920 for pid=61968
+[CAP] Created endpoint 2921 for pid=61968
+[CAP] Created endpoint 2922 for pid=61965
+[CAP] Created endpoint 2923 for pid=61967
+[CAP] Created endpoint 2924 for pid=61966
+[CAP] Created endpoint 2925 for pid=61973
+[CAP] Created endpoint 2926 for pid=61972
+[CAP] Created endpoint 2927 for pid=61972
+[CAP] Created endpoint 2928 for pid=61965
+[CAP] Created endpoint 2929 for pid=61968
+[CAP] Created endpoint 2930 for pid=61968
+[CAP] Created endpoint 2931 for pid=61968
+[CAP] Created endpoint 2932 for pid=61965
+[CAP] Created endpoint 2933 for pid=61972
+[CAP] Created endpoint 2934 for pid=61973
+[CAP] Created endpoint 2935 for pid=61968
+[CAP] Created endpoint 2936 for pid=61966
+[CAP] Created endpoint 2937 for pid=61965
+[CAP] Created endpoint 2938 for pid=61966
+[CAP] Created endpoint 2939 for pid=61967
+[CAP] Created endpoint 2940 for pid=61967
+[CAP] Created endpoint 2941 for pid=61973
+[CAP] Created endpoint 2942 for pid=61973
+[CAP] Created endpoint 2943 for pid=61965
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2944 for pid=61973
+[CAP] Created endpoint 2945 for pid=61973
+[SCHED] process_mark_finished pid=61968 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61968 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61968 name='cap-probe'
+[CAP] Created endpoint 2946 for pid=61965
+[CAP] Created endpoint 2947 for pid=61972
+[CAP] Created endpoint 2948 for pid=61966
+[CAP] Created endpoint 2949 for pid=61973
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2950 for pid=61956
+[SCHED] process_mark_finished pid=61972 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61972 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61972 name='cap-probe'
+[CAP] Created endpoint 2951 for pid=61965
+[CAP] Created endpoint 2952 for pid=61973
+[CAP] Created endpoint 2953 for pid=61960
+[CAP] Created endpoint 2954 for pid=61967
+[CAP] Created endpoint 2955 for pid=61965
+[CAP] Created endpoint 2956 for pid=61965
+[CAP] Created endpoint 2957 for pid=61965
+[CAP] Created endpoint 2958 for pid=61967
+[CAP] Created endpoint 2959 for pid=61973
+[CAP] Created endpoint 2960 for pid=61960
+[CAP] Created endpoint 2961 for pid=61967
+[CAP] Created endpoint 2962 for pid=61965
+[CAP] Created endpoint 2963 for pid=61967
+[CAP] Created endpoint 2964 for pid=61956
+[CAP] Created endpoint 2965 for pid=61973
+[CAP] Created endpoint 2966 for pid=61967
+[CAP] Created endpoint 2967 for pid=61966
+[CAP] Created endpoint 2968 for pid=61967
+[CAP] Created endpoint 2969 for pid=61966
+[CAP] Created endpoint 2970 for pid=61965
+[CAP] Created endpoint 2971 for pid=61965
+[CAP] Created endpoint 2972 for pid=61967
+[CAP] Created endpoint 2973 for pid=61973
+[CAP] Created endpoint 2974 for pid=61956
+[CAP] Created endpoint 2975 for pid=61967
+[CAP] Created endpoint 2976 for pid=61973
+[CAP] Created endpoint 2977 for pid=61967
+[CAP] Created endpoint 2978 for pid=61960
+[CAP] Created endpoint 2979 for pid=61966
+[CAP] Created endpoint 2980 for pid=61965
+[CAP] Created endpoint 2981 for pid=61956
+[CAP] Created endpoint 2982 for pid=61956
+[CAP] Created endpoint 2983 for pid=61973
+[CAP] Created endpoint 2984 for pid=61967
+[CAP] Created endpoint 2985 for pid=61966
+[CAP] Created endpoint 2986 for pid=61956
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61960 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61960 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61960 name='cap-probe'
+[CAP] Created endpoint 2987 for pid=61973
+[CAP] Created endpoint 2988 for pid=61967
+[CAP] Created endpoint 2989 for pid=61967
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 2990 for pid=61966
+[SCHED] process_mark_finished pid=61973 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61973 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61973 name='cap-probe'
+[CAP] Created endpoint 2991 for pid=61965
+[CAP] Created endpoint 2992 for pid=61966
+[CAP] Created endpoint 2993 for pid=61961
+[CAP] Created endpoint 2994 for pid=61967
+[CAP] Created endpoint 2995 for pid=61956
+[CAP] Created endpoint 2996 for pid=61966
+[CAP] Created endpoint 2997 for pid=61965
+[CAP] Created endpoint 2998 for pid=61956
+[CAP] Created endpoint 2999 for pid=61965
+[CAP] Created endpoint 3000 for pid=61956
+[CAP] Created endpoint 3001 for pid=61966
+[CAP] Created endpoint 3002 for pid=61961
+[CAP] Created endpoint 3003 for pid=61967
+[CAP] Created endpoint 3004 for pid=61961
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 3005 for pid=61961
+[SCHED] process_mark_finished pid=61965 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61965 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61965 name='cap-probe'
+[CAP] Created endpoint 3006 for pid=61961
+[CAP] Created endpoint 3007 for pid=61966
+[CAP] Created endpoint 3008 for pid=61967
+[CAP] Created endpoint 3009 for pid=61956
+[CAP] Created endpoint 3010 for pid=61967
+[CAP] Created endpoint 3011 for pid=61961
+[CAP] Created endpoint 3012 for pid=61966
+[CAP] Created endpoint 3013 for pid=61967
+[CAP] Created endpoint 3014 for pid=61961
+[CAP] Created endpoint 3015 for pid=61961
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 3016 for pid=61956
+[SCHED] process_mark_finished pid=61967 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61967 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61967 name='cap-probe'
+[CAP] Created endpoint 3017 for pid=61961
+[CAP] Created endpoint 3018 for pid=61966
+[CAP] Created endpoint 3019 for pid=61966
+[CAP] Created endpoint 3020 for pid=61961
+[CAP] Created endpoint 3021 for pid=61966
+[CAP] Created endpoint 3022 for pid=61956
+[CAP] Created endpoint 3023 for pid=61956
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3024 for pid=61961
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3025 for pid=61966
+[CAP] Created endpoint 3026 for pid=61956
+[CAP] Created endpoint 3027 for pid=61956
+[CAP] Created endpoint 3028 for pid=61966
+[CAP] Created endpoint 3029 for pid=61961
+[CAP] Created endpoint 3030 for pid=61956
+[CAP] Created endpoint 3031 for pid=61956
+[CAP] Created endpoint 3032 for pid=61961
+[CAP] Created endpoint 3033 for pid=61956
+[CAP] Created endpoint 3034 for pid=61956
+[CAP] Created endpoint 3035 for pid=61956
+[CAP] Created endpoint 3036 for pid=61966
+[SCHED] process_reaped pid=61957 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61957 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61957 cleared_msgs=0
+[SCHED] process_reaped pid=61958 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61958 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61958 cleared_msgs=0
+[SCHED] process_reaped pid=61959 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61959 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61959 cleared_msgs=0
+[SCHED] process_reaped pid=61960 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61960 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61960 cleared_msgs=0
+[SCHED] process_reaped pid=61964 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61964 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61964 cleared_msgs=0
+[SCHED] process_reaped pid=61965 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61965 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61965 cleared_msgs=0
+[SCHED] process_reaped pid=61967 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61967 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61967 cleared_msgs=0
+[SCHED] process_reaped pid=61968 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61968 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61968 cleared_msgs=0
+[SCHED] process_reaped pid=61969 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61969 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61969 cleared_msgs=0
+[SCHED] process_reaped pid=61971 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61971 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61971 cleared_msgs=0
+[SCHED] process_reaped pid=61972 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61972 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61972 cleared_msgs=0
+[SCHED] process_reaped pid=61973 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61973 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61973 cleared_msgs=0
+[SCHED] process_reaped pid=61974 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61974 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61974 cleared_msgs=0
+[SCHED] process_reaped pid=61975 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61975 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61975 cleared_msgs=0
+[SCHED] process_reaped pid=61977 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61977 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61977 cleared_msgs=0
+[CAP] Created endpoint 3037 for pid=61961
+[CAP] Created endpoint 3038 for pid=61961
+[CAP] Created endpoint 3039 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3040 for pid=61956
+[CAP] Created endpoint 3041 for pid=61961
+[CAP] Created endpoint 3042 for pid=61956
+[CAP] Created endpoint 3043 for pid=61966
+[CAP] Created endpoint 3044 for pid=61966
+[CAP] Created endpoint 3045 for pid=61961
+[CAP] Created endpoint 3046 for pid=61956
+[CAP] Created endpoint 3047 for pid=61961
+[CAP] Created endpoint 3048 for pid=61961
+[CAP] Created endpoint 3049 for pid=61966
+[CAP] Created endpoint 3050 for pid=61961
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3051 for pid=61956
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3052 for pid=61966
+[CAP] Created endpoint 3053 for pid=61956
+[CAP] Created endpoint 3054 for pid=61956
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3055 for pid=61961
+[CAP] Created endpoint 3056 for pid=61966
+[CAP] Created endpoint 3057 for pid=61956
+[CAP] Created endpoint 3058 for pid=61966
+[CAP] Created endpoint 3059 for pid=61956
+[CAP] Created endpoint 3060 for pid=61966
+[CAP] Created endpoint 3061 for pid=61966
+[CAP] Created endpoint 3062 for pid=61956
+[CAP] Created endpoint 3063 for pid=61961
+[CAP] Created endpoint 3064 for pid=61966
+[CAP] Created endpoint 3065 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3066 for pid=61961
+[CAP] Created endpoint 3067 for pid=61966
+[CAP] Created endpoint 3068 for pid=61956
+[CAP] Created endpoint 3069 for pid=61961
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3070 for pid=61961
+[CAP] Created endpoint 3071 for pid=61956
+[CAP] Created endpoint 3072 for pid=61956
+[SCHED] process_exit_begin reason=exit
+[CAP] Created endpoint 3073 for pid=61956
+[CAP] Created endpoint 3074 for pid=61966
+[SCHED] process_mark_finished pid=61961 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61961 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61961 name='cap-probe'
+[CAP] Created endpoint 3075 for pid=61966
+[CAP] Created endpoint 3076 for pid=61956
+[CAP] Created endpoint 3077 for pid=61966
+[SCHED] process_reaped pid=61961 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61961 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61961 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61956 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61956 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61956 name='cap-probe'
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3078 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3079 for pid=61966
+[CAP] Created endpoint 3080 for pid=61966
+[CAP] Created endpoint 3081 for pid=61966
+[CAP] Created endpoint 3082 for pid=61966
+[CAP] Created endpoint 3083 for pid=61966
+[SCHED] process_reaped pid=61956 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61956 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61956 cleared_msgs=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3084 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3085 for pid=61966
+[CAP] Created endpoint 3086 for pid=61966
+[CAP] Created endpoint 3087 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3088 for pid=61966
+[CAP] Created endpoint 3089 for pid=61966
+[CAP] Created endpoint 3090 for pid=61966
+[CAP] Created endpoint 3091 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[CAP] Created endpoint 3092 for pid=61966
+[CAP] Created endpoint 3093 for pid=61966
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_exit_begin reason=exit
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_mark_finished pid=61966 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61966 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61966 name='cap-probe'
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_reaped pid=61966 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61966 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61966 cleared_msgs=0
+[CAP] Created endpoint 3094 for pid=61954
+[CAP] Created endpoint 3095 for pid=61954
+[CAP] Created endpoint 3096 for pid=61954
+[CAP] Created endpoint 3097 for pid=61954
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_exit_begin reason=exit
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_mark_finished pid=61954 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61954 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61954 name='cap-probe'
+[SCHED] process_reaped pid=61954 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61954 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61954 cleared_msgs=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=11 cpu=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61979 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61979 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61979 name='cap-probe'
+[SCHED] process_reaped pid=61979 name='cap-probe' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61979 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61979 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=1 max_live=1
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[CAP-PR] exec authority withdrawn before VM activation records=1 remaining=0 account=0
+[EXEC-R3] authority commit=1 pid=61953 incarnation=2 old_generation=67 new_generation=92 roles=withdrawn endpoint=preserved uid=preserved old_views=1
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 272920576, generation: 67 } new_vm=AddressSpaceIdentity { pml4_phys: 327155712, generation: 92 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=518 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=2 pid=61953 incarnation=2 old_generation=92 new_generation=93 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 327155712, generation: 92 } new_vm=AddressSpaceIdentity { pml4_phys: 329302016, generation: 93 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=3 pid=61953 incarnation=2 old_generation=93 new_generation=94 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 329302016, generation: 93 } new_vm=AddressSpaceIdentity { pml4_phys: 331448320, generation: 94 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=4 pid=61953 incarnation=2 old_generation=94 new_generation=95 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 331448320, generation: 94 } new_vm=AddressSpaceIdentity { pml4_phys: 333594624, generation: 95 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=5 pid=61953 incarnation=2 old_generation=95 new_generation=96 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 333594624, generation: 95 } new_vm=AddressSpaceIdentity { pml4_phys: 335740928, generation: 96 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=6 pid=61953 incarnation=2 old_generation=96 new_generation=97 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 335740928, generation: 96 } new_vm=AddressSpaceIdentity { pml4_phys: 337887232, generation: 97 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=7 pid=61953 incarnation=2 old_generation=97 new_generation=98 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 337887232, generation: 97 } new_vm=AddressSpaceIdentity { pml4_phys: 340033536, generation: 98 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[SYSCALL] exec path=/test/exec-r2, argc=1, envc=1
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=190 memsz=190 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=13e memsz=13e prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=e0 memsz=e0 prot=Read
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffefa0
+[EXEC-R3] authority commit=8 pid=61953 incarnation=2 old_generation=98 new_generation=99 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 340033536, generation: 98 } new_vm=AddressSpaceIdentity { pml4_phys: 342179840, generation: 99 } kernel_rsp=0xffffffff900169f0 entry=0x400000 user_rsp=0x7fffffffefa0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400000
+[SYSCALL] exec path=/test/exec-r2-missing, argc=0, envc=0
+[SYSCALL] exec: path not found: /test/exec-r2-missing
+[EXEC-R2] user entry stack argv env PID and failed-exec PASS
+[EXEC-R2] eight replacements PASS; entering original /bin/true
+[SYSCALL] exec path=/bin/true, argc=0, envc=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5fe memsz=5fe prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=29 memsz=29 prot=Read
+[EXEC] Stack: argc=0 envc=0 auxv=2 rsp=0x7fffffffefb0
+[EXEC] Loaded ELF entry=0x400030, stack=0x7fffffffefb0
+[EXEC-R3] authority commit=9 pid=61953 incarnation=2 old_generation=99 new_generation=100 roles=withdrawn endpoint=preserved uid=preserved old_views=0
+[EXEC-R2] commit pid=61953 incarnation=2 old_vm=AddressSpaceIdentity { pml4_phys: 342179840, generation: 99 } new_vm=AddressSpaceIdentity { pml4_phys: 344326144, generation: 100 } kernel_rsp=0xffffffff900169f0 entry=0x400030 user_rsp=0x7fffffffefb0
+[EXEC-R2] retired VM reclaimed frames=515 tables=9 swap=0 active_cpus=0
+[SYSCALL] exec: success, entry=0x400030
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61953 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61953 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61953 name='cap-probe'
+[SCHED] process_reaped pid=61953 name='cap-probe' user_frames=514 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61953 frames=514 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61953 cleared_msgs=0
+[SESSION-E] checkpoint=account-denied issuer=61952 issuer_inc=1 vm=66 session_epoch=UNESTABLISHED broker=boot-global commit=none error=2 cpu=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61952 name='cap-probe' reason=exit code=0
+[SCHED] terminating pid=61952 name='cap-probe' reason=exit
+[SCHED] FINISHED process pid=61952 name='cap-probe'
+[SCHED] process_reaped pid=61952 name='cap-probe' user_frames=518 page_tables=9 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61952 frames=518 pts=9 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61952 cleared_msgs=0
+[T1-AUTH] PASS sibling_progress=blocked-authenticated-ipc private_kernel_stack=checked
+[CAP-R41] COMPLETE delivered_auth_consumed=15 stale_incarnation=denied real_call_cancel=retired pending=0 active_auth_account=0 cpus=12
+[CAP-PR] lifecycle PASS auth=17 account=0 account_denied=35 post_reap_records=0 late_auth=denied late_account=denied cpus=12
+[CAP-P] native PASS cpus=12 workers=24 predictions_denied=2976 issuance_cycles=3072 free_before=331464 free_after=331464 data_delta=0 pt_delta=0 mappings=0 tokens=0 ticks=342

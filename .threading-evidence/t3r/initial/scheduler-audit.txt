@@ -1,0 +1,117 @@
+7://! lowest-priority tier queue, respecting per-process CPU affinity masks.
+47://! do not produce voluntary short-burst feedback. Yield/block/exit retire a turn.
+53://! lowest-priority non-empty queue, checking cpu_mask affinity before taking.
+109:#[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+110:pub(crate) mod t2_fixture;
+112:pub(crate) mod t2r_fixture;
+115:#[cfg(all(debug_assertions, feature = "pin_release_test"))]
+116:pub mod pin_release_test;
+119:#[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+120:pub mod remote_wake_test;
+298:    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+299:    pin_release_test::released(waiters);
+436:    last_reap_tick: u64,
+463:            last_reap_tick: 0,
+569:        self.reap_finished_processes();
+570:        self.add_process_after_reaping(process)
+573:    pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
+610:        // Only reuse slots that are fully Reaped (or Finished that became reaped above).
+619:                    && p.service_reap_watcher.is_none()
+629:                "[SCHED] process_slot_reused idx={} pid={} (reused reaped slot)",
+633:            // Drop old (reaped) contents by overwrite; new process owns fresh resources.
+639:                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped slot)",
+649:        // Fallback: if there are stale Finished (not safe to reap yet), do not overwrite them.
+650:        // Search only for Reaped again (after the reap attempt above).
+657:                    && p.service_reap_watcher.is_none()
+665:            serial_println!("[SCHED] process_slot_reused idx={} (reaped)", id);
+671:                "[SCHED] CREATED process #{} '{}' idx={} burst_score={} tier={:?} (reused reaped)",
+958:        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+959:        pin_release_test::registered(owner, cpu_id, idx, held);
+1221:            && self.global_tick.saturating_sub(self.last_reap_tick) >= 50
+1223:            self.last_reap_tick = self.global_tick;
+1224:            self.reap_finished_processes();
+1337:    /// lowest-priority non-empty queue. Respects cpu_mask affinity.
+1840:                let next_fs_base = self.processes[next].fs_base;
+1851:                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+1889:            // wake coincides with expiration, retire the old turn normally
+1921:        self.processes[current].fs_base =
+1968:            let next_fs_base = self.processes[next].fs_base;
+1984:                x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+1999:                    self.reap_process_resources(prev);
+2003:            // Opportunistic global reaping of any other safe Finished processes.
+2004:            self.reap_finished_processes();
+2069:    /// until all their workers are reaped. Existing native tasks remain private.
+2733:    pub fn reap_process_resources(&mut self, idx: usize) {
+2736:            regression::note_deferred_reap();
+2746:            // Already reaped or never marked for cleanup. Ensure state reflects it.
+2748:                // If no pending work was recorded, treat as reaped to allow reuse.
+2759:            "[SCHED] process_reap_attempt idx={} pid={} name='{}'",
+2765:        // Safety: never reap while still current on a core or queued.
+2769:                "[SCHED] process_reap_blocked_reason idx={} reason=owning_core cpu={}",
+2778:                "[SCHED] process_reap_blocked_reason idx={} reason=queued_on_core",
+2820:                        "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
+2832:                    "[SCHED] process_reap_blocked_reason idx={} reason=no_hhdm",
+2839:        // Additional safety: do not reap the live current on this or other cores (double-check).
+2844:                    "[SCHED] process_reap_blocked_reason idx={} reason=current_on_cpu={}",
+2858:                    "[SCHED] process_reap_blocked_reason idx={} reason=active_address_space mask={:#x}",
+2868:        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
+2938:        let reaped_generation = self.processes[idx].address_space.identity().generation;
+2971:        crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-clean", reaped_generation);
+2979:            crate::serial_println!("[SESSION-E3] seq={} checkpoint=fixture-ipc-cleaned pid={} incarnation={} vm={} owned_endpoints={} pending_call=none reply_target=none deferred_targets=0 pending_commits=0 snapshot=serialized cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, broker.endpoints_owned_by(pid).len(), current_cpu_id());
+2984:            crate::serial_println!("[SESSION-E3] seq={} checkpoint=service-ipc-retired pid={} incarnation={} vm={} reply_target=none deferred_targets=0 pending_call=none cpu={}", crate::capability::session_race::sequence(), pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+2996:        // Reaping this owner was deferred until every Linux worker reaped.
+3003:        self.processes[idx].fs_base = 0;
+3010:                .service_reap_watcher
+3013:                process.service_reap_watcher = None;
+3017:        self.processes[idx].service_reap_receipt = [
+3018:            reaped_generation,
+3027:            generation: reaped_generation,
+3035:        self.supervision.reaped(
+3040:                self.processes[idx].service_reap_receipt[3],
+3044:        self.supervision.manager_reaped(identity);
+3046:        // Mark as fully reaped: slot is now safe for add_process reuse.
+3050:            crate::serial_println!("[GRANT-F] pid-reaped pid={} incarnation={} vm={} pending=0 reply=0 deferred=0 stack=0 cpu={}", pid, self.processes[idx].foreground.incarnation, reaped_generation, current_cpu_id());
+3053:        crate::capability::production_gate::reaped(&self.processes[idx]);
+3061:                "[SCHED] process_reaped pid={} name='{}' user_frames={} page_tables={} swap_blocks={} ipc_cleared={}",
+3074:            "[SCHED] ipc_entries_reaped_for_process pid={} cleared_msgs={}",
+3088:            let (created, finished, reaped, skipped, stale_wakes, reused, max_live) =
+3092:            // additional diagnostic for every reaped worker.
+3093:            if reaped == created {
+3095:                        "[THREAD-LIFECYCLE] created={} finished={} reaped={} borrower_reclaim_skipped={} stale_wake_rejected={} borrower_slots_reused={} max_live={}",
+3098:                        reaped,
+3146:    /// Centralized reaper. Walks Finished processes and reaps those that are
+3148:    /// A reaped slot transitions to ProcessState::Reaped and may be reused by
+3149:    /// add_process. Never reaps the current task of any CPU.
+3150:    pub fn reap_finished_processes(&mut self) {
+3174:                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=owning_core",
+3183:                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=queued",
+3192:                    "[SCHED] process_reap_blocked_reason pid={} idx={} reason=in_use_on_core",
+3198:            // Do not reap if this idx is still the current on its last known owner (paranoia).
+3203:                        "[SCHED] process_reap_blocked_reason pid={} idx={} reason=live_owner",
+3213:                "[SCHED] process_reap_attempt pid={} idx={} name='{}'",
+3219:            self.reap_process_resources(idx);
+3227:    /// Finished and that core is asked to reschedule; reaping waits until the
+3293:        self.reap_process_resources(idx);
+3354:            self.reap_process_resources(idx);
+3483:        let _reaped_slots = self
+3817:        let reaped_process_count = self
+3823:        let process_slots_finished = finished_process_count + reaped_process_count;
+3844:            "[SCHED-ACCT] live_process_count={} finished_process_count={} reaped_process_count={} process_slots_used={} process_slots_finished={} ipc_wait_entries={} ipc_queue_entries={}",
+3847:            reaped_process_count,
+3951:    // Generation one: twelve concurrent borrower records all finish and reap.
+3970:        sched.reap_process_resources(idx);
+4008:        sched.reap_process_resources(idx);
+4018:    sched.reap_process_resources(0);
+4021:    sched.reap_process_resources(live_idx);
+4023:    sched.reap_process_resources(0);
+4042:        "[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK"
+4156:    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+4158:        remote_wake_test::opportunity(cpu_id);
+4182:    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+4183:    pin_release_test::requested(cpu_id);
+4422:        // that terminal result, but still retire actual execution exactly once
+4450:    // Completion is published by the existing pin-gated reaper after the
+4540:    let (rsp, fs_base, kernel_stack_top) = {
+4568:            let fs_base = sched.processes[idx].fs_base;
+4582:            (rsp, fs_base, kernel_stack_top)
+4592:        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);

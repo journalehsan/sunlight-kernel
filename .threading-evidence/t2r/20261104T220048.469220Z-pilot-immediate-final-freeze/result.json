@@ -1,0 +1,12 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "objcopy",
+    "--strip-debug",
+    "target/x86_64-unknown-none/debug/sunlight-kernel",
+    ".threading-evidence/t2r/pilot-immediate-final/kernel.elf"
+  ],
+  "exit_code": 0,
+  "seconds": 0.25056694500381127
+}

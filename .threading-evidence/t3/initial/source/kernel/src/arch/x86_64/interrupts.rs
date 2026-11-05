@@ -1,0 +1,1351 @@
+use crate::arch::x86_64::keyboard;
+use crate::arch::x86_64::{ioapic, lapic};
+use crate::serial_println;
+use core::sync::atomic::{AtomicU64, Ordering};
+use x86_64::instructions::port::Port;
+use x86_64::instructions::segmentation::Segment;
+use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector};
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::structures::tss::TaskStateSegment;
+use x86_64::VirtAddr;
+
+static mut IDT: InterruptDescriptorTable = InterruptDescriptorTable::new();
+const PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS: u64 = 6_000;
+
+/// Return a shared reference to the kernel IDT for AP loading.
+///
+/// # Safety
+/// Safe to call from APs after `init()` has returned on the BSP:
+/// the IDT is fully populated and read-only at that point.
+/// APs call `load_unsafe()` which only writes the CPU-local IDTR register
+/// and does not modify the IDT itself.
+pub unsafe fn idt_ref() -> &'static InterruptDescriptorTable {
+    &IDT
+}
+
+static TSS: spin::Lazy<TaskStateSegment> = spin::Lazy::new(|| {
+    let mut tss = TaskStateSegment::new();
+    // RSP0: kernel stack used when entering ring 0 from ring 3.
+    tss.privilege_stack_table[0] = {
+        const STACK_SIZE: usize = 256 * 1024;
+        static mut STACK0: [u8; STACK_SIZE] = [0; STACK_SIZE];
+        let stack_start = VirtAddr::from_ptr(unsafe { &STACK0 });
+        stack_start + STACK_SIZE as u64
+    };
+    // IST[0]: dedicated stack for double fault handler.
+    tss.interrupt_stack_table[0] = {
+        const STACK_SIZE: usize = 256 * 1024;
+        static mut STACK1: [u8; STACK_SIZE] = [0; STACK_SIZE];
+        let stack_start = VirtAddr::from_ptr(unsafe { &STACK1 });
+        stack_start + STACK_SIZE as u64
+    };
+    tss.interrupt_stack_table[1] = VirtAddr::new(super::syscall_stack::nmi_stack_top(0));
+    tss
+});
+
+struct Selectors {
+    code_selector: SegmentSelector,
+    tss_selector: SegmentSelector,
+}
+
+fn user_code_segment() -> Descriptor {
+    // 64-bit ring 3 code: 0x00AFFA000000FFFF
+    Descriptor::UserSegment(0x00AFFA000000FFFF)
+}
+
+fn user_data_segment() -> Descriptor {
+    // 64-bit ring 3 data: 0x00AFF2000000FFFF
+    Descriptor::UserSegment(0x00AFF2000000FFFF)
+}
+
+static GDT: spin::Lazy<(GlobalDescriptorTable, Selectors)> = spin::Lazy::new(|| {
+    let mut gdt = GlobalDescriptorTable::new();
+    let code_selector = gdt.append(Descriptor::kernel_code_segment());
+    let _data_selector = gdt.append(Descriptor::kernel_data_segment());
+    let _user_code_compat = gdt.append(user_code_segment()); // index 3, selector 0x1B
+    let _user_data = gdt.append(user_data_segment()); // index 4, selector 0x23
+    let _user_code_64 = gdt.append(user_code_segment()); // index 5, selector 0x2B
+    let tss_selector = gdt.append(Descriptor::tss_segment(&*TSS));
+    (
+        gdt,
+        Selectors {
+            code_selector,
+            tss_selector,
+        },
+    )
+});
+
+pub fn set_tss_rsp0(stack_top: u64) {
+    unsafe {
+        let tss_ptr = &*TSS as *const TaskStateSegment as *mut TaskStateSegment;
+        (*tss_ptr).privilege_stack_table[0] = VirtAddr::new(stack_top);
+    }
+}
+
+pub fn current_tss_rsp0() -> u64 {
+    (&*TSS).privilege_stack_table[0].as_u64()
+}
+
+/// Load the BSP's shared GDT and IDT on an Application Processor.
+///
+/// Called from `smp::ap_entry_rust` during phase-0 AP bring-up.
+///
+/// The GDT and IDT are global statics initialised once by `init()` on the
+/// BSP before any AP is started, so they are safe to read concurrently.
+/// `lgdt` and `lidt` only update the CPU's internal GDTR/IDTR register —
+/// they do not modify the descriptor tables in memory.
+///
+/// **TSS is deliberately not loaded here.**  The BSP's TSS descriptor in the
+/// GDT has its Busy bit set (by `load_tss` in `init()`), and re-loading the
+/// same TSS selector on another CPU raises #GP.  Per-AP TSSes are a phase-1
+/// deliverable (LAPIC bring-up).  APs in phase 0 never execute ring-3 code,
+/// so RSP0 / IST stacks are not needed yet.
+pub fn ap_load_gdt_and_idt() {
+    use x86_64::instructions::segmentation::{Segment, CS, DS, ES, SS};
+    use x86_64::structures::gdt::SegmentSelector;
+
+    // Load the BSP's GDT.  spin::Lazy guarantees it is initialized (the BSP
+    // called init() → GDT.0.load() before start_aps() was ever invoked).
+    GDT.0.load();
+
+    unsafe {
+        // Set the code segment to the kernel 64-bit code selector.
+        CS::set_reg(GDT.1.code_selector);
+        // Null out data/stack/extra segment registers (not used in 64-bit mode).
+        SS::set_reg(SegmentSelector(0));
+        DS::set_reg(SegmentSelector(0));
+        ES::set_reg(SegmentSelector(0));
+        // Load the IDT — same pointer as the BSP; lidt is non-destructive.
+        IDT.load_unsafe();
+    }
+}
+
+/// Initialize IDT, GDT, PIC, and PIT.
+pub fn init() {
+    serial_println!("[IDT] Loading interrupt descriptor table...");
+
+    GDT.0.load();
+    unsafe {
+        x86_64::instructions::segmentation::CS::set_reg(GDT.1.code_selector);
+        x86_64::instructions::segmentation::SS::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
+        x86_64::instructions::segmentation::DS::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
+        x86_64::instructions::segmentation::ES::set_reg(x86_64::structures::gdt::SegmentSelector(
+            0,
+        ));
+        x86_64::instructions::tables::load_tss(GDT.1.tss_selector);
+    }
+
+    let idt = unsafe { &mut IDT };
+
+    idt.divide_error.set_handler_fn(divide_error_handler);
+    idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
+    unsafe {
+        idt.double_fault
+            .set_handler_fn(double_fault_handler)
+            .set_stack_index(0);
+    }
+    idt.general_protection_fault.set_handler_fn(gpf_handler);
+    idt.page_fault.set_handler_fn(page_fault_handler);
+    unsafe {
+        idt.non_maskable_interrupt
+            .set_handler_fn(tlb_shootdown_nmi_entry)
+            .set_stack_index(1);
+    }
+
+    // Use naked timer handler to enable manual context switching.
+    unsafe {
+        idt[0x20].set_handler_addr(x86_64::VirtAddr::new(
+            timer_entry as *const () as usize as u64,
+        ));
+        idt[RESCHEDULE_VECTOR].set_handler_addr(x86_64::VirtAddr::new(
+            reschedule_entry as *const () as usize as u64,
+        ));
+    }
+
+    // Keyboard IRQ1 handler (vector 0x21)
+    idt[0x21].set_handler_fn(keyboard_entry);
+    serial_println!("[KBD] IRQ1 handler installed at vector 0x21");
+
+    // Mouse IRQ12 handler (vector 0x2C = 32 + 12)
+    idt[0x2C].set_handler_fn(mouse_entry);
+
+    // MM-2B synchronous remote TLB shootdown IPI.
+    idt[crate::memory::tlb::SHOOTDOWN_VECTOR].set_handler_fn(tlb_shootdown_ipi_entry);
+    #[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
+    idt[crate::memory::tlb::TEST_VECTOR].set_handler_fn(tlb_test_ipi_entry);
+
+    idt.load();
+
+    remap_pic();
+    init_pit();
+
+    let mut pic1_data: Port<u8> = Port::new(0x21);
+    let mut pic2_data: Port<u8> = Port::new(0xA1);
+    unsafe {
+        pic1_data.write(0xF8); // enable IRQ0, IRQ1, and IRQ2 cascade for slave PIC
+        pic2_data.write(0xEF); // enable IRQ12 (mouse) on PIC2 (bit 4 = IRQ12)
+    }
+
+    // Calibrate TSC against PIT for accurate per-process CPU accounting.
+    // This uses direct PIT counter reads and completes in ~1-2 ms.
+    calibrate_tsc_from_pit();
+    let hz = TSC_HZ_APPROX.load(Ordering::Relaxed);
+    if hz != 0 {
+        serial_println!("[TIME] TSC calibrated ~{} Hz for internal accounting", hz);
+    } else {
+        serial_println!("[TIME] TSC calibration unavailable; using tick-based ns fallback");
+    }
+
+    // Switch BSP from PIC IRQ0 timer to per-core LAPIC timer.
+    // All cores (BSP + APs) will use the LAPIC timer at vector 0x20,
+    // which is already wired to `timer_entry` in the IDT above.
+    unsafe {
+        crate::arch::x86_64::lapic::init_lapic();
+        crate::arch::x86_64::lapic::calibrate_lapic_timer(100);
+        crate::arch::x86_64::lapic::arm_lapic_timer();
+        // Mask PIC IRQ0 (timer). IRQ1 (keyboard) and IRQ2 (cascade) stay
+        // unmasked so PS/2 keyboard interrupts continue to arrive on BSP.
+        // 0xF8 was: IRQ0+IRQ1+IRQ2 unmasked. 0xF9 masks IRQ0 only.
+        let mut pic1_data: Port<u8> = Port::new(0x21);
+        pic1_data.write(0xF9);
+    }
+
+    serial_println!(
+        "time: clocksource=lapic-periodic tick_hz={} lapic_frequency_hz={} lapic_initial_count={} calibration_reference={} tsc_frequency_hz={}",
+        crate::timekeeping::TICK_HZ,
+        crate::arch::x86_64::lapic::timer_frequency_hz(),
+        crate::arch::x86_64::lapic::timer_initial_count(),
+        if hz == 0 { "fixed-fallback" } else { "pit-calibrated-tsc" },
+        hz
+    );
+    serial_println!("[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC");
+    serial_println!("[IDT] OK");
+}
+
+fn is_user_frame(stack_frame: &InterruptStackFrame) -> bool {
+    stack_frame.code_segment.0 & 0x3 == 0x3
+}
+
+extern "x86-interrupt" fn tlb_shootdown_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
+    crate::memory::tlb::handle_shootdown_ipi();
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
+}
+
+extern "x86-interrupt" fn tlb_shootdown_nmi_entry(_stack_frame: InterruptStackFrame) {
+    crate::memory::tlb::handle_shootdown_ipi();
+}
+
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
+extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
+    crate::memory::tlb::handle_test_ipi();
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
+}
+
+fn terminate_current_user_process(reason: &str, code: i32) -> ! {
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::exited(code);
+    let kstack_top = crate::sched::finish_current_process(code, reason);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::finished();
+    crate::sched::request_park_after_sysret();
+    crate::sched::flush_dispatch_notifications();
+
+    let handoff = crate::sched::stack_handoff_slot();
+    unsafe {
+        core::arch::asm!(
+            "mov rsp, {stack}",
+            "xchg qword ptr [{handoff}], rax",
+            "cmp qword ptr [{handoff} + 8], 0",
+            "je 2f",
+            "and rsp, -16",
+            "call {release_wake}",
+            "2:",
+            "jmp {idle}",
+            stack = in(reg) kstack_top,
+            handoff = in(reg) handoff,
+            in("rax") usize::MAX,
+            idle = sym crate::sched::core_idle_entry,
+            release_wake = sym crate::sched::pin_release_wake,
+            options(noreturn)
+        );
+    }
+}
+
+fn io_wait() {
+    unsafe {
+        let mut port: Port<u8> = Port::new(0x80);
+        port.write(0);
+    }
+}
+
+fn remap_pic() {
+    const PIC1_CMD: u16 = 0x20;
+    const PIC1_DATA: u16 = 0x21;
+    const PIC2_CMD: u16 = 0xA0;
+    const PIC2_DATA: u16 = 0xA1;
+    const ICW1_INIT: u8 = 0x11;
+    const ICW4_8086: u8 = 0x01;
+
+    let mut cmd1: Port<u8> = Port::new(PIC1_CMD);
+    let mut data1: Port<u8> = Port::new(PIC1_DATA);
+    let mut cmd2: Port<u8> = Port::new(PIC2_CMD);
+    let mut data2: Port<u8> = Port::new(PIC2_DATA);
+
+    unsafe {
+        cmd1.write(ICW1_INIT);
+        io_wait();
+        cmd2.write(ICW1_INIT);
+        io_wait();
+        data1.write(0x20);
+        io_wait();
+        data2.write(0x28);
+        io_wait();
+        data1.write(0x04);
+        io_wait();
+        data2.write(0x02);
+        io_wait();
+        data1.write(ICW4_8086);
+        io_wait();
+        data2.write(ICW4_8086);
+        io_wait();
+        data1.write(0xFF);
+        io_wait();
+        data2.write(0xFF);
+        io_wait();
+    }
+}
+
+fn mask_legacy_pic() {
+    unsafe {
+        let mut pic1_data: Port<u8> = Port::new(0x21);
+        let mut pic2_data: Port<u8> = Port::new(0xa1);
+        pic1_data.write(0xff);
+        pic2_data.write(0xff);
+    }
+}
+
+/// Prefer native I/O APIC delivery for the legacy i8042 sources. If firmware
+/// data or MMIO validation is unavailable, retain the already-configured PIC
+/// path so older virtual machines continue to boot with keyboard input.
+pub fn configure_input_interrupt_routing() {
+    let destination = lapic::local_apic_id();
+    let Ok(destination) = u8::try_from(destination) else {
+        serial_println!(
+            "[IOAPIC] BSP APIC ID {} exceeds xAPIC destination width; using PIC input routing",
+            destination
+        );
+        return;
+    };
+
+    match ioapic::configure_input_irqs(destination) {
+        Ok(()) => {
+            mask_legacy_pic();
+            serial_println!("[IOAPIC] input routing active; legacy PIC masked");
+        }
+        Err(error) => {
+            serial_println!("[IOAPIC] input routing unavailable: {}; using PIC", error);
+        }
+    }
+}
+
+#[inline]
+fn acknowledge_external_irq(irq: u8) {
+    if ioapic::input_irqs_enabled() {
+        unsafe { lapic::send_eoi() };
+        return;
+    }
+
+    unsafe {
+        if irq >= 8 {
+            let mut cmd2: Port<u8> = Port::new(0xa0);
+            cmd2.write(0x20);
+        }
+        let mut cmd1: Port<u8> = Port::new(0x20);
+        cmd1.write(0x20);
+    }
+}
+
+fn init_pit() {
+    const PIT_CMD: u16 = 0x43;
+    const PIT_CH0: u16 = 0x40;
+
+    let mut cmd: Port<u8> = Port::new(PIT_CMD);
+    let mut ch0: Port<u8> = Port::new(PIT_CH0);
+
+    unsafe {
+        cmd.write(super::pit::MODE_2_RATE_GENERATOR);
+        ch0.write((super::pit::RELOAD & 0xFF) as u8);
+        ch0.write((super::pit::RELOAD >> 8) as u8);
+    }
+}
+
+/// Latch and read current PIT channel 0 countdown value.
+/// Used for early TSC calibration against real hardware timebase.
+pub(super) fn read_pit_count() -> u16 {
+    unsafe {
+        let mut cmd: Port<u8> = Port::new(0x43);
+        let mut ch0: Port<u8> = Port::new(0x40);
+        // Latch count: channel 0, low+high, no mode change
+        cmd.write(0x00);
+        let lo = ch0.read();
+        let hi = ch0.read();
+        ((hi as u16) << 8) | (lo as u16)
+    }
+}
+
+/// Calibrate TSC frequency using PIT hardware counter (no dependency on IRQs).
+/// Computes fixed-point multiplier for cheap now_ns() in hot paths.
+/// Safe to call with interrupts disabled; spins briefly (~1-2 ms).
+pub fn calibrate_tsc_from_pit() {
+    let start_count = read_pit_count();
+    let tsc0 = unsafe { core::arch::x86_64::_rdtsc() };
+    let mut spins: u32 = 0;
+    let (end_count, dropped) = loop {
+        let current = read_pit_count();
+        let Some(dropped) = super::pit::elapsed_counts(start_count, current) else {
+            crate::serial_println!(
+                "[TIME] PIT calibration rejected invalid snapshot start_count={} current_count={} reload={}",
+                start_count,
+                current,
+                super::pit::RELOAD
+            );
+            return;
+        };
+        if dropped >= super::pit::CALIBRATION_COUNTS {
+            break (current, dropped);
+        }
+        spins += 1;
+        if spins > 10_000_000 {
+            crate::serial_println!(
+                "[TIME] PIT calibration timed out start_count={} last_count={} elapsed_counts={}",
+                start_count,
+                current,
+                dropped
+            );
+            return;
+        }
+        core::hint::spin_loop();
+    };
+    let tsc1 = unsafe { core::arch::x86_64::_rdtsc() };
+    let tsc_delta = tsc1.saturating_sub(tsc0);
+    if tsc_delta < 1000 {
+        return;
+    }
+    let Some(hz) = super::pit::tsc_frequency_hz(tsc_delta, dropped) else {
+        return;
+    };
+    if hz < 100_000_000 {
+        return;
+    }
+    TSC_HZ_APPROX.store(hz, Ordering::SeqCst);
+    // Fixed point: ns = (dt_tsc * mul) >> 32
+    // mul = (1_000_000_000 << 32) / hz
+    let mul = ((1_000_000_000u128 << 32) / (hz as u128)) as u64;
+    TSC_TO_NS_MUL.store(mul, Ordering::SeqCst);
+    TSC_ORIGIN.store(tsc0, Ordering::SeqCst);
+    // FastLane M5.4: publish the opt-in, per-CPU qualified clock from the same
+    // raw inputs. No-op unless the debug measurement feature is enabled.
+    #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
+    super::measurement_clock::init_bsp(dropped, tsc_delta);
+    crate::serial_println!(
+        "[TIME] PIT calibration mode=2 input_hz={} reload={} start_count={} end_count={} elapsed_counts={} tsc_delta={} tsc_hz={}",
+        super::pit::INPUT_HZ,
+        super::pit::RELOAD,
+        start_count,
+        end_count,
+        dropped,
+        tsc_delta,
+        hz
+    );
+}
+
+/// Return current monotonic time in nanoseconds since an arbitrary boot origin.
+/// Uses calibrated TSC when available; otherwise coarse tick-based fallback.
+/// Cost: one rdtsc + mul/shift (very cheap) when calibrated.
+pub fn now_ns() -> u64 {
+    let mul = TSC_TO_NS_MUL.load(Ordering::Relaxed);
+    if mul != 0 {
+        let origin = TSC_ORIGIN.load(Ordering::Relaxed);
+        let tsc = unsafe { core::arch::x86_64::_rdtsc() };
+        let dt = tsc.saturating_sub(origin);
+        return ((dt as u128 * (mul as u128)) >> 32) as u64;
+    }
+    // Fallback: centralized 100 Hz timekeeper tick.
+    ticks().saturating_mul(crate::timekeeping::NS_PER_TICK)
+}
+
+extern "x86-interrupt" fn divide_error_handler(stack_frame: InterruptStackFrame) {
+    // Diagnostic 1d: log pid/rip/rsp for every fault (before existing log)
+    let pid = crate::sched::try_current_pid();
+    serial_println!(
+        "[FAULT] #0 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        0u64
+    );
+    serial_println!("[INT] Divide Error: {:?}", stack_frame);
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("divide-error", 128 + 8);
+    }
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+extern "x86-interrupt" fn invalid_opcode_handler(stack_frame: InterruptStackFrame) {
+    // Diagnostic 1d: log pid/rip/rsp for #UD
+    let pid = crate::sched::try_current_pid();
+    serial_println!(
+        "[FAULT] #6 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        0u64
+    );
+    serial_println!("[INT] Invalid Opcode: {:?}", stack_frame);
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("invalid-opcode", 128 + 4);
+    }
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+extern "x86-interrupt" fn double_fault_handler(
+    stack_frame: InterruptStackFrame,
+    _error_code: u64,
+) -> ! {
+    let pid = crate::sched::try_current_pid();
+    serial_println!(
+        "[FAULT] #8 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        _error_code
+    );
+    serial_println!("[INT] Double Fault: {:?}", stack_frame);
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+extern "x86-interrupt" fn gpf_handler(stack_frame: InterruptStackFrame, error_code: u64) {
+    // Diagnostic 1d: log pid/rip/rsp for #GP
+    let pid = crate::sched::try_current_pid();
+    serial_println!(
+        "[FAULT] #13 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+        pid,
+        stack_frame.instruction_pointer.as_u64(),
+        stack_frame.stack_pointer.as_u64(),
+        error_code
+    );
+    serial_println!(
+        "[INT] General Protection Fault: {:?} code={}",
+        stack_frame,
+        error_code
+    );
+    if is_user_frame(&stack_frame) {
+        terminate_current_user_process("general-protection", 128 + 11);
+    }
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+extern "x86-interrupt" fn page_fault_handler(
+    _stack_frame: InterruptStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    // Diagnostic 1d: log pid/rip/rsp for the injected #PF witnesses that the
+    // FastLane mapping assessors correlate with [FL-PF]. Ordinary demand
+    // faults are expected and handled below, so logging every one would flood
+    // the serial console for no diagnostic value.
+    #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+    {
+        let pid = crate::sched::try_current_pid();
+        let rip = _stack_frame.instruction_pointer.as_u64();
+        let rsp = _stack_frame.stack_pointer.as_u64();
+        serial_println!(
+            "[FAULT] #14 pid={} rip=0x{:x} rsp=0x{:x} err=0x{:x}",
+            pid,
+            rip,
+            rsp,
+            error_code.bits()
+        );
+    }
+    let vaddr = x86_64::registers::control::Cr2::read_raw();
+
+    #[cfg(feature = "cap_issuance_test")]
+    {
+        let (cr3, _) = x86_64::registers::control::Cr3::read();
+        serial_println!(
+            "[EXEC-R2] vector=14 cr2={:#x} cr3={:#x} cs={:#x} flags={:?}",
+            vaddr,
+            cr3.start_address().as_u64(),
+            _stack_frame.code_segment.0,
+            error_code
+        );
+    }
+
+    // Not-present fault: check whether this page was swapped out to ZRAM.
+    if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
+        && handle_swap_page_fault(vaddr)
+    {
+        return;
+    }
+
+    if !error_code.contains(PageFaultErrorCode::PROTECTION_VIOLATION)
+        && handle_demand_page_fault(vaddr, &error_code)
+    {
+        return;
+    }
+
+    // Check if this is a write fault (CoW candidate)
+    if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
+        // Try to handle as CoW page fault
+        if handle_cow_page_fault(vaddr) {
+            return; // CoW fault handled successfully
+        }
+    }
+
+    // Not a CoW fault — unrecoverable
+    serial_println!("[FAULT] Page Fault at {:#x}: code={:?}", vaddr, error_code);
+    if is_user_frame(&_stack_frame) {
+        #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
+        {
+            let sched = crate::sched::SCHEDULER.lock();
+            let p = sched.current_process();
+            serial_println!("[FL-PF] pid={} inc={} vm={} va={} error={} cpu={}", p.pid, p.foreground.incarnation, p.address_space.identity().generation, vaddr, error_code.bits(), crate::sched::current_cpu_id());
+        }
+        terminate_current_user_process("page-fault", 128 + 11);
+    }
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+/// Allocate the first frame for an absent Linux anonymous mapping page.
+/// Returns true only when this fault was satisfied by demand backing.
+fn handle_demand_page_fault(vaddr: u64, error_code: &PageFaultErrorCode) -> bool {
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
+        return false;
+    }
+    let Some(hhdm) = crate::HHDM_REQ
+        .response()
+        .map(|response| x86_64::VirtAddr::new(response.offset))
+    else {
+        return false;
+    };
+    let access = if error_code.contains(PageFaultErrorCode::INSTRUCTION_FETCH) {
+        crate::process::mmap::AnonymousAccess::Execute
+    } else if error_code.contains(PageFaultErrorCode::CAUSED_BY_WRITE) {
+        crate::process::mmap::AnonymousAccess::Write
+    } else {
+        crate::process::mmap::AnonymousAccess::Read
+    };
+    let page_address = vaddr & !0xfff;
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let owner_pid = sched.current_memory_owner().pid;
+    let mut reclaim_budget = crate::memory::swap::DirectReclaimBudget::new();
+    crate::memory::swap::maybe_reclaim_for_anonymous_allocation(
+        &mut sched,
+        &mut pmm,
+        hhdm,
+        Some((owner_pid, x86_64::VirtAddr::new(page_address))),
+        &mut reclaim_budget,
+    );
+    match unsafe {
+        crate::process::mmap::fault_in_anonymous_page(
+            sched.current_process(),
+            vaddr,
+            access,
+            &mut pmm,
+            hhdm,
+        )
+    } {
+        Ok(handled) => handled,
+        Err(error) => {
+            crate::serial_println!(
+                "[MM-LAZY] fault failed pid={} addr={:#x} access={:?} error={:?}",
+                sched.current_process().pid,
+                vaddr,
+                access,
+                error
+            );
+            false
+        }
+    }
+}
+
+/// Handle a fault on a page that was swapped out to ZRAM.
+/// Returns true if `vaddr`'s page held a swapped marker and was faulted back in.
+fn handle_swap_page_fault(vaddr: u64) -> bool {
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
+        return false;
+    }
+
+    let page_addr = vaddr & !0xFFF;
+    let page = match x86_64::structures::paging::Page::from_start_address(x86_64::VirtAddr::new(
+        page_addr,
+    )) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    let hhdm = match crate::HHDM_REQ.response() {
+        Some(resp) => x86_64::VirtAddr::new(resp.offset),
+        None => return false,
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+    let process = sched.current_process_mut();
+    if unsafe { process.address_space.swapped_block_id(page, hhdm) }.is_none() {
+        return false;
+    }
+
+    match unsafe {
+        crate::memory::swap::swap_in_page(&mut process.address_space, page, hhdm, &mut pmm)
+    } {
+        Ok(_) => {
+            crate::serial_println!("[SWAP] page-in at {:#x}", page_addr);
+            true
+        }
+        Err(e) => {
+            crate::serial_println!("[SWAP] page-in failed at {:#x}: {:?}", page_addr, e);
+            false
+        }
+    }
+}
+
+/// Handle Copy-on-Write page fault
+/// Returns true if handled, false if unrecoverable
+fn handle_cow_page_fault(vaddr: u64) -> bool {
+    // Only handle user-space addresses
+    if vaddr >= crate::memory::user::USER_END_EXCLUSIVE {
+        return false;
+    }
+
+    let page_addr = vaddr & !0xFFF; // Page-align
+    let page = match x86_64::structures::paging::Page::from_start_address(x86_64::VirtAddr::new(
+        page_addr,
+    )) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Get current page mappings
+    let hhdm = match crate::HHDM_REQ.response() {
+        Some(resp) => x86_64::VirtAddr::new(resp.offset),
+        None => return false,
+    };
+
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let mut pmm = crate::PMM.lock();
+
+    let process = sched.current_process_mut();
+
+    // A write-protection fault is a CoW candidate only when software policy
+    // still authorizes writes. In particular, mprotect(R/RX) must not be
+    // undone by allocating a private writable frame on the next user write.
+    let cow_authorized = process
+        .address_space
+        .lookup_region(page_addr)
+        .is_some_and(|region| {
+            region.kind == crate::process::region::MappingKind::Anonymous
+                && region.protection.writable()
+        });
+    if !cow_authorized {
+        return false;
+    }
+
+    // Look up the current physical frame
+    let (old_phys, old_flags) = match unsafe { process.address_space.lookup_entry(page, hhdm) } {
+        Some(entry) => entry,
+        None => return false,
+    };
+
+    // Allocate a new frame for the copy
+    let new_phys = match pmm.alloc_frame_owned(process.pid as u32) {
+        Some(phys) => phys,
+        None => return false,
+    };
+
+    // Copy the page content
+    let old_vaddr = hhdm + old_phys.as_u64();
+    let new_vaddr = hhdm + new_phys.as_u64();
+
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            old_vaddr.as_ptr::<u8>(),
+            new_vaddr.as_mut_ptr::<u8>(),
+            4096,
+        );
+    }
+
+    // Remap the page as writable
+    let new_frame = match x86_64::structures::paging::PhysFrame::from_start_address(new_phys) {
+        Ok(f) => f,
+        Err(_) => {
+            pmm.free_frame(new_phys);
+            return false;
+        }
+    };
+
+    let flags = old_flags | x86_64::structures::paging::PageTableFlags::WRITABLE;
+
+    if unsafe {
+        process.address_space.replace_mapping(
+            page,
+            crate::process::address_space::ExpectedMapping::Present {
+                frame: old_phys,
+                flags: old_flags,
+            },
+            crate::process::address_space::ReplacementMapping::Present {
+                frame: new_frame,
+                flags,
+            },
+            crate::process::address_space::OwnershipTransition::ReleaseOldFrame,
+            &mut *pmm,
+            hhdm,
+        )
+    }
+    .is_err()
+    {
+        pmm.free_frame(new_phys);
+        return false;
+    }
+
+    crate::serial_println!(
+        "[COW] CoW page fault at {:#x}: allocated new frame",
+        page_addr
+    );
+    true
+}
+
+// === Monotonic kernel clock (TSC calibrated) ===
+// These are initialized during calibrate_tsc_from_pit().
+static TSC_ORIGIN: AtomicU64 = AtomicU64::new(0);
+static TSC_TO_NS_MUL: AtomicU64 = AtomicU64::new(0); // (dt * mul) >> 32 == nanoseconds
+static TSC_HZ_APPROX: AtomicU64 = AtomicU64::new(0);
+
+/// Return the calibrated TSC frequency in Hz, or 0 if uncalibrated.
+/// Used by `lapic::calibrate_lapic_timer` to calibrate LAPIC timer rate.
+pub fn tsc_hz() -> u64 {
+    TSC_HZ_APPROX.load(Ordering::Relaxed)
+}
+
+/// Naked timer interrupt entry. Manually saves all GPRs to match the
+/// `iretq_to_context` / `init_context` layout, calls the Rust handler,
+/// and optionally switches context.
+#[unsafe(naked)]
+pub unsafe extern "C" fn timer_entry() {
+    core::arch::naked_asm!(
+        // Push all 15 GPRs in reverse pop order (rax first, r15 last)
+        // so that after pushes rsp points to r15 and the layout matches
+        // init_context / iretq_to_context.
+        "push rax",
+        "push rcx",
+        "push rdx",
+        "push rsi",
+        "push rdi",
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push rbx",
+        "push rbp",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "mov r12, rsp",
+        "call {handoff_slot}",
+        "mov r13, rax", // stable per-CPU release address, callee-saved
+        "mov rdi, r12",
+        "call timer_rust",
+        // Save return value (new RSP) in r12 (callee-saved, preserved by timer_rust).
+        "mov r12, rax",
+        // Hardware timer entry preserves the established runnable IF policy.
+        "mov rbx, [rsp + 136]",
+        "or rbx, 0x200",
+        "mov [rsp + 136], rbx",
+        // Restore return value.
+        "mov rax, r12",
+        "test rax, rax",
+        "jz 1f",
+        "mov rsp, rax",
+        "1:",
+        // This CPU will never access the outgoing stack again. An aligned
+        // x86 xchg is a full barrier; a remote picker/reaper loads with
+        // Acquire. CPUs that rejected the pinned task owe a new event.
+        "mov rcx, -1",
+        "xchg qword ptr [r13], rcx",
+        "cmp qword ptr [r13 + 8], 0",
+        "je 2f",
+        "mov rbx, rsp",
+        "and rsp, -16",
+        "call {release_wake}",
+        "mov rsp, rbx",
+        "2:",
+        // Pop in the same order as iretq_to_context (r15 first, rax last).
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop rbp",
+        "pop rbx",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rax",
+        "iretq",
+        handoff_slot = sym crate::sched::stack_handoff_slot,
+        release_wake = sym crate::sched::pin_release_wake,
+    );
+}
+
+/// A voluntary reschedule IPI sent while syscall interrupts are disabled.
+/// It becomes pending until SYSRET enables interrupts in ring 3, so the
+/// scheduler saves a userspace frame instead of a live syscall stack frame.
+/// Unlike the timer vector, it must not advance clocks or wake timer clients.
+pub const RESCHEDULE_VECTOR: u8 = 0xF3;
+
+#[unsafe(naked)]
+pub unsafe extern "C" fn reschedule_entry() {
+    core::arch::naked_asm!(
+        "push rax",
+        "push rcx",
+        "push rdx",
+        "push rsi",
+        "push rdi",
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push rbx",
+        "push rbp",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "mov r12, rsp",
+        "call {handoff_slot}",
+        "mov r13, rax",
+        "mov rdi, r12",
+        "call reschedule_rust",
+        "mov r12, rax",
+        // CPL0 Doorbell continuations must retain IF=0 until SYSRET.
+        // Hardware IRQs and initial runnable contexts already carry IF=1.
+        // Opt-in pre-repair control: never admitted to ordinary/release images.
+        ".if {if_control}",
+        "or qword ptr [rsp + 136], 0x200",
+        ".endif",
+        "mov rax, r12",
+        "test rax, rax",
+        "jz 1f",
+        "mov rsp, rax",
+        "1:",
+        "mov rcx, -1",
+        "xchg qword ptr [r13], rcx",
+        "cmp qword ptr [r13 + 8], 0",
+        "je 2f",
+        "mov rbx, rsp",
+        "and rsp, -16",
+        "call {release_wake}",
+        "mov rsp, rbx",
+        "2:",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop rbp",
+        "pop rbx",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+        "pop rdi",
+        "pop rsi",
+        "pop rdx",
+        "pop rcx",
+        "pop rax",
+        "iretq",
+        handoff_slot = sym crate::sched::stack_handoff_slot,
+        release_wake = sym crate::sched::pin_release_wake,
+        if_control = const cfg!(all(debug_assertions, feature = "fastlane_doorbell_if_control")) as u8,
+    );
+}
+
+#[no_mangle]
+extern "C" fn reschedule_rust(saved_rsp: u64) -> u64 {
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    crate::sched::doorbell_test::handled();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::handled();
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    crate::sched::remote_wake_test::handled(crate::sched::current_cpu_id());
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
+    x86_64::instructions::interrupts::disable();
+    let cpu_id = crate::sched::current_cpu_id();
+    crate::sched::accounting::interrupt_entry(cpu_id);
+    let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_trace"))]
+    if let Some(i) = sched.current_process_index() {
+        // SAFETY: naked entry supplied the live 15-GPR plus CPU frame on
+        // this task's kernel stack; only read the two fixed scalar slots.
+        let (cs, flags) = unsafe {
+            let frame = saved_rsp as *const u64;
+            (frame.add(16).read(), frame.add(17).read())
+        };
+        sched.trace_bell_process("irq-frame", i, cs, flags);
+    }
+    #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+    crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::before_schedule(&mut sched, cpu_id);
+    #[cfg(feature = "scheduler_guest_bench")]
+    let outgoing = sched.diagnostic_current_pid(cpu_id);
+    let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
+    crate::sched::doorbell_test::scheduled(&sched, cpu_id, result);
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::after_schedule(&mut sched, cpu_id, result);
+    #[cfg(feature = "scheduler_guest_bench")]
+    crate::scheduler_bench_diag::observe(&sched, outgoing, result, 32);
+    #[cfg(feature = "scheduler_timer_trace")]
+    crate::scheduler_timer_trace::event(
+        &sched,
+        13,
+        sched.diagnostic_current_pid(cpu_id).unwrap_or(0),
+        RESCHEDULE_VECTOR as u64,
+        (result != 0) as u64,
+        crate::sched::peek_reschedule_on(cpu_id) as u64,
+    );
+    drop(sched);
+    crate::sched::flush_dispatch_notifications();
+    #[cfg(feature = "scheduler_b_test")]
+    crate::sched::regression::handoff_delay();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::handoff_checkpoint(cpu_id);
+    result
+}
+
+/// Wake tty_server every N timer ticks for the foreground render cadence.
+/// Timer is ~100 Hz, so 3 ticks ≈ 30 ms ≈ ~33 FPS. Larger = less CPU but
+/// choppier; smaller = smoother but starves the foreground app of CPU.
+const TTY_WAKE_INTERVAL_TICKS: u64 = 3;
+
+/// Rust side of the timer handler.
+/// `saved_rsp` points to the pushed registers on the kernel stack.
+/// Returns 0 to resume the interrupted context, or a new RSP to switch.
+#[no_mangle]
+pub extern "C" fn timer_rust(saved_rsp: u64) -> u64 {
+    #[cfg(feature = "scheduler_timer_trace")]
+    let timer_entry_ns = now_ns();
+    // Send LAPIC EOI. All cores (BSP and APs) now receive their timer
+    // interrupts from the per-core LAPIC, not the legacy 8259 PIC.
+    unsafe {
+        crate::arch::x86_64::lapic::send_eoi();
+    }
+
+    // Cache CPU ID once per timer entry.
+    // current_cpu_id() issues a CPUID instruction (a full pipeline serialisation
+    // point). Calling it once and threading the result through eliminates the
+    // 2–3 redundant CPUID executions the old code did per tick per core.
+    let cpu_id = crate::sched::current_cpu_id();
+    #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+    crate::sched::pin_release_test::timer(cpu_id);
+    crate::sched::accounting::interrupt_entry(cpu_id);
+
+    // Per-core Intel DTS sample (allowlisted models only; ~1 Hz). Each CPU
+    // reads its own IA32_THERM_STATUS so readings are never mislabeled.
+    crate::thermal_hw::on_timer_tick(cpu_id);
+
+    // ── AP fast-paths (lock-free) ─────────────────────────────────────────────
+
+    // AP: scheduler not yet ready — run queues not seeded, skip everything.
+    if cpu_id != 0 && !crate::sched::SCHEDULER_READY.load(core::sync::atomic::Ordering::Acquire) {
+        return 0;
+    }
+
+    // ── BSP-only global bookkeeping ───────────────────────────────────────────
+    // APs do not touch the centralized global timekeeper or the key-injection
+    // buffer. They only drive local preemption/accounting.
+    let ticks_total = if cpu_id == 0 {
+        let calibrated_monotonic_ns = if tsc_hz() == 0 { None } else { Some(now_ns()) };
+        let ticks = crate::timekeeping::advance_global_tick(cpu_id, calibrated_monotonic_ns);
+        crate::arch::x86_64::rtc::diagnostic_checkpoint(cpu_id, ticks);
+        // Poll key injection buffer for test automation (no IRQ1 needed)
+        keyboard::poll_inject_buffer();
+        ticks
+    } else {
+        crate::timekeeping::global_ticks()
+    };
+
+    // Disable interrupts while holding scheduler lock to prevent a deadlock if
+    // a keyboard IRQ fires while we hold the lock (keyboard handler also locks).
+    x86_64::instructions::interrupts::disable();
+
+    // Global history fixture rendezvous runs without SCHEDULER or a broker
+    // guard retained between ticks. Normal builds contain no hook.
+    #[cfg(feature = "grant_history_test")]
+    crate::capability::production_gate::history::on_tick(cpu_id);
+
+    let sched_lock_start = now_ns();
+    #[cfg(feature = "scheduler_perf_diag")]
+    let sched_lock_clock_valid = crate::sched::perf::observe_clock(cpu_id, sched_lock_start);
+
+    // ── Phase 1: brief lock — tick accounting + BSP timer work (no heavy telemetry) ─
+    //
+    // Capture telemetry scalars under lock (cheap), release lock, then do expensive
+    // page counting outside the lock (Phase 2 goal).
+    #[cfg(feature = "scheduler_guest_bench")]
+    let mut bench_reason = 0;
+    let mut telemetry_snap: Option<crate::telemetry::TelemetrySnapshot> = None;
+    #[cfg(feature = "scheduler_perf_diag")]
+    let sched_lock_acquired;
+    {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        #[cfg(feature = "scheduler_timer_trace")]
+        crate::scheduler_timer_trace::event(&sched, 1, 0, timer_entry_ns, ticks_total, 0);
+        #[cfg(feature = "scheduler_perf_diag")]
+        {
+            sched_lock_acquired = now_ns();
+            let acquired_clock_valid =
+                crate::sched::perf::observe_clock(cpu_id, sched_lock_acquired);
+            if sched_lock_clock_valid && acquired_clock_valid {
+                let rec = &crate::sched::perf::CPU[cpu_id];
+                crate::sched::perf::sample(
+                    &rec.lock_wait,
+                    sched_lock_acquired.saturating_sub(sched_lock_start),
+                );
+            }
+        }
+        #[cfg(feature = "scheduler_guest_bench")]
+        if crate::sched::peek_reschedule_on(cpu_id) {
+            bench_reason |= 1;
+        }
+        sched.tick(cpu_id, ticks_total);
+        #[cfg(all(debug_assertions, feature = "thread_admission_test"))]
+        crate::sched::t2_fixture::on_tick(&sched);
+        #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+        crate::sched::remote_wake_test::on_tick(&mut sched, cpu_id);
+        #[cfg(all(debug_assertions, feature = "pin_release_test"))]
+        crate::sched::pin_release_test::on_tick(&mut sched, cpu_id);
+        #[cfg(feature = "scheduler_guest_bench")]
+        if crate::sched::peek_reschedule_on(cpu_id) {
+            bench_reason |= 2;
+        }
+        #[cfg(feature = "scheduler_b_test")]
+        crate::sched::regression::on_tick(&mut sched, cpu_id);
+        #[cfg(feature = "cap_issuance_test")]
+        crate::capability::gate::on_tick(&mut sched, cpu_id);
+        #[cfg(feature = "production_grant_test")]
+        crate::capability::production_gate::on_tick(&mut sched, cpu_id);
+
+        // Telemetry and cross-process timer work are BSP-only (CPU 0).
+        if cpu_id == 0 {
+            // Elapsed deadline: delayed timer delivery may skip an exact
+            // modulo tick. Never publish repeatedly for the same global tick.
+            static LAST_TELEMETRY_TICK: AtomicU64 = AtomicU64::new(0);
+            if ticks_total.saturating_sub(LAST_TELEMETRY_TICK.load(Ordering::Relaxed)) >= 100 {
+                LAST_TELEMETRY_TICK.store(ticks_total, Ordering::Relaxed);
+                let pmm = crate::PMM.lock();
+                // Capture only scalars here; expensive walks moved out.
+                telemetry_snap = Some(crate::telemetry::capture_telemetry_snapshot(&sched, &pmm));
+                // pmm dropped; sched still held briefly for remaining BSP work.
+            }
+
+            // Timer-server notification and TTY wakeup.
+            // With per-core LAPIC timers all firing at 100 Hz, doing this on
+            // every core would multiply the effective tick rate seen by
+            // timer_server (×N) and over-wake tty_server. BSP handles all
+            // cross-process timer signalling.
+            let timer_endpoint = sched
+                .processes
+                .iter()
+                .find(|p| {
+                    p.name_str() == "timer_server"
+                        && !matches!(
+                            p.state,
+                            crate::process::ProcessState::Finished
+                                | crate::process::ProcessState::Reaped
+                        )
+                })
+                .and_then(|p| p.ipc_endpoint.map(|ep| (ep, p.pid)));
+
+            if let Some((endpoint_id, timer_pid)) = timer_endpoint {
+                #[cfg(feature = "scheduler_guest_bench")]
+                crate::scheduler_bench_diag::timer_deadline(ticks_total, now_ns());
+                crate::ipc::with_shard(endpoint_id, |bus| {
+                    bus.send_timer_tick(endpoint_id, ticks_total);
+                });
+                #[cfg(feature = "scheduler_timer_trace")]
+                crate::scheduler_timer_trace::event(&sched, 2, timer_pid, ticks_total, 0, 0);
+                #[cfg(feature = "scheduler_guest_bench")]
+                if sched.is_blocked_on_recv(timer_pid) {
+                    bench_reason |= 4;
+                }
+                sched.wake_pid(timer_pid);
+            }
+
+            if ticks_total % TTY_WAKE_INTERVAL_TICKS == 0 {
+                if let Some(tty_pid) = sched
+                    .processes
+                    .iter()
+                    .find(|p| {
+                        p.name_str() == "tty_server"
+                            && (sched.online_cores > 1
+                                || (p.state == crate::process::ProcessState::BlockedOnIpc
+                                    && p.pending_call.is_none()))
+                    })
+                    .map(|p| p.pid)
+                {
+                    // On one CPU, wake only the TTY's receive wait. Do not mark
+                    // it Ready during a nested login call to UAC: the grant
+                    // mint requires the TTY caller to remain blocked until the
+                    // reply commits. Preserve the established SMP wake path.
+                    #[cfg(feature = "scheduler_guest_bench")]
+                    if sched.is_blocked_on_recv(tty_pid) {
+                        bench_reason |= 8;
+                    }
+                    sched.wake_pid(tty_pid);
+                }
+            }
+        }
+    } // Phase 1 lock released here — other cores can now proceed.
+
+    let sched_lock_end = now_ns();
+    #[cfg(feature = "scheduler_perf_diag")]
+    if sched_lock_clock_valid && crate::sched::perf::observe_clock(cpu_id, sched_lock_end) {
+        crate::sched::perf::sample(
+            &crate::sched::perf::CPU[cpu_id].lock_hold,
+            sched_lock_end.saturating_sub(sched_lock_acquired),
+        );
+    }
+
+    // Phase 2 telemetry commit outside SCHEDULER lock (expensive page walks here).
+    if let Some(snap) = telemetry_snap {
+        #[cfg(feature = "cpu_accounting_diag")]
+        crate::telemetry::report_cpu_sample(&snap);
+        let tel_start = now_ns();
+        unsafe {
+            crate::telemetry::commit_telemetry_snapshot(&snap);
+        }
+        let tel_end = now_ns();
+        if ticks_total % PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS == 0 {
+            serial_println!(
+                "[DIAG] sched_lock_hold_ns={} telemetry_update_ns={}",
+                sched_lock_end - sched_lock_start,
+                tel_end - tel_start
+            );
+        }
+    }
+
+    if cpu_id == 0 && ticks_total % PERFORMANCE_DIAGNOSTIC_INTERVAL_TICKS == 0 {
+        // Also report per-core activity and parked state via existing diag if enabled.
+        // (timer_ticks / ctx_switches already updated in tick() and visible in SCHED-DIAG)
+    }
+
+    // ── Phase 2: AP lock-free early exit ─────────────────────────────────────
+    //
+    // peek_reschedule_on() reads the reschedule-mask atomic without acquiring
+    // the scheduler lock. It is safe because:
+    //   • Only this core ever clears its own bit (via check_reschedule_on).
+    //   • Other cores may only SET our bit (via request_reschedule_on).
+    // If our bit is not set, no context switch is needed; skip Phase 2 entirely
+    // and return 0 without contending on the global lock.
+    if !crate::sched::peek_reschedule_on(cpu_id) {
+        crate::sched::flush_dispatch_notifications();
+        return 0;
+    }
+
+    // ── Phase 2: context switch (re-acquire lock only when needed) ────────────
+    //
+    // schedule_tick() will re-check (and consume) the reschedule bit under the
+    // lock, save the interrupted context, run pick_next / steal_work, switch
+    // address spaces, and update the TSS RSP0.
+    let mut sched = crate::sched::SCHEDULER.lock();
+    #[cfg(feature = "scheduler_guest_bench")]
+    let outgoing = sched.diagnostic_current_pid(cpu_id);
+    let result = sched.schedule_tick(cpu_id, saved_rsp);
+    #[cfg(feature = "scheduler_guest_bench")]
+    crate::scheduler_bench_diag::observe(&sched, outgoing, result, bench_reason);
+    #[cfg(feature = "scheduler_timer_trace")]
+    crate::scheduler_timer_trace::event(
+        &sched,
+        13,
+        sched.diagnostic_current_pid(cpu_id).unwrap_or(0),
+        32,
+        (result != 0) as u64,
+        crate::sched::peek_reschedule_on(cpu_id) as u64,
+    );
+    drop(sched);
+    crate::sched::flush_dispatch_notifications();
+
+    #[cfg(feature = "scheduler_b_test")]
+    crate::sched::regression::handoff_delay();
+
+    // IMPORTANT: do NOT re-enable interrupts here.
+    //
+    // The naked `timer_entry` still has to (a) optionally switch the stack
+    // pointer to `result` (the next process's saved kernel stack), (b) pop 15
+    // GPRs, and (c) `iretq`. If interrupts were enabled now, a nested timer or
+    // keyboard IRQ could fire *after* `mov rsp, rax` — i.e. while RSP points at
+    // a half-restored context — and the nested handler could context-switch
+    // again, clobbering the frame this handler is mid-way through restoring.
+    // The result is a garbage IRET frame and a #GP on `iretq` (observed as an
+    // intermittent GPF at the `iretq` instruction after long uptime).
+    //
+    // Interrupts are re-enabled atomically by `iretq` itself: every runnable
+    // userspace context has IF=1 (init_context writes 0x202 and hardware
+    // IRQs preserve interrupted flags). Software reschedules may instead save
+    // IF=0 for a CPL0 syscall continuation; that state must be preserved too.
+    result
+}
+
+#[allow(dead_code)]
+pub fn ticks() -> u64 {
+    // Legacy tick accessor kept intentionally for syscall/API compatibility.
+    crate::timekeeping::global_ticks()
+}
+
+// ---------------------------------------------------------------------------
+// Keyboard IRQ1 handler
+// ---------------------------------------------------------------------------
+
+extern "x86-interrupt" fn keyboard_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
+    keyboard::handle_irq1();
+    acknowledge_external_irq(1);
+    crate::sched::flush_dispatch_notifications();
+}
+
+// Mouse IRQ12 handler
+extern "x86-interrupt" fn mouse_entry(_stack_frame: InterruptStackFrame) {
+    crate::sched::accounting::interrupt_entry_local();
+    use crate::arch::x86_64::mouse;
+    mouse::handle_irq12();
+    acknowledge_external_irq(12);
+    crate::sched::flush_dispatch_notifications();
+}

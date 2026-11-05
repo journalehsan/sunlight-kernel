@@ -1,0 +1,14 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "--test",
+    "kernel/src/sched/requests.rs",
+    "-o",
+    "target/t3r-requests-host"
+  ],
+  "exit_code": 0,
+  "seconds": 0.250798852997832
+}

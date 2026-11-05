@@ -1,0 +1,507 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling typenum v1.20.1
+   Compiling simd-adler32 v0.3.9
+   Compiling zune-core v0.4.12
+   Compiling subtle v2.6.1
+   Compiling generic-array v0.14.7
+   Compiling scopeguard v1.2.0
+   Compiling lz4_flex v0.11.6
+   Compiling base64ct v1.8.3
+   Compiling unicode-segmentation v1.13.3
+   Compiling rand_core v0.6.4
+   Compiling cpufeatures v0.2.17
+   Compiling sunlight-libc v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+   Compiling sun-font v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-font)
+   Compiling zeroize v1.9.0
+warning: unused variable: `pat`
+   --> sunlight-tz/src/localtime.rs:264:9
+    |
+264 |     let pat = "\"";
+    |         ^^^ help: if this is intentional, prefix it with an underscore: `_pat`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-tz` (lib) generated 1 warning (run `cargo fix --lib -p sunlight-tz` to apply 1 suggestion)
+   Compiling lock_api v0.4.14
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/lib.rs:43:35
+   |
+43 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+   = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:680:44
+    |
+680 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:689:44
+    |
+689 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:698:44
+    |
+698 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:715:44
+    |
+715 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/alloc.rs:787:29
+    |
+787 |     any(target_os = "none", target_os = "sunlightos")
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/errno.rs:38:44
+   |
+38 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+   |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+ --> sunlight-libc/src/fd.rs:7:36
+  |
+7 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:33:36
+   |
+33 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+  --> sunlight-libc/src/fd.rs:61:36
+   |
+61 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:141:44
+    |
+141 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:158:44
+    |
+158 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:174:44
+    |
+174 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mem.rs:207:44
+    |
+207 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:113:29
+    |
+113 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/mman.rs:235:29
+    |
+235 |     any(target_os = "none", target_os = "sunlightos"),
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:155:44
+    |
+155 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:167:44
+    |
+167 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:179:44
+    |
+179 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:191:44
+    |
+191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:206:44
+    |
+206 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/string.rs:221:44
+    |
+221 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `sunlightos`
+   --> sunlight-libc/src/time.rs:132:44
+    |
+132 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+   Compiling zune-inflate v0.2.54
+   Compiling zune-jpeg v0.4.21
+   Compiling password-hash v0.5.0
+   Compiling spinning_top v0.2.5
+   Compiling zune-png v0.4.10
+   Compiling linked_list_allocator v0.10.6
+warning: field `terminal` is never read
+   --> sunlight-libc/src/sun_exec.rs:764:5
+    |
+759 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+764 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling sun-img v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img)
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling sunlight-ui v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui)
+   Compiling blake2 v0.10.6
+   Compiling argon2 v0.5.3
+warning: `sunlight-libc` (lib) generated 25 warnings
+warning: sun-font@0.2.6324-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+   Compiling sunlight-uac v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-uac)
+   Compiling sunshell v0.2.6324-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunshell)
+warning: unreachable statement
+   --> sunshell/src/main.rs:793:21
+    |
+792 |                     self.cmd_shutdown();
+    |                     ------------------- any code following this expression is unreachable
+793 |                     unreachable!();
+    |                     ^^^^^^^^^^^^^^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable statement
+   --> sunshell/src/main.rs:797:21
+    |
+796 |                     self.cmd_reboot();
+    |                     ----------------- any code following this expression is unreachable
+797 |                     unreachable!();
+    |                     ^^^^^^^^^^^^^^ unreachable statement
+
+warning: value assigned to `uid` is never read
+    --> sunshell/src/main.rs:1945:27
+     |
+1945 |             let mut uid = 0u32;
+     |                           ^^^^ this value is reassigned later and never used
+...
+1948 |                 uid = parse_u32(&owner_group[..colon]).unwrap_or(0);
+     |                 --------------------------------------------------- `uid` is overwritten here before the previous value is read
+     |
+     = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `gid`
+    --> sunshell/src/main.rs:4108:49
+     |
+4108 |     fn start_tty_shell(shell_id: u64, uid: u64, gid: u64) -> ! {
+     |                                                 ^^^ help: if this is intentional, prefix it with an underscore: `_gid`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: methods `load_user_from_vfs`, `cmd_whoami`, `cmd_id`, `cmd_echo`, and `cmd_cat` are never used
+    --> sunshell/src/main.rs:870:12
+     |
+ 300 |     impl Shell {
+     |     ---------- methods in this implementation
+...
+ 870 |         fn load_user_from_vfs(&mut self, username: &[u8]) -> bool {
+     |            ^^^^^^^^^^^^^^^^^^
+...
+ 946 |         fn cmd_whoami(&self) -> &[u8] {
+     |            ^^^^^^^^^^
+...
+ 950 |         fn cmd_id(&self, args: &[&str]) -> &[u8] {
+     |            ^^^^^^
+...
+1866 |         fn cmd_echo(&self, args: &[&str]) -> &[u8] {
+     |            ^^^^^^^^
+...
+1889 |         fn cmd_cat(&self, args: &[&str]) -> &[u8] {
+     |            ^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `push_art_line` is never used
+    --> sunshell/src/main.rs:2715:8
+     |
+2715 |     fn push_art_line(line: &[u8]) {
+     |        ^^^^^^^^^^^^^
+
+warning: function `push_label_value` is never used
+    --> sunshell/src/main.rs:2730:8
+     |
+2730 |     fn push_label_value(label: &str, value: &str) {
+     |        ^^^^^^^^^^^^^^^^
+
+warning: function `push_label_value_bytes` is never used
+    --> sunshell/src/main.rs:2738:8
+     |
+2738 |     fn push_label_value_bytes(label: &[u8], value: &[u8]) {
+     |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_section_header` is never used
+    --> sunshell/src/main.rs:2750:8
+     |
+2750 |     fn push_section_header(title: &str) {
+     |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `push_blank` is never used
+    --> sunshell/src/main.rs:2756:8
+     |
+2756 |     fn push_blank() {
+     |        ^^^^^^^^^^
+
+warning: function `push_bytes` is never used
+    --> sunshell/src/main.rs:2765:8
+     |
+2765 |     fn push_bytes(data: &[u8]) {
+     |        ^^^^^^^^^^
+
+warning: function `format_uptime` is never used
+    --> sunshell/src/main.rs:2771:8
+     |
+2771 |     fn format_uptime(total_s: u64) -> alloc::string::String {
+     |        ^^^^^^^^^^^^^
+
+warning: function `lookup_user` is never used
+    --> sunshell/src/main.rs:3024:8
+     |
+3024 |     fn lookup_user(username: &[u8]) -> Option<(u32, u32)> {
+     |        ^^^^^^^^^^^
+
+warning: function `ulibc_write_long_out` is never used
+    --> sunshell/src/main.rs:3296:8
+     |
+3296 |     fn ulibc_write_long_out(len: usize) -> Result<(), sunlight_libc::Errno> {
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `pty_write_prompt` is never used
+    --> sunshell/src/main.rs:3561:8
+     |
+3561 |     fn pty_write_prompt(
+     |        ^^^^^^^^^^^^^^^^
+
+warning: creating a mutable reference to mutable static
+   --> sunshell/src/main.rs:955:31
+    |
+955 |                     let buf = &mut BUF;
+    |                               ^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+help: use `&raw mut` instead to create a raw pointer
+    |
+955 |                     let buf = &raw mut BUF;
+    |                                +++
+
+warning: creating a mutable reference to mutable static
+   --> sunshell/src/main.rs:976:31
+    |
+976 |                     let buf = &mut BUF;
+    |                               ^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+    |
+976 |                     let buf = &raw mut BUF;
+    |                                +++
+
+warning: creating a shared reference to mutable static
+    --> sunshell/src/main.rs:1334:41
+     |
+1334 |                 let n = bytes.len().min(BUF.len().saturating_sub(1));
+     |                                         ^^^^^^^^^ shared reference to mutable static
+     |
+     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:1869:27
+     |
+1869 |                 let buf = &mut BUF;
+     |                           ^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+     |
+1869 |                 let buf = &raw mut BUF;
+     |                            +++
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:1904:27
+     |
+1904 |                 let buf = &mut BUF;
+     |                           ^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+     |
+1904 |                 let buf = &raw mut BUF;
+     |                            +++
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:2077:27
+     |
+2077 |                 let out = &mut OUT;
+     |                           ^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+     |
+2077 |                 let out = &raw mut OUT;
+     |                            +++
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:2336:27
+     |
+2336 |                 let out = &mut OUT;
+     |                           ^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+     |
+2336 |                 let out = &raw mut OUT;
+     |                            +++
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:2499:27
+     |
+2499 |                 let buf = &mut BUF;
+     |                           ^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+help: use `&raw mut` instead to create a raw pointer
+     |
+2499 |                 let buf = &raw mut BUF;
+     |                            +++
+
+warning: creating a mutable reference to mutable static
+    --> sunshell/src/main.rs:3413:44
+     |
+3413 |             if let Some(buffer) = unsafe { PTY_OUTPUT_BUFFER.as_mut() } {
+     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: `sunshell` (bin "sshl") generated 24 warnings (run `cargo fix --bin "sshl" -p sunshell` to apply 1 suggestion)
+    Finished `release` profile [optimized] target(s) in 10.92s

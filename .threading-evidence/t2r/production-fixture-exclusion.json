@@ -1,0 +1,25 @@
+{
+  "release": {
+    "path": ".threading-evidence/t2r/20261104T222131.677428Z-suite-production/kernel.elf",
+    "sha256": "0b6bbe490df45a7fb7ec6274df870e3a11e7569ba37252d07d69c93c6dd4f20e",
+    "excluded": {
+      "[T2R]": true,
+      "T2R ready": true,
+      "T2R actor": true,
+      "[T2-FAULT]": true
+    },
+    "pass": true
+  },
+  "debug": {
+    "path": "target/x86_64-unknown-none/debug/sunlight-kernel",
+    "sha256": "69594e90b6045fe21bdcca1ddcac69429ff72f4198f75be8eec831de4d63230a",
+    "excluded": {
+      "[T2R]": true,
+      "T2R ready": true,
+      "T2R actor": true,
+      "[T2-FAULT]": true
+    },
+    "pass": true
+  },
+  "pass": true
+}

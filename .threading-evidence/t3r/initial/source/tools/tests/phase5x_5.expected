@@ -1,0 +1,4 @@
+# Phase 5.x.5 test: sunlight-utils file system utilities
+[UTIL] sunlight-utils v0.1 loaded
+[UTIL] Commands available: ls cat cp mv rm mkdir rmdir touch chmod find grep wc head tail sort uniq cut date id whoami
+[UTIL] OK

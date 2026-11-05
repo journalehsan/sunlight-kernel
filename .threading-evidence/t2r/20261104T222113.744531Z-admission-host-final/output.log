@@ -1,0 +1,17 @@
+
+running 12 tests
+test cancellation_exit_teardown_and_generation_reuse_serialize_with_create ... ok
+test every_reservation_failure_rolls_back_without_publication ... ok
+test exec_eligibility_and_admission_have_one_vm_generation ... ok
+test exited_linux_leader_retains_admission_only_for_its_live_group ... ok
+test inherited_state_budgets_reject_before_publication ... ok
+test low_heap_preserves_existing_process_and_storage ... ok
+test process::env::tests::sorted_inheritance_and_all_allocation_failures ... ok
+test process::thread_admission::tests::quota_boundaries_and_overflow ... ok
+test reaping_and_slot_reuse_race_with_concurrent_creation ... ok
+test recycled_root_does_not_adopt_a_different_vm_generation ... ok
+test storage_is_bounded_and_pinned_or_watched_slots_are_not_reused ... ok
+test two_creators_race_for_final_global_and_vm_slots ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

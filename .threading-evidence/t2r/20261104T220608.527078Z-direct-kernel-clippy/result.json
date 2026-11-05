@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    ".threading-evidence/t2r/direct-clippy-driver.py",
+    ".threading-evidence/t2r/direct-clippy-detail"
+  ],
+  "exit_code": 1,
+  "seconds": 20.26802453197888
+}

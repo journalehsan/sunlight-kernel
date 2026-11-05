@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "bash",
+    "-c",
+    "cargo check -p sunlight-kernel --bin sunlight-kernel --offline && cargo clippy -p sunlight-kernel --bin sunlight-kernel --offline && cargo test -p sunlight-kernel --lib --target x86_64-unknown-linux-gnu --offline && python3 -m unittest discover -s tools -p \"test_threading_t*.py\""
+  ],
+  "exit_code": 101,
+  "seconds": 69.79438002800453
+}

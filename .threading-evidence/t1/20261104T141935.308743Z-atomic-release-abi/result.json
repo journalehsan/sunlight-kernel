@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/check_syscall_stack_abi.py",
+    ".threading-evidence/t1/images/atomic-release/kernel.elf"
+  ],
+  "exit_code": 0,
+  "seconds": 0.7507486819813494
+}

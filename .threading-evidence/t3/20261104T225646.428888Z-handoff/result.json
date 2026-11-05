@@ -1,0 +1,18 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "--timeout",
+    "1000",
+    "--",
+    "python3",
+    "tools/test_remote_wake_smp.py",
+    "--pin-release",
+    "--evidence-dir",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3/handoff",
+    "--timeout",
+    "180"
+  ],
+  "error": "FileNotFoundError(2, 'No such file or directory')",
+  "seconds": 0.0003570360131561756
+}

@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "bash",
+    "-c",
+    "rustc --edition=2021 --test kernel/src/arch/x86_64/cpu_topology.rs -o target/t3-topology-test && target/t3-topology-test && cargo test -p sunlight-kernel --lib --target x86_64-unknown-linux-gnu --offline && python3 tools/threading_t2_host.py && python3 -m unittest discover -s tools -p \"test_threading_t*.py\""
+  ],
+  "exit_code": 0,
+  "seconds": 2.2515908729983494
+}

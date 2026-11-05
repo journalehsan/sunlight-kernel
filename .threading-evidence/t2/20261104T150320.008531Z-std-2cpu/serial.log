@@ -1,0 +1,2607 @@
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T15:03:01Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x10d5bb70 (68956 frames, 269 MiB)
+[PMM] 1236/1504 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11846 end_count=7846 elapsed_counts=4000 tsc_delta=8303915 tsc_hz=2477020476
+[TIME] TSC calibrated ~2477020476 Hz for internal accounting
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63218500 lapic_initial_count=632185 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2477020476
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x15 minute=0x03 second=0x42 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T15:03:42Z assumed_basis=UTC
+wall: utc=2026-11-04T15:03:42Z unix=1793804622 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90e00000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8002e334
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff904a6af0..0xffffffff904b6af0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8002e334
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[MM-0] unsafe fork rejection is atomic: OK
+[MM-1] user address/range arithmetic: OK
+[MM-1] page-aware copy, strings, permissions, atomic output, and swap policy: OK
+[MM-0] NXE and NX mapping flags: OK
+[MM-0] user-frame reuse sanitization: OK
+[MM-0] anonymous mmap W^X, NX, and zero-fill: OK
+[MM-0] temporary SHM views preserve persistent mappings: OK
+[MM-0] SHM NX, zero-fill, and peer preservation: OK
+[CAP] Created endpoint 0 for pid=53594
+[CAP] Created endpoint 1 for pid=53596
+[MM-0] framebuffer authority lifecycle: OK
+[MM-2A] anonymous mmap contract rejects unsupported semantics: OK
+[MM-2A] collision, cursor, SHM commit, live-content, and NX replacement: OK
+[SCHED] process_reaped pid=41216 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41216 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41216 cleared_msgs=0
+[SCHED] process_reaped pid=41217 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41217 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41217 cleared_msgs=0
+[SCHED] process_reaped pid=41218 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41218 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41218 cleared_msgs=0
+[SCHED] process_reaped pid=41219 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41219 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41219 cleared_msgs=0
+[SCHED] process_reaped pid=41220 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41220 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41220 cleared_msgs=0
+[SCHED] process_reaped pid=41221 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41221 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41221 cleared_msgs=0
+[SCHED] process_reaped pid=41222 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41222 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41222 cleared_msgs=0
+[SCHED] process_reaped pid=41223 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41223 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41223 cleared_msgs=0
+[SCHED] process_reaped pid=41224 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41224 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41224 cleared_msgs=0
+[SCHED] process_reaped pid=41225 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41225 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41225 cleared_msgs=0
+[SCHED] process_reaped pid=41226 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41226 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41226 cleared_msgs=0
+[SCHED] process_reaped pid=41227 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41227 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41227 cleared_msgs=0
+[SCHED] process_slot_reused idx=1 pid=45312 (reused reaped slot)
+[SCHED] CREATED process #1 'mm0-thread' idx=1 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=2 pid=45313 (reused reaped slot)
+[SCHED] CREATED process #2 'mm0-thread' idx=2 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=3 pid=45314 (reused reaped slot)
+[SCHED] CREATED process #3 'mm0-thread' idx=3 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=4 pid=45315 (reused reaped slot)
+[SCHED] CREATED process #4 'mm0-thread' idx=4 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=5 pid=45316 (reused reaped slot)
+[SCHED] CREATED process #5 'mm0-thread' idx=5 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=6 pid=45317 (reused reaped slot)
+[SCHED] CREATED process #6 'mm0-thread' idx=6 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=7 pid=45318 (reused reaped slot)
+[SCHED] CREATED process #7 'mm0-thread' idx=7 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=8 pid=45319 (reused reaped slot)
+[SCHED] CREATED process #8 'mm0-thread' idx=8 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=9 pid=45320 (reused reaped slot)
+[SCHED] CREATED process #9 'mm0-thread' idx=9 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=10 pid=45321 (reused reaped slot)
+[SCHED] CREATED process #10 'mm0-thread' idx=10 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=11 pid=45322 (reused reaped slot)
+[SCHED] CREATED process #11 'mm0-thread' idx=11 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_slot_reused idx=12 pid=45323 (reused reaped slot)
+[SCHED] CREATED process #12 'mm0-thread' idx=12 burst_score=256 tier=High (reused reaped slot)
+[SCHED] process_reaped pid=45312 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45312 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45312 cleared_msgs=0
+[SCHED] process_reaped pid=45313 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45313 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45313 cleared_msgs=0
+[SCHED] process_reaped pid=45314 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45314 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45314 cleared_msgs=0
+[SCHED] process_reaped pid=45315 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45315 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45315 cleared_msgs=0
+[SCHED] process_reaped pid=45316 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45316 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45316 cleared_msgs=0
+[SCHED] process_reaped pid=45317 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45317 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45317 cleared_msgs=0
+[SCHED] process_reaped pid=45318 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45318 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45318 cleared_msgs=0
+[SCHED] process_reaped pid=45319 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45319 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45319 cleared_msgs=0
+[SCHED] process_reaped pid=45320 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45320 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45320 cleared_msgs=0
+[SCHED] process_reaped pid=45321 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45321 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45321 cleared_msgs=0
+[SCHED] process_reaped pid=45322 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45322 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45322 cleared_msgs=0
+[SCHED] process_reaped pid=45323 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45323 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45323 cleared_msgs=0
+[SCHED] process_slot_reused idx=1 pid=49408 (reused reaped slot)
+[SCHED] CREATED process #13 'mm0-thread' idx=1 burst_score=256 tier=High (reused reaped slot)
+[SCHED] shared-address-space borrower pid=49408 terminated reason=address-space-owner-exit
+[SCHED] process_reaped pid=49408 name='mm0-thread' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=49408 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=49408 cleared_msgs=0
+[SCHED] process_reaped pid=40961 name='mm0-owner' user_frames=1 page_tables=4 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=40961 frames=1 pts=4 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=40961 cleared_msgs=0
+[MM-0] native borrower lifecycle: 12 finished/reaped + 12 recreated/reaped: OK
+[MM-0] thread address-space lifecycle: OK
+[SCHED] process_exit_begin external pid=48879 reason=self-test(SIGKILL-live)
+[SCHED] process_mark_finished pid=48879 name='kill-test' reason=self-test(SIGKILL-live) code=137 (external)
+[SCHED] FINISHED process pid=48879 name='kill-test'
+[SCHED] terminating pid=48879 name='kill-test' reason=self-test(SIGKILL-live)
+[CAP] Created endpoint 0 for pid=51966
+[SCHED] process_reaped pid=48879 name='kill-test' user_frames=0 page_tables=1 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=48879 frames=0 pts=1 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=48879 cleared_msgs=0
+[SIG]  termination-path self-test: OK
+[SEC]  Token forge attempt: REJECTED (CapError::NotFound)
+[SEC]  word_count=9 attempt: REJECTED (IpcError::InvalidWordCount)
+[SEC]  kernel ptr attempt: REJECTED (PtrError::KernelAddress)
+[SEC]  badge forge attempt: REJECTED (overwritten by kernel)
+[SEC]  IPC multi-caller queue: OK
+[SEC]  IPC timeout cancellation target: OK
+[SEC]  IPC bounded queue/backpressure/reuse: OK
+[SEC]  IPC notification coalescing/elapsed time: OK
+[SEC]  IPC terminal arbitration/generation: OK
+[CAP] Created endpoint 0 for pid=28929
+[CAP] Created endpoint 1 for pid=28929
+[SEC]  IPC capability isolation/lifecycle: OK
+[SEC]  nameserver REGISTER ownership/identity: OK
+[SEC]  IPC deferred reply lifecycle: OK
+[SEC]  IPC deadline wake/race/late reply: OK
+[SEC]  IPC SMP terminal-state stress: 64 iterations OK
+[SEC]  dead process cap: REJECTED (CapError::Revoked)
+[SEC]  Security hardening: PASSED
+[ELF]  Static ELF loader initialized
+[KERN] spawn endpoint registered
+[IPC]  IPC bus initialized
+[IPC]  IpcMsg format: fixed 80-byte struct
+[IPC]  Syscalls: IpcCall IpcReplyWait IpcRecv NotifySend NotifyWait
+[IPC]  Fastpath check: enabled (stub)
+[KBD]  IRQ1 router initialized (driver: sunlight-kbd)
+[KBD]  Key injection enabled (phase=document-service, 4776 scancodes)
+[PROC] Spawning init (pid=1)...
+[PROC] Loading init ELF (29032 bytes)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4e2f memsz=4e2f prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=4c8 memsz=4c8 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=8 memsz=8 prot=ReadWrite
+[SCHED] CREATED process #14 'init' idx=0 burst_score=256 tier=High
+[PROC] Spawning vfs_server (pid=3)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1405d memsz=1405d prot=ReadExec
+[ELF] PT_LOAD off=16000 vaddr=415000 filesz=3f969f9 memsz=3f969f9 prot=Read
+[ELF] PT_LOAD off=3faca00 vaddr=43aba00 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=3fad000 vaddr=43ac000 filesz=0 memsz=10008 prot=ReadWrite
+[SCHED] CREATED process #15 'vfs_server' idx=1 burst_score=256 tier=High
+[PROC] Spawning tty_server (pid=4)...
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=20181 memsz=20181 prot=ReadExec
+[ELF] PT_LOAD off=22000 vaddr=421000 filesz=2fa798 memsz=2fa798 prot=Read
+[ELF] PT_LOAD off=31c798 vaddr=71b798 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=31d000 vaddr=71c000 filesz=158 memsz=3221 prot=ReadWrite
+[BOOT-DISPLAY] tty mapping cache=wc pages=1000 p1_tables=2 required_len=4096000 mapped_len=4096000
+[SCHED] CREATED process #16 'tty_server' idx=2 burst_score=256 tier=High
+[VMXNET3-AUDIT] initialize_network_backend entered
+[VMXNET3] stage=NotProbed
+[VMXNET3-AUDIT] 15ad:07b0 absent from PCI enumeration
+[VMXNET3-AUDIT] probe call site reached, invoking probe_vmxnet3
+[VMXNET3] pci device 15ad:07b0 not present
+[VMXNET3] verify ethernet0.virtualDev = "vmxnet3"
+[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan
+[NET] failed stage=no supported PCI Ethernet backend
+[NET]  no supported Ethernet backend found
+[GPU]  VirtIO GPU not present (no -device virtio-gpu-pci)
+[SVGA] VMware SVGA II (15ad:0405) not present
+[SunlightOS] Foundation Complete
+[HELIOS] Linux ELF compatibility layer loaded
+[HELIOS-ABI] write=43 dup=45 wait4=-29 enosys=-38 enoent=-2 eagain=-11 stat=144 timespec=16 ok
+[SCHED] CFS-style scheduler (round-robin baseline)
+[SCHED]  ✓ weighted CFS weight field
+[SCHED]  ✓ SCHED_FIFO real-time type field
+[SCHED]  ✓ cpu_mask CPU affinity field
+✓ Stabilization and Hardening scheduler verification PASSED
+[PROC] Entering scheduler — dropping to Ring 3
+══════════════════════════════════════
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff90e090c0
+[VFS]  VFS server started
+[CAP] Created endpoint 0 for pid=3
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 1 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[init] nameserver registry integrity tests: OK
+[init] Registered kernel spawn endpoint
+[SPAWN] Request from pid=1 for path=/sbin/timer_server uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/timer_server (8720 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=318 memsz=318 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=f4 memsz=f4 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #17 'timer_server' idx=3 burst_score=256 tier=High
+[SPAWN] /sbin/timer_server spawned pid=5
+[init] launched base service
+[timer] Timer server started
+[CAP] Created endpoint 2 for pid=5
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-kbd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-kbd (10064 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=cc3 memsz=cc3 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=630 memsz=630 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400250, stack=0x7fffffffef20
+[SCHED] CREATED process #18 'sunlight-kbd' idx=4 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-kbd spawned pid=6
+[SUNLIGHTD-SCHED] First time scheduled, rip=0x400250 idx=4
+[TTY]  TTY server started
+[KBD] sunlight-kbd starting
+[LOGIN-TUI] service started
+[CAP] Created endpoint 3 for pid=6
+[SYSCALL] mmap(0x0, 0x1000000) -> 0x1000000000
+[init] launched base service
+[VFS]  Registered as 'vfs'
+[timer] Registered as 'time' with init name server
+[timer] Serving via ipc_reply_and_wait loop
+[timer] Listening for tick events...
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-mouse uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-mouse (17648 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2578 memsz=2578 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=3d4 memsz=3d4 prot=Read
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400400, stack=0x7fffffffef20
+[SCHED] CREATED process #19 'sunlight-mouse' idx=5 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-mouse spawned pid=7
+[init] launched base service
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-usb-mouse uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-usb-mouse (20904 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2535 memsz=2535 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=120 memsz=120 prot=Read
+[ELF] PT_LOAD off=4120 vaddr=403120 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=98 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4010d0, stack=0x7fffffffef20
+[SCHED] CREATED process #20 'sunlight-usb-mouse' idx=6 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-usb-mouse spawned pid=8
+[init] launched base service
+[VFS]  Test open /etc/motd
+[VFS]  Test read /etc/motd
+[VFS]  Read: "Welcome to SunlightOS\n"
+[VFS]  Fstat OK
+[VFS]  ENOENT test OK
+[VFS]  Bad handle test OK
+[SUNLIGHT-FS] request actor=unknown op=write path=<ipc-handle>
+[SUNLIGHT-FS] decision actor=unknown op=write path=<ipc-handle> result=deny reason=DeniedUnknownActor err=OperationNotPermitted
+[VFS]  IPC write policy OK
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/tmp/.native-stat-mkdir-test
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/tmp/.native-stat-mkdir-test result=allow reason=AllowedTmp err=None
+[VFS]  Native stat/mkdir RAMFS OK
+[VFS]  Stat OK
+[SunlightOS] Phase 3.0 OK
+[VFS]  Permission model: Unix uid/gid/mode
+[VFS]  /etc/passwd: 2 users loaded
+[VFS]  /etc/group: 7 groups loaded
+[VFS]  Permission check: root bypasses OK
+[VFS]  Permission check: user read /etc/passwd OK
+[VFS]  Permission check: user read /etc/shadow EACCES OK
+[SHM]  alloc_shared_page: OK
+[MOUSE] sunlight-mouse starting
+
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[MOUSE] Initializing PS/2 mouse hardware
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  VFS read 2048 bytes via shared memory: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  Shared memory grant: PASSED
+[MOUSE] PS/2 pointing device ready in relative mode (id=0x0)
+[CAP] Created endpoint 4 for pid=7
+[USB-MOUSE] ring-3 xHCI HID driver starting
+
+[USB-MOUSE] no usable xHCI boot mouse
+
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-swapd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-swapd (12648 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4d5 memsz=4d5 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=187 memsz=187 prot=Read
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #21 'sunlight-swapd' idx=7 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-swapd spawned pid=9
+[init] launched base service
+[SWAP-1] sunlight-swapd calculating fixed boot policy
+[SWAP-1] enabled pools=1 logical_mib=1504 physical_budget_kib=385264 admin_pid=9
+[SWAP-1] policy configured; fault path is kernel-resident
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=9 name='sunlight-swapd' reason=exit code=0
+[SCHED] terminating pid=9 name='sunlight-swapd' reason=exit
+[SCHED] FINISHED process pid=9 name='sunlight-swapd'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=8 name='sunlight-usb-mouse' reason=exit code=1
+[SCHED] terminating pid=8 name='sunlight-usb-mouse' reason=exit
+[SCHED] FINISHED process pid=8 name='sunlight-usb-mouse'
+[SCHED] process_reaped pid=8 name='sunlight-usb-mouse' user_frames=517 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=8 frames=517 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=8 cleared_msgs=0
+[SCHED] process_reaped pid=9 name='sunlight-swapd' user_frames=515 page_tables=8 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=9 frames=515 pts=8 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=9 cleared_msgs=0
+[MOUSE] Registered user-space driver at endpoint 4
+[MOUSE] registered with kernel IRQ12 router
+
+[SPAWN] Request from pid=1 for path=/sbin/deviced uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/deviced (500352 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=65a5 memsz=65a5 prot=ReadExec
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=2f4 memsz=2f4 prot=Read
+[ELF] PT_LOAD off=82f8 vaddr=4072f8 filesz=8 memsz=8 prot=ReadWrite
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=710d8 memsz=710d8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401750, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=6 pid=10 (reused reaped slot)
+[SCHED] CREATED process #22 'deviced' idx=6 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/deviced spawned pid=10
+[init] launched base service
+[DEVICED] starting
+[CAP] Created endpoint 5 for pid=10
+[MOUSE] deviced unavailable; continuing without registration
+
+[DEVICED] registered as 'deviced'
+[DEVICED] inventory ready records=8
+[SPAWN] Request from pid=1 for path=/sbin/sunlightd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlightd (147824 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1d334 memsz=1d334 prot=ReadExec
+[ELF] PT_LOAD off=1f000 vaddr=41e000 filesz=4758 memsz=4758 prot=Read
+[ELF] PT_LOAD off=24000 vaddr=423000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x409380, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=7 pid=11 (reused reaped slot)
+[SCHED] CREATED process #23 'sunlightd' idx=7 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/sunlightd spawned pid=11
+[init] launched base service
+[SUNLIGHTD] main() reached
+
+[SUNLIGHTD] Starting sunlightd v0.2
+[CAP] Created endpoint 6 for pid=11
+[SUNLIGHTD] Registered as 'sunlightd'
+[SUNLIGHTD] enabled-state open failed: NoEntry
+[SUNLIGHTD] Loaded 21 service units
+[SUNLIGHTD] Autostart: parallel where possible, gated by service readiness
+[SUNLIGHTD] TLS waits for rand_service, sunlight-kv, and the network stack
+[SunlightOS] sunlightd OK
+[SPAWN] Request from pid=1 for path=/sbin/networkd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/networkd (45480 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=8ab5 memsz=8ab5 prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=820 memsz=820 prot=Read
+[ELF] PT_LOAD off=a820 vaddr=409820 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=0 memsz=1 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x402d30, stack=0x7fffffffef20
+[SCHED] CREATED process #24 'networkd' idx=8 burst_score=256 tier=High
+[SPAWN] /sbin/networkd spawned pid=12
+[init] launched base service
+[NETD] networkd v0 starting
+[CAP] Created endpoint 7 for pid=12
+[SPAWN] Request from pid=1 for path=/sbin/resolved uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/resolved (24944 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3d65 memsz=3d65 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=42c memsz=42c prot=Read
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400f50, stack=0x7fffffffef20
+[SCHED] CREATED process #25 'resolved' idx=9 burst_score=256 tier=High
+[SPAWN] /sbin/resolved spawned pid=13
+[init] launched base service
+[RESOLVED] resolved v0 starting
+[CAP] Created endpoint 8 for pid=13
+[NETD] registered as 'networkd'
+[RESOLVED] registered as 'resolved'
+[RESOLVED] seeded system default OpenDNS
+[SPAWN] Request from pid=1 for path=/sbin/powerd uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/powerd (20840 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=22e5 memsz=22e5 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=568 memsz=568 prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400890, stack=0x7fffffffef20
+[SCHED] CREATED process #26 'powerd' idx=10 burst_score=256 tier=High
+[SPAWN] /sbin/powerd spawned pid=14
+[init] launched base service
+[POWERD] powerd v0 starting (thermal constraints enabled)
+[CAP] Created endpoint 9 for pid=14
+[POWERD] registered as 'powerd'
+[SPAWN] Request from pid=1 for path=/sbin/thermald uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/thermald (29040 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4715 memsz=4715 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=688 memsz=688 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401000, stack=0x7fffffffef20
+[SCHED] CREATED process #27 'thermald' idx=11 burst_score=256 tier=High
+[SPAWN] /sbin/thermald spawned pid=15
+[init] launched base service
+[THERMALD] sunlight-thermald starting (monitoring-first)
+[CAP] Created endpoint 10 for pid=15
+[SPAWN] Request from pid=1 for path=/sbin/audiod uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/audiod (696688 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=ff8d memsz=ff8d prot=ReadExec
+[ELF] PT_LOAD off=11000 vaddr=410000 filesz=98c30 memsz=98c30 prot=Read
+[ELF] PT_LOAD off=aa000 vaddr=4a9000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401a20, stack=0x7fffffffef20
+[SCHED] CREATED process #28 'audiod' idx=12 burst_score=256 tier=High
+[SPAWN] /sbin/audiod spawned pid=16
+[init] launched base service
+[AUDIOD] sunlight-audiod starting
+[CAP] Created endpoint 11 for pid=16
+[THERMALD] registered as 'thermald'
+[THERMALD] identity ready smbios=2.8 conf=2
+[THERMALD] device: QEMU Standard PC (i440FX + PIIX, 1996)
+[THERMALD] no thermal sensors (FirmwareAuto / Unavailable)
+[SPAWN] Request from pid=1 for path=/sbin/sunlight-display uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/sunlight-display (942504 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=24489 memsz=24489 prot=ReadExec
+[ELF] PT_LOAD off=26000 vaddr=425000 filesz=bf203 memsz=bf203 prot=Read
+[ELF] PT_LOAD off=e5208 vaddr=4e4208 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=e6000 vaddr=4e5000 filesz=0 memsz=4061 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x412af0, stack=0x7fffffffef20
+[SCHED] CREATED process #29 'sunlight-display' idx=13 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-display spawned pid=17
+[init] launched base service
+[DISPLAY] sunlight-display v2 (window manager) starting
+
+[CAP] Created endpoint 12 for pid=17
+[DISPLAY] registered as display_server
+
+[SUNLIGHTD] capability profile timezone_service uid=0 gid=0 caps=service-lifecycle,logging,vfs,time-sync
+[SPAWN] Request from pid=11 for path=/sbin/timezone_service uid=0 gid=0 caps=0x104c0
+[SPAWN] Loading /sbin/timezone_service (94632 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=7f35 memsz=7f35 prot=ReadExec
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=dc18 memsz=dc18 prot=Read
+[ELF] PT_LOAD off=16c18 vaddr=415c18 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=17000 vaddr=416000 filesz=0 memsz=400e8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400020, stack=0x7fffffffef20
+[SCHED] CREATED process #30 'timezone_service' idx=14 burst_score=256 tier=High
+[SPAWN] /sbin/timezone_service spawned pid=18
+[SUNLIGHTD] spawned timezone_service pid=18
+[SUNLIGHTD] timezone.service: running (pid=18)
+[SunlightOS] timezone OK
+[SPAWN] Request from pid=1 for path=/sbin/mezzo uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/mezzo (24944 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3545 memsz=3545 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=758 memsz=758 prot=Read
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400470, stack=0x7fffffffef20
+[SCHED] CREATED process #31 'mezzo' idx=15 burst_score=256 tier=High
+[SPAWN] /sbin/mezzo spawned pid=19
+[init] launched base service
+[TZ] Starting timezone_service
+[CAP] Created endpoint 13 for pid=19
+[BOOT-DISPLAY] mapped width=
+1280
+x
+800
+ pitch=
+0x00001400
+ bpp=
+32
+ mapped_len=
+4096000
+
+
+[LOGIN-TUI] background decoded (simg-v2)
+
+[DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4
+
+[LOGIN-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+
+[LOGIN-SURFACE] dimensions=1280x800 frontbuffer_bytes=4096000 backbuffer_bytes=0 presentation=direct draw_rows=800 draw_row_bytes=5120
+
+[DISPLAY-GEOMETRY] framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+
+[TTY] Framebuffer acquired
+[DISPLAY-LIMINE] immutable=true runtime_modes=false required_len=
+[LOGIN-TUI] metrics acquired
+[LOGIN-TUI] background begin
+4096000
+ mapped_len=
+4096000
+ layout=valid
+
+[display] available mode 0: 
+1280
+x
+800
+ pitch=
+5120
+ bpp=
+32
+ format=limine-framebuffer current=yes
+
+[display] current mode: 
+1280
+x
+800
+
+
+[DISPLAY-SELECT] virtio absent/not-ready
+
+[DISPLAY-SELECT] vmware absent/not-ready
+
+[DISPLAY-SELECT] selected=Limine reason=firmware-fallback
+
+[DISPLAY] display_backend=Limine requested=1280x800 virtio_scanout=none svga=none final=1280x800 reason=no-virtio-gpu
+
+[DISPLAY] compositor size 1280x800 pitch=5120
+
+[DISPLAY] back_buffer expected_len=
+1024000
+ actual_len=
+0
+
+
+[DISPLAY-BUFFERS] compositor_target=1280x800 frontbuffer_bytes=4096000 backbuffer_allocation_bytes=0
+
+[DISPLAY] counters 
+startup
+: batches=
+0
+ cursor_x=
+640
+ cursor_y=
+400
+ clamped=
+0
+ delta_capped=
+0
+ hw_move=
+0
+ sw_move=
+0
+ sw_redraw=
+0
+ desktop_redraw=
+0
+ dirty=
+0
+ full_present=
+0
+ rect_present=
+0
+ fb_copy=
+0
+ hw_cursor=
+0
+ drag_started=
+0
+ alt_tab=
+0
+ alt_tab_repeat=
+0
+ event_polls=
+0
+ events_available=
+0
+ wrong_window=
+0
+ pointer_other_window=
+0
+ button_queued=
+0
+ button_dequeued=
+0
+ button_queue_drops=
+0
+
+
+[DISPLAY] Limine buffer deferred while TTY owns framebuffer
+
+[DISPLAY] metrics published generation=1
+
+[SPAWN] Request from pid=1 for path=/sbin/pty_server uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/pty_server (33136 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5625 memsz=5625 prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=104 memsz=104 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #32 'pty_server' idx=16 burst_score=256 tier=High
+[SPAWN] /sbin/pty_server spawned pid=20
+[init] launched base service
+[PTY] pty_server started
+
+[CAP] Created endpoint 14 for pid=20
+[PTY] registered
+
+[SUNLIGHTD] capability profile niced uid=0 gid=0 caps=service-lifecycle,logging,scheduler-control
+[SPAWN] Request from pid=11 for path=/sbin/niced uid=0 gid=0 caps=0x80c0
+[SPAWN] Loading /sbin/niced (49528 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9fa5 memsz=9fa5 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=6ff memsz=6ff prot=Read
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=18 memsz=18 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400ec0, stack=0x7fffffffef20
+[SCHED] CREATED process #33 'niced' idx=17 burst_score=256 tier=High
+[SPAWN] /sbin/niced spawned pid=21
+[SUNLIGHTD] spawned niced pid=21
+[SPAWN] Request from pid=1 for path=/sbin/net_server uid=0 gid=0 caps=0xffffffffffffffff
+[SPAWN] Loading /sbin/net_server (223664 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=24775 memsz=24775 prot=ReadExec
+[ELF] PT_LOAD off=26000 vaddr=425000 filesz=28f8 memsz=28f8 prot=Read
+[ELF] PT_LOAD off=288f8 vaddr=4278f8 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=29000 vaddr=428000 filesz=d7c4 memsz=10ecb0 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x408ff0, stack=0x7fffffffef20
+[SCHED] CREATED process #34 'net_server' idx=18 burst_score=256 tier=High
+[SPAWN] /sbin/net_server spawned pid=22
+[init] launched base service
+[NICED] Starting sunlight-niced v0.1
+[NICED] Loaded 12 configs, 2 rules
+[NICED] TelemetryPage mapped (read-only)
+[CAP] Created endpoint 15 for pid=21
+[CAP] Created endpoint 16 for pid=22
+[NICED] Registered as 'niced'
+[NICED] Monitor loop started (1Hz)
+[SunlightOS] niced OK
+[NET]  Registered as 'net' with init
+[TTY] Login rendered
+[LOGIN-TUI] first frame complete
+[CAP] Created endpoint 17 for pid=4
+[TTY]  endpoint created
+[CAP] Created endpoint 18 for pid=16
+[NET] backend unavailable state=5 error=PCI device 15ad:07b0 not present stage=NotProbed detail=0x0
+[NET] DHCP disabled until a hardware frame backend is registered
+[TTY]  Registered as 'tty'
+[TTY]  Login screen ready
+[LOGIN-TUI] input ready
+[SUNLIGHTD] capability profile gcd uid=0 gid=0 caps=logging,scheduler-control
+[SPAWN] Request from pid=11 for path=/sbin/gcd uid=0 gid=0 caps=0x8080
+[SPAWN] Loading /sbin/gcd (45424 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=8e4d memsz=8e4d prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=512 memsz=512 prot=Read
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400450, stack=0x7fffffffef20
+[SCHED] CREATED process #35 'gcd' idx=19 burst_score=256 tier=High
+[SPAWN] /sbin/gcd spawned pid=23
+[SUNLIGHTD] spawned gcd pid=23
+[KBD] found tty, ready to process keys
+[KBD] Registered user-space driver at endpoint 3
+[AUDIOD] registered as 'audiod.capture'
+[KBD] registered with kernel IRQ1 router
+[AUDIOD] registered as 'audiod'
+[init] base service spawn pass complete
+[SUNLIGHTD] capability profile uac_service uid=0 gid=0 caps=authentication,logging,vfs,session-identity
+[SPAWN] Request from pid=11 for path=/sbin/uac_service uid=0 gid=0 caps=0x2000482
+[SPAWN] Loading /sbin/uac_service (127400 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=19613 memsz=19613 prot=ReadExec
+[ELF] PT_LOAD off=1b000 vaddr=41a000 filesz=3238 memsz=3238 prot=Read
+[ELF] PT_LOAD off=1e238 vaddr=41d238 filesz=10 memsz=10 prot=ReadWrite
+[ELF] PT_LOAD off=1f000 vaddr=41e000 filesz=0 memsz=200038 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x401280, stack=0x7fffffffef20
+[SCHED] CREATED process #36 'uac_service' idx=20 burst_score=256 tier=High
+[SPAWN] /sbin/uac_service spawned pid=24
+[SUNLIGHTD] spawned uac_service pid=24
+[UAC] uac_service main() reached
+
+[UAC] Starting uac_service v0.1
+[CAP] Created endpoint 19 for pid=24
+[UAC] Registered as 'uac'
+[AUDIOD] ready volume=65 muted=0 device=No audio output device available
+[AUDIOD] system-sounds theme=Sunlight Default enabled=1 volume=60 queue_cap=4
+[MOUSE] found tty, ready to process mouse events
+
+[MOUSE] pointer profile=
+Generic
+ invert_y=
+yes
+ base_sens=
+81920
+/65536 precise_zone<=
+[SunlightOS] uac OK
+2
+ normal_zone<=
+8
+ low_gain=
+65536
+/65536 mid_gain=
+81920
+/65536 max_gain=
+114688
+/65536
+
+[GCD] Starting sunlight-gcd v0.1
+[CAP] Created endpoint 20 for pid=23
+[SYSCALL] setnice: pid=7 uid=0 0→-10
+[KBD] registered with deviced
+[SYSCALL] setnice: pid=3 uid=0 0→-10
+[SYSCALL] setnice: pid=4 uid=0 0→-5
+[SUNLIGHTD] capability profile sunlight-sm uid=0 gid=0 caps=logging
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-sm uid=0 gid=0 caps=0x80
+[SPAWN] Loading /sbin/sunlight-sm (41328 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=779d memsz=779d prot=ReadExec
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=6c8 memsz=6c8 prot=Read
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400bb0, stack=0x7fffffffef20
+[SCHED] CREATED process #37 'sunlight-sm' idx=21 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-sm spawned pid=25
+[SUNLIGHTD] spawned sunlight-sm pid=25
+[MOUSE] boosted to critical scheduler priority via niced
+
+[GCD] Registered as 'gcd'
+[GCD] Registered as 'proc'
+[GCD] Subscribed to PROC_EXIT
+[SunlightOS] gcd OK
+timezone: zone=UTC offset_seconds=0 dst=false application_point=timezone_service
+[SM] Starting sunlight-sm
+[CAP] Created endpoint 21 for pid=25
+local: 2026-11-04T15:03:44 weekday=Wednesday utc_epoch=1793804624
+[TZ] Zone database loaded
+[CAP] Created endpoint 22 for pid=18
+[SM] Registered as 'sm'
+[TZ] Registered as 'tz'
+[SUNLIGHTD] capability profile sunlight-dialogd uid=0 gid=0 caps=logging,user-session
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-dialogd uid=0 gid=0 caps=0x40080
+[SPAWN] Loading /sbin/sunlight-dialogd (1884856 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=f1e10 memsz=f1e10 prot=ReadExec
+[ELF] PT_LOAD off=f3000 vaddr=4f2000 filesz=d8b1c memsz=d8b1c prot=Read
+[ELF] PT_LOAD off=1cc000 vaddr=5cb000 filesz=78 memsz=18f6 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #38 'sunlight-dialogd' idx=22 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-dialogd spawned pid=26
+[SUNLIGHTD] spawned sunlight-dialogd pid=26
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[DIALOGD] starting
+
+[CAP] Created endpoint 23 for pid=26
+[DIALOGD] registered
+
+[SUNLIGHTD] capability profile rand_service uid=0 gid=0 caps=logging
+[SPAWN] Request from pid=11 for path=/sbin/rand_service uid=0 gid=0 caps=0x80
+[SPAWN] Loading /sbin/rand_service (16744 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bdf memsz=1bdf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=9e memsz=9e prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400410, stack=0x7fffffffef20
+[SCHED] CREATED process #39 'rand_service' idx=23 burst_score=256 tier=High
+[SPAWN] /sbin/rand_service spawned pid=27
+[RAND] Starting rand_service
+[SUNLIGHTD] spawned rand_service pid=27
+[CAP] Created endpoint 24 for pid=27
+[RAND] Registered as 'rand'
+[SUNLIGHTD] capability profile sunlight-docserv uid=0 gid=0 caps=logging,user-session
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-docserv uid=0 gid=0 caps=0x40080
+[SPAWN] Loading /sbin/sunlight-docserv (5207152 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3755b0 memsz=3755b0 prot=ReadExec
+[ELF] PT_LOAD off=377000 vaddr=776000 filesz=17f13c memsz=17f13c prot=Read
+[ELF] PT_LOAD off=4f7000 vaddr=8f6000 filesz=230 memsz=2184 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffef20
+[SCHED] CREATED process #40 'sunlight-docserv' idx=24 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-docserv spawned pid=28
+[SUNLIGHTD] spawned sunlight-docserv pid=28
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x8000000) -> 0x1000001000
+[SUNLIGHTD] capability profile timed uid=0 gid=0 caps=network,service-lifecycle,logging,secure-random,vfs,time-sync
+[SPAWN] Request from pid=11 for path=/sbin/timed uid=0 gid=0 caps=0x105c1
+[SPAWN] Loading /sbin/timed (45440 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=87be memsz=87be prot=ReadExec
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=6d8 memsz=6d8 prot=Read
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=20 memsz=20 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x403990, stack=0x7fffffffef20
+[SCHED] CREATED process #41 'timed' idx=25 burst_score=256 tier=High
+[SPAWN] /sbin/timed spawned pid=29
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008001000
+[SUNLIGHTD] spawned timed pid=29
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008201000
+[SYSCALL] thread_spawn: parent=28 tid=30 trampoline=0x40001c
+[timed] Time daemon started (UTC + NTP)
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008202000
+[CAP] Created endpoint 25 for pid=29
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008402000
+[SYSCALL] thread_spawn: parent=28 tid=31 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008403000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008603000
+[SYSCALL] thread_spawn: parent=28 tid=32 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008604000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008804000
+[SYSCALL] thread_spawn: parent=28 tid=33 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008805000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008a05000
+[SYSCALL] thread_spawn: parent=28 tid=34 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008a06000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008c06000
+[SYSCALL] thread_spawn: parent=28 tid=35 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008c07000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008e07000
+[SYSCALL] thread_spawn: parent=28 tid=36 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008e08000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1009008000
+[SYSCALL] thread_spawn: parent=28 tid=37 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009009000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1009209000
+[SYSCALL] thread_spawn: parent=28 tid=38 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100920a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100940a000
+[SYSCALL] thread_spawn: parent=28 tid=39 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100940b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100960b000
+[timed] Registered as 'timed'
+[SYSCALL] thread_spawn: parent=28 tid=40 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100960c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100980c000
+[SYSCALL] thread_spawn: parent=28 tid=41 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100980d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1009a0d000
+[SYSCALL] thread_spawn: parent=28 tid=42 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009a0e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1009c0e000
+[SYSCALL] thread_spawn: parent=28 tid=43 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009c0f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1009e0f000
+[SYSCALL] thread_spawn: parent=28 tid=44 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009e10000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100a010000
+[SYSCALL] thread_spawn: parent=28 tid=45 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a011000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100a211000
+[SYSCALL] thread_spawn: parent=28 tid=46 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a212000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100a412000
+[SYSCALL] thread_spawn: parent=28 tid=47 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a413000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100a613000
+[SYSCALL] thread_spawn: parent=28 tid=48 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a614000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100a814000
+[SYSCALL] thread_spawn: parent=28 tid=49 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a815000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100aa15000
+[SYSCALL] thread_spawn: parent=28 tid=50 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100aa16000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ac16000
+[SYSCALL] thread_spawn: parent=28 tid=51 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ac17000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ae17000
+[SYSCALL] thread_spawn: parent=28 tid=52 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ae18000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100b018000
+[SYSCALL] thread_spawn: parent=28 tid=53 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b019000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100b219000
+[SYSCALL] thread_spawn: parent=28 tid=54 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b21a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100b41a000
+[SYSCALL] thread_spawn: parent=28 tid=55 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b41b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100b61b000
+[SYSCALL] thread_spawn: parent=28 tid=56 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b61c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100b81c000
+[SYSCALL] thread_spawn: parent=28 tid=57 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b81d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ba1d000
+[SYSCALL] thread_spawn: parent=28 tid=58 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ba1e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100bc1e000
+[SYSCALL] thread_spawn: parent=28 tid=59 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100bc1f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100be1f000
+[SYSCALL] thread_spawn: parent=28 tid=60 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100be20000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100c020000
+[SYSCALL] thread_spawn: parent=28 tid=61 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c021000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100c221000
+[SUNLIGHTD] capability profile sunlight-sessiond uid=0 gid=0 caps=spawn-user,logging,session-lock
+[SCHED] process_exit_begin reason=exit
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-sessiond uid=0 gid=0 caps=0x800088
+[SPAWN] Loading /sbin/sunlight-sessiond (127352 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bc82 memsz=1bc82 prot=ReadExec
+[ELF] PT_LOAD off=1d000 vaddr=41c000 filesz=1d7b memsz=1d7b prot=Read
+[ELF] PT_LOAD off=1f000 vaddr=41e000 filesz=18 memsz=18 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4098e0, stack=0x7fffffffef20
+[SCHED] CREATED process #74 'sunlight-sessiond' idx=58 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-sessiond spawned pid=62
+[SCHED] process_mark_finished pid=30 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=30 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=30 name='sunlight-docserv'
+[SUNLIGHTD] spawned sunlight-sessiond pid=62
+[SCHED] process_reaped pid=30 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=30 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=30 cleared_msgs=0
+[CAP] Created endpoint 26 for pid=62
+[SESSION-FOUNDATION] SERVICE_READY PASS
+
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=31 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=31 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=31 name='sunlight-docserv'
+[SCHED] process_reaped pid=31 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=31 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=31 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=32 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=32 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=32 name='sunlight-docserv'
+[SCHED] process_reaped pid=32 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=32 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=32 cleared_msgs=0
+[SESSION-CONFIG] SERVICE_READY PASS
+
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=33 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=33 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=33 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=34 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=34 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=34 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=35 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=35 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=35 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=36 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=36 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=36 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=37 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=37 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=37 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=38 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=38 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=38 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=39 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=39 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=39 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=40 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=40 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=40 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=41 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=41 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=41 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=42 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=42 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=42 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=43 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=43 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=43 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=44 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=44 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=44 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=45 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=45 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=45 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=33 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=33 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=33 cleared_msgs=0
+[SCHED] process_reaped pid=34 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=34 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=34 cleared_msgs=0
+[SCHED] process_reaped pid=35 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=35 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=35 cleared_msgs=0
+[SCHED] process_reaped pid=36 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=36 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=36 cleared_msgs=0
+[SCHED] process_reaped pid=37 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=37 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=37 cleared_msgs=0
+[SCHED] process_reaped pid=38 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=38 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=38 cleared_msgs=0
+[SCHED] process_reaped pid=39 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=39 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=39 cleared_msgs=0
+[SCHED] process_reaped pid=40 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=40 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=40 cleared_msgs=0
+[SCHED] process_reaped pid=41 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=41 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=41 cleared_msgs=0
+[SCHED] process_reaped pid=42 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=42 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=42 cleared_msgs=0
+[SCHED] process_reaped pid=43 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=43 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=43 cleared_msgs=0
+[SCHED] process_reaped pid=44 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=44 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=44 cleared_msgs=0
+[SCHED] process_reaped pid=45 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=45 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=45 cleared_msgs=0
+[SCHED] process_mark_finished pid=46 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=46 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=46 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[timer] 100 ticks elapsed
+[SCHED] process_mark_finished pid=47 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=47 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=47 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=48 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=48 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=48 name='sunlight-docserv'
+[IPC]  round-trip test: 1000 calls OK
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=49 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=49 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=49 name='sunlight-docserv'
+[SunlightOS] Phase 2.6 OK
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=46 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=46 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=46 cleared_msgs=0
+[SCHED] process_reaped pid=47 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=47 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=47 cleared_msgs=0
+[SCHED] process_reaped pid=48 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=48 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=48 cleared_msgs=0
+[SCHED] process_reaped pid=49 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=49 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=49 cleared_msgs=0
+[SCHED] process_mark_finished pid=50 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=50 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=50 name='sunlight-docserv'
+[SCHED] process_reaped pid=50 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=50 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=50 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=51 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=51 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=51 name='sunlight-docserv'
+[SCHED] process_reaped pid=51 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=51 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=51 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=52 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=52 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=52 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=53 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=53 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=53 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=52 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=52 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=52 cleared_msgs=0
+[SCHED] process_reaped pid=53 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=53 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=53 cleared_msgs=0
+[SCHED] process_mark_finished pid=54 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=54 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=54 name='sunlight-docserv'
+[SCHED] process_reaped pid=54 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=54 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=54 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=55 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=55 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=55 name='sunlight-docserv'
+[SCHED] process_reaped pid=55 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=55 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=55 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=56 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=56 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=56 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=57 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=57 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=57 name='sunlight-docserv'
+[SCHED] process_reaped pid=56 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=56 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=56 cleared_msgs=0
+[SCHED] process_reaped pid=57 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=57 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=57 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=58 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=58 name='sunlight-docserv'
+[SCHED] process_reaped pid=58 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=59 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=59 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=59 name='sunlight-docserv'
+[SCHED] process_reaped pid=59 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=59 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=59 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=60 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=60 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=60 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=61 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=61 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=61 name='sunlight-docserv'
+[SCHED] process_reaped pid=60 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=60 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=60 cleared_msgs=0
+[SCHED] process_reaped pid=61 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=61 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=61 cleared_msgs=0
+[THREAD-LIFECYCLE] created=32 finished=32 reaped=32 borrower_reclaim_skipped=32 stale_wake_rejected=13 borrower_slots_reused=0 max_live=32
+[SESSION-CONFIG] WELCOME_BUNDLE_DISCOVERED PASS
+
+[SESSION-CONFIG] ELIGIBLE_BUNDLES PASS
+
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c222000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100c422000
+[SYSCALL] thread_spawn: parent=28 tid=63 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=63 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=63 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=63 name='sunlight-docserv'
+[SCHED] process_reaped pid=63 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=63 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=63 cleared_msgs=0
+[THREAD-LIFECYCLE] created=33 finished=33 reaped=33 borrower_reclaim_skipped=33 stale_wake_rejected=13 borrower_slots_reused=0 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c423000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100c623000
+[SYSCALL] thread_spawn: parent=28 tid=64 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c624000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100c824000
+[SYSCALL] thread_spawn: parent=28 tid=65 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c825000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ca25000
+[SYSCALL] thread_spawn: parent=28 tid=66 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ca26000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100cc26000
+[SYSCALL] thread_spawn: parent=28 tid=67 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100cc27000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ce27000
+[SYSCALL] thread_spawn: parent=28 tid=68 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ce28000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100d028000
+[SYSCALL] thread_spawn: parent=28 tid=69 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d029000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100d229000
+[SYSCALL] thread_spawn: parent=28 tid=70 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d22a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100d42a000
+[SYSCALL] thread_spawn: parent=28 tid=71 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d42b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100d62b000
+[SYSCALL] thread_spawn: parent=28 tid=72 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d62c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100d82c000
+[SYSCALL] thread_spawn: parent=28 tid=73 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d82d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100da2d000
+[SYSCALL] thread_spawn: parent=28 tid=74 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100da2e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100dc2e000
+[SYSCALL] thread_spawn: parent=28 tid=75 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100dc2f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100de2f000
+[SYSCALL] thread_spawn: parent=28 tid=76 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100de30000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100e030000
+[SYSCALL] thread_spawn: parent=28 tid=77 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e031000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100e231000
+[SYSCALL] thread_spawn: parent=28 tid=78 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e232000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100e432000
+[SYSCALL] thread_spawn: parent=28 tid=79 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e433000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100e633000
+[SYSCALL] thread_spawn: parent=28 tid=80 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e634000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100e834000
+[SYSCALL] thread_spawn: parent=28 tid=81 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e835000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ea35000
+[SYSCALL] thread_spawn: parent=28 tid=82 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ea36000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ec36000
+[SYSCALL] thread_spawn: parent=28 tid=83 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ec37000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100ee37000
+[SYSCALL] thread_spawn: parent=28 tid=84 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ee38000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100f038000
+[SYSCALL] thread_spawn: parent=28 tid=85 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f039000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100f239000
+[SYSCALL] thread_spawn: parent=28 tid=86 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f23a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100f43a000
+[SYSCALL] thread_spawn: parent=28 tid=87 trampoline=0x40001c
+[SYSCALL] setnice: pid=5 uid=0 -5→-5
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f43b000
+[SYSCALL] setnice: pid=6 uid=0 0→-10
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100f63b000
+[SYSCALL] thread_spawn: parent=28 tid=88 trampoline=0x40001c
+[SYSCALL] setnice: pid=7 uid=0 -10→-10
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f63c000
+[SYSCALL] setnice: pid=16 uid=0 0→-10
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100f83c000
+[SYSCALL] thread_spawn: parent=28 tid=89 trampoline=0x40001c
+[SYSCALL] setnice: pid=20 uid=0 0→-10
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f83d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100fa3d000
+[SYSCALL] thread_spawn: parent=28 tid=90 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100fa3e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100fc3e000
+[SYSCALL] thread_spawn: parent=28 tid=91 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100fc3f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x100fe3f000
+[SYSCALL] thread_spawn: parent=28 tid=92 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100fe40000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010040000
+[SYSCALL] thread_spawn: parent=28 tid=93 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010041000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010241000
+[SYSCALL] thread_spawn: parent=28 tid=94 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010242000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010442000
+[SYSCALL] thread_spawn: parent=28 tid=95 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010443000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010643000
+[SUNLIGHTD] capability profile sunlight-kv uid=0 gid=0 caps=logging,storage-admin
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-kv uid=0 gid=0 caps=0x1080
+[SPAWN] Loading /sbin/sunlight-kv (70160 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=e50d memsz=e50d prot=ReadExec
+[ELF] PT_LOAD off=10000 vaddr=40f000 filesz=a53 memsz=a53 prot=Read
+[ELF] PT_LOAD off=10a58 vaddr=40fa58 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=11000 vaddr=410000 filesz=21 memsz=12a1 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x407260, stack=0x7fffffffef20
+[SCHED] CREATED process #108 'sunlight-kv' idx=59 burst_score=256 tier=High
+[SPAWN] /sbin/sunlight-kv spawned pid=96
+[SUNLIGHTD] spawned sunlight-kv pid=96
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=64 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=64 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=64 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=65 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=65 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=65 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=66 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=66 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=66 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=67 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=67 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=67 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=68 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=68 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=68 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=69 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=69 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=69 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=70 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=70 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=70 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=71 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=71 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=71 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=72 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=72 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=72 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=73 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=73 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=73 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=74 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=74 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=74 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=75 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=75 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=75 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=76 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=76 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=76 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=77 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=77 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=77 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=78 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=78 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=78 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=79 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=79 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=79 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=80 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=80 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=80 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=81 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=81 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=81 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=82 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=82 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=82 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=83 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=83 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=83 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=84 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=84 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=84 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=85 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=85 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=85 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=86 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=86 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=86 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=87 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=87 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=87 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=88 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=88 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=88 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=89 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=89 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=89 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=90 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=90 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=90 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=91 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=91 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=91 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=92 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=92 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=92 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=93 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=93 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=93 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=94 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=94 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=94 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=95 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=95 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=95 name='sunlight-docserv'
+[SCHED] process_reaped pid=64 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=64 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=64 cleared_msgs=0
+[SCHED] process_reaped pid=65 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=65 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=65 cleared_msgs=0
+[SCHED] process_reaped pid=66 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=66 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=66 cleared_msgs=0
+[SCHED] process_reaped pid=67 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=67 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=67 cleared_msgs=0
+[SCHED] process_reaped pid=68 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=68 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=68 cleared_msgs=0
+[SCHED] process_reaped pid=69 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=69 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=69 cleared_msgs=0
+[SCHED] process_reaped pid=70 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=70 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=70 cleared_msgs=0
+[SCHED] process_reaped pid=71 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=71 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=71 cleared_msgs=0
+[SCHED] process_reaped pid=72 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=72 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=72 cleared_msgs=0
+[SCHED] process_reaped pid=73 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=73 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=73 cleared_msgs=0
+[SCHED] process_reaped pid=74 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=74 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=74 cleared_msgs=0
+[SCHED] process_reaped pid=75 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=75 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=75 cleared_msgs=0
+[SCHED] process_reaped pid=76 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=76 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=76 cleared_msgs=0
+[SCHED] process_reaped pid=77 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=77 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=77 cleared_msgs=0
+[SCHED] process_reaped pid=78 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=78 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=78 cleared_msgs=0
+[SCHED] process_reaped pid=79 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=79 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=79 cleared_msgs=0
+[SCHED] process_reaped pid=80 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=80 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=80 cleared_msgs=0
+[SCHED] process_reaped pid=81 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=81 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=81 cleared_msgs=0
+[SCHED] process_reaped pid=82 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=82 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=82 cleared_msgs=0
+[SCHED] process_reaped pid=83 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=83 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=83 cleared_msgs=0
+[SCHED] process_reaped pid=84 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=84 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=84 cleared_msgs=0
+[SCHED] process_reaped pid=85 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=85 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=85 cleared_msgs=0
+[SCHED] process_reaped pid=86 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=86 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=86 cleared_msgs=0
+[SCHED] process_reaped pid=87 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=87 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=87 cleared_msgs=0
+[SCHED] process_reaped pid=88 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=88 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=88 cleared_msgs=0
+[SCHED] process_reaped pid=89 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=89 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=89 cleared_msgs=0
+[SCHED] process_reaped pid=90 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=90 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=90 cleared_msgs=0
+[SCHED] process_reaped pid=91 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=91 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=91 cleared_msgs=0
+[SCHED] process_reaped pid=92 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=92 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=92 cleared_msgs=0
+[SCHED] process_reaped pid=93 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=93 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=93 cleared_msgs=0
+[SCHED] process_reaped pid=94 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=94 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=94 cleared_msgs=0
+[SCHED] process_reaped pid=95 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=95 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=95 cleared_msgs=0
+[THREAD-LIFECYCLE] created=65 finished=65 reaped=65 borrower_reclaim_skipped=65 stale_wake_rejected=13 borrower_slots_reused=0 max_live=32
+[SYSCALL] setnice: pid=22 uid=0 0→-5
+[GCD] cleaned pid=64 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=65 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=66 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=67 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=68 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=69 ipc=0 shm=0 tmp=0 fds=0
+[GCD] cleaned pid=70 ipc=0 shm=0 tmp=0 fds=0
+[SUNLIGHT-KV] main() reached (no_std)
+
+[SUNLIGHT-KV] Starting sunlight-kv (SunlightOS mode)
+[CAP] Created endpoint 27 for pid=96
+[SUNLIGHT-KV] Registered as 'sunlight-kv'
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010644000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010844000
+[SYSCALL] thread_spawn: parent=28 tid=97 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=97 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=97 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=97 name='sunlight-docserv'
+[SCHED] process_reaped pid=97 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=97 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=97 cleared_msgs=0
+[THREAD-LIFECYCLE] created=66 finished=66 reaped=66 borrower_reclaim_skipped=66 stale_wake_rejected=13 borrower_slots_reused=0 max_live=32
+[KV][SM] lookup ok
+[SHM]  alloc_shared_page: OK
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010845000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010a45000
+[SYSCALL] thread_spawn: parent=28 tid=98 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010a46000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010c46000
+[SYSCALL] thread_spawn: parent=28 tid=99 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010c47000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1010e47000
+[SYSCALL] thread_spawn: parent=28 tid=100 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1010e48000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1011048000
+[SYSCALL] thread_spawn: parent=28 tid=101 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1011049000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1011249000
+[SYSCALL] thread_spawn: parent=28 tid=102 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101124a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101144a000
+[SYSCALL] thread_spawn: parent=28 tid=103 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101144b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101164b000
+[SYSCALL] thread_spawn: parent=28 tid=104 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101164c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101184c000
+[SYSCALL] thread_spawn: parent=28 tid=105 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101184d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1011a4d000
+[SYSCALL] thread_spawn: parent=28 tid=106 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1011a4e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1011c4e000
+[SYSCALL] thread_spawn: parent=28 tid=107 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1011c4f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1011e4f000
+[SYSCALL] thread_spawn: parent=28 tid=108 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1011e50000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012050000
+[SYSCALL] thread_spawn: parent=28 tid=109 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012051000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012251000
+[SYSCALL] thread_spawn: parent=28 tid=110 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012252000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012452000
+[SYSCALL] thread_spawn: parent=28 tid=111 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012453000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012653000
+[SYSCALL] thread_spawn: parent=28 tid=112 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012654000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012854000
+[SYSCALL] thread_spawn: parent=28 tid=113 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012855000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012a55000
+[SYSCALL] thread_spawn: parent=28 tid=114 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012a56000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012c56000
+[SYSCALL] thread_spawn: parent=28 tid=115 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012c57000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1012e57000
+[SYSCALL] thread_spawn: parent=28 tid=116 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1012e58000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1013058000
+[SYSCALL] thread_spawn: parent=28 tid=117 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1013059000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1013259000
+[SYSCALL] thread_spawn: parent=28 tid=118 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101325a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101345a000
+[SYSCALL] thread_spawn: parent=28 tid=119 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101345b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101365b000
+[SYSCALL] thread_spawn: parent=28 tid=120 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101365c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101385c000
+[SYSCALL] thread_spawn: parent=28 tid=121 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101385d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1013a5d000
+[SYSCALL] thread_spawn: parent=28 tid=122 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1013a5e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1013c5e000
+[SYSCALL] thread_spawn: parent=28 tid=123 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1013c5f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1013e5f000
+[SYSCALL] thread_spawn: parent=28 tid=124 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1013e60000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014060000
+[SYSCALL] thread_spawn: parent=28 tid=125 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014061000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014261000
+[SYSCALL] thread_spawn: parent=28 tid=126 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014262000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014462000
+[SYSCALL] thread_spawn: parent=28 tid=127 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014463000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014663000
+[SYSCALL] thread_spawn: parent=28 tid=128 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014664000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014864000
+[SYSCALL] thread_spawn: parent=28 tid=129 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014865000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014a65000
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SM][READ] path=/var/lib/sunlight/kv.store not-found
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=98 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=98 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=98 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=99 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=99 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=99 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=100 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=100 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=100 name='sunlight-docserv'
+[SCHED] process_reaped pid=98 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=98 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=98 cleared_msgs=0
+[SCHED] process_reaped pid=99 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=99 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=99 cleared_msgs=0
+[SCHED] process_reaped pid=100 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=100 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=100 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=101 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=101 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=101 name='sunlight-docserv'
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=102 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=102 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=102 name='sunlight-docserv'
+[SCHED] process_reaped pid=101 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[SCHED] process_reaped pid=102 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=103 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=103 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=103 name='sunlight-docserv'
+[SCHED] process_reaped pid=103 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=104 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=104 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=104 name='sunlight-docserv'
+[SCHED] process_reaped pid=104 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=104 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=104 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=105 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=105 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=105 name='sunlight-docserv'
+[SCHED] process_reaped pid=105 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=105 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=105 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=106 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=106 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=106 name='sunlight-docserv'
+[SCHED] process_reaped pid=106 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=106 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=106 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=107 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=107 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=107 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=107 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=107 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=107 cleared_msgs=0
+[SCHED] process_mark_finished pid=108 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=108 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=108 name='sunlight-docserv'
+[SCHED] process_reaped pid=108 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=108 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=108 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=109 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=109 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=109 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=110 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=110 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=110 name='sunlight-docserv'
+[SUNLIGHTD] capability profile wiseowl-memorydb uid=0 gid=0 caps=logging,secure-random
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=111 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=111 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=111 name='sunlight-docserv'
+[SPAWN] Request from pid=11 for path=/sbin/wiseowl-memorydb uid=0 gid=0 caps=0x180
+[SCHED] process_reaped pid=109 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=109 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=109 cleared_msgs=0
+[SCHED] process_reaped pid=110 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=110 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=110 cleared_msgs=0
+[SCHED] process_reaped pid=111 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=111 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=111 cleared_msgs=0
+[SPAWN] Loading /sbin/wiseowl-memorydb (410024 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=5f834 memsz=5f834 prot=ReadExec
+[ELF] PT_LOAD off=61000 vaddr=460000 filesz=2369 memsz=2369 prot=Read
+[ELF] PT_LOAD off=63370 vaddr=462370 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=64000 vaddr=463000 filesz=0 memsz=61 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x429f50, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=26 pid=130 (reused reaped slot)
+[SCHED] CREATED process #142 'wiseowl-memorydb' idx=26 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/wiseowl-memorydb spawned pid=130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=112 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=112 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=112 name='sunlight-docserv'
+[SCHED] process_reaped pid=112 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=112 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=112 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=113 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=113 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=113 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=114 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=114 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=114 name='sunlight-docserv'
+[SCHED] process_reaped pid=113 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=113 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=113 cleared_msgs=0
+[SCHED] process_reaped pid=114 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=114 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=114 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=115 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=115 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=115 name='sunlight-docserv'
+[SUNLIGHTD] spawned wiseowl-memorydb pid=130
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=116 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=116 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=116 name='sunlight-docserv'
+[SCHED] process_reaped pid=115 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=115 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=115 cleared_msgs=0
+[SCHED] process_reaped pid=116 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=116 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=116 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=117 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=117 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=117 name='sunlight-docserv'
+[SCHED] process_reaped pid=117 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=117 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=117 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=118 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=118 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=118 name='sunlight-docserv'
+[SCHED] process_reaped pid=118 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=118 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=118 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=119 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=119 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=119 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=120 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=120 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=120 name='sunlight-docserv'
+[SCHED] process_reaped pid=119 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=119 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=119 cleared_msgs=0
+[SCHED] process_reaped pid=120 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=120 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=120 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=121 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=121 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=121 name='sunlight-docserv'
+[SCHED] process_reaped pid=121 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=121 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=121 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=122 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=122 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=122 name='sunlight-docserv'
+[SCHED] process_reaped pid=122 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=122 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=122 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=123 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=123 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=123 name='sunlight-docserv'
+[SCHED] process_reaped pid=123 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=123 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=123 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=124 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=124 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=124 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=125 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=125 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=125 name='sunlight-docserv'
+[SCHED] process_reaped pid=124 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=124 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=124 cleared_msgs=0
+[SCHED] process_reaped pid=125 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=125 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=125 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=126 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=126 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=126 name='sunlight-docserv'
+[SCHED] process_reaped pid=126 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=126 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=126 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=127 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=127 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=127 name='sunlight-docserv'
+[SCHED] process_reaped pid=127 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=127 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=127 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=128 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=128 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=128 name='sunlight-docserv'
+[SCHED] process_reaped pid=128 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=128 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=128 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=129 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=129 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=129 name='sunlight-docserv'
+[SCHED] process_reaped pid=129 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=129 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=129 cleared_msgs=0
+[THREAD-LIFECYCLE] created=98 finished=98 reaped=98 borrower_reclaim_skipped=98 stale_wake_rejected=13 borrower_slots_reused=1 max_live=32
+[SHM]  map_shared_page: OK
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib/sunlight-kv
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib/sunlight-kv result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SM][DENY] op=mkdir path=/var/lib/sunlight-kv reason=mkdir-failed
+[SHM]  shm_free: page unmapped OK
+[WISEOWL-DB] starting wiseowl-memorydb
+[WISEOWL-DB] persistent /state unavailable; identity startup suspended
+[CAP] Created endpoint 28 for pid=130
+[KV][SM] mkdir path=/var/lib/sunlight-kv result=failed
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var result=deny reason=DeniedImmutableRoot err=Some(ReadOnlyFilesystem)
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib/sunlight
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Mkdir path=/var/lib/sunlight result=deny reason=DeniedMissingCapability err=Some(OperationNotPermitted)
+[SM][DENY] op=mkdir path=/var/lib/sunlight reason=mkdir-failed
+[SHM]  shm_free: page unmapped OK
+[KV][SM] mkdir path=/var/lib/sunlight result=failed
+[SUNLIGHT-KV] WARNING: kv.store not available, using volatile store
+[SUNLIGHT-KV] Entering IPC loop
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014a66000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014c66000
+[SYSCALL] thread_spawn: parent=28 tid=131 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=131 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=131 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=131 name='sunlight-docserv'
+[SCHED] process_reaped pid=131 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=131 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=131 cleared_msgs=0
+[THREAD-LIFECYCLE] created=99 finished=99 reaped=99 borrower_reclaim_skipped=99 stale_wake_rejected=13 borrower_slots_reused=1 max_live=32
+[NATIVE-STD] T2 capacity=32 EAGAIN cycles=3 join/detach/TLS recovery OK
+
+[SUNLIGHTD] capability profile sunlight-tls uid=0 gid=0 caps=network,logging,secure-random,kv-store,time-sync
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-tls uid=0 gid=0 caps=0x10981
+[SPAWN] Loading /sbin/sunlight-tls (1139248 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=fd537 memsz=fd537 prot=ReadExec
+[ELF] PT_LOAD off=ff000 vaddr=4fe000 filesz=15c18 memsz=15c18 prot=Read
+[ELF] PT_LOAD off=114c18 vaddr=513c18 filesz=48 memsz=48 prot=ReadWrite
+[ELF] PT_LOAD off=115000 vaddr=514000 filesz=1040 memsz=802040 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x4150a0, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=27 pid=132 (reused reaped slot)
+[SCHED] CREATED process #144 'sunlight-tls' idx=27 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/sunlight-tls spawned pid=132
+[SUNLIGHTD] spawned sunlight-tls pid=132
+[SUNLIGHT-TLS] main() reached (no_std)
+
+[SUNLIGHT-TLS] Starting sunlight-tls (real rustls)
+[CAP] Created endpoint 29 for pid=132
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014c67000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1014e67000
+[SYSCALL] thread_spawn: parent=28 tid=133 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1014e68000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1015068000
+[SYSCALL] thread_spawn: parent=28 tid=134 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1015069000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1015269000
+[SYSCALL] thread_spawn: parent=28 tid=135 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101526a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101546a000
+[SYSCALL] thread_spawn: parent=28 tid=136 trampoline=0x40001c
+[SUNLIGHT-TLS] Registered as 'sunlight-tls'
+[SUNLIGHT-TLS] dbg: build_root_store start
+[SUNLIGHT-TLS] dbg: seed get index...
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000000000
+[SUNLIGHT-TLS] dbg: seeding gtsr4 (525 bytes)...
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[KV][SM] persistence skipped; volatile store updated key=tls.ca.gtsr4
+[SUNLIGHT-TLS] seeded kv trust store with 'gtsr4'
+[SUNLIGHT-TLS] dbg: seeding isrgx1 (1391 bytes)...
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[KV][SM] persistence skipped; volatile store updated key=tls.ca.isrgx1
+[SUNLIGHT-TLS] seeded kv trust store with 'isrgx1'
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[KV][SM] persistence skipped; volatile store updated key=tls.ca.idx
+[SUNLIGHT-TLS] dbg: seed done, loading index
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=133 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=133 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=133 name='sunlight-docserv'
+[SCHED] process_reaped pid=133 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=133 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=133 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=136 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=136 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=136 name='sunlight-docserv'
+[SCHED] process_reaped pid=136 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=136 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=136 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=134 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=134 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=134 name='sunlight-docserv'
+[SCHED] process_reaped pid=134 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=134 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=134 cleared_msgs=0
+[SUNLIGHT-TLS] trust += gtsr4
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=135 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=135 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=135 name='sunlight-docserv'
+[SCHED] process_reaped pid=135 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=135 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=135 cleared_msgs=0
+[THREAD-LIFECYCLE] created=103 finished=103 reaped=103 borrower_reclaim_skipped=103 stale_wake_rejected=13 borrower_slots_reused=2 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101546b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101566b000
+[SYSCALL] thread_spawn: parent=28 tid=137 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101566c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101586c000
+[SYSCALL] thread_spawn: parent=28 tid=138 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101586d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1015a6d000
+[SYSCALL] thread_spawn: parent=28 tid=139 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1015a6e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1015c6e000
+[SYSCALL] thread_spawn: parent=28 tid=140 trampoline=0x40001c
+[SUNLIGHT-TLS] trust += isrgx1
+[SUNLIGHTD] capability profile sunlight-clipd uid=0 gid=0 caps=logging,kv-store
+[SPAWN] Request from pid=11 for path=/sbin/sunlight-clipd uid=0 gid=0 caps=0x880
+[SPAWN] Loading /sbin/sunlight-clipd (49576 bytes)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=9625 memsz=9625 prot=ReadExec
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=458 memsz=458 prot=Read
+[ELF] PT_LOAD off=b458 vaddr=40a458 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=0 memsz=30008 prot=ReadWrite
+[EXEC] Stack: argc=0 envc=7 auxv=2 rsp=0x7fffffffef20
+[EXEC] Loaded ELF entry=0x400d40, stack=0x7fffffffef20
+[SCHED] process_slot_reused idx=32 pid=141 (reused reaped slot)
+[SCHED] CREATED process #153 'sunlight-clipd' idx=32 burst_score=256 tier=High (reused reaped slot)
+[SPAWN] /sbin/sunlight-clipd spawned pid=141
+[SUNLIGHTD] spawned sunlight-clipd pid=141
+[SUNLIGHT-TLS] dbg: roots loaded n=2, building config
+[CLIPD] starting
+[CAP] Created endpoint 30 for pid=141
+[CLIPD] registered
+[SUNLIGHT-TLS] dbg: provider ready
+[SUNLIGHT-TLS] client config ready (2 roots)
+[SUNLIGHT-TLS] Entering IPC loop
+[CLIPD] history=0 current=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=140 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=140 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=140 name='sunlight-docserv'
+[SCHED] process_reaped pid=140 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=140 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=140 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=137 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=137 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=137 name='sunlight-docserv'
+[SCHED] process_reaped pid=137 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=137 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=137 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=138 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=138 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=138 name='sunlight-docserv'
+[SCHED] process_reaped pid=138 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=138 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=138 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=139 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=139 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=139 name='sunlight-docserv'
+[SCHED] process_reaped pid=139 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=139 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=139 cleared_msgs=0
+[THREAD-LIFECYCLE] created=107 finished=107 reaped=107 borrower_reclaim_skipped=107 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1015c6f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1015e6f000
+[SYSCALL] thread_spawn: parent=28 tid=142 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1015e70000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016070000
+[SYSCALL] thread_spawn: parent=28 tid=143 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016071000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016271000
+[SYSCALL] thread_spawn: parent=28 tid=144 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016272000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016472000
+[SYSCALL] thread_spawn: parent=28 tid=145 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=142 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=142 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=142 name='sunlight-docserv'
+[SCHED] process_reaped pid=142 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=142 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=142 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=143 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=143 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=143 name='sunlight-docserv'
+[SCHED] process_reaped pid=143 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=143 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=143 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=144 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=144 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=144 name='sunlight-docserv'
+[SCHED] process_reaped pid=144 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=144 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=144 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=145 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=145 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=145 name='sunlight-docserv'
+[SCHED] process_reaped pid=145 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=145 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=145 cleared_msgs=0
+[THREAD-LIFECYCLE] created=111 finished=111 reaped=111 borrower_reclaim_skipped=111 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016473000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016673000
+[SYSCALL] thread_spawn: parent=28 tid=146 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016674000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016874000
+[SYSCALL] thread_spawn: parent=28 tid=147 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016875000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016a75000
+[SYSCALL] thread_spawn: parent=28 tid=148 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016a76000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016c76000
+[SYSCALL] thread_spawn: parent=28 tid=149 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=149 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=149 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=149 name='sunlight-docserv'
+[SCHED] process_reaped pid=149 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=149 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=149 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=148 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=148 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=148 name='sunlight-docserv'
+[SCHED] process_reaped pid=148 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=148 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=148 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=146 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=146 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=146 name='sunlight-docserv'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=147 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=147 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=147 name='sunlight-docserv'
+[SCHED] process_reaped pid=146 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=146 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=146 cleared_msgs=0
+[SCHED] process_reaped pid=147 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=147 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=147 cleared_msgs=0
+[THREAD-LIFECYCLE] created=115 finished=115 reaped=115 borrower_reclaim_skipped=115 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016c77000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1016e77000
+[SYSCALL] thread_spawn: parent=28 tid=150 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1016e78000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1017078000
+[SYSCALL] thread_spawn: parent=28 tid=151 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1017079000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1017279000
+[SYSCALL] thread_spawn: parent=28 tid=152 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101727a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101747a000
+[SYSCALL] thread_spawn: parent=28 tid=153 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=153 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=153 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=153 name='sunlight-docserv'
+[SCHED] process_reaped pid=153 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=153 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=153 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=152 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=152 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=152 name='sunlight-docserv'
+[SCHED] process_reaped pid=152 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=152 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=152 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=151 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=151 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=151 name='sunlight-docserv'
+[SCHED] process_reaped pid=151 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=151 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=151 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=150 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=150 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=150 name='sunlight-docserv'
+[SCHED] process_reaped pid=150 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=150 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=150 cleared_msgs=0
+[THREAD-LIFECYCLE] created=119 finished=119 reaped=119 borrower_reclaim_skipped=119 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101747b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101767b000
+[SYSCALL] thread_spawn: parent=28 tid=154 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101767c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101787c000
+[SYSCALL] thread_spawn: parent=28 tid=155 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101787d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1017a7d000
+[SYSCALL] thread_spawn: parent=28 tid=156 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1017a7e000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1017c7e000
+[SYSCALL] thread_spawn: parent=28 tid=157 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=154 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=154 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=154 name='sunlight-docserv'
+[SCHED] process_reaped pid=154 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=154 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=154 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=155 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=155 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=155 name='sunlight-docserv'
+[SCHED] process_reaped pid=155 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=155 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=155 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=156 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=156 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=156 name='sunlight-docserv'
+[SCHED] process_reaped pid=156 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=156 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=156 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=157 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=157 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=157 name='sunlight-docserv'
+[SCHED] process_reaped pid=157 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=157 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=157 cleared_msgs=0
+[THREAD-LIFECYCLE] created=123 finished=123 reaped=123 borrower_reclaim_skipped=123 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1017c7f000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1017e7f000
+[SYSCALL] thread_spawn: parent=28 tid=158 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1017e80000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018080000
+[SYSCALL] thread_spawn: parent=28 tid=159 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018081000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018281000
+[SYSCALL] thread_spawn: parent=28 tid=160 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018282000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018482000
+[SYSCALL] thread_spawn: parent=28 tid=161 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=160 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=160 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=160 name='sunlight-docserv'
+[SCHED] process_reaped pid=160 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=160 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=160 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=159 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=159 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=159 name='sunlight-docserv'
+[SCHED] process_reaped pid=159 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=159 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=159 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=158 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=158 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=158 name='sunlight-docserv'
+[SCHED] process_reaped pid=158 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=158 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=158 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=161 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=161 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=161 name='sunlight-docserv'
+[SCHED] process_reaped pid=161 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=161 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=161 cleared_msgs=0
+[THREAD-LIFECYCLE] created=127 finished=127 reaped=127 borrower_reclaim_skipped=127 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018483000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018683000
+[SYSCALL] thread_spawn: parent=28 tid=162 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018684000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018884000
+[SYSCALL] thread_spawn: parent=28 tid=163 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018885000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018a85000
+[SYSCALL] thread_spawn: parent=28 tid=164 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018a86000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018c86000
+[SYSCALL] thread_spawn: parent=28 tid=165 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=165 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=165 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=165 name='sunlight-docserv'
+[SCHED] process_reaped pid=165 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=165 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=165 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=162 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=162 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=162 name='sunlight-docserv'
+[SCHED] process_reaped pid=162 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=162 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=162 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=163 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=163 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=163 name='sunlight-docserv'
+[SCHED] process_reaped pid=163 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=163 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=163 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=164 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=164 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=164 name='sunlight-docserv'
+[SCHED] process_reaped pid=164 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=164 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=164 cleared_msgs=0
+[THREAD-LIFECYCLE] created=131 finished=131 reaped=131 borrower_reclaim_skipped=131 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018c87000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1018e87000
+[SYSCALL] thread_spawn: parent=28 tid=166 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=166 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=166 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=166 name='sunlight-docserv'
+[SCHED] process_reaped pid=166 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=166 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=166 cleared_msgs=0
+[THREAD-LIFECYCLE] created=132 finished=132 reaped=132 borrower_reclaim_skipped=132 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1018e88000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1019088000
+[SYSCALL] thread_spawn: parent=28 tid=167 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1019089000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1019289000
+[SYSCALL] thread_spawn: parent=28 tid=168 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101928a000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101948a000
+[SYSCALL] thread_spawn: parent=28 tid=169 trampoline=0x40001c
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101948b000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101968b000
+[SYSCALL] thread_spawn: parent=28 tid=170 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=167 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=167 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=167 name='sunlight-docserv'
+[SCHED] process_reaped pid=167 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=167 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=167 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=169 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=169 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=169 name='sunlight-docserv'
+[SCHED] process_reaped pid=169 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=169 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=169 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=168 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=168 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=168 name='sunlight-docserv'
+[SCHED] process_reaped pid=168 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=168 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=168 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=170 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=170 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=170 name='sunlight-docserv'
+[SCHED] process_reaped pid=170 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=170 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=170 cleared_msgs=0
+[THREAD-LIFECYCLE] created=136 finished=136 reaped=136 borrower_reclaim_skipped=136 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[NATIVE-STD] collections/clocks/locks/TLS/join OK
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-std-shared-fd
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-std-shared-fd result=allow reason=AllowedTmp err=None
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101968c000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x101988c000
+[SYSCALL] thread_spawn: parent=28 tid=171 trampoline=0x40001c
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=171 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=171 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=171 name='sunlight-docserv'
+[SCHED] process_reaped pid=171 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=171 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=171 cleared_msgs=0
+[THREAD-LIFECYCLE] created=137 finished=137 reaped=137 borrower_reclaim_skipped=137 stale_wake_rejected=13 borrower_slots_reused=3 max_live=32
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3755b0 memsz=3755b0 prot=ReadExec
+[ELF] PT_LOAD off=377000 vaddr=776000 filesz=17f13c memsz=17f13c prot=Read
+[ELF] PT_LOAD off=4f7000 vaddr=8f6000 filesz=230 memsz=2184 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=7 auxv=2 rsp=0x7fffffffeee0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffeee0
+[SCHED] process_slot_reused idx=28 pid=172 (reused reaped slot)
+[SCHED] CREATED process #184 'sunlight-docserv' idx=28 burst_score=256 tier=High (reused reaped slot)
+[SYSCALL] spawn: /bin/sunlight-docserv pid=172 ppid=28
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x8000000) -> 0x1000001000
+memory allocation of 
+135266304
+ bytes failed
+
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=172 name='sunlight-docserv' reason=exit code=101
+[SCHED] terminating pid=172 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=172 name='sunlight-docserv'
+[SCHED] process_reaped pid=172 name='sunlight-docserv' user_frames=34554 page_tables=76 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=172 frames=34554 pts=76 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=172 cleared_msgs=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3755b0 memsz=3755b0 prot=ReadExec
+[ELF] PT_LOAD off=377000 vaddr=776000 filesz=17f13c memsz=17f13c prot=Read
+[ELF] PT_LOAD off=4f7000 vaddr=8f6000 filesz=230 memsz=2184 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=7 auxv=2 rsp=0x7fffffffeee0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffeee0
+[SCHED] process_slot_reused idx=28 pid=173 (reused reaped slot)
+[SCHED] CREATED process #185 'sunlight-docserv' idx=28 burst_score=256 tier=High (reused reaped slot)
+[SYSCALL] spawn: /bin/sunlight-docserv pid=173 ppid=28
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x8000000) -> 0x1000001000
+[GCD] cleaned pid=170 ipc=0 shm=0 tmp=0 fds=0
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008001000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008201000
+[SYSCALL] thread_spawn: parent=173 tid=174 trampoline=0x40001c
+
+thread '<unnamed>' (2) panicked at sunlight-docserv/src/main.rs:23:35:
+native worker panic containment probe
+
+[SCHED] process_exit_begin external pid=173 reason=native-exit-group
+[SCHED] process_mark_finished pid=173 name='sunlight-docserv' reason=native-exit-group code=101 (external)
+[SCHED] FINISHED process pid=173 name='sunlight-docserv'
+[SCHED] terminating pid=173 name='sunlight-docserv' reason=native-exit-group
+[SCHED] shared-address-space borrower pid=174 terminated reason=address-space-owner-exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_reaped pid=174 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=174 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=174 cleared_msgs=0
+[THREAD-LIFECYCLE] created=138 finished=138 reaped=138 borrower_reclaim_skipped=138 stale_wake_rejected=13 borrower_slots_reused=4 max_live=32
+[SCHED] process_reaped pid=173 name='sunlight-docserv' user_frames=35067 page_tables=77 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=173 frames=35067 pts=77 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=173 cleared_msgs=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3755b0 memsz=3755b0 prot=ReadExec
+[ELF] PT_LOAD off=377000 vaddr=776000 filesz=17f13c memsz=17f13c prot=Read
+[ELF] PT_LOAD off=4f7000 vaddr=8f6000 filesz=230 memsz=2184 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=7 auxv=2 rsp=0x7fffffffeee0
+[EXEC] Loaded ELF entry=0x400000, stack=0x7fffffffeee0
+[SCHED] process_slot_reused idx=28 pid=175 (reused reaped slot)
+[SCHED] CREATED process #187 'sunlight-docserv' idx=28 burst_score=256 tier=High (reused reaped slot)
+[SYSCALL] spawn: /bin/sunlight-docserv pid=175 ppid=28
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x8000000) -> 0x1000001000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008001000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1008201000
+[SYSCALL] thread_spawn: parent=175 tid=176 trampoline=0x40001c
+[SCHED] process_exit_begin external pid=176 reason=native-exit-group
+[SCHED] process_mark_finished pid=176 name='sunlight-docserv' reason=native-exit-group code=43 (external)
+[SCHED] FINISHED process pid=176 name='sunlight-docserv'
+[SCHED] terminating pid=176 name='sunlight-docserv' reason=native-exit-group
+[SCHED] process_reaped pid=176 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=176 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=176 cleared_msgs=0
+[THREAD-LIFECYCLE] created=139 finished=139 reaped=139 borrower_reclaim_skipped=139 stale_wake_rejected=13 borrower_slots_reused=4 max_live=32
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=175 name='sunlight-docserv' reason=exit code=43
+[SCHED] terminating pid=175 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=175 name='sunlight-docserv'
+[NATIVE-STD] shared descriptors/OOM/group exit OK
+
+[NATIVE-STD] worker panic containment OK
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-hayro-fixture.pdf
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-hayro-fixture.pdf result=allow reason=AllowedTmp err=None
+[SCHED] process_reaped pid=175 name='sunlight-docserv' user_frames=35067 page_tables=77 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=175 frames=35067 pts=77 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=175 cleared_msgs=0
+[DOCSERV] native Hayro PDF raster/recovery OK
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-hayro-rich-fixture.pdf
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/tmp/native-hayro-rich-fixture.pdf result=allow reason=AllowedTmp err=None
+[DOCSERV] native Hayro text/vector/image pixels OK
+
+[SUNLIGHT-FS] request actor=User { uid: 0, name: "root" } op=Create path=/tmp/docserv-fixture.pdf
+[SUNLIGHT-FS] decision actor=User { uid: 0, name: "root" } op=Create path=/tmp/docserv-fixture.pdf result=allow reason=AllowedTmp err=None
+[SYSCALL] mmap(0x0, 0x200000) -> 0x101988d000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1019a8d000
+[SYSCALL] thread_spawn: parent=28 tid=177 trampoline=0x40001c
+[CAP] Created endpoint 31 for pid=177
+[DOCSERV] ready
+
+[DOCSERV] 
+Hayro text extraction is not implemented
+
+
+[DOCSERV] 
+unknown document handle 1
+
+
+[DOCSERV] native thumbnail OK
+
+[DOCSERV] native Hayro IPC open/render/close OK
+
+[SCHED] process_exit_begin external pid=177 reason=native-exit-group
+[SCHED] process_mark_finished pid=177 name='sunlight-docserv' reason=native-exit-group code=0 (external)
+[SCHED] FINISHED process pid=177 name='sunlight-docserv'
+[SCHED] terminating pid=177 name='sunlight-docserv' reason=native-exit-group
+[SCHED] process_reaped pid=177 name='sunlight-docserv' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=177 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=177 cleared_msgs=0
+[THREAD-LIFECYCLE] created=140 finished=140 reaped=140 borrower_reclaim_skipped=140 stale_wake_rejected=13 borrower_slots_reused=4 max_live=32
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=28 name='sunlight-docserv' reason=exit code=0
+[SCHED] terminating pid=28 name='sunlight-docserv' reason=exit
+[SCHED] FINISHED process pid=28 name='sunlight-docserv'

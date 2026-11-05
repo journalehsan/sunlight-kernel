@@ -1,0 +1,15 @@
+{
+  "image": ".threading-evidence/t3/20261105T161924.376440Z-suite-production/kernel.elf",
+  "sha256": "30a7dd344f6a9a5bde2cb3d8c9e32abb0fba729565578bfd73b5afca91bb6c32",
+  "fixture_markers_absent": {
+    "[F13NR] PASS": true,
+    "[R2V] PASS": true,
+    "[F13NA] PASS": true,
+    "[T2] begin": true,
+    "[T2-FAULT]": true,
+    "[T1] PASS": true,
+    "[T1-AUTH] PASS": true
+  },
+  "cpu_identity_boot_diagnostics_present": true,
+  "topology_override_feature_added": false
+}

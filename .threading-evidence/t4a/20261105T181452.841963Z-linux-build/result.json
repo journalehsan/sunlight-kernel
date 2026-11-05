@@ -1,0 +1,20 @@
+{
+  "timeout": false,
+  "command": [
+    "env",
+    "SUNLIGHT_INJECT_PHASE=helios-thread-probe",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--offline",
+    "--features",
+    "key_inject"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 45.31008595900494
+}

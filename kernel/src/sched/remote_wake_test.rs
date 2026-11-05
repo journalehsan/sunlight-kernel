@@ -27,7 +27,10 @@ fn checked_apic_base(cpu: usize) -> u64 {
     let base = unsafe { x86_64::registers::model_specific::Msr::new(0x1b).read() };
     assert_ne!(base & (1 << 11), 0, "LAPIC disabled");
     assert_eq!(base & (1 << 10), 0, "fixture requires actual xAPIC mode");
-    assert_eq!(crate::arch::x86_64::lapic::local_apic_id() as usize, cpu);
+    assert_eq!(
+        Some(crate::arch::x86_64::lapic::local_apic_id()),
+        crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
+    );
     base
 }
 

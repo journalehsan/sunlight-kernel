@@ -168,6 +168,10 @@ pub fn exec_into_process(
         }
     };
 
+    // Completion receipts belong to the retired image; failed exec above
+    // preserves them along with the original VM.
+    process.clear_futex_wait();
+
     if activate_on_success {
         // The only live-image caller is sys_exec, holding SCHEDULER -> PMM
         // without CAP_BROKER. Unpublished spawn uses false and may already
@@ -672,6 +676,9 @@ pub fn spawn_from_path_with_restrictions(
     env: Option<super::env::EnvMap>,
     service_lookup_restrictions: Option<u64>,
 ) -> Result<usize, SpawnError> {
+    sched
+        .reserve_task_storage()
+        .map_err(|_| SpawnError::NoMemory)?;
     let bytes = embedded_bytes_for_path(path)?;
     // Shells map a tty tab via their shell_id; non-shell paths (e.g. user-level
     // daemons such as timezone_service/niced/gcd spawned by sunlightd) have no
@@ -914,6 +921,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
         #[cfg(feature = "native_session_race_test")]
         "/tmp/session-race-probe" | "/bin/session-racer" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
+        #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+        "/test/contract-system" | "/test/contract-audio" | "/test/contract-protected" | "/test/contract-required" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
         "/usr/bin/top" | "/bin/top" => Ok(crate::SUNLIGHT_TOP_ELF_BYTES),
         "/usr/bin/memoryctl" | "/bin/memoryctl" => Ok(crate::MEMORYCTL_ELF_BYTES),
         "/usr/bin/sunlightctl" | "/bin/sunlightctl" => Ok(crate::SUNLIGHTCTL_ELF_BYTES),

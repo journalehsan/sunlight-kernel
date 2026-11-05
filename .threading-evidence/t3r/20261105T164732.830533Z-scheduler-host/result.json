@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "tools/test_scheduler_host.py"
+  ],
+  "exit_code": 0,
+  "seconds": 3.5010918370098807
+}

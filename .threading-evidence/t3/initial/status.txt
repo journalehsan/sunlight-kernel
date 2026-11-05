@@ -1,0 +1,239 @@
+ M .version_state.json
+ M Cargo.lock
+ M certificatectl/Cargo.toml
+ M chronos-core/Cargo.toml
+ M compat-linux/Cargo.toml
+ M cpu-utils/Cargo.toml
+ M drivers/Cargo.toml
+ M fastlane-doorbell/Cargo.toml
+ M fastlane-ring/Cargo.toml
+ M golden-fish/Cargo.toml
+ M helios-note/Cargo.toml
+ M hello-linux/Cargo.toml
+ M ipc/Cargo.toml
+ M ipc/src/lib.rs
+ M kernel/Cargo.toml
+ M kernel/build.rs
+ M kernel/src/arch/x86_64/cpu.rs
+ M kernel/src/arch/x86_64/interrupts.rs
+ M kernel/src/arch/x86_64/mod.rs
+ M kernel/src/arch/x86_64/smp.rs
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/capability/channel.rs
+ M kernel/src/capability/channel_mapping.rs
+ M kernel/src/capability/channel_native.rs
+ M kernel/src/capability/channel_shared_ring.rs
+ M kernel/src/capability/channel_tests.rs
+ M kernel/src/capability/gate.rs
+ M kernel/src/capability/mapping_trace.rs
+ M kernel/src/capability/mod.rs
+ M kernel/src/ipc/mod.rs
+ M kernel/src/main.rs
+ M kernel/src/memory/mod.rs
+ M kernel/src/memory/shared_lifetime_gate.rs
+ M kernel/src/memory/tlb.rs
+ M kernel/src/memory/user.rs
+ M kernel/src/mm2a_host.rs
+ M kernel/src/process/env.rs
+ M kernel/src/process/exec_authority.rs
+ M kernel/src/process/fd_table.rs
+ M kernel/src/process/mmap.rs
+ M kernel/src/process/mod.rs
+ M kernel/src/process/region.rs
+ M kernel/src/process/spawn.rs
+ M kernel/src/sched/accounting.rs
+ M kernel/src/sched/doorbell_stack.rs
+ M kernel/src/sched/mod.rs
+ M kernel/src/sched/regression.rs
+ M melody-mina/Cargo.toml
+ M memoryctl/Cargo.toml
+ M mezzoctl/Cargo.toml
+ M rappid-rabbit/Cargo.toml
+ M services/eyes/Cargo.toml
+ M services/init/Cargo.toml
+ M services/install_sunlightos/Cargo.toml
+ M services/mezzo/Cargo.toml
+ M services/net_server/Cargo.toml
+ M services/pty_server/Cargo.toml
+ M services/rand_service/Cargo.toml
+ M services/secret_store_test/Cargo.toml
+ M services/solar/Cargo.toml
+ M services/sun-exec/Cargo.toml
+ M services/sun-open/Cargo.toml
+ M services/sunlight-audiod/Cargo.toml
+ M services/sunlight-clipd/Cargo.toml
+ M services/sunlight-control-panel/Cargo.toml
+ M services/sunlight-deviced/Cargo.toml
+ M services/sunlight-dialogd/Cargo.toml
+ M services/sunlight-display/Cargo.toml
+ M services/sunlight-gcd/Cargo.toml
+ M services/sunlight-kbd/Cargo.toml
+ M services/sunlight-mouse/Cargo.toml
+ M services/sunlight-networkd/Cargo.toml
+ M services/sunlight-niced/Cargo.toml
+ M services/sunlight-powerd/Cargo.toml
+ M services/sunlight-resolved/Cargo.toml
+ M services/sunlight-runner/Cargo.toml
+ M services/sunlight-sessionctl/Cargo.toml
+ M services/sunlight-sessiond/Cargo.toml
+ M services/sunlight-sm/Cargo.toml
+ M services/sunlight-startup-fixture/Cargo.toml
+ M services/sunlight-swapd/Cargo.toml
+ M services/sunlight-tasks/Cargo.toml
+ M services/sunlight-terminal/Cargo.toml
+ M services/sunlight-thermald/Cargo.toml
+ M services/sunlight-thumbd/Cargo.toml
+ M services/sunlight-uac/Cargo.toml
+ M services/sunlight-uac/src/bin/channel_fixture/mod.rs
+ M services/sunlight-uac/src/bin/channel_fixture/shared_ring.rs
+ M services/sunlight-uac/src/bin/session_race_probe.rs
+ M services/sunlight-usb-mouse/Cargo.toml
+ M services/sunlight-vortex-shell/Cargo.toml
+ M services/sunlightctl/Cargo.toml
+ M services/sunlightd/Cargo.toml
+ M services/timed/Cargo.toml
+ M services/timer_server/Cargo.toml
+ M services/timezone_service/Cargo.toml
+ M services/tty_server/Cargo.toml
+ M services/vfs_server/Cargo.toml
+ M std-proof/sunlight-dict/Cargo.toml
+ M std-proof/sunlight-sunsay/Cargo.toml
+ M std-proof/sunlight-zoxide/Cargo.toml
+ M sun-font/Cargo.toml
+ M sun-img/Cargo.toml
+ M sun-imgc/Cargo.toml
+ M sunlight-api-lab/Cargo.toml
+ M sunlight-audio/Cargo.toml
+ M sunlight-bench/Cargo.toml
+ M sunlight-block/Cargo.toml
+ M sunlight-calculator/Cargo.toml
+ M sunlight-calendar/Cargo.toml
+ M sunlight-chronos/Cargo.toml
+ M sunlight-clipman/Cargo.toml
+ M sunlight-devices/Cargo.toml
+ M sunlight-dialogs/Cargo.toml
+ M sunlight-docserv/Cargo.toml
+ M sunlight-docserv/src/main.rs
+ M sunlight-docview/Cargo.toml
+ M sunlight-edit/Cargo.toml
+ M sunlight-elf/Cargo.toml
+ M sunlight-emoji-picker/Cargo.toml
+ M sunlight-fat/Cargo.toml
+ M sunlight-fetch/Cargo.toml
+ M sunlight-files/Cargo.toml
+ M sunlight-fs/Cargo.toml
+ M sunlight-hangman/Cargo.toml
+ M sunlight-http/Cargo.toml
+ M sunlight-kv/Cargo.toml
+ M sunlight-kvctl/Cargo.toml
+ M sunlight-libc/Cargo.toml
+ M sunlight-libc/src/mman.rs
+ M sunlight-libc/src/std_runtime.rs
+ M sunlight-libc/src/thread.rs
+ M sunlight-light-lens/Cargo.toml
+ M sunlight-locale/Cargo.toml
+ M sunlight-media/Cargo.toml
+ M sunlight-net-utils/Cargo.toml
+ M sunlight-net/Cargo.toml
+ M sunlight-reminders/Cargo.toml
+ M sunlight-sensors/Cargo.toml
+ M sunlight-shell-appstate/Cargo.toml
+ M sunlight-silicon-echoes/Cargo.toml
+ M sunlight-smbios/Cargo.toml
+ M sunlight-telemetry/Cargo.toml
+ M sunlight-tls/Cargo.toml
+ M sunlight-top/Cargo.toml
+ M sunlight-tty/Cargo.toml
+ M sunlight-tz/Cargo.toml
+ M sunlight-ui/Cargo.toml
+ M sunlight-utils/Cargo.toml
+ M sunlight-virtio/Cargo.toml
+ M sunlight-voice-recorder/Cargo.toml
+ M sunlight-wallpaper/Cargo.toml
+ M sunlight-welcome/Cargo.toml
+ M sunlight-widget-gallery/Cargo.toml
+ M sunlight-writer/Cargo.toml
+ M sunshell/Cargo.toml
+ M tools/fastlane_m60r_receipt.py
+ M tools/hayro-native-probe/Cargo.toml
+ M tools/hayro-prototype/Cargo.toml
+ M tools/helios-probes/capability-probe.S
+ M tools/helios-probes/scheduler-probe.S
+ M tools/native-std-probe/Cargo.toml
+ M tools/native-std/overlay/thread/sunlightos.rs
+ M tools/tests/fd-description/Cargo.toml
+ M tools/tests/fd-description/src/lib.rs
+ M tools/tests/scheduler_service.rs
+ M wiseowl-brain/Cargo.toml
+ M wiseowl-console/Cargo.toml
+ M wiseowl-identity/Cargo.toml
+ M wiseowl-index/Cargo.toml
+ M wiseowl-memory/Cargo.toml
+ M wiseowl-memorydb/Cargo.toml
+?? .threading-evidence/
+?? docs/ipc/fastlane-m61a-mediated-cpu-accounting.md
+?? docs/ipc/fastlane-m61b-contract-routing.md
+?? docs/ipc/fastlane-m61b-r1-native-routing-pilot.md
+?? docs/ipc/fastlane-m61b-r1b-operation-equivalence.md
+?? docs/ipc/fastlane-m61b-r1c-native-dispatch.md
+?? docs/ipc/fastlane-m61b-r1d-first-native-operation.md
+?? docs/ipc/fastlane-m61b-r1e-native-ring-operation.md
+?? docs/ipc/fastlane-m61b-r1e-r1-hybrid-operation.md
+?? docs/ipc/fastlane-m61b-r2-hybrid-lifecycle.md
+?? docs/ipc/fastlane-m61b-r2e-exec-reply-race.md
+?? docs/ipc/fastlane-m61b-r2e-p1-caller-exec.md
+?? docs/kernel/threading-audit-2026-11-04.md
+?? docs/kernel/threading-t1-trusted-syscall-stack.md
+?? docs/kernel/threading-t2-fallible-admission.md
+?? docs/kernel/threading-t2r-lifecycle-race-closure.md
+?? ipc/src/fastlane_operation.rs
+?? ipc/src/fastlane_operation_ipc.rs
+?? kernel/src/arch/x86_64/syscall_stack.rs
+?? kernel/src/capability/channel_contract.rs
+?? kernel/src/capability/channel_contract_native.rs
+?? kernel/src/capability/channel_hybrid.rs
+?? kernel/src/capability/channel_mediated_accounting.rs
+?? kernel/src/capability/hybrid_race.rs
+?? kernel/src/capability/measurement_window.rs
+?? kernel/src/process/ipc_identity.rs
+?? kernel/src/process/thread_admission.rs
+?? kernel/src/sched/t2_fixture.rs
+?? kernel/src/sched/t2r_fixture.rs
+?? kernel/src/sched/thread_admission.rs
+?? services/sunlight-uac/src/bin/channel_fixture/operation.rs
+?? services/sunlight-uac/src/bin/channel_fixture/shared_ring/mediated_accounting.rs
+?? services/sunlight-uac/src/bin/channel_fixture/shared_ring/operation.rs
+?? services/sunlight-uac/src/bin/channel_fixture/shared_ring/operation/
+?? tools/check_syscall_stack_abi.py
+?? tools/fastlane_m61a_receipt.py
+?? tools/fastlane_m61a_validate.py
+?? tools/fastlane_m61b_r1_model.rs
+?? tools/fastlane_m61b_r1b_validate.py
+?? tools/fastlane_m61b_r1d_validate.py
+?? tools/fastlane_m61b_r1e_r1_receipt.py
+?? tools/fastlane_m61b_r1e_r1_validate.py
+?? tools/fastlane_m61b_r1e_validate.py
+?? tools/fastlane_m61b_r2_controls.py
+?? tools/fastlane_m61b_r2_receipt.py
+?? tools/fastlane_m61b_r2_validate.py
+?? tools/fastlane_m61b_r2e_p1_receipt.py
+?? tools/helios-probes/syscall-linux-completion-probe.S
+?? tools/helios-probes/syscall-stack-control.inc
+?? tools/helios-probes/thread-admission-probe.S
+?? tools/helios-probes/thread-lifecycle-race-probe.S
+?? tools/test_fastlane_m61a.py
+?? tools/test_threading_t1.py
+?? tools/test_threading_t2.py
+?? tools/test_threading_t2r.py
+?? tools/tests/thread_admission.rs
+?? tools/threading_t1_validate.py
+?? tools/threading_t2_acceptance.py
+?? tools/threading_t2_allocation_host.py
+?? tools/threading_t2_host.py
+?? tools/threading_t2_regressions.py
+?? tools/threading_t2_validate.py
+?? tools/threading_t2r_format.py
+?? tools/threading_t2r_pilot.py
+?? tools/threading_t2r_receipt.py
+?? tools/threading_t2r_regressions.py
+?? tools/threading_t2r_validate.py

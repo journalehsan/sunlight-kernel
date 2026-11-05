@@ -1,0 +1,19 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "env",
+    "SUNLIGHT_CAP_EXEC_PROBE=1",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--offline",
+    "--features",
+    "syscall_stack_auth_test"
+  ],
+  "exit_code": 0,
+  "seconds": 13.263128390011843
+}

@@ -43,6 +43,11 @@ impl Scheduler {
             return Err(Error::Denied);
         }
         let who = RecipientIdentity::of(current);
+        #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
+        if matches!(op, 2 | 3) {
+            let mut caps = CAP_BROKER.lock();
+            caps.channels.row_mut(h)?.contract.fastlane_setup()?;
+        }
         let mut broker = CAP_BROKER.lock();
         broker.expire_sessions(self.global_tick);
         broker.channels.expire(self.global_tick);

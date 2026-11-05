@@ -14,3 +14,10 @@ mod eventfd {
 }
 #[path = "../../../../kernel/src/process/fd_table.rs"]
 mod fd_table;
+
+mod unix_socket {
+    pub fn retain(_: u32) {}
+    pub fn release(_: u32) {}
+}
+#[path = "../../../../kernel/src/process/thread_admission.rs"]
+mod thread_admission;

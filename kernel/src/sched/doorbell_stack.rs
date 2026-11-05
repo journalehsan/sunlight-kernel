@@ -1,33 +1,22 @@
 // Shared kernel-stack park trampoline. See F1.3N stack lifetime proof.
 // SAFETY: the dispatcher supplies its live 15-register SyscallRegs frame.
 // Its process owns the kernel stack; all guards are released before switching.
-// The saved original stack pointer is used only after this same task resumes.
+// RBX retains the trusted input frame only while this same task owns execution.
 #[unsafe(naked)]
 pub(crate) unsafe extern "C" fn on_kernel_stack(
     _frame: &mut crate::arch::x86_64::syscall::SyscallFrame,
 ) -> u64 {
     core::arch::naked_asm!(
-        "push rdi",
-        "call {stack_top}",
-        "pop rdi",
-        "mov r11, rsp",
-        "mov rsp, rax",
-        "sub rsp, 256",
-        "and rsp, -16",
-        "push r11",
-        "sub rsp, 136",
-        "mov rsi, rdi",
-        "mov rdi, rsp",
-        "mov ecx, 15",
-        "cld",
-        "rep movsq",
-        "mov rdi, rsp",
+        // Ordinary entry already owns this task's supervisor stack. Never
+        // repivot over the live dispatcher; retain its frame across parking.
+        "push rbx",
+        "mov rbx, rdi",
         "call {fixture}",
         "test rax, rax",
         "jnz 2f",
-        "cmp qword ptr [rsp], 0xf1c2",
+        "cmp qword ptr [rbx], 0xf1c2",
         "je 3f",
-        "cmp qword ptr [rsp + 40], 0",
+        "cmp qword ptr [rbx + 40], 0",
         "jne 2f",
         "3:",
         "call {flush}",
@@ -35,7 +24,7 @@ pub(crate) unsafe extern "C" fn on_kernel_stack(
         "int {vector}",
         "2:",
         ".if {trace}",
-        "mov rdi, rsp",
+        "mov rdi, rbx",
         "pushfq",
         "pop rsi",
         "cli",
@@ -45,11 +34,9 @@ pub(crate) unsafe extern "C" fn on_kernel_stack(
         "add rsp, 8",
         "pop rax",
         ".endif",
-        "add rsp, 136",
-        "pop rsp",
+        "pop rbx",
         "ret",
         flush = sym flush,
-        stack_top = sym stack_top,
         fixture = sym fixture,
         resume = sym resume,
         trace = const cfg!(all(debug_assertions, feature = "fastlane_doorbell_trace")) as u8,
@@ -77,10 +64,6 @@ extern "C" fn resume(_frame: &crate::arch::x86_64::syscall::SyscallFrame, _flags
             "Doorbell kernel continuation resumed with IF set"
         );
     }
-}
-
-extern "C" fn stack_top() -> u64 {
-    super::SCHEDULER.lock().current_process().kernel_stack_top
 }
 
 extern "C" fn fixture(frame: &crate::arch::x86_64::syscall::SyscallFrame) -> u64 {

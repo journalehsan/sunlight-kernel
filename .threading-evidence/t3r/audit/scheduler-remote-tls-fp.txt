@@ -1,0 +1,122 @@
+kernel/src/arch/x86_64/syscall.rs:468:        crate::sched::request_reschedule_on(cpu);
+kernel/src/arch/x86_64/syscall.rs:977:                p.cpu_mask = 1 << frame.rdi;
+kernel/src/arch/x86_64/syscall.rs:979:                if frame.rdi == 0 { p.cpu_mask = u64::MAX; }
+kernel/src/arch/x86_64/syscall.rs:1063:        101 => sys_set_fs_base(frame),
+kernel/src/arch/x86_64/syscall.rs:1488:                sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:1634:                    { child.cpu_mask = 1; }
+kernel/src/arch/x86_64/syscall.rs:1638:                    child.cpu_mask = 1;
+kernel/src/arch/x86_64/syscall.rs:1646:                        child.cpu_mask = if n4_on_ap { 2 } else { 1 };
+kernel/src/arch/x86_64/syscall.rs:2290:                sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:2323:                sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:2364:    sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:2574:    sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:2785:    unsafe { thread.fx_state.save() };
+kernel/src/arch/x86_64/syscall.rs:2786:    thread.fs_base = tls_ptr;
+kernel/src/arch/x86_64/syscall.rs:2894:        return sched.wake_native_futex(identity, address, frame.rdx as usize) as u64;
+kernel/src/arch/x86_64/syscall.rs:2908:    sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:3089:    child.cpu_mask = parent.cpu_mask;
+kernel/src/arch/x86_64/syscall.rs:3106:    unsafe { child.fx_state.save() };
+kernel/src/arch/x86_64/syscall.rs:3107:    child.fs_base = if flags & sunlight_compat_linux::clone::CLONE_SETTLS != 0 {
+kernel/src/arch/x86_64/syscall.rs:3110:        parent.fs_base
+kernel/src/arch/x86_64/syscall.rs:3180:    sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:3225:    let (context, fs_base) = {
+kernel/src/arch/x86_64/syscall.rs:3239:        process.fx_state = crate::arch::x86_64::cpu::FxState::initial();
+kernel/src/arch/x86_64/syscall.rs:3240:        unsafe { process.fx_state.restore() };
+kernel/src/arch/x86_64/syscall.rs:3241:        (process.context_rsp, process.fs_base)
+kernel/src/arch/x86_64/syscall.rs:3245:        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);
+kernel/src/arch/x86_64/syscall.rs:3534:    crate::sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:3772:        child.cpu_mask = if option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") {
+kernel/src/arch/x86_64/syscall.rs:3819:                child.cpu_mask = 1;
+kernel/src/arch/x86_64/syscall.rs:4426:                        crate::sched::request_reschedule_on(cpu);
+kernel/src/arch/x86_64/syscall.rs:5365:fn sys_set_fs_base(frame: &mut SyscallFrame) -> u64 {
+kernel/src/arch/x86_64/syscall.rs:5376:        sched.current_process_mut().fs_base = base;
+kernel/src/arch/x86_64/syscall.rs:5476:        let result = sys_set_fs_base(frame);
+kernel/src/arch/x86_64/syscall.rs:5657:    crate::sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:5691:    crate::sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:6509:        crate::sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:6657:            crate::sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:6709:    crate::sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:6904:        crate::sched::request_reschedule_after_sysret();
+kernel/src/arch/x86_64/syscall.rs:7538:    crate::sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:8940:                            crate::sched::request_reschedule();
+kernel/src/arch/x86_64/syscall.rs:9289:                            crate::sched::request_reschedule();
+kernel/src/sched/thread_admission.rs:52:                    && !self.stack_is_pinned(*idx)
+kernel/src/sched/thread_admission.rs:151:                    && !self.stack_is_pinned(idx)
+kernel/src/sched/mod.rs:53://! lowest-priority non-empty queue, checking cpu_mask affinity before taking.
+kernel/src/sched/mod.rs:306:            request_reschedule_on(cpu);
+kernel/src/sched/mod.rs:336:            request_reschedule_on(cpu);
+kernel/src/sched/mod.rs:548:        let cpu_mask = if idx < self.processes.len() {
+kernel/src/sched/mod.rs:549:            self.processes[idx].cpu_mask
+kernel/src/sched/mod.rs:557:            if cpu_mask & (1u64 << core_id) == 0 {
+kernel/src/sched/mod.rs:623:                    && !self.stack_is_pinned(*idx)
+kernel/src/sched/mod.rs:661:                    && !self.stack_is_pinned(*idx)
+kernel/src/sched/mod.rs:696:    /// Choose the least-loaded core that the process's cpu_mask permits.
+kernel/src/sched/mod.rs:697:    fn target_core_for_process(&self, idx: usize) -> usize {
+kernel/src/sched/mod.rs:703:        let cpu_mask = if idx < self.processes.len() {
+kernel/src/sched/mod.rs:704:            self.processes[idx].cpu_mask
+kernel/src/sched/mod.rs:712:            if cpu_mask & (1u64 << core_id) == 0 {
+kernel/src/sched/mod.rs:796:                request_reschedule_on(core_id);
+kernel/src/sched/mod.rs:811:            request_reschedule_on(core_id);
+kernel/src/sched/mod.rs:824:        let core_id = self.target_core_for_process(idx);
+kernel/src/sched/mod.rs:894:        let cpu_mask = self.processes[idx].cpu_mask;
+kernel/src/sched/mod.rs:895:        let target_cpu = if cpu_mask & (1u64 << preferred_cpu) != 0 {
+kernel/src/sched/mod.rs:898:            self.target_core_for_process(idx)
+kernel/src/sched/mod.rs:943:    fn stack_is_pinned(&self, idx: usize) -> bool {
+kernel/src/sched/mod.rs:948:    fn stack_is_pinned_remotely(&self, idx: usize, cpu_id: usize) -> bool {
+kernel/src/sched/mod.rs:949:        self.processes[idx].stack_handoff_core as usize != cpu_id && self.stack_is_pinned(idx)
+kernel/src/sched/mod.rs:957:    fn wait_for_pin_release(&self, idx: usize, cpu_id: usize) -> bool {
+kernel/src/sched/mod.rs:1247:                request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:1257:            request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:1265:            request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:1290:            request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:1319:    /// Search a queue (back to front) for a process whose cpu_mask permits
+kernel/src/sched/mod.rs:1330:                && processes[pidx].cpu_mask & (1u64 << thief_id) != 0
+kernel/src/sched/mod.rs:1339:    /// lowest-priority non-empty queue. Respects cpu_mask affinity.
+kernel/src/sched/mod.rs:1444:                if self.stack_is_pinned_remotely(idx, thief_id)
+kernel/src/sched/mod.rs:1445:                    && self.wait_for_pin_release(idx, thief_id)
+kernel/src/sched/mod.rs:1454:                    && self.processes[idx].cpu_mask & (1u64 << thief_id) != 0
+kernel/src/sched/mod.rs:1631:            if self.stack_is_pinned_remotely(idx, cpu_id) && self.wait_for_pin_release(idx, cpu_id)
+kernel/src/sched/mod.rs:1640:                || self.processes[idx].cpu_mask & (1u64 << cpu_id) == 0
+kernel/src/sched/mod.rs:1739:                && self.processes[idx].cpu_mask & (1u64 << cpu_id) != 0
+kernel/src/sched/mod.rs:1741:                && !self.stack_is_pinned_remotely(idx, cpu_id)
+kernel/src/sched/mod.rs:1756:            request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:1842:                let next_fs_base = self.processes[next].fs_base;
+kernel/src/sched/mod.rs:1852:                    self.processes[next].fx_state.restore();
+kernel/src/sched/mod.rs:1853:                    x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+kernel/src/sched/mod.rs:1882:            && self.processes[current].cpu_mask & (1u64 << cpu_id) != 0
+kernel/src/sched/mod.rs:1921:        unsafe { self.processes[current].fx_state.save() };
+kernel/src/sched/mod.rs:1925:        self.processes[current].fs_base =
+kernel/src/sched/mod.rs:1972:            let next_fs_base = self.processes[next].fs_base;
+kernel/src/sched/mod.rs:1987:                self.processes[next].fx_state.restore();
+kernel/src/sched/mod.rs:1988:                x86_64::registers::model_specific::Msr::new(0xC0000100).write(next_fs_base);
+kernel/src/sched/mod.rs:2097:    pub fn wake_native_futex(
+kernel/src/sched/mod.rs:2112:                self.wake_native_futex_index(idx);
+kernel/src/sched/mod.rs:2119:    fn wake_native_futex_index(&mut self, idx: usize) {
+kernel/src/sched/mod.rs:2127:            request_reschedule_on(cpu);
+kernel/src/sched/mod.rs:2148:                self.wake_native_futex_index(idx);
+kernel/src/sched/mod.rs:2161:                self.wake_native_futex_index(idx);
+kernel/src/sched/mod.rs:2270:                request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:2305:                request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:2339:                request_reschedule_on(cpu);
+kernel/src/sched/mod.rs:2582:            request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:2613:                request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:2652:                    request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:2708:                request_reschedule_on(self.processes[idx].owning_core as usize);
+kernel/src/sched/mod.rs:2742:        if idx >= self.processes.len() || self.stack_is_pinned(idx) {
+kernel/src/sched/mod.rs:2862:                crate::memory::tlb::active_cpu_mask(self.processes[idx].address_space.identity());
+kernel/src/sched/mod.rs:3011:        self.processes[idx].fs_base = 0;
+kernel/src/sched/mod.rs:3012:        self.processes[idx].fx_state = crate::arch::x86_64::cpu::FxState::initial();
+kernel/src/sched/mod.rs:3171:            if self.stack_is_pinned(idx) {
+kernel/src/sched/mod.rs:3299:            request_reschedule_on(owning as usize);
+kernel/src/sched/mod.rs:3362:            request_reschedule_on(owning as usize);
+kernel/src/sched/mod.rs:3417:                self.processes[idx].fx_state.restore();
+kernel/src/sched/mod.rs:4188:pub fn request_reschedule_on(cpu_id: usize) {
+kernel/src/sched/mod.rs:4247:pub fn request_reschedule() {
+kernel/src/sched/mod.rs:4248:    request_reschedule_on(current_cpu_id());
+kernel/src/sched/mod.rs:4264:    request_reschedule_on(cpu_id);
+kernel/src/sched/mod.rs:4312:pub fn request_reschedule_after_sysret() {
+kernel/src/sched/mod.rs:4550:    let (rsp, fs_base, kernel_stack_top) = {
+kernel/src/sched/mod.rs:4578:            let fs_base = sched.processes[idx].fs_base;
+kernel/src/sched/mod.rs:4583:                sched.processes[idx].fx_state.restore();
+kernel/src/sched/mod.rs:4592:            (rsp, fs_base, kernel_stack_top)
+kernel/src/sched/mod.rs:4602:        x86_64::registers::model_specific::Msr::new(0xC0000100).write(fs_base);

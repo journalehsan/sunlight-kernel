@@ -1,0 +1,337 @@
+--- initial/kernel/src/arch/x86_64/interrupts.rs
++++ kernel/src/arch/x86_64/interrupts.rs
+@@ -205,6 +205,17 @@
+     // which is already wired to `timer_entry` in the IDT above.
+     unsafe {
+         crate::arch::x86_64::lapic::init_lapic();
++        assert_eq!(
++            Some(lapic::local_apic_id()),
++            super::cpu_identity::topology().apic_id(0)
++        );
++        serial_println!(
++            "[CPU-ID] bsp logical=0 apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
++            lapic::local_apic_id(),
++            &*TSS as *const TaskStateSegment as u64,
++            TSS.interrupt_stack_table[0].as_u64(),
++            TSS.interrupt_stack_table[1].as_u64()
++        );
+         crate::arch::x86_64::lapic::calibrate_lapic_timer(100);
+         crate::arch::x86_64::lapic::arm_lapic_timer();
+         // Mask PIC IRQ0 (timer). IRQ1 (keyboard) and IRQ2 (cascade) stay
+--- initial/kernel/src/arch/x86_64/lapic.rs
++++ kernel/src/arch/x86_64/lapic.rs
+@@ -115,6 +115,7 @@
+ /// Caller must ensure interrupts are disabled (IF=0) during init to
+ /// avoid receiving timer interrupts before the timer is fully armed.
+ pub unsafe fn init_lapic() {
++    super::cpu_identity::validate_controller();
+     // Enable LAPIC; set spurious vector to 0xFF.
+     lapic_write(LAPIC_SVR, 0x1FF);
+ }
+@@ -147,17 +148,16 @@
+     }
+ }
+ 
+-/// Send a fixed-delivery IPI to one logical CPU/APIC ID.
+-///
+-/// SunlightOS currently uses xAPIC mode and its scheduler CPU index is the
+-/// initial APIC ID, capped to the supported 64-core mask.
++/// Send a fixed-delivery IPI to a validated online logical CPU.
++/// Translate to a unicast xAPIC hardware destination before touching the ICR.
+ pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
+     assert!(
+         cpu_id < crate::sched::MAX_CORES,
+         "IPI target is out of range"
+     );
++    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+     wait_for_icr_idle();
+-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
++    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+     lapic_write(LAPIC_ICR_LOW, vector as u32);
+     wait_for_icr_idle();
+ }
+@@ -170,6 +170,7 @@
+         cpu_id < crate::sched::MAX_CORES,
+         "IPI target is out of range"
+     );
++    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+     if crate::sched::remote_wake_test::attempt(cpu_id) {
+         return false;
+@@ -183,7 +184,7 @@
+         crate::sched::remote_wake_test::hardware_busy(cpu_id);
+         return false;
+     }
+-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
++    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+     lapic_write(LAPIC_ICR_LOW, vector as u32);
+     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
+     crate::sched::remote_wake_test::accepted(cpu_id);
+@@ -241,8 +242,9 @@
+         cpu_id < crate::sched::MAX_CORES,
+         "NMI target is out of range"
+     );
++    let apic_id = super::cpu_identity::ipi_destination(cpu_id);
+     wait_for_icr_idle();
+-    lapic_write(LAPIC_ICR_HIGH, (cpu_id as u32) << 24);
++    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+     lapic_write(LAPIC_ICR_LOW, 0b100 << 8);
+     wait_for_icr_idle();
+ }
+--- initial/kernel/src/arch/x86_64/mod.rs
++++ kernel/src/arch/x86_64/mod.rs
+@@ -1,6 +1,8 @@
+ pub mod acpi;
+ pub mod boot;
+ pub mod cpu;
++pub(crate) mod cpu_identity;
++mod cpu_topology;
+ pub mod interrupts;
+ pub mod ioapic;
+ pub mod keyboard;
+--- initial/kernel/src/arch/x86_64/smp.rs
++++ kernel/src/arch/x86_64/smp.rs
+@@ -28,16 +28,11 @@
+ //!
+ //! ## Thread-safety invariants
+ //!
+-//! - The BSP starts APs one at a time and waits for `AP_ONLINE` to advance
+-//!   before starting the next AP.  Therefore only one AP runs `ap_entry_rust`
+-//!   at a time, and indexing `AP_STACKS`, `AP_TSS_STORE`, and `AP_GDTS` by
+-//!   `AP_ONLINE.load()` (before incrementing) is race-free.
+-//! - `AP_STACKS`, `AP_TSS_STORE`, and `AP_GDTS` are written once by the
+-//!   respective AP and thereafter read-only (except that `AP_TSS_STORE[i]`
+-//!   RSP0 is updated atomically by the scheduler on every context switch on
+-//!   that core).
+-//! - `AP_ONLINE` is `AtomicU32`; the Release fetch_add pairs with the BSP's
+-//!   Acquire load in the spin-wait loop.
++//! The immutable topology is published before any per-CPU initialization.
++//! Logical CPU 0 owns the BSP TSS; logical k > 0 owns AP slot k - 1.
++//! The BSP starts APs serially in that validated logical order and waits for
++//! AP_ONLINE with Acquire/Release. AP_ONLINE is a readiness counter, never an
++//! identity source. Hotplug and dynamic topology mutation are unsupported.
+ 
+ use core::arch::naked_asm;
+ use core::sync::atomic::{AtomicU32, Ordering};
+@@ -51,7 +46,7 @@
+ // ─── Constants ───────────────────────────────────────────────────────────────
+ 
+ /// Maximum number of Application Processors (total logical cores − 1 BSP).
+-pub const MAX_APS: usize = 63;
++pub const MAX_APS: usize = super::cpu_topology::MAX_CPUS - 1;
+ 
+ /// Per-AP kernel stack size (64 KiB).
+ const AP_STACK_SIZE: usize = 64 * 1024;
+@@ -123,6 +118,11 @@
+ /// 3. `smp::start_aps()` (this function) — each AP gets its own TSS, GDT,
+ ///    LAPIC, and is left running in an interrupt-enabled idle loop.
+ pub fn start_aps(all_cpus: &[&limine::mp::MpInfo], bsp_lapic_id: u32) {
++    assert_eq!(
++        super::cpu_identity::topology().apic_id(0),
++        Some(bsp_lapic_id)
++    );
++    assert_eq!(super::cpu_identity::topology().count(), all_cpus.len());
+     let mut ap_idx = 0usize;
+ 
+     for cpu_info in all_cpus {
+@@ -130,13 +130,9 @@
+             continue;
+         }
+ 
+-        if ap_idx >= MAX_APS {
+-            crate::serial_println!(
+-                "[SMP] Warning: more than {} APs; ignoring remaining cores",
+-                MAX_APS
+-            );
+-            break;
+-        }
++        let logical = super::cpu_identity::topology().logical_id(cpu_info.lapic_id).expect("unmapped AP");
++        let slot = super::cpu_identity::topology().ap_slot(logical).expect("BSP in AP startup");
++        assert_eq!(slot, ap_idx, "AP startup ownership mismatch");
+ 
+         let stack_top: u64 = unsafe { AP_STACKS[ap_idx].0.as_mut_ptr().add(AP_STACK_SIZE) as u64 };
+ 
+@@ -182,7 +178,7 @@
+     if cpu_id == 0 {
+         crate::arch::x86_64::interrupts::set_tss_rsp0(stack_top);
+     } else {
+-        let ap_idx = cpu_id - 1;
++        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
+         if ap_idx < MAX_APS {
+             unsafe {
+                 AP_TSS_STORE[ap_idx].privilege_stack_table[0] = VirtAddr::new(stack_top);
+@@ -196,7 +192,7 @@
+     if cpu_id == 0 {
+         crate::arch::x86_64::interrupts::current_tss_rsp0()
+     } else {
+-        let ap_idx = cpu_id - 1;
++        let ap_idx = super::cpu_identity::topology().ap_slot(cpu_id).expect("invalid AP TSS owner");
+         if ap_idx < MAX_APS {
+             unsafe { AP_TSS_STORE[ap_idx].privilege_stack_table[0].as_u64() }
+         } else {
+@@ -320,9 +316,18 @@
+     cpu::init_cpu_features();
+ 
+     // ── Step 2: Determine AP index ───────────────────────────────────────────
+-    // The BSP starts APs one at a time and waits between each, so at most one
+-    // AP runs this code concurrently.  AP_ONLINE.load() gives our 0-based index.
+-    let ap_idx = AP_ONLINE.load(Ordering::Relaxed) as usize;
++    // Resolve hardware identity through the published mapping; startup order
++    // is checked only as a readiness invariant.
++    super::cpu_identity::validate_controller();
++    let logical = super::cpu_identity::current();
++    assert_eq!(
++        super::cpu_identity::topology().apic_id(logical),
++        Some(info.lapic_id)
++    );
++    let ap_idx = super::cpu_identity::topology()
++        .ap_slot(logical)
++        .expect("invalid AP owner");
++    assert_eq!(ap_idx, AP_ONLINE.load(Ordering::Acquire) as usize);
+ 
+     // ── Step 3: Per-AP GDT + TSS ─────────────────────────────────────────────
+     ap_setup_gdt_and_tss(ap_idx);
+@@ -345,6 +350,16 @@
+     super::measurement_clock::publish_cpu();
+ 
+     // ── Step 7: Signal BSP ───────────────────────────────────────────────────
++    crate::serial_println!(
++        "[CPU-ID] online logical={} apic={} tss={:#x} ist_df={:#x} ist_nmi={:#x}",
++        logical,
++        lapic::local_apic_id(),
++        core::ptr::addr_of!(AP_TSS_STORE[ap_idx]) as u64,
++        AP_TSS_STORE[ap_idx].interrupt_stack_table[0].as_u64(),
++        AP_TSS_STORE[ap_idx].interrupt_stack_table[1].as_u64()
++    );
++    assert_eq!(lapic::local_apic_id(), info.lapic_id);
++    super::cpu_identity::mark_online(logical);
+     let seq = AP_ONLINE.fetch_add(1, Ordering::Release) + 1;
+     crate::serial_println!(
+         "[SMP] AP{} (LAPIC {}) online — TSS loaded, LAPIC timer armed",
+--- initial/kernel/src/main.rs
++++ kernel/src/main.rs
+@@ -439,6 +439,7 @@
+     x86_64::instructions::interrupts::disable();
+ 
+     serial::init();
++    arch::x86_64::cpu_identity::initialize();
+     cpu::init_cpu_features();
+ 
+     // Early firmware-neutral boot diagnostics (serial only; before FB/splash).
+--- initial/kernel/src/sched/doorbell_test.rs
++++ kernel/src/sched/doorbell_test.rs
+@@ -606,7 +606,7 @@
+     }
+     unsafe { crate::arch::x86_64::lapic::mask_timer_for_remote_wake_test() };
+     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+-        assert_eq!(crate::arch::x86_64::lapic::local_apic_id() as usize, cpu);
++        assert_eq!(Some(crate::arch::x86_64::lapic::local_apic_id()), crate::arch::x86_64::cpu_identity::topology().apic_id(cpu));
+         serial_println!(
+             "[F13NA] cpu cpu={} apic={} timer=masked",
+             cpu,
+--- initial/kernel/src/sched/mod.rs
++++ kernel/src/sched/mod.rs
+@@ -280,6 +280,7 @@
+ 
+ /// Maximum number of logical CPUs supported by the per-core scheduler.
+ pub const MAX_CORES: usize = 64;
++const _: () = assert!(MAX_CORES == crate::arch::x86_64::smp::MAX_APS + 1);
+ static STACK_HANDOFFS: handoff::Handoffs<MAX_CORES> = handoff::Handoffs::new();
+ 
+ /// Called before a naked IRQ stub publishes its outgoing context. The returned
+@@ -1780,7 +1781,7 @@
+     /// RSP of the next process to resume (0 = stay on current context).
+     pub fn schedule_tick(&mut self, cpu_id: usize, saved_rsp: u64) -> u64 {
+         #[cfg(feature = "scheduler_perf_diag")]
+-        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].invocations, 1);
++        perf::add(&perf::CPU[cpu_id].invocations, 1);
+         #[cfg(feature = "cpu_accounting_diag")]
+         {
+             self.cpu_events[cpu_id][0] = self.cpu_events[cpu_id][0].saturating_add(1);
+@@ -4117,7 +4118,8 @@
+ /// resulting `iretq` reads a zeroed/garbage CS and raises `#GP` (err=0) — the
+ /// desktop appears frozen because the gpf_handler loops on `hlt`.
+ pub(crate) fn core_idle_stack_top(cpu_id: usize) -> u64 {
+-    let cpu = cpu_id.min(MAX_CORES - 1);
++    assert!(cpu_id < MAX_CORES, "invalid logical idle stack owner");
++    let cpu = cpu_id;
+     unsafe {
+         core::ptr::addr_of!(CORE_IDLE_STACKS[cpu][crate::process::KERNEL_STACK_SIZE - 1]) as u64 + 1
+     }
+@@ -4157,7 +4159,7 @@
+     }
+     #[cfg(feature = "scheduler_perf_diag")]
+     if requested {
+-        perf::add(&perf::CPU[cpu_id.min(MAX_CORES - 1)].rearms, 1);
++        perf::add(&perf::CPU[cpu_id].rearms, 1);
+     }
+     requested
+ }
+@@ -4181,7 +4183,7 @@
+     pin_release_test::requested(cpu_id);
+     let source_cpu = current_cpu_id();
+     #[cfg(feature = "scheduler_perf_diag")]
+-    perf::add(&perf::CPU[source_cpu.min(MAX_CORES - 1)].requests, 1);
++    perf::add(&perf::CPU[source_cpu].requests, 1);
+     if cpu_id != source_cpu && SCHEDULER_READY.load(Ordering::Acquire) {
+         if RESCHEDULE_MASK.request_delivery(cpu_id) {
+             DISPATCH_NOTIFICATION_MASK.fetch_or(reschedule_bit(cpu_id), Ordering::Release);
+@@ -4613,17 +4615,10 @@
+ 
+ // ─── SMP helpers ──────────────────────────────────────────────────────────────
+ 
+-/// Return the current logical CPU index using the initial APIC ID from CPUID.
+-///
+-/// BSP has APIC ID 0 on all supported platforms. APs are parked until SMP
+-/// Phase 1 LAPIC timers are wired; until then this always returns 0 on the
+-/// BSP. When per-core timers fire, each AP's CPUID gives its own APIC ID,
+-/// mapping directly to an index into CORES[].
++/// Return the dense logical CPU identity from the immutable boot topology.
+ #[inline]
+ pub fn current_cpu_id() -> usize {
+-    // CPUID leaf 1, EBX[31:24] = initial APIC ID (valid for up to 256 logical CPUs).
+-    let apic_id = core::arch::x86_64::__cpuid(1).ebx as usize >> 24;
+-    apic_id.min(MAX_CORES - 1)
++    crate::arch::x86_64::cpu_identity::current()
+ }
+ 
+ /// Initialise the per-core scheduler after SMP bring-up.
+@@ -4633,7 +4628,12 @@
+ /// online_cores field so that enqueue_process(), steal_work(), and
+ /// schedule_tick() are aware of all available cores.
+ pub fn init_cores(total_cpus: usize) {
+-    let count = total_cpus.min(MAX_CORES).max(1);
++    assert_eq!(
++        total_cpus,
++        crate::arch::x86_64::cpu_identity::topology().count()
++    );
++    assert!((1..=MAX_CORES).contains(&total_cpus));
++    let count = total_cpus;
+     ONLINE_CORES.store(count, Ordering::Release);
+     init_core_idle_contexts(count);
+     {
+--- initial/kernel/src/sched/pin_release_test.rs
++++ kernel/src/sched/pin_release_test.rs
+@@ -223,7 +223,7 @@
+     }
+     if IDLE.fetch_or(1 << cpu, Ordering::AcqRel) & (1 << cpu) == 0 {
+         let apic = crate::arch::x86_64::lapic::local_apic_id() as usize;
+-        assert_eq!(apic, cpu);
++        assert_eq!(Some(apic as u32), crate::arch::x86_64::cpu_identity::topology().apic_id(cpu));
+         serial_println!("[R2V] cpu cpu={} apic={}", cpu, apic);
+     }
+     if r2d_a_round() && cpu == 1 && PHASE.load(Ordering::Acquire) == 2 {
+--- initial/kernel/src/sched/remote_wake_test.rs
++++ kernel/src/sched/remote_wake_test.rs
+@@ -27,7 +27,10 @@
+     let base = unsafe { x86_64::registers::model_specific::Msr::new(0x1b).read() };
+     assert_ne!(base & (1 << 11), 0, "LAPIC disabled");
+     assert_eq!(base & (1 << 10), 0, "fixture requires actual xAPIC mode");
+-    assert_eq!(crate::arch::x86_64::lapic::local_apic_id() as usize, cpu);
++    assert_eq!(
++        Some(crate::arch::x86_64::lapic::local_apic_id()),
++        crate::arch::x86_64::cpu_identity::topology().apic_id(cpu)
++    );
+     base
+ }
+ 

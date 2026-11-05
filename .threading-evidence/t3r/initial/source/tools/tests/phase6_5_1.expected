@@ -1,0 +1,4 @@
+# Phase 6.5.1 gate: RTC clock + dynamic sysinfo (Step 1 of Userland Foundations)
+# [RTC] line carries dynamic date/time, so we match the static prefix only.
+[RTC] CMOS clock:
+[TTY]  sysfetch invoked

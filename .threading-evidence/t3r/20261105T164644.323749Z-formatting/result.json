@@ -1,0 +1,10 @@
+{
+  "pass": true,
+  "timeout": false,
+  "command": [
+    "python3",
+    "/tmp/t3r_format_check.py"
+  ],
+  "exit_code": 0,
+  "seconds": 2.5011809070128947
+}

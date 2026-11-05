@@ -1,0 +1,177 @@
+[
+  {
+    "name": "remote-wake",
+    "argv": [
+      "python3",
+      "tools/test_remote_wake_smp.py",
+      "--cpus",
+      "2",
+      "12",
+      "--evidence-dir",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/remote-wake",
+      "--timeout",
+      "150"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "handoff",
+    "argv": [
+      "python3",
+      "tools/test_remote_wake_smp.py",
+      "--pin-release",
+      "--cpus",
+      "2",
+      "12",
+      "--evidence-dir",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/handoff",
+      "--timeout",
+      "150"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "native-std-hayro",
+    "argv": [
+      "python3",
+      "tools/threading_t3r_regressions.py",
+      "std",
+      "--cpus",
+      "2",
+      "4",
+      "12"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "native-fp",
+    "argv": [
+      "python3",
+      "tools/threading_t3r_regressions.py",
+      "fp",
+      "--cpus",
+      "2",
+      "4",
+      "12"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ordinary-debug",
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--offline"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "ordinary-debug-freeze",
+    "argv": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/ordinary-debug.elf"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "production",
+    "argv": [
+      "python3",
+      "tools/threading_t3r_regressions.py",
+      "production",
+      "--cpus",
+      "2"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-feature-exclusion",
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--release",
+      "--no-default-features",
+      "--features",
+      "thread_migration_test",
+      "--offline"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "release-feature-freeze",
+    "argv": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/release/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/release-feature.elf"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "tlb-build",
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel",
+      "--features",
+      "mm2b_smp_test",
+      "--offline"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "tlb-freeze",
+    "argv": [
+      "objcopy",
+      "--strip-debug",
+      "target/x86_64-unknown-none/debug/sunlight-kernel",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/tlb/kernel.elf"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "tlb-iso",
+    "argv": [
+      "bash",
+      "tools/make_hybrid_iso.sh",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/tlb/kernel.elf",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/tlb/boot.iso",
+      "target/limine",
+      "/home/ehsantor/Projects/sunlightos-kernel"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "tlb-12cpu",
+    "argv": [
+      "python3",
+      "tools/threading_t3r_validate.py",
+      "guest",
+      "tlb-12cpu",
+      "--iso",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t3r/tlb/boot.iso",
+      "--cpus",
+      "12",
+      "--timeout",
+      "180",
+      "--marker",
+      "[MM-2B] 12 CPUs pre-touched, replaced, acknowledged, and observed new content: OK",
+      "--marker",
+      "[MM-2B] PMM accounting returned to baseline: OK"
+    ],
+    "exit_code": 0
+  }
+]

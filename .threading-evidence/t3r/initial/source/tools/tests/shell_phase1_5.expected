@@ -1,0 +1,7 @@
+[SSHL-TEST] tty-ipc coverage PASS
+[SSHL-TEST] pty coverage PASS
+[SSHL-TEST] producer error=BrokenPipe
+[SSHL-TEST] PTY live output 65536 PASS
+[SSHL-TEST] native gate PASS
+[SSHL-TEST] TTY live output 65536 PASS
+[TTY]  exit: sshl --native-tests -> 0

@@ -1,0 +1,11 @@
+{
+  "pass": false,
+  "timeout": false,
+  "command": [
+    "python3",
+    ".threading-evidence/t3r/clippy-capture.py",
+    ".threading-evidence/t3r/clippy"
+  ],
+  "exit_code": 1,
+  "seconds": 30.035413820995018
+}

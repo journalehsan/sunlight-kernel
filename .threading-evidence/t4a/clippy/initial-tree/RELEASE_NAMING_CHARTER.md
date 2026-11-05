@@ -1,0 +1,1 @@
+/home/ehsantor/Projects/sunlightos-kernel/RELEASE_NAMING_CHARTER.md

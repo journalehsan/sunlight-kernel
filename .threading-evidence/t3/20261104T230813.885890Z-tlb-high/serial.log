@@ -1,0 +1,330 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU-ID] logical=2 apic=2 bsp=false
+[CPU-ID] logical=3 apic=3 bsp=false
+[CPU-ID] logical=4 apic=4 bsp=false
+[CPU-ID] logical=5 apic=5 bsp=false
+[CPU-ID] logical=6 apic=6 bsp=false
+[CPU-ID] logical=7 apic=7 bsp=false
+[CPU-ID] logical=8 apic=8 bsp=false
+[CPU-ID] logical=9 apic=9 bsp=false
+[CPU-ID] logical=10 apic=10 bsp=false
+[CPU-ID] logical=11 apic=64 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f6490
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 12 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-04T23:06:13Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf122ac0 (61731 frames, 241 MiB)
+[PMM] 1311/1551 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f6490
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe51cb
+[ACPI] Found table: FACP at 0x7ffe4c87
+[ACPI] Found table: APIC at 0x7ffe4cfb
+[ACPI] Found table: HPET at 0x7ffe516b
+[ACPI] Found table: WAET at 0x7ffe51a3
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf64d0 len=459
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11786 end_count=7785 elapsed_counts=4001 tsc_delta=8111222 tsc_hz=2418936288
+[TIME] TSC calibrated ~2418936288 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6a1858 ist_df=0xffffffff8ee218d0 ist_nmi=0xffffffff8f0259a0
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62958400 lapic_initial_count=629584 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2418936288
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x04 hour=0x23 minute=0x08 second=0x47 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-04T23:08:47Z assumed_basis=UTC
+wall: utc=2026-11-04T23:08:47Z unix=1793833727 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  4  apic_id=  4  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  5  apic_id=  5  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  6  apic_id=  6  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  7  apic_id=  7  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  8  apic_id=  8  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  9  apic_id=  9  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid= 10  apic_id= 10  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid= 11  apic_id= 11  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 12  apic_id= 12  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 13  apic_id= 13  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 14  apic_id= 14  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 15  apic_id= 15  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 16  apic_id= 16  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 17  apic_id= 17  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 18  apic_id= 18  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 19  apic_id= 19  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 20  apic_id= 20  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 21  apic_id= 21  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 22  apic_id= 22  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 23  apic_id= 23  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 24  apic_id= 24  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 25  apic_id= 25  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 26  apic_id= 26  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 27  apic_id= 27  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 28  apic_id= 28  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 29  apic_id= 29  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 30  apic_id= 30  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 31  apic_id= 31  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 32  apic_id= 32  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 33  apic_id= 33  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 34  apic_id= 34  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 35  apic_id= 35  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 36  apic_id= 36  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 37  apic_id= 37  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 38  apic_id= 38  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 39  apic_id= 39  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 40  apic_id= 40  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 41  apic_id= 41  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 42  apic_id= 42  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 43  apic_id= 43  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 44  apic_id= 44  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 45  apic_id= 45  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 46  apic_id= 46  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 47  apic_id= 47  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 48  apic_id= 48  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 49  apic_id= 49  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 50  apic_id= 50  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 51  apic_id= 51  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 52  apic_id= 52  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 53  apic_id= 53  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 54  apic_id= 54  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 55  apic_id= 55  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 56  apic_id= 56  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 57  apic_id= 57  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 58  apic_id= 58  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 59  apic_id= 59  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 60  apic_id= 60  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 61  apic_id= 61  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 62  apic_id= 62  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 63  apic_id= 63  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 64  apic_id= 64  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid= 65  apic_id= 65  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 66  apic_id= 66  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 67  apic_id= 67  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 68  apic_id= 68  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 69  apic_id= 69  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 70  apic_id= 70  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 71  apic_id= 71  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 72  apic_id= 72  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 73  apic_id= 73  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 74  apic_id= 74  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 75  apic_id= 75  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 76  apic_id= 76  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 77  apic_id= 77  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 78  apic_id= 78  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 79  apic_id= 79  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 80  apic_id= 80  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 81  apic_id= 81  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 82  apic_id= 82  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 83  apic_id= 83  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 84  apic_id= 84  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 85  apic_id= 85  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 86  apic_id= 86  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 87  apic_id= 87  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 88  apic_id= 88  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 89  apic_id= 89  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 90  apic_id= 90  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 91  apic_id= 91  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 92  apic_id= 92  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 93  apic_id= 93  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 94  apic_id= 94  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 95  apic_id= 95  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 96  apic_id= 96  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 97  apic_id= 97  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 98  apic_id= 98  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid= 99  apic_id= 99  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=100  apic_id=100  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=101  apic_id=101  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=102  apic_id=102  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=103  apic_id=103  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=104  apic_id=104  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=105  apic_id=105  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=106  apic_id=106  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=107  apic_id=107  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=108  apic_id=108  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=109  apic_id=109  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=110  apic_id=110  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=111  apic_id=111  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=112  apic_id=112  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=113  apic_id=113  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=114  apic_id=114  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=115  apic_id=115  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=116  apic_id=116  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=117  apic_id=117  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=118  apic_id=118  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=119  apic_id=119  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=120  apic_id=120  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=121  apic_id=121  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=122  apic_id=122  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=123  apic_id=123  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=124  apic_id=124  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=125  apic_id=125  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=126  apic_id=126  flags=0x0  [disabled]
+[ACPI] MADT:  Local APIC  proc_uid=127  apic_id=127  flags=0x0  [disabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 128 logical processor(s) found, 12 usable
+[ACPI] MADT: 128 logical processor(s) detected (12 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[SYSCALL] OK
+[SMP] Limine MP response: 12 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8e930ec0..0xffffffff8e940ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8d6824c0 ist_df=0xffffffff8e940ec0 ist_nmi=0xffffffff8f0299a0
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8e940ec0..0xffffffff8e950ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=2 apic=2 tss=0xffffffff8d682528 ist_df=0xffffffff8e950ec0 ist_nmi=0xffffffff8f02d9a0
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8e950ec0..0xffffffff8e960ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=3 apic=3 tss=0xffffffff8d682590 ist_df=0xffffffff8e960ec0 ist_nmi=0xffffffff8f0319a0
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP3  proc_id=4  lapic_id=4  stack=0xffffffff8e960ec0..0xffffffff8e970ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=5
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=4 apic=4 tss=0xffffffff8d6825f8 ist_df=0xffffffff8e970ec0 ist_nmi=0xffffffff8f0359a0
+[SMP] AP4 (LAPIC 4) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP4  proc_id=5  lapic_id=5  stack=0xffffffff8e970ec0..0xffffffff8e980ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=6
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=5 apic=5 tss=0xffffffff8d682660 ist_df=0xffffffff8e980ec0 ist_nmi=0xffffffff8f0399a0
+[SMP] AP5 (LAPIC 5) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP5  proc_id=6  lapic_id=6  stack=0xffffffff8e980ec0..0xffffffff8e990ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=7
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=6 apic=6 tss=0xffffffff8d6826c8 ist_df=0xffffffff8e990ec0 ist_nmi=0xffffffff8f03d9a0
+[SMP] AP6 (LAPIC 6) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP6  proc_id=7  lapic_id=7  stack=0xffffffff8e990ec0..0xffffffff8e9a0ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=8
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=7 apic=7 tss=0xffffffff8d682730 ist_df=0xffffffff8e9a0ec0 ist_nmi=0xffffffff8f0419a0
+[SMP] AP7 (LAPIC 7) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP7  proc_id=8  lapic_id=8  stack=0xffffffff8e9a0ec0..0xffffffff8e9b0ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=9
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=8 apic=8 tss=0xffffffff8d682798 ist_df=0xffffffff8e9b0ec0 ist_nmi=0xffffffff8f0459a0
+[SMP] AP8 (LAPIC 8) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP8  proc_id=9  lapic_id=9  stack=0xffffffff8e9b0ec0..0xffffffff8e9c0ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=10
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=9 apic=9 tss=0xffffffff8d682800 ist_df=0xffffffff8e9c0ec0 ist_nmi=0xffffffff8f0499a0
+[SMP] AP9 (LAPIC 9) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP9  proc_id=10  lapic_id=10  stack=0xffffffff8e9c0ec0..0xffffffff8e9d0ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=11
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=10 apic=10 tss=0xffffffff8d682868 ist_df=0xffffffff8e9d0ec0 ist_nmi=0xffffffff8f04d9a0
+[SMP] AP10 (LAPIC 10) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP10  proc_id=64  lapic_id=64  stack=0xffffffff8e9d0ec0..0xffffffff8e9e0ec0
+[CPU] x87/SSE enabled; NXE active cpu_count=12
+[SYSCALL] LSTAR = 0xffffffff8000dec4
+[CPU-ID] online logical=11 apic=64 tss=0xffffffff8d6828d0 ist_df=0xffffffff8e9e0ec0 ist_nmi=0xffffffff8f0519a0
+[SMP] AP11 (LAPIC 64) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 11 AP(s) online (12 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 12 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-2B-DIAG] requests=2 targets=22 local=2 remote=22 range=24 full=0 acks=22 switch_retries=0 no_remote=0 failures=0
+[MM-2B] 12 CPUs pre-touched, replaced, acknowledged, and observed new content: OK
+[MM-2B] PMM accounting returned to baseline: OK
+[MM-0] NXE active on 12 CPU(s)
+[CAP]  Capability broker initialized
+[MM-0] unsafe fork rejection is atomic: OK
+[MM-1] user address/range arithmetic: OK
+[MM-1] page-aware copy, strings, permissions, atomic output, and swap policy: OK
+[MM-0] NXE and NX mapping flags: OK
+[MM-0] user-frame reuse sanitization: OK
+[MM-0] anonymous mmap W^X, NX, and zero-fill: OK
+[MM-0] temporary SHM views preserve persistent mappings: OK
+[MM-0] SHM NX, zero-fill, and peer preservation: OK
+[CAP] Created endpoint 0 for pid=53594

@@ -12,7 +12,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use x86_64::{PhysAddr, VirtAddr};
 
 pub const SHOOTDOWN_VECTOR: u8 = 0xF1;
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 pub const TEST_VECTOR: u8 = 0xF2;
 pub const RANGE_FLUSH_PAGE_THRESHOLD: u64 = 32;
 
@@ -37,7 +37,7 @@ static CONTEXT_SWITCH_RETRIES: AtomicU64 = AtomicU64::new(0);
 static NO_REMOTE_TARGETS: AtomicU64 = AtomicU64::new(0);
 static INVARIANT_FAILURES: AtomicU64 = AtomicU64::new(0);
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 struct TestMailbox {
     sequence: AtomicU64,
     acknowledgement: AtomicU64,
@@ -48,7 +48,7 @@ struct TestMailbox {
     result: AtomicU64,
 }
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 impl TestMailbox {
     const fn new() -> Self {
         Self {
@@ -63,11 +63,11 @@ impl TestMailbox {
     }
 }
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 static TEST_MAILBOXES: [TestMailbox; MAX_TRACKED_CPUS] =
     [const { TestMailbox::new() }; MAX_TRACKED_CPUS];
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 static NEXT_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -463,7 +463,7 @@ fn invariant_failure(message: &str) -> ! {
     panic!("MM-2B TLB invariant failure: {message}");
 }
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 fn test_broadcast(command: u64, identity: AddressSpaceIdentity, address: u64, targets: u64) -> u64 {
     let sequence = NEXT_TEST_SEQUENCE.fetch_add(1, Ordering::AcqRel);
     for cpu_id in 0..MAX_TRACKED_CPUS {
@@ -515,7 +515,7 @@ fn test_broadcast(command: u64, identity: AddressSpaceIdentity, address: u64, ta
     }
 }
 
-#[cfg(feature = "mm2b_smp_test")]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
 pub fn handle_test_ipi() {
     const ENTER_AND_READ: u64 = 1;
     const READ: u64 = 2;
@@ -554,7 +554,8 @@ pub fn handle_test_ipi() {
 #[cfg(any(
     feature = "mm2d_munmap_test",
     feature = "mm2e_mprotect_test",
-    feature = "fastlane_f1_audit"
+    feature = "fastlane_f1_audit",
+    feature = "fastlane_hybrid_lifecycle_test"
 ))]
 pub fn test_activate_and_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
     test_broadcast(1, identity, address, targets);
@@ -563,7 +564,8 @@ pub fn test_activate_and_read(identity: AddressSpaceIdentity, address: u64, targ
 #[cfg(any(
     feature = "mm2d_munmap_test",
     feature = "mm2e_mprotect_test",
-    feature = "fastlane_f1_audit"
+    feature = "fastlane_f1_audit",
+    feature = "fastlane_hybrid_lifecycle_test"
 ))]
 pub fn test_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
     test_broadcast(2, identity, address, targets);
@@ -572,7 +574,8 @@ pub fn test_read(identity: AddressSpaceIdentity, address: u64, targets: u64) {
 #[cfg(any(
     feature = "mm2d_munmap_test",
     feature = "mm2e_mprotect_test",
-    feature = "fastlane_f1_audit"
+    feature = "fastlane_f1_audit",
+    feature = "fastlane_hybrid_lifecycle_test"
 ))]
 pub fn test_leave(targets: u64) {
     test_broadcast(3, AddressSpaceIdentity::INVALID, 0, targets);
@@ -581,13 +584,14 @@ pub fn test_leave(targets: u64) {
 #[cfg(any(
     feature = "mm2d_munmap_test",
     feature = "mm2e_mprotect_test",
-    feature = "fastlane_f1_audit"
+    feature = "fastlane_f1_audit",
+    feature = "fastlane_hybrid_lifecycle_test"
 ))]
 pub fn test_result(cpu_id: usize) -> u64 {
     TEST_MAILBOXES[cpu_id].result.load(Ordering::Acquire)
 }
 
-#[cfg(any(feature = "mm2e_mprotect_test", feature = "fastlane_f1_audit"))]
+#[cfg(any(feature = "mm2e_mprotect_test", feature = "fastlane_f1_audit", feature = "fastlane_hybrid_lifecycle_test"))]
 pub fn test_remote_invalidation_count() -> u64 {
     REMOTE_INVALIDATIONS.load(Ordering::Acquire)
 }

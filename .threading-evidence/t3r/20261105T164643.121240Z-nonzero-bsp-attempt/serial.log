@@ -1,0 +1,176 @@
+[T3R-FW] slot=0 processor=0 apic=0 bsp=0
+[T3R-FW] slot=1 processor=1 apic=1 bsp=0
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-05T16:44:19Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf126d50 (61735 frames, 241 MiB)
+[PMM] 1320/1561 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11913 end_count=7913 elapsed_counts=4000 tsc_delta=8332965 tsc_hz=2485685961
+[TIME] TSC calibrated ~2485685961 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8e6e7dc8 ist_df=0xffffffff8f124250 ist_nmi=0xffffffff8e9b6080
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63110700 lapic_initial_count=631107 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2485685961
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x05 hour=0x16 minute=0x47 second=0x11 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-05T16:47:11Z assumed_basis=UTC
+wall: utc=2026-11-05T16:47:11Z unix=1793897231 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff80086c4c
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8ecb4250..0xffffffff8ecc4250
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff80086c4c
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8e6e53c8 ist_df=0xffffffff8ecc4250 ist_nmi=0xffffffff8e9ba080
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[ELF] PT_LOAD off=0 vaddr=3ff000 filesz=1c8 memsz=1c8 prot=Read
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=352 memsz=352 prot=ReadExec
+[ELF] PT_LOAD off=2000 vaddr=401000 filesz=a0 memsz=a0 prot=Read
+[ELF] PT_LOAD off=20a0 vaddr=4020a0 filesz=40 memsz=8460 prot=ReadWrite
+[SCHED] CREATED process #1 't3r-owner' idx=0 burst_score=256 tier=High
+[T3R] begin cpus=2 owner=58112 inc=1 vm=AddressSpaceIdentity { pml4_phys: 269684736, generation: 1 }
+[SCHED] process 0 't3r-owner' state=Ready
+[SCHED] Entering process 0 't3r-owner' at rsp=0xffffffff900087a0
+[T3R] created role=0 owner=58112 owner_inc=1 tid=58113 inc=2 vm=AddressSpaceIdentity { pml4_phys: 269684736, generation: 1 } slot=1 stack=0xffffffff901e0520 tls=0x4020a0 queued=1
+[SYSCALL] thread_spawn: parent=58112 tid=58113 trampoline=0x4000b2
+[T3R] created role=1 owner=58112 owner_inc=1 tid=58114 inc=3 vm=AddressSpaceIdentity { pml4_phys: 269684736, generation: 1 } slot=2 stack=0xffffffff901ead20 tls=0x4020c0 queued=1
+[SYSCALL] thread_spawn: parent=58112 tid=58114 trampoline=0x4000b2
+[T3R] dispatch role=0 tid=58113 inc=2 cpu=0 apic=0 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e7dc8 rsp0=0xffffffff901e0520 df=0xffffffff8f124250 nmi=0xffffffff8e9b6080 remote_pin=false
+[T3R] dispatch role=1 tid=58114 inc=3 cpu=0 apic=0 stack=0xffffffff901ead20 tls=0x4020c0 tss=0xffffffff8e6e7dc8 rsp0=0xffffffff901ead20 df=0xffffffff8f124250 nmi=0xffffffff8e9b6080 remote_pin=false
+[T3R] execution tid=58113 inc=2 cpu=0 apic=0 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e7dc8 rsp0=0xffffffff901e0520 df=0xffffffff8f124250 nmi=0xffffffff8e9b6080
+[T3R] request tid=58113 inc=2 source=0 destination=1 blocked=true pinned=false
+[T3R] wake tid=58113 inc=2 from=0 queued=1 request=true wait=cleared pinned=false
+[T3R] dispatch role=0 tid=58113 inc=2 cpu=1 apic=1 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e53c8 rsp0=0xffffffff901e0520 df=0xffffffff8ecc4250 nmi=0xffffffff8e9ba080 remote_pin=false
+[T3R] execution tid=58113 inc=2 cpu=1 apic=1 stack=0xffffffff901e0520 tls=0x4020a0 tss=0xffffffff8e6e53c8 rsp0=0xffffffff901e0520 df=0xffffffff8ecc4250 nmi=0xffffffff8e9ba080
+[T3R] state tid=58113 inc=2 tls=true fs=true gpr=true x87=true xmm=true mxcsr=true canary=true
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58113 name='t3r-owner' reason=exit code=0
+[SCHED] terminating pid=58113 name='t3r-owner' reason=exit
+[SCHED] FINISHED process pid=58113 name='t3r-owner'
+[SCHED] process_mark_finished pid=58114 name='t3r-owner' reason=exit code=0
+[SCHED] terminating pid=58114 name='t3r-owner' reason=exit
+[SCHED] FINISHED process pid=58114 name='t3r-owner'
+[T3R] retire role=0 tid=58113 inc=2 count=1
+[SCHED] process_reaped pid=58113 name='t3r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58113 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58113 cleared_msgs=0
+[T3R] retire role=1 tid=58114 inc=3 count=1
+[SCHED] process_reaped pid=58114 name='t3r-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58114 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58114 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=0 max_live=2
+[T3R] reaped role=0 tid=58113 inc=2 stack=0 tls=0 current=0 queued=0 pins=0 pending=0 exit=0
+[T3R] reaped role=1 tid=58114 inc=3 stack=0 tls=0 current=0 queued=0 pins=0 pending=0 exit=0
+[T3R] resources heap_base=1919184 heap_final=1939664 cache_bytes=20480 frame_base=333527 frame_final=333527 workers=0 reservations=0 stacks=1 fd_refs=3 handoff_pins=0 handoff_waiters=0 user_backing=owner_static pulses=1,9,1
+[T3R] PASS cpus=2 executions=0,1 physical_distinct=true
