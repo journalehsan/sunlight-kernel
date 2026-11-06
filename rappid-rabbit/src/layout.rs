@@ -14,7 +14,7 @@
 //! intentional: returning deterministic geometry is safer than dropping a
 //! subtree or silently switching to a nested retained object graph.
 
-use alloc::{borrow::Cow, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{borrow::Cow, collections::BTreeMap, format, string::String, sync::Arc, vec, vec::Vec};
 
 use golden_fish::{Attribute, Document, Node, NodeId};
 use sunlight_ui::{
@@ -335,7 +335,7 @@ pub enum FormWidgetKind {
 
 impl FormWidgetKind {
     /// Retained-scene control kind byte: `1` is a labelled button, `0` is a
-    /// single-line field/select.  This mirrors the legacy engine contract.
+    /// single-line field/select in the retained scene.
     pub fn control_kind(self) -> u8 {
         match self {
             FormWidgetKind::Submit | FormWidgetKind::Button => 1,
@@ -721,8 +721,19 @@ pub struct LayoutTree<'a> {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LayoutResult<'a> {
+    /// Generated content owned by list items, separate from DOM text.
+    pub list_markers: Vec<RenderMarker<'a>>,
     pub geometry: LayoutTree<'a>,
     pub render_boxes: Vec<RenderBox<'a>>,
+}
+
+/// A generated list label positioned beside its item's first line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RenderMarker<'a> {
+    pub node_id: NodeId,
+    pub bounds: Rect,
+    pub label: String,
+    pub style: ResolvedStyle<'a>,
 }
 
 /// Converts the f32 browser IR into the shared `DocumentWidget` retained scene.
@@ -745,7 +756,7 @@ pub fn into_document_scene<'a>(
 /// in two ways that the pure-layout helper cannot express: images carry their
 /// decoded pixels, resolved URL, and intrinsic dimensions, and each rendered
 /// anchor loses its per-fragment link metadata in favour of one non-painting
-/// `Link` hit region per visual line, matching the legacy scene contract.
+/// `Link` hit region per visual line.
 pub fn into_document_scene_with_images<'a, S: SceneImageSource + ?Sized>(
     document_id: u64,
     viewport: Size,
@@ -904,6 +915,31 @@ pub fn into_document_scene_with_images<'a, S: SceneImageSource + ?Sized>(
             });
         }
     }
+    for marker in &result.list_markers {
+        let family = DocumentFontFamily::resolve_css_list(&marker.style.font_family);
+        scene.push(RenderObject {
+            id: RenderObjectId(((marker.node_id as u64) << 32) | (31u64 << 24)),
+            owner_node_id: DocumentNodeId(marker.node_id as u64),
+            kind: RenderObjectKind::Text {
+                text: marker.label.clone(),
+                color: marker.style.color,
+                font_size: ceil_u32(marker.style.font_size),
+                bold: marker.style.font_weight >= 600,
+                italic: marker.style.italic,
+                underline: false,
+                line_through: false,
+                monospace: family == DocumentFontFamily::Monospace,
+                font_family: family,
+            },
+            bounds: int_rect(marker.bounds),
+            clip_bounds: None,
+            paint_order: PaintOrder {
+                phase: 4,
+                ..PaintOrder::default()
+            },
+            interaction: None,
+        });
+    }
     for (slot, region) in links.into_iter().enumerate() {
         scene.push(RenderObject {
             id: RenderObjectId(
@@ -1007,7 +1043,7 @@ fn image_object_kind<S: SceneImageSource + ?Sized>(
 ///
 /// A control always needs a visible box, so missing borders fall back to a
 /// 1px grey outline and a transparent background becomes the platform field
-/// fill.  These match the legacy engine's retained-control defaults.
+/// fill.
 const UA_CONTROL_BORDER: Color = Color::rgb(0x88, 0x88, 0x88);
 const UA_CONTROL_BACKGROUND: Color = Color::rgb(0xFF, 0xFF, 0xFF);
 const UA_CONTROL_DISABLED_BACKGROUND: Color = Color::rgb(0xDD, 0xDD, 0xDD);
@@ -1121,7 +1157,9 @@ pub fn layout_document<'a>(
     if let Some(root) = engine.tree.root {
         engine.flatten(root, &mut render_boxes);
     }
+    let list_markers = engine.list_markers();
     LayoutResult {
+        list_markers,
         geometry: engine.tree,
         render_boxes,
     }
@@ -1903,6 +1941,85 @@ impl<'a> LayoutEngine<'a> {
         }
     }
 
+    fn list_markers(&self) -> Vec<RenderMarker<'a>> {
+        let mut markers = Vec::new();
+        let mut ordinals = BTreeMap::new();
+        let document = self.context.styles.document();
+        for item in &self.tree.boxes {
+            let computed = self.context.styles.computed(item.dom_node);
+            if !matches!(document.get(item.dom_node), Some(Node::Element { .. }))
+                || keyword(computed, Property::Display) != "list-item"
+            {
+                continue;
+            }
+            let parent = item
+                .parent
+                .map(|id| self.tree.boxes[id.0 as usize].dom_node);
+            let start = parent
+                .and_then(|id| match document.get(id) {
+                    Some(Node::Element { attributes, .. }) => attribute_value(attributes, "start")
+                        .and_then(|value| value.parse::<i64>().ok()),
+                    _ => None,
+                })
+                .unwrap_or(1);
+            let ordinal = ordinals.entry(parent).or_insert(start);
+            if let Some(Node::Element { attributes, .. }) = document.get(item.dom_node) {
+                if let Some(value) =
+                    attribute_value(attributes, "value").and_then(|value| value.parse::<i64>().ok())
+                {
+                    *ordinal = value;
+                }
+            }
+            let style_type = keyword(computed, Property::ListStyleType);
+            let label = match style_type.as_str() {
+                "none" => String::new(),
+                "disc" => String::from("•"),
+                "circle" => String::from("◦"),
+                "square" => String::from("▪"),
+                _ => format!("{}.", ordinal),
+            };
+            *ordinal = ordinal.saturating_add(1);
+            if label.is_empty() {
+                continue;
+            }
+            let width = self.context.fonts.measure_width(
+                &item.style.font_family,
+                item.style.font_size,
+                &label,
+            );
+            // Use the first line's vertical position, including a nested inline
+            // span or anchor. Nested blocks/lists establish their own lines.
+            let first_line = item
+                .children
+                .iter()
+                .find_map(|id| {
+                    let child = &self.tree.boxes[id.0 as usize];
+                    child
+                        .fragments
+                        .first()
+                        .map(|fragment| fragment.bounds.y)
+                        .or_else(|| {
+                            (child.contributes_children_to_inline_flow()
+                                && child.border_box.height > 0.0)
+                                .then_some(child.border_box.y)
+                        })
+                })
+                .unwrap_or(item.content_box.y);
+            markers.push(RenderMarker {
+                node_id: item.dom_node,
+                bounds: Rect::new(
+                    item.content_box.x - width - item.style.font_size * 0.5,
+                    first_line,
+                    width,
+                    item.style.line_height,
+                ),
+                label,
+                style: resolve_output_style(item),
+            });
+        }
+        markers
+    }
+
     fn flatten(&self, id: LayoutId, output: &mut Vec<RenderBox<'a>>) {
         let layout_box = &self.tree.boxes[id.0 as usize];
         let resolved = resolve_output_style(layout_box);
@@ -2208,6 +2325,19 @@ fn text_intrinsic(
     style: &LayoutStyle<'_>,
     text: &str,
 ) -> (f32, f32) {
+    if matches!(style.white_space, WhiteSpace::Pre | WhiteSpace::PreWrap) {
+        let (lines, longest) = inline_lines(
+            context,
+            vec![InlineToken::Text {
+                layout_id: LayoutId(0),
+                text,
+                style: style.clone(),
+            }],
+            None,
+            false,
+        );
+        return (longest, lines.iter().map(|line| line.width).fold(0.0, max));
+    }
     let full = text_advance(context, style, collapse_text(text));
     let mut longest = 0.0_f32;
     for word in text.split_ascii_whitespace() {
@@ -2494,6 +2624,63 @@ fn inline_lines<'a>(
                 text,
                 style,
             } => {
+                if matches!(style.white_space, WhiteSpace::Pre | WhiteSpace::PreWrap) {
+                    pending_space = false;
+                    for segment in text.split_inclusive('\n') {
+                        let newline = segment.ends_with('\n');
+                        let content = if newline {
+                            segment
+                                .strip_suffix('\n')
+                                .unwrap()
+                                .strip_suffix('\r')
+                                .unwrap_or(&segment[..segment.len() - 1])
+                        } else {
+                            segment
+                        };
+                        for chunk in content.split_inclusive([' ', '\t']) {
+                            let tab = chunk.ends_with('\t');
+                            let chunk = chunk.strip_suffix('\t').unwrap_or(chunk);
+                            let width = text_advance(context, &style, chunk);
+                            let wrap = style.white_space == WhiteSpace::PreWrap
+                                && !nowrap
+                                && !line.items.is_empty()
+                                && available
+                                    .is_some_and(|limit| line.width + width > limit + EPSILON);
+                            if wrap {
+                                lines.push(core::mem::take(&mut line));
+                            }
+                            if !chunk.is_empty() {
+                                line.push(
+                                    layout_id,
+                                    Some(chunk),
+                                    RectSize::new(width, style.line_height),
+                                    text_baseline(&style),
+                                    0.0,
+                                );
+                            }
+                            if tab {
+                                let tab_width = max(1.0, text_advance(context, &style, " ") * 8.0);
+                                line.width =
+                                    ((line.width / tab_width) as u32 + 1) as f32 * tab_width;
+                            }
+                            longest = max(
+                                longest,
+                                if style.white_space == WhiteSpace::Pre {
+                                    line.width
+                                } else {
+                                    width
+                                },
+                            );
+                        }
+                        // Empty preserved lines still have the current font's height.
+                        line.ascent = max(line.ascent, text_baseline(&style));
+                        line.descent = max(line.descent, style.line_height - text_baseline(&style));
+                        if newline {
+                            lines.push(core::mem::take(&mut line));
+                        }
+                    }
+                    continue;
+                }
                 if text.as_bytes().first().is_some_and(u8::is_ascii_whitespace) {
                     pending_space = true;
                 }
@@ -2560,7 +2747,7 @@ fn inline_lines<'a>(
             }
         }
     }
-    if !line.items.is_empty() {
+    if !line.items.is_empty() || line.height() > 0.0 {
         lines.push(line);
     }
     (lines, longest)
@@ -2627,6 +2814,7 @@ impl<'a> LayoutEngine<'a> {
                 line.descent = max(line.descent, style.line_height - text_baseline(&style));
             } else {
                 line.ascent = style.line_height;
+                line.descent = 0.0;
             }
             let offset = match style.text_align {
                 TextAlign::Center => max(0.0, available - line.width) * 0.5,
@@ -3734,5 +3922,68 @@ mod tests {
             .unwrap();
         assert_eq!(wrapper.border_box.width, 136.0);
         assert_eq!(wrapper.border_box.x, 82.0);
+    }
+    #[test]
+    fn lists_emit_owned_nested_markers_and_honor_visible_ordinals() {
+        let result = layout(
+            include_str!("../tests/fixtures/text-centric-page.html"),
+            320,
+        );
+        let labels: Vec<_> = result
+            .list_markers
+            .iter()
+            .map(|marker| marker.label.as_str())
+            .collect();
+        assert_eq!(labels, ["•", "•", "•", "3.", "4.", "9.", "10."]);
+        assert!(result.list_markers[2].bounds.x > result.list_markers[1].bounds.x);
+        for marker in &result.list_markers {
+            let item = result
+                .geometry
+                .boxes
+                .iter()
+                .find(|item| item.dom_node == marker.node_id)
+                .unwrap();
+            assert!(marker.bounds.right() < item.content_box.x);
+            assert!(marker.bounds.y >= item.content_box.y);
+        }
+        let scene = into_document_scene(1, Size::new(320, 600), &result);
+        for marker in &result.list_markers {
+            assert!(scene.objects_for_node(DocumentNodeId(marker.node_id as u64)).iter().any(|id| {
+                matches!(&scene.object(*id).unwrap().kind, RenderObjectKind::Text { text, .. } if text == &marker.label)
+            }));
+        }
+        let suppressed = layout("<ul style='list-style:none'><li>navigation</li></ul>", 320);
+        assert!(suppressed.list_markers.is_empty());
+    }
+
+    #[test]
+    fn preformatted_text_preserves_spaces_blank_lines_tabs_and_overflow() {
+        let result = layout("<pre>first  line\n    indented\n\nlast\n\tTabbed</pre>", 80);
+        let runs: Vec<_> = result
+            .render_boxes
+            .iter()
+            .filter_map(|item| match item.node_type {
+                BoxType::TextRun(text) => Some((text, item.bounds)),
+                _ => None,
+            })
+            .collect();
+        let first_y = runs[0].1.y;
+        let first_line: String = runs
+            .iter()
+            .filter(|(_, bounds)| bounds.y == first_y)
+            .map(|(text, _)| *text)
+            .collect();
+        assert_eq!(first_line, "first  line");
+        let indented = runs.iter().find(|(text, _)| *text == "indented").unwrap().1;
+        let last = runs.iter().find(|(text, _)| *text == "last").unwrap().1;
+        assert_eq!(indented.x, runs[0].1.x + 32.0);
+        assert!(
+            (last.y - indented.bottom() - 19.2).abs() < 0.1,
+            "blank line must retain height: indented={indented:?} last={last:?} runs={runs:?}"
+        );
+        let tabbed = runs.iter().find(|(text, _)| *text == "Tabbed").unwrap().1;
+        assert_eq!(tabbed.x, runs[0].1.x + 64.0);
+        assert!(result.geometry.content_size.width > 80.0);
+        assert!(runs.iter().all(|(text, _)| !text.contains('\t')));
     }
 }

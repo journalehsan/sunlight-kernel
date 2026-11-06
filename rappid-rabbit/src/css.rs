@@ -2199,15 +2199,16 @@ pub fn user_agent_stylesheet() -> Stylesheet {
         dt { display: block; font-weight: bold; }
         dd { display: block; margin-left: 40px; }
         blockquote { margin: 16px 40px; }
+        p, pre { margin: 1em 0; }
         pre { white-space: pre; font-family: monospace; }
         code { font-family: monospace; }
         script, style, head, meta, link, title { display: none; }
-        h1 { display: block; font-weight: bold; font-size: 32px; }
-        h2 { display: block; font-weight: bold; font-size: 28px; }
-        h3 { display: block; font-weight: bold; font-size: 24px; }
-        h4 { display: block; font-weight: bold; font-size: 20px; }
-        h5 { display: block; font-weight: bold; font-size: 18px; }
-        h6 { display: block; font-weight: bold; font-size: 16px; }
+        h1 { display: block; margin: 0.67em 0; font-weight: bold; font-size: 32px; }
+        h2 { display: block; margin: 0.83em 0; font-weight: bold; font-size: 28px; }
+        h3 { display: block; margin: 1em 0; font-weight: bold; font-size: 24px; }
+        h4 { display: block; margin: 1.33em 0; font-weight: bold; font-size: 20px; }
+        h5 { display: block; margin: 1.67em 0; font-weight: bold; font-size: 18px; }
+        h6 { display: block; margin: 2.33em 0; font-weight: bold; font-size: 16px; }
         strong, b { font-weight: bold; }
         em, i { font-style: italic; }
         small { font-size: 12px; }
@@ -2215,7 +2216,7 @@ pub fn user_agent_stylesheet() -> Stylesheet {
         del { text-decoration: line-through; }
         ins { text-decoration: underline; }
         sub, sup { font-size: 12px; }
-        hr { border-top: 1px solid gray; margin: 8px 0; }
+        hr { border-top-width: 1px; border-top-style: solid; border-top-color: gray; margin: 8px 0; }
         a { text-decoration: underline; color: blue; }
         body { color: #222222; background-color: white; font-size: 16px; margin: 8px; font-family: sans-serif; }
     "#,
