@@ -1590,16 +1590,7 @@ impl RabbitApp {
         self.developer_tools.console.push(
             ConsoleSeverity::Quiet,
             ConsoleSource::Browser,
-            format!(
-                "[RABBIT][FORM] submit form={} method=GET action={} controls={}",
-                form_id.0,
-                target,
-                self.form_state
-                    .controls
-                    .values()
-                    .filter(|c| c.form_owner() == Some(form_id) && !c.is_disabled())
-                    .count()
-            ),
+            format!("Form submitted: GET {target}"),
         );
         self.url_input.set_text(&target);
         self.queue_fetch();
@@ -1619,10 +1610,7 @@ impl RabbitApp {
         }
         match event {
             Event::Key(ch) if ch == '\n' || ch == '\r' => {
-                if matches!(
-                    control.kind(),
-                    FormControlKind::TextInput | FormControlKind::SearchInput
-                ) {
+                if control.kind().is_text() || control.kind().is_submit() {
                     return self.submit_form(id);
                 }
                 false
@@ -1634,7 +1622,7 @@ impl RabbitApp {
                 }
                 changed
             }
-            Event::Key(ch) if ch.is_ascii_graphic() || ch == ' ' => {
+            Event::Key(ch) if !ch.is_control() => {
                 let changed = self.form_state.insert_char(ch);
                 if changed {
                     self.patch_focused_control();
@@ -1647,6 +1635,9 @@ impl RabbitApp {
                 shift,
                 ..
             } => {
+                if keycode == 0x1C && (control.kind().is_text() || control.kind().is_submit()) {
+                    return self.submit_form(id);
+                }
                 let changed = match keycode {
                     KEY_LEFT => self.form_state.move_cursor_left(),
                     KEY_RIGHT => self.form_state.move_cursor_right(),

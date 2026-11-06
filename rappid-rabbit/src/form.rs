@@ -32,7 +32,23 @@ pub enum FormControlKind {
     SearchInput,
     SubmitInput,
     ButtonInput,
+    HiddenInput,
+    Checkbox { checked: bool },
+    Radio { checked: bool },
     ButtonElement(ButtonType),
+}
+
+impl FormControlKind {
+    pub fn is_submit(&self) -> bool {
+        matches!(
+            self,
+            Self::SubmitInput | Self::ButtonElement(ButtonType::Submit)
+        )
+    }
+
+    pub fn is_text(&self) -> bool {
+        matches!(self, Self::TextInput | Self::SearchInput)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -166,17 +182,24 @@ impl FormState {
 
     fn build_control(
         &self,
-        _document: &Document,
+        document: &Document,
         node_id: usize,
         attributes: &[Attribute],
         form_owner: Option<DocumentNodeId>,
     ) -> Option<FormControlState> {
-        let tag_name = _document.get(node_id)?.tag_name()?;
+        let tag_name = document.get(node_id)?.tag_name()?;
         let attr = |name: &str| -> Option<&str> {
             attributes
                 .iter()
                 .find(|a| a.name().eq_ignore_ascii_case(name))
                 .map(Attribute::value)
+        };
+
+        // An explicit owner overrides ancestry, including an unresolved owner.
+        let form_owner = if let Some(owner) = attr("form") {
+            find_form_by_id(document, owner)
+        } else {
+            form_owner
         };
 
         match tag_name.to_ascii_lowercase().as_str() {
@@ -224,7 +247,24 @@ impl FormState {
                         disabled: attr("disabled").is_some(),
                         form_owner,
                     }),
-                    "button" => Some(FormControlState::Button {
+                    "hidden" | "checkbox" | "radio" => Some(FormControlState::Button {
+                        kind: match input_type.as_str() {
+                            "hidden" => FormControlKind::HiddenInput,
+                            "checkbox" => FormControlKind::Checkbox {
+                                checked: attr("checked").is_some(),
+                            },
+                            _ => FormControlKind::Radio {
+                                checked: attr("checked").is_some(),
+                            },
+                        },
+                        name: attr("name").map(String::from),
+                        value: Some(String::from(
+                            attr("value").unwrap_or(if input_type == "hidden" { "" } else { "on" }),
+                        )),
+                        disabled: attr("disabled").is_some(),
+                        form_owner,
+                    }),
+                    "button" | "reset" | "file" | "image" => Some(FormControlState::Button {
                         kind: FormControlKind::ButtonInput,
                         name: attr("name").map(String::from),
                         value: attr("value").map(String::from),
@@ -263,22 +303,14 @@ impl FormState {
                     .as_str()
                 {
                     "submit" | "" => ButtonType::Submit,
-                    "button" => ButtonType::Button,
+                    "button" | "reset" => ButtonType::Button,
                     _ => ButtonType::Submit,
                 };
                 let kind = match btn_type {
                     ButtonType::Submit => FormControlKind::ButtonElement(ButtonType::Submit),
                     ButtonType::Button => FormControlKind::ButtonElement(ButtonType::Button),
                 };
-                // Collect text content for the button value
-                let value = attr("value").map(String::from).or_else(|| {
-                    let text = collect_text_content(_document, node_id);
-                    if text.is_empty() {
-                        None
-                    } else {
-                        Some(text)
-                    }
-                });
+                let value = attr("value").map(String::from);
                 Some(FormControlState::Button {
                     kind,
                     name: attr("name").map(String::from),
@@ -295,7 +327,7 @@ impl FormState {
 
     pub fn focus_control(&mut self, node_id: DomNodeId) -> bool {
         if let Some(control) = self.controls.get(&node_id) {
-            if control.is_disabled() {
+            if control.is_disabled() || matches!(control.kind(), FormControlKind::HiddenInput) {
                 return false;
             }
             self.focused_control = Some(node_id);
@@ -454,7 +486,8 @@ impl FormState {
             let idx = (pos + offset) % ordered.len();
             let candidate = ordered[idx];
             if let Some(control) = self.controls.get(&candidate) {
-                if !control.is_disabled() {
+                if !control.is_disabled() && !matches!(control.kind(), FormControlKind::HiddenInput)
+                {
                     self.focused_control = Some(candidate);
                     return Some(candidate);
                 }
@@ -471,7 +504,8 @@ impl FormState {
             let idx = (pos.saturating_add(ordered.len()).saturating_sub(offset)) % ordered.len();
             let candidate = ordered[idx];
             if let Some(control) = self.controls.get(&candidate) {
-                if !control.is_disabled() {
+                if !control.is_disabled() && !matches!(control.kind(), FormControlKind::HiddenInput)
+                {
                     self.focused_control = Some(candidate);
                     return Some(candidate);
                 }
@@ -517,38 +551,19 @@ pub fn resolve_form_action(
     if action.is_empty() {
         return String::from(document_url);
     }
-    // Try to resolve as a relative URL
-    if let Some(base) = base_url {
-        if let Ok(resolved) = resolve_url(base, action) {
-            return resolved;
-        }
-    }
-    // Try absolute parsing
-    if let Ok(parsed) = ParsedUrl::parse(action) {
-        return crate::format_url(&parsed);
-    }
-    // Fallback: just append to document URL if action is relative
-    // Strip trailing slash from doc URL, prepend action
-    let base = document_url.trim_end_matches('/');
-    if action.starts_with('/') {
-        // Root-relative: find the base origin
-        if let Some(scheme_end) = base.find("://") {
-            let after_scheme = &base[scheme_end + 3..];
-            if let Some(host_end) = after_scheme.find('/') {
-                format!("{}{}", &base[..scheme_end + 3 + host_end], action)
-            } else {
-                format!("{base}{action}")
+    let document_base = ParsedUrl::parse(document_url).ok();
+    let resolved = base_url
+        .or(document_base.as_ref())
+        .and_then(|base| resolve_url(base, action).ok())
+        .map(|mut url| {
+            if let Some((_, fragment)) = action.split_once('#') {
+                url.push('#');
+                url.push_str(fragment);
             }
-        } else {
-            format!("{base}{action}")
-        }
-    } else if action.starts_with('?') {
-        // Query-only action
-        let base_no_query = document_url.split('?').next().unwrap_or(document_url);
-        format!("{base_no_query}{action}")
-    } else {
-        format!("{base}/{action}")
-    }
+            url
+        });
+    // Unsupported schemes must never become navigation targets.
+    resolved.unwrap_or_else(|| String::from(document_url))
 }
 
 // ── GET form serialization ──────────────────────────────────────────
@@ -561,48 +576,29 @@ pub fn serialize_get_form(
 ) -> String {
     let mut pairs: Vec<(String, String)> = Vec::new();
     let mut stack = vec![document.root()];
-    let _form_id_usize = form_node_id.0 as usize;
-
     while let Some(node_id) = stack.pop() {
         let dom_id = DocumentNodeId(node_id as u64);
         if let Some(control) = form_state.controls.get(&dom_id) {
-            if control.form_owner() != Some(form_node_id) {
-                continue;
-            }
-            if control.is_disabled() {
-                continue;
-            }
-            match control {
-                FormControlState::Text {
-                    name, readonly: _, ..
-                } => {
-                    if let Some(name) = name {
-                        let value = control.current_value_owned();
-                        pairs.push((name.clone(), value));
-                    }
+            let successful = match control.kind() {
+                FormControlKind::TextInput
+                | FormControlKind::SearchInput
+                | FormControlKind::HiddenInput => true,
+                FormControlKind::Checkbox { checked } | FormControlKind::Radio { checked } => {
+                    *checked
                 }
-                FormControlState::Button {
-                    name,
-                    value,
-                    kind: _,
-                    ..
-                } => {
-                    if Some(dom_id) == submitter {
-                        if let Some(name) = name {
-                            pairs.push((name.clone(), value.clone().unwrap_or_default()));
-                        }
-                    }
+                kind => kind.is_submit() && submitter == Some(dom_id),
+            };
+            if control.form_owner() == Some(form_node_id) && !control.is_disabled() && successful {
+                if let Some(name) = control.name().filter(|name| !name.is_empty()) {
+                    pairs.push((String::from(name), control.current_value_owned()));
                 }
             }
         }
-        if let Some(node) = document.get(node_id) {
-            match node {
-                Node::Element { children, .. } | Node::Document { children } => {
-                    for &child in children.iter().rev() {
-                        stack.push(child);
-                    }
-                }
-                _ => {}
+        if let Some(Node::Element { children, .. } | Node::Document { children }) =
+            document.get(node_id)
+        {
+            for &child in children.iter().rev() {
+                stack.push(child);
             }
         }
     }
@@ -631,16 +627,39 @@ pub fn build_get_submission_url(
     submitter: Option<DocumentNodeId>,
 ) -> String {
     let action = get_form_action(document, form_node_id.0 as usize);
-    let _method = get_form_method(document, form_node_id.0 as usize);
 
-    let action_url = resolve_form_action(action.as_deref(), document_url, base_url);
+    let document_base = ParsedUrl::parse(document_url).ok();
+    let base_url = base_url.or(document_base.as_ref());
+    let html_base = document
+        .find_first_element("base")
+        .and_then(|id| document.attributes(id))
+        .and_then(|attrs| attrs.iter().find(|a| a.name().eq_ignore_ascii_case("href")))
+        .and_then(|attr| base_url.and_then(|base| resolve_url(base, attr.value()).ok()))
+        .and_then(|url| ParsedUrl::parse(&url).ok());
+    let action_url = resolve_form_action(
+        action.as_deref(),
+        document_url,
+        html_base.as_ref().or(base_url),
+    );
     let query = serialize_get_form(form_state, document, form_node_id, submitter);
 
     if query.is_empty() {
         action_url
     } else {
-        let separator = if action_url.contains('?') { "&" } else { "?" };
-        format!("{}{}{}", action_url, separator, query)
+        let (target, fragment) = action_url.split_once('#').unwrap_or((&action_url, ""));
+        let separator = if target.ends_with('?') || target.ends_with('&') {
+            ""
+        } else if target.contains('?') {
+            "&"
+        } else {
+            "?"
+        };
+        let suffix = if fragment.is_empty() {
+            String::new()
+        } else {
+            format!("#{fragment}")
+        };
+        format!("{target}{separator}{query}{suffix}")
     }
 }
 
@@ -660,7 +679,11 @@ pub fn get_form_method(document: &Document, form_node_id: usize) -> String {
         attributes
             .iter()
             .find(|a| a.name().eq_ignore_ascii_case("method"))
-            .map(|a| a.value().to_ascii_lowercase())
+            .map(|a| match a.value().to_ascii_lowercase().as_str() {
+                "post" => String::from("post"),
+                "dialog" => String::from("dialog"),
+                _ => String::from("get"),
+            })
             .unwrap_or_else(|| String::from("get"))
     } else {
         String::from("get")
@@ -692,40 +715,44 @@ fn find_next_char_boundary(text: &str, pos: usize) -> usize {
     next.min(text.len())
 }
 
-fn collect_text_content(document: &Document, node_id: usize) -> String {
-    let mut result = String::new();
-    let mut stack = vec![node_id];
-    while let Some(current) = stack.pop() {
-        match document.get(current) {
-            Some(Node::Text { content }) => {
-                result.push_str(content);
+fn find_form_by_id(document: &Document, id: &str) -> Option<DocumentNodeId> {
+    if id.is_empty() {
+        return None;
+    }
+    let mut stack = vec![document.root()];
+    while let Some(node_id) = stack.pop() {
+        if let Some(Node::Element {
+            tag_name,
+            attributes,
+            children,
+        }) = document.get(node_id)
+        {
+            if tag_name.eq_ignore_ascii_case("form")
+                && attributes
+                    .iter()
+                    .any(|a| a.name().eq_ignore_ascii_case("id") && a.value() == id)
+            {
+                return Some(DocumentNodeId(node_id as u64));
             }
-            Some(Node::Element { children, .. }) => {
-                for &child in children.iter().rev() {
-                    stack.push(child);
-                }
-            }
-            _ => {}
+            stack.extend(children.iter().rev().copied());
+        } else if let Some(Node::Document { children }) = document.get(node_id) {
+            stack.extend(children.iter().rev().copied());
         }
     }
-    result.trim().into()
+    None
 }
 
 fn has_boolean_attr(attributes: &[Attribute], name: &str) -> bool {
-    attributes.iter().any(|attribute| {
-        attribute.name().eq_ignore_ascii_case(name)
-            // The host HTML adapter currently drops the first byte of the
-            // final valueless attribute in a fragment; accept this one
-            // narrowly so readonly remains observable on both parsers.
-            || (name == "readonly" && attribute.name().eq_ignore_ascii_case("eadonly"))
-    })
+    attributes
+        .iter()
+        .any(|attribute| attribute.name().eq_ignore_ascii_case(name))
 }
 
 pub fn percent_encode(input: &str) -> String {
     let mut result = String::with_capacity(input.len());
     for byte in input.bytes() {
         match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'*' => {
                 result.push(byte as char);
             }
             b' ' => {
@@ -750,6 +777,146 @@ mod tests {
         let mut state = FormState::new();
         state.build_from_dom(&doc);
         (doc, state)
+    }
+
+    fn query(html: &str, submit_name: Option<&str>) -> String {
+        let (doc, state) = build_state(html);
+        let form = DocumentNodeId(doc.find_first_element("form").unwrap() as u64);
+        let submitter = submit_name.and_then(|name| {
+            state
+                .controls
+                .iter()
+                .find(|(_, control)| control.name() == Some(name))
+                .map(|(id, _)| *id)
+        });
+        serialize_get_form(&state, &doc, form, submitter)
+    }
+
+    #[test]
+    fn successful_controls_and_triggered_button_only() {
+        let html = r#"<form><input name="q" value="arch linux">
+            <input name="" value="empty"><input value="nameless">
+            <input disabled="disabled" name="disabled" value="no">
+            <input type="hidden" name="token" value="a&b">
+            <input type="password" name="pw" value="secret">
+            <input type="checkbox" name="yes" checked="checked">
+            <input type="checkbox" name="no" value="no">
+            <input type="radio" name="choice" value="one">
+            <input type="radio" name="choice" value="two" checked="checked">
+            <button name="go" value="search">Search</button>
+            <input type="submit" name="other" value="other">
+            <button type="button" name="cancel" value="cancel">Cancel</button>
+            <button type="reset" name="reset" value="reset">Reset</button></form>"#;
+        let expected = "q=arch+linux&token=a%26b&pw=secret&yes=on&choice=two";
+        assert_eq!(query(html, None), expected);
+        assert_eq!(query(html, Some("go")), format!("{expected}&go=search"));
+        assert_eq!(
+            query(html, Some("other")),
+            format!("{expected}&other=other")
+        );
+        assert_eq!(query(html, Some("cancel")), expected);
+        assert_eq!(query(html, Some("reset")), expected);
+    }
+
+    #[test]
+    fn boolean_checked_and_disabled_attributes() {
+        assert_eq!(
+            query(
+                r#"<form><input type="checkbox" name="a" checked>
+            <input type="checkbox" name="b" checked disabled>
+            <input type="radio" name="c" checked></form>"#,
+                None
+            ),
+            "a=on&c=on"
+        );
+    }
+
+    #[test]
+    fn explicit_owner_overrides_ancestor_and_includes_external_controls() {
+        let html = r#"<input form="search" name="before" value="1">
+            <form id="search"><input name="inside" value="2">
+            <input form="missing" name="excluded" value="3"></form>
+            <input form="search" name="after" value="4">
+            <form id="other"><input form="search" name="reassigned" value="5"></form>"#;
+        assert_eq!(query(html, None), "before=1&inside=2&after=4&reassigned=5");
+    }
+
+    #[test]
+    fn relative_actions_resolve_against_document_directory_or_base() {
+        let document_url = "https://example.com/docs/page?old=1";
+        assert_eq!(
+            resolve_form_action(Some("../search"), document_url, None),
+            "https://example.com/search"
+        );
+        assert_eq!(
+            resolve_form_action(Some("search"), document_url, None),
+            "https://example.com/docs/search"
+        );
+        let base = ParsedUrl::parse("https://other.example/base/").unwrap();
+        assert_eq!(
+            resolve_form_action(Some("search"), document_url, Some(&base)),
+            "https://other.example/base/search"
+        );
+        assert_eq!(
+            resolve_form_action(Some(""), document_url, Some(&base)),
+            document_url
+        );
+        assert_eq!(
+            resolve_form_action(Some("javascript:alert(1)"), document_url, None),
+            document_url
+        );
+    }
+
+    #[test]
+    fn runtime_edit_to_navigation_url_with_html_base_and_fragment() {
+        let (doc, mut state) = build_state(
+            r#"<base href="/packages/"><form action="search?source=web#results"><input type="search" name="q"></form>"#,
+        );
+        let input = *state.controls.keys().next().unwrap();
+        assert!(state.focus_control(input));
+        for ch in "arch linux & café".chars() {
+            assert!(state.insert_char(ch));
+        }
+        let form = state.controls[&input].form_owner().unwrap();
+        assert_eq!(
+            build_get_submission_url(
+                &state,
+                &doc,
+                form,
+                "https://example.com/docs/page",
+                None,
+                None
+            ),
+            "https://example.com/packages/search?source=web&q=arch+linux+%26+caf%C3%A9#results"
+        );
+    }
+
+    #[test]
+    fn hidden_controls_are_serialized_but_never_focused() {
+        let (doc, mut state) = build_state(
+            r#"<form><input name="q"><input type="hidden" name="h" value="v"><button>Go</button></form>"#,
+        );
+        let ids: Vec<_> = state.controls.keys().copied().collect();
+        assert!(!state.focus_control(ids[1]));
+        state.focus_control(ids[0]);
+        assert_eq!(state.focus_next_control(&doc), Some(ids[2]));
+        assert_eq!(state.focus_prev_control(&doc), Some(ids[0]));
+    }
+
+    #[test]
+    fn method_defaults_and_case_insensitivity() {
+        for (value, expected) in [
+            ("", "get"),
+            ("GeT", "get"),
+            ("PoSt", "post"),
+            ("invalid", "get"),
+        ] {
+            let (doc, _) = build_state(&format!("<form method='{value}'></form>"));
+            assert_eq!(
+                get_form_method(&doc, doc.find_first_element("form").unwrap()),
+                expected
+            );
+        }
     }
 
     #[test]
@@ -824,7 +991,7 @@ mod tests {
             control.kind(),
             FormControlKind::ButtonElement(ButtonType::Submit)
         ));
-        assert_eq!(control.current_value(), "Go");
+        assert_eq!(control.current_value(), "");
     }
 
     #[test]
@@ -845,7 +1012,7 @@ mod tests {
     fn percent_encode_basics() {
         assert_eq!(percent_encode("hello world"), "hello+world");
         assert_eq!(percent_encode("a&b=c"), "a%26b%3Dc");
-        assert_eq!(percent_encode("ABC123-_.~"), "ABC123-_.~");
+        assert_eq!(percent_encode("ABC123-_.*~"), "ABC123-_.*%7E");
     }
 
     #[test]
