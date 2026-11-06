@@ -322,7 +322,7 @@ pub fn set_preference_field(
 }
 
 /// Native sunlight-kv adapter (register key packing, SHM values).
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub mod native {
     use super::*;
     use sunlight_ipc::{

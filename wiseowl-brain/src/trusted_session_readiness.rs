@@ -93,7 +93,7 @@ impl WiseOwlAuthorityConnections {
     }
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub fn materialize_kernel_session_proof(
     proof: sunlight_ipc::SessionAuthorityProof,
     now: u64,

@@ -112,6 +112,8 @@ pub const MAX_ACTION_LABEL: usize = 64;
 
 #[cfg(feature = "host")]
 pub mod host_types {
+    use alloc::string::String;
+    use alloc::vec::Vec;
 
     use serde::{Deserialize, Serialize};
 

@@ -490,7 +490,7 @@ impl Default for WiseOwlStatusContextSource {
 
 impl WiseOwlStatusContextSource {
     /// Query MemoryDB GetHealth + GetStats with short timeout (native only).
-    #[cfg(feature = "sunlightos")]
+    #[cfg(sunlight_native)]
     pub fn query_native() -> Self {
         use sunlight_ipc::{ipc_call_timeout, nameserver_lookup_timeout, IpcMsg};
 
@@ -539,7 +539,7 @@ impl WiseOwlStatusContextSource {
         out
     }
 
-    #[cfg(not(feature = "sunlightos"))]
+    #[cfg(not(sunlight_native))]
     pub fn query_native() -> Self {
         Self::default()
     }
@@ -629,7 +629,7 @@ impl Default for IndexContextSource {
 }
 
 impl IndexContextSource {
-    #[cfg(feature = "sunlightos")]
+    #[cfg(sunlight_native)]
     pub fn query_native() -> Self {
         use sunlight_ipc::{ipc_call_timeout, nameserver_lookup_timeout, IpcMsg};
 
@@ -673,7 +673,7 @@ impl IndexContextSource {
         out
     }
 
-    #[cfg(not(feature = "sunlightos"))]
+    #[cfg(not(sunlight_native))]
     pub fn query_native() -> Self {
         Self::default()
     }

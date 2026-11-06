@@ -51,8 +51,18 @@ static mut LIFECYCLE_ADAPTERS: Option<wiseowl_brain::BraindTrustedLifecycleAdapt
 #[cfg(feature = "delegated-session-lifecycle-ipc-v1-test")]
 static mut DELEGATION_GATE_EMITTED: bool = false;
 
+#[cfg(target_os = "none")]
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    run_daemon()
+}
+
+#[cfg(target_os = "sunlightos")]
+fn main() {
+    run_daemon()
+}
+
+fn run_daemon() -> ! {
     // Startup diagnostics are operational only.  They carry neither caller
     // identity, attestation data nor readiness evidence.
     serial_println!("[WISEOWL-BRAIN] START_PHASE PROCESS_ENTERED");
@@ -1906,8 +1916,10 @@ fn handle_native_health(_msg: IpcMsg) -> IpcMsg {
         };
         serial_println!("[WISEOWL-IDENTITY-C] brain probe mode={:?}", mode);
         if _msg.words[0] == 0xC1A0_0001 {
-            return IpcMsg::with_label(BrainOp::Reply.label())
-                .word(0, (mode == wiseowl_brain::identity_binding::BrainIdentityMode::Personalized) as u64);
+            return IpcMsg::with_label(BrainOp::Reply.label()).word(
+                0,
+                (mode == wiseowl_brain::identity_binding::BrainIdentityMode::Personalized) as u64,
+            );
         }
     }
     let pipeline = unsafe { PIPELINE.as_mut().unwrap() };
@@ -2267,6 +2279,7 @@ fn make_error_reply(msg: IpcMsg, code: u16) -> IpcMsg {
     make_reply(msg, &err_resp)
 }
 
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     serial_println!("[WISEOWL-BRAIN] PANIC braind");

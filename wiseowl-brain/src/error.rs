@@ -19,7 +19,6 @@ pub enum BrainError {
     UnknownOperation(u16),
 }
 
-#[cfg(feature = "host")]
 impl fmt::Display for BrainError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -46,7 +45,6 @@ impl fmt::Display for BrainError {
     }
 }
 
-#[cfg(feature = "host")]
-impl std::error::Error for BrainError {}
+impl core::error::Error for BrainError {}
 
 pub type BrainResult<T> = Result<T, BrainError>;

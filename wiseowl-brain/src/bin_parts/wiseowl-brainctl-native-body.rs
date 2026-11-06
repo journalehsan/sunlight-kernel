@@ -5,14 +5,19 @@ use sunlight_ipc::{
     debug_log, ipc_call, nameserver_lookup, process_yield, shm_alloc, shm_free, shm_map,
     CapabilityToken, IpcMsg,
 };
+#[cfg(target_os = "none")]
 use sunlight_libc as libc;
+#[cfg(target_os = "sunlightos")]
+extern crate sunlight_libc;
 
 use wiseowl_brain::native_ipc::{
     BrainIpcHeader, BrainOp, BRAIN_ENDPOINT, BRAIN_IPC_HEADER_LEN, NATIVE_PROTOCOL_VERSION,
     REG_INLINE_BODY_MAX, SHM_PAGE_SIZE,
 };
-use wiseowl_brain::protocol::{BrainRequestWire, BrainResponseWire, MAX_NAME_LEN, MAX_VERSION_LEN,
-    MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN, GreetingRequestWire};
+use wiseowl_brain::protocol::{
+    BrainRequestWire, BrainResponseWire, GreetingRequestWire, MAX_DEVICE_CLASS_LEN, MAX_MODEL_LEN,
+    MAX_NAME_LEN, MAX_VERSION_LEN,
+};
 
 macro_rules! serial_println {
     ($($arg:tt)*) => {{
@@ -22,32 +27,44 @@ macro_rules! serial_println {
     }};
 }
 
+#[cfg(target_os = "none")]
 #[no_mangle]
 pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     let mut arg_storage: [&str; 8] = [""; 8];
-    let argc = unsafe {
-        libc::crt0::collect_utf8_args(argc, argv, &mut arg_storage, 512)
-    };
+    let argc = unsafe { libc::crt0::collect_utf8_args(argc, argv, &mut arg_storage, 512) };
 
-    if argc < 2 {
-        serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context> [options]");
+    run_cli(&arg_storage[..argc]);
+    libc::exit(0);
+}
+
+#[cfg(target_os = "sunlightos")]
+fn main() {
+    let args: Vec<String> = std::env::args().take(8).collect();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_cli(&args);
+}
+
+fn run_cli(arg_storage: &[&str]) {
+    if arg_storage.len() < 2 {
+        serial_println!(
+            "[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context> [options]"
+        );
         process_yield();
-        libc::exit(0);
+        return;
     }
 
     match arg_storage[1] {
         "health" => cmd_health(),
         "stats" => cmd_stats(),
-        "greet" => cmd_greet(&arg_storage[..argc]),
-        "context" => cmd_context(&arg_storage[..argc]),
-        "preferences" => cmd_preferences(&arg_storage[..argc]),
+        "greet" => cmd_greet(arg_storage),
+        "context" => cmd_context(arg_storage),
+        "preferences" => cmd_preferences(arg_storage),
         _ => {
             serial_println!("[WISEOWL-BRAIN] CLI usage: wiseowl-brainctl <health|stats|greet|context|preferences> ...");
         }
     }
 
     process_yield();
-    libc::exit(0);
 }
 
 fn connect() -> Option<CapabilityToken> {
@@ -101,7 +118,11 @@ fn send_request(cap: CapabilityToken, op: BrainOp, body: &[u8]) -> Option<BrainR
         let header_enc = header.encode();
         unsafe {
             core::ptr::copy_nonoverlapping(header_enc.as_ptr(), ptr, BRAIN_IPC_HEADER_LEN);
-            core::ptr::copy_nonoverlapping(body.as_ptr(), ptr.add(BRAIN_IPC_HEADER_LEN), body.len());
+            core::ptr::copy_nonoverlapping(
+                body.as_ptr(),
+                ptr.add(BRAIN_IPC_HEADER_LEN),
+                body.len(),
+            );
         }
         let msg = IpcMsg::with_label(op.label())
             .word(0, body.len() as u64)
@@ -373,6 +394,7 @@ fn cmd_preferences(args: &[&str]) {
     }
 }
 
+#[cfg(target_os = "none")]
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     serial_println!("[WISEOWL-BRAIN] PANIC brainctl");

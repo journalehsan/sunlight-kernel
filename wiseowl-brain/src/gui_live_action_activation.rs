@@ -5,7 +5,7 @@
 //! launcher, session authority, or readiness-source substitute: those remain
 //! available only through their existing production adapters.
 
-#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
+#[cfg(all(sunlight_native, feature = "gui-live-action-activation-v1-test"))]
 use crate::{
     BoundedActionPlanner, PlannerContext, PlannerInput, PlannerResult, RequestedBy, SessionId,
     SunlightPlannerRegistry,
@@ -13,7 +13,7 @@ use crate::{
 
 /// Gate used only by the QEMU activation fixture.  Production builds do not
 /// compile a fake authority, readiness source, launcher, or executor here.
-#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
+#[cfg(all(sunlight_native, feature = "gui-live-action-activation-v1-test"))]
 pub fn run_deterministic_live_action_gate() -> bool {
     if !crate::trusted_session_readiness::run_deterministic_trust_gate()
         || !crate::gui_bridge::run_deterministic_bridge_gate()

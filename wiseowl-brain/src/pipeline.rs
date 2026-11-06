@@ -9,7 +9,7 @@ use crate::foundation::{FoundationLoadState, FoundationMemory};
 use crate::greeting;
 use crate::grounded::{AuthIdentity, BrainContextSource, FactKind, GroundedFact};
 use crate::mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 use crate::planner::{
     BoundedActionPlanner, PlannerContext, PlannerInput, PlannerResult, SunlightPlannerRegistry,
 };
@@ -23,7 +23,7 @@ pub struct CognitivePipeline {
     foundation: FoundationLoadState,
     runtime_context: RuntimeContextCache,
     action_intents: ActionIntentEvaluator<DEFAULT_AUDIT_CAPACITY>,
-    #[cfg(feature = "sunlightos")]
+    #[cfg(sunlight_native)]
     action_planner: BoundedActionPlanner<SunlightPlannerRegistry>,
 }
 
@@ -46,7 +46,7 @@ impl CognitivePipeline {
             foundation,
             runtime_context,
             action_intents,
-            #[cfg(feature = "sunlightos")]
+            #[cfg(sunlight_native)]
             action_planner: BoundedActionPlanner::new(SunlightPlannerRegistry),
         }
     }
@@ -82,7 +82,7 @@ impl CognitivePipeline {
     /// Converts a bounded conversation request into an untrusted proposal.
     /// The result cannot execute and must be built into an ActionIntent before
     /// entering `evaluate_action` and the rest of TrustedActionFlow.
-    #[cfg(feature = "sunlightos")]
+    #[cfg(sunlight_native)]
     pub fn plan_action(
         &mut self,
         input: &PlannerInput,
@@ -100,7 +100,7 @@ impl CognitivePipeline {
         )
     }
 
-    #[cfg(feature = "sunlightos")]
+    #[cfg(sunlight_native)]
     pub fn planner_audit(
         &self,
     ) -> &crate::planner::PlannerAuditLog<{ crate::planner::DEFAULT_PLANNER_AUDIT_CAPACITY }> {

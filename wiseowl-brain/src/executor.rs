@@ -832,10 +832,10 @@ fn responder_matches_requester(responder: ResponderIdentity, requester: Requeste
 /// Production adapter for SunlightOS. Brain receives this narrow typed
 /// capability; executable and Control Panel argument resolution stay inside
 /// the authoritative shared launcher.
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub struct SunlightLaunchAdapter;
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 impl TrustedLaunchAdapter for SunlightLaunchAdapter {
     fn application_status(&self, bundle_id: &TypedIdentifier) -> RegistryStatus {
         if sunlight_libc::sun_exec::registered_application_available(bundle_id.as_str().as_bytes())

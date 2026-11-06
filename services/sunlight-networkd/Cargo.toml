@@ -556,7 +556,7 @@ edition = "2021"
 
 [dependencies]
 sunlight-ipc = { path = "../../ipc" }
-sunlight-libc = { path = "../../sunlight-libc", features = ["global-alloc"] }
+sunlight-libc = { path = "../../sunlight-libc" }
 heapless = "0.8"
 
 [[bin]]
@@ -566,3 +566,8 @@ path = "src/main.rs"
 [[bin]]
 name = "networkctl"
 path = "src/bin/networkctl.rs"
+
+[features]
+# Executables own allocator selection; library clients may use native std.
+default = ["global-alloc"]
+global-alloc = ["sunlight-libc/global-alloc"]

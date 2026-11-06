@@ -122,6 +122,15 @@ The first time, the toolchain will be automatically installed by rustup when you
 ```
 This compiles the kernel, creates a bootable ISO with the Limine bootloader, and launches QEMU with serial output.
 
+### Check workspace compilation:
+
+```bash
+python3 tools/check_workspace.py
+```
+
+The workspace mixes freestanding, host, and native std targets. See
+[workspace checks](docs/workspace-checks.md) for individual commands and test targets.
+
 ### Run automated test:
 ```bash
 ./tools/test.sh

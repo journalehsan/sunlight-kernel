@@ -26,6 +26,14 @@ const FOUNDATION_KEYS: &[(u16, &str)] = &[
 ];
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(sunlight_native)");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_SUNLIGHTOS");
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
+    if std::env::var_os("CARGO_FEATURE_SUNLIGHTOS").is_some()
+        && matches!(target_os.as_str(), "none" | "sunlightos")
+    {
+        println!("cargo:rustc-cfg=sunlight_native");
+    }
     if let Err(error) = build_foundation_blob() {
         panic!("failed to build Wise Owl foundation blob: {error}");
     }

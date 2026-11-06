@@ -225,8 +225,8 @@ bincode = { version = "1.3", optional = true }
 thiserror = { version = "1", optional = true }
 log = { version = "0.4", optional = true }
 sunlight-ipc = { path = "../ipc", optional = true }
-sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
-sunlight-networkd = { path = "../services/sunlight-networkd", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+sunlight-networkd = { path = "../services/sunlight-networkd", optional = true, default-features = false }
 sunlight-tz = { path = "../sunlight-tz", optional = true }
 sunlight-locale = { path = "../sunlight-locale", optional = true }
 wiseowl-index = { path = "../wiseowl-index", default-features = false }
@@ -240,3 +240,14 @@ tempfile = "3"
 wiseowl-index = { path = "../wiseowl-index", features = ["host"] }
 wiseowl-memory = { path = "../wiseowl-memory", features = ["host"] }
 wiseowl-memorydb = { path = "../wiseowl-memorydb", features = ["host"] }
+
+# Libraries remain usable by freestanding clients. Only the native std target
+# links std startup; the legacy target retains its explicit allocator.
+[target.'cfg(target_os = "sunlightos")'.dependencies]
+sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["native-std"] }
+
+[target.'cfg(target_os = "none")'.dependencies]
+sunlight-libc = { path = "../sunlight-libc", optional = true, features = ["global-alloc", "dynamic-heap"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }

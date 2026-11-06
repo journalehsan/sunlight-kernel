@@ -1,5 +1,5 @@
-#![cfg_attr(feature = "sunlightos", no_std)]
-#![cfg_attr(feature = "sunlightos", allow(static_mut_refs))]
+#![cfg_attr(target_os = "none", no_std)]
+#![cfg_attr(sunlight_native, allow(static_mut_refs))]
 
 extern crate alloc;
 
@@ -73,7 +73,7 @@ pub use delegated_session_lifecycle::{
     DisplayLifecycleEventKind, LifecycleIngressError, LifecycleTargetKind, TrustedLaunchContext,
 };
 pub use diagnostics::BrainDiagnostics;
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub use executor::SunlightLaunchAdapter;
 pub use executor::{
     ActionExecutor, DispatchStatus, ExecutionAuditEntry, ExecutionAuditEvent, ExecutionAuditLog,
@@ -92,7 +92,7 @@ pub use gui_bridge::{
     WiseOwlGuiEventPayload, WiseOwlGuiSessionBinding, GUI_BRIDGE_PROTOCOL_VERSION,
     MAX_GUI_BRIDGE_DEDUP, MAX_GUI_BRIDGE_EVENTS,
 };
-#[cfg(all(feature = "sunlightos", feature = "gui-live-action-activation-v1-test"))]
+#[cfg(all(sunlight_native, feature = "gui-live-action-activation-v1-test"))]
 pub use gui_live_action_activation::run_deterministic_live_action_gate;
 pub use mtm::{BrainPreferences, GreetingStyle, WelcomeMemoryState};
 pub use outcome::{
@@ -103,7 +103,7 @@ pub use outcome::{
     PublicOutcomeCode, ReadinessContract, TrustedSourceKind,
 };
 pub use pipeline::CognitivePipeline;
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub use planner::SunlightPlannerRegistry;
 pub use planner::{
     ActionIntentDraft, BoundedActionPlanner, ClarificationCandidate, ClarificationId,

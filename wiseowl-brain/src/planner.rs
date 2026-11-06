@@ -252,10 +252,10 @@ pub trait PlannerRegistry {
     fn visit_settings_pages(&self, visitor: &mut dyn FnMut(RegistryTargetRef<'_>));
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 pub struct SunlightPlannerRegistry;
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 impl PlannerRegistry for SunlightPlannerRegistry {
     fn alias_model_version(&self) -> u16 {
         sunlight_libc::sun_exec::ACTION_ALIAS_MODEL_VERSION

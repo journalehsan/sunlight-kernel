@@ -545,17 +545,17 @@ fn target_arch_label() -> &'static str {
     }
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn monotonic_ms() -> u64 {
     sunlight_ipc::monotonic_millis()
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn monotonic_ms() -> u64 {
     0
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn read_text_file<const N: usize>(path: &[u8]) -> Option<String<N>> {
     let fd = sunlight_libc::open(path).ok()?;
     let mut buf = [0u8; 256];
@@ -569,7 +569,7 @@ fn read_text_file<const N: usize>(path: &[u8]) -> Option<String<N>> {
     }
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn read_text_file<const N: usize>(_path: &[u8]) -> Option<String<N>> {
     None
 }
@@ -582,7 +582,7 @@ fn read_release_generation() -> Option<String<BUILD_LEN>> {
     read_text_file(b"/etc/sunlight/release-generation")
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_static_system(snapshot: &mut RuntimeContextSnapshot) {
     let info = sunlight_ipc::sysinfo();
     snapshot.system.ram_mib = u32::try_from(info.total_ram_kb / 1024)
@@ -590,10 +590,10 @@ fn refresh_static_system(snapshot: &mut RuntimeContextSnapshot) {
         .filter(|mib| *mib > 0);
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_static_system(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn read_locale() -> Option<String<MAX_LOCALE_LEN>> {
     let fd = sunlight_libc::open(b"/etc/locale.conf").ok()?;
     let mut buf = [0u8; 512];
@@ -608,12 +608,12 @@ fn read_locale() -> Option<String<MAX_LOCALE_LEN>> {
     }
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn read_locale() -> Option<String<MAX_LOCALE_LEN>> {
     None
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_uptime(snapshot: &mut RuntimeContextSnapshot) {
     let info = sunlight_ipc::sysinfo();
     if info.uptime_secs > 0 {
@@ -621,10 +621,10 @@ fn refresh_uptime(snapshot: &mut RuntimeContextSnapshot) {
     }
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_uptime(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_timezone(snapshot: &mut RuntimeContextSnapshot) {
     let Ok(client) = sunlight_tz::client::TzClient::connect() else {
         return;
@@ -639,10 +639,10 @@ fn refresh_timezone(snapshot: &mut RuntimeContextSnapshot) {
     }
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_timezone(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_session(snapshot: &mut RuntimeContextSnapshot) {
     use sunlight_ipc::{
         ipc_call_timeout, nameserver_lookup_timeout, IpcMsg, SessionKind, SessionMsg, SessionState,
@@ -693,10 +693,10 @@ fn refresh_session(snapshot: &mut RuntimeContextSnapshot) {
     }
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_session(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn session_state_label(state: sunlight_ipc::SessionState) -> &'static str {
     use sunlight_ipc::SessionState;
 
@@ -714,7 +714,7 @@ fn session_state_label(state: sunlight_ipc::SessionState) -> &'static str {
     }
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn lookup_uid_name(uid: u32) -> Option<String<MAX_NAME_LEN>> {
     let fd = sunlight_libc::open(b"/etc/passwd").ok()?;
     let mut buf = [0u8; 2048];
@@ -735,7 +735,7 @@ fn lookup_uid_name(uid: u32) -> Option<String<MAX_NAME_LEN>> {
     None
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_network(snapshot: &mut RuntimeContextSnapshot) {
     use sunlight_networkd::{DerivedConnectionState, NetworkClient};
 
@@ -749,10 +749,10 @@ fn refresh_network(snapshot: &mut RuntimeContextSnapshot) {
     snapshot.network.interface_count = u8::try_from(network.interfaces.len()).ok();
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_network(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_display(snapshot: &mut RuntimeContextSnapshot) {
     let Some(display_ep) = sunlight_ipc::nameserver_lookup_timeout("display_server", 50) else {
         return;
@@ -766,10 +766,10 @@ fn refresh_display(snapshot: &mut RuntimeContextSnapshot) {
         Some(((metrics.scale_fp as u64).saturating_mul(100) / 65_536).min(u32::MAX as u64) as u32);
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_display(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_power(snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextProviderError> {
     use sunlight_ipc::{
         ipc_call_timeout, nameserver_lookup_timeout, IpcMsg, PowerProfile, PowerdMsg,
@@ -795,12 +795,12 @@ fn refresh_power(snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextPro
     Ok(())
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_power(_snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextProviderError> {
     Err(ContextProviderError::Unavailable)
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_thermal(snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextProviderError> {
     use sunlight_ipc::{
         ipc_call_timeout, nameserver_lookup_timeout, IpcMsg, ThermalState, ThermaldMsg,
@@ -822,7 +822,7 @@ fn refresh_thermal(snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextP
     Ok(())
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_thermal(_snapshot: &mut RuntimeContextSnapshot) -> Result<(), ContextProviderError> {
     Err(ContextProviderError::Unavailable)
 }
@@ -833,7 +833,7 @@ fn refresh_storage(_snapshot: &mut RuntimeContextSnapshot) -> Result<(), Context
     Err(ContextProviderError::Unavailable)
 }
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn refresh_services(snapshot: &mut RuntimeContextSnapshot) {
     snapshot.services.display = service_status_from_lookup("display_server");
     snapshot.services.sessiond = service_status_from_lookup(sunlight_ipc::SESSION_ENDPOINT);
@@ -843,10 +843,10 @@ fn refresh_services(snapshot: &mut RuntimeContextSnapshot) {
     snapshot.services.timezone_service = service_status_from_lookup("tz");
 }
 
-#[cfg(not(feature = "sunlightos"))]
+#[cfg(not(sunlight_native))]
 fn refresh_services(_snapshot: &mut RuntimeContextSnapshot) {}
 
-#[cfg(feature = "sunlightos")]
+#[cfg(sunlight_native)]
 fn service_status_from_lookup(name: &str) -> Option<RuntimeServiceStatus> {
     if sunlight_ipc::nameserver_lookup_timeout(name, 20).is_some() {
         Some(RuntimeServiceStatus::Running)

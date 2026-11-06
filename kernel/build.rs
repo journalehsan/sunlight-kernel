@@ -289,6 +289,47 @@ fn main() {
     fs::create_dir_all(rabbit_dest.parent().unwrap()).expect("create native Rabbit directory");
     fs::copy(rabbit_source, rabbit_dest).expect("stage native Rabbit");
 
+    // Wise Owl brain is a std userland service. Its shared library can still
+    // be used by freestanding clients such as the graphical console.
+    for input in ["wiseowl-brain", "tools/build_wiseowl_brain.sh"] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let brain_outputs = ["wiseowl-braind", "wiseowl-brainctl"];
+    let brain_release = target_dir.join("x86_64-sunlightos/release");
+    for output in brain_outputs {
+        println!(
+            "cargo:rerun-if-changed={}",
+            brain_release.join(output).display()
+        );
+    }
+    // Preserve the binaries prepared by tools/test.sh with gate features.
+    // Standalone kernel builds prepare missing or invalid artifacts.
+    if brain_outputs
+        .iter()
+        .any(|output| !userspace_elf_looks_valid(&brain_release.join(output)))
+    {
+        let brain_status = Command::new("bash")
+            .arg(workspace_root.join("tools/build_wiseowl_brain.sh"))
+            .env("CARGO_TARGET_DIR", &scratch_target_dir)
+            .current_dir(workspace_root)
+            .status()
+            .expect("invoke native Wise Owl brain builder");
+        assert!(
+            brain_status.success(),
+            "failed to build native Wise Owl brain"
+        );
+        fs::create_dir_all(&brain_release).expect("create native brain output directory");
+        for output in brain_outputs {
+            let source = scratch_target_dir
+                .join("x86_64-sunlightos/release")
+                .join(output);
+            fs::copy(source, brain_release.join(output)).expect("stage native Wise Owl brain");
+        }
+    }
+
     // Yazi is embedded unconditionally; ordinary kernel builds must prepare it
     // too, rather than relying on a previous Yazi-specific test run.
     let yazi_script = workspace_root.join("tools/build_yazi.sh");

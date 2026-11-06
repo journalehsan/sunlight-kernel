@@ -677,31 +677,31 @@ else
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-index --bin wiseowl-indexd --bin wiseowl-indexctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
 fi
 if [[ "$PHASE" == "wiseowl-executor-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,executor-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features executor-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-planner-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,planner-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features planner-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-coordinator-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,coordinator-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features coordinator-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-outcome-observer-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,outcome-observer-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features outcome-observer-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-action-receipt-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,action-receipt-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features action-receipt-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-gui-bridge-foundation-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,gui-bridge-foundation-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features gui-bridge-foundation-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-trusted-session-readiness-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,trusted-session-readiness-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features trusted-session-readiness-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-gui-live-action-activation-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,gui-live-action-activation-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features gui-live-action-activation-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,delegated-session-lifecycle-ipc-v1-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features delegated-session-lifecycle-ipc-v1-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-identity-phase-c" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,identity-phase-b-test,identity-phase-c-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features identity-phase-b-test,identity-phase-c-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-identity-phase-b" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,identity-phase-b-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features identity-phase-b-test >>"$BUILD_LOG" 2>&1
 elif [[ "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" ]]; then
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos,phase4a-test --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh --features phase4a-test >>"$BUILD_LOG" 2>&1
 else
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package wiseowl-brain --bin wiseowl-braind --bin wiseowl-brainctl --features sunlightos --no-default-features --release >>"$BUILD_LOG" 2>&1
+    bash tools/build_wiseowl_brain.sh >>"$BUILD_LOG" 2>&1
 fi
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-emoji-picker --release >>"$BUILD_LOG" 2>&1
 # --- Step 1b: Create the FAT32 volume required by this gate. ---
