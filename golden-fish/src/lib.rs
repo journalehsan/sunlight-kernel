@@ -61,6 +61,23 @@ mod tests {
     }
 
     #[test]
+    fn consecutive_boolean_attributes_preserve_following_names() {
+        let doc = parse(r#"<input checked disabled readonly name="q" value="value">"#);
+        let input = doc.find_first_element("input").unwrap();
+        let attrs = doc.attributes(input).unwrap();
+        for name in ["checked", "disabled", "readonly", "name", "value"] {
+            assert!(
+                attrs.iter().any(|attr| attr.name() == name),
+                "missing {name}"
+            );
+        }
+        assert_eq!(
+            attrs.iter().find(|a| a.name() == "name").unwrap().value(),
+            "q"
+        );
+    }
+
+    #[test]
     fn test_simple_element_with_text() {
         let doc = parse("<p>Hello</p>");
         // Expect at least one element p under root

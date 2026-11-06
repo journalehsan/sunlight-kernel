@@ -65,7 +65,23 @@ fn convert_node(
             // Attributes: iter() yields (Cow<str>, Option<Cow<str>>)
             let mut attrs: Vec<Attribute> = Vec::new();
             for (k, v_opt) in tag.attributes().iter() {
-                let name = k.into_owned();
+                // tl 0.7 advances once after a valueless attribute even when
+                // it has already consumed whitespace. Recover the next name's
+                // first byte only when its source boundary proves it was lost.
+                // Synthetic id/class keys do not point into this source slice.
+                let raw = tag.raw().as_bytes();
+                let offset = (k.as_ptr() as usize).checked_sub(raw.as_ptr() as usize);
+                let name = offset
+                    .filter(|&offset| {
+                        offset >= 2
+                            && offset.saturating_add(k.len()) <= raw.len()
+                            && raw[offset - 2].is_ascii_whitespace()
+                            && raw[offset - 1].is_ascii_alphabetic()
+                    })
+                    .and_then(|offset| {
+                        core::str::from_utf8(&raw[offset - 1..offset + k.len()]).ok()
+                    })
+                    .map_or_else(|| k.into_owned(), alloc::string::String::from);
                 let value = v_opt
                     .map(Cow::into_owned)
                     .map(|value| {
