@@ -17,7 +17,7 @@ use sunlight_ui::{
 };
 
 use crate::{
-    css::{ComputedStyle, Property, PropertyValue, StyleContext},
+    css::{Property, StyleContext},
     form::FormControlState,
     images::ImageCache,
     layout::{self, FontMeasurer as LayoutFontMeasurer, ImageMetrics, SceneImageSource},
@@ -489,9 +489,6 @@ fn unsupported_features(dom: &Document, styles: &StyleContext) -> Vec<&'static s
             continue;
         };
         let style = styles.nearest_element_style(dom, node_id);
-        if matches!(keyword(style, Property::Float).as_str(), "left" | "right") {
-            push_unique(&mut unsupported, "float");
-        }
         if matches!(
             tag_name.to_ascii_lowercase().as_str(),
             "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th"
@@ -566,13 +563,6 @@ fn form_control_is_approximated(tag_name: &str, attributes: &[Attribute]) -> boo
         );
     }
     false
-}
-
-fn keyword(style: Option<&ComputedStyle>, property: Property) -> String {
-    match style.and_then(|style| style.value(&property)) {
-        Some(PropertyValue::Keyword(value)) | Some(PropertyValue::Raw(value)) => value.clone(),
-        _ => String::new(),
-    }
 }
 
 fn attr<'a>(attributes: &'a [Attribute], name: &str) -> Option<&'a str> {
@@ -1204,12 +1194,12 @@ mod tests {
     }
 
     #[test]
-    fn renderer_reports_unsupported_floats_tables_and_forms() {
+    fn renderer_reports_unsupported_tables_and_forms_but_supports_sibling_floats() {
         let new = render(
             "<style>.f{float:left}</style><div class=f>float</div><table><tr><td>cell</td></tr></table><form><textarea>notes</textarea></form>",
         );
         let unsupported = &new.diagnostics.unsupported;
-        assert!(unsupported.contains(&"float"));
+        assert!(!unsupported.contains(&"float"));
         assert!(unsupported.contains(&"table"));
         assert!(unsupported.contains(&"form-control"));
     }

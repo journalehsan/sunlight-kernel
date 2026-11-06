@@ -1,0 +1,31 @@
+<!doctype html>
+<!-- Minimized static Arch homepage/CSS, 2026-11-06. Retains the full-width
+     left float and negative sidebar margin used by the actual stylesheet. -->
+<style>
+* { margin:0; padding:0 }
+body { font-size:16px }
+#content { width:95%; margin:0 auto }
+#content-left-wrapper { float:left; width:100% }
+#content-left { margin:0 340px 0 0 }
+#content-right { float:left; width:300px; margin-left:-300px }
+.box { padding:8px; background:#ecf2f5; border:1px solid #bcd }
+#intro { height:100px }
+#news { margin-top:20px }
+#news h3 { float:left; padding-bottom:8px; margin-top:8px }
+#news h3 a { display:block; background:#1794d1; font-size:15px;
+             line-height:20px; padding:2px 10px; color:white }
+#news .rss-icon { float:right; margin-top:13px }
+#news h4 { clear:both; font-size:13px; margin-top:20px; border-bottom:1px dotted #bbb }
+#footer { clear:both; margin-top:20px }
+</style>
+<div id=content>
+ <div id=content-left-wrapper><div id=content-left>
+  <div class=box id=intro>Introduction</div>
+  <div id=news><h3 id=news-title><a id=news-label>Latest News</a></h3>
+   <a class=rss-icon id=rss><img src=rss.svg width=8 height=8 alt=RSS></a>
+   <h4 id=article-title>Article headline</h4><p>Static news content.</p>
+  </div>
+ </div></div>
+ <div id=content-right><div class=box>Package Search and Recent Updates</div></div>
+ <div id=footer>Footer clears both columns</div>
+</div>

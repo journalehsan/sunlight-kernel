@@ -7,7 +7,11 @@
 //!
 //! The implementation covers normal block flow, anonymous inline formatting
 //! contexts, common adjoining-margin collapse, images, single-line flex
-//! row/column containers, and intrinsic-sized single-line form controls.
+//! row/column containers, sibling floats/clear with signed margins and local
+//! inline exclusions, and intrinsic-sized single-line form controls.
+//! Float exclusions and clearance propagate through ordinary descendants
+//! sharing a block formatting context; floats, inline blocks and flex items
+//! establish independent contexts.
 //! Non-rendered nodes (`display: none`, `[hidden]`, `input[type=hidden]`) are
 //! pruned during tree construction, so they never occupy a `LayoutBox` or
 //! shift adjacent flow.  Unsupported CSS falls back to normal flow.  This is
@@ -166,6 +170,15 @@ pub enum CrossAxisAlignment {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FloatSide {
+    #[default]
+    None,
+    Left,
+    Right,
+    Both,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WhiteSpace {
     #[default]
     Normal,
@@ -203,13 +216,6 @@ impl Dimension {
             Self::Vw(_) | Self::Vh(_) => value_placeholder(self),
         }
     }
-
-    fn fixed(self) -> Option<f32> {
-        match self {
-            Self::Px(value) => Some(value),
-            Self::Auto | Self::Percent(_) | Self::Vw(_) | Self::Vh(_) => None,
-        }
-    }
 }
 
 fn value_placeholder(dimension: Dimension) -> f32 {
@@ -222,6 +228,8 @@ fn value_placeholder(dimension: Dimension) -> f32 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LayoutStyle<'a> {
     pub display: Display,
+    pub float: FloatSide,
+    pub clear: FloatSide,
     pub color: Color,
     pub background_color: Color,
     pub font_family: Cow<'a, str>,
@@ -503,6 +511,8 @@ impl<'a> StyleTree<'a> {
             .unwrap_or(font_size * 1.2);
         LayoutStyle {
             display: display(computed),
+            float: float_side(&keyword(computed, Property::Float)),
+            clear: float_side(&keyword(computed, Property::Clear)),
             color: css_color(computed, Property::Color, Color::rgb(0, 0, 0)),
             background_color: css_color(computed, Property::BackgroundColor, Color::TRANSPARENT),
             font_family: family,
@@ -701,12 +711,15 @@ impl<'a> GeometryContext<'a> {
     }
 
     fn dimension(&self, value: Dimension, _font_size: f32, containing: f32) -> f32 {
+        self.signed_dimension(value, containing).max(0.0)
+    }
+
+    fn signed_dimension(&self, value: Dimension, containing: f32) -> f32 {
         match value {
             Dimension::Vw(percent) => self.viewport_width * percent / 100.0,
             Dimension::Vh(percent) => self.viewport_height * percent / 100.0,
             _ => value.resolve(containing, 0.0),
         }
-        .max(0.0)
     }
 }
 
@@ -1201,6 +1214,11 @@ impl<'a> LayoutEngine<'a> {
                     .line_height(&style.font_family, style.font_size),
             );
         }
+        // Text uses its parent's font but does not inherit float or clear.
+        if matches!(node, Node::Text { .. }) {
+            style.float = FloatSide::None;
+            style.clear = FloatSide::None;
+        }
         if matches!(node, Node::Document { .. }) {
             style.display = Display::Block;
         }
@@ -1225,6 +1243,21 @@ impl<'a> LayoutEngine<'a> {
             },
             _ => inherited_link.clone(),
         };
+        let flex_item =
+            parent.is_some_and(|p| self.tree.boxes[p.0 as usize].style.display == Display::Flex);
+        if flex_item {
+            // Floats do not apply to flex items. Whitespace-only text does not
+            // generate an anonymous flex item.
+            style.float = FloatSide::None;
+            if matches!(node, Node::Text { content } if content.trim().is_empty()) {
+                return None;
+            }
+        }
+        if (flex_item || style.float != FloatSide::None)
+            && matches!(style.display, Display::Inline | Display::InlineBlock)
+        {
+            style.display = Display::Block;
+        }
         let kind = match node {
             Node::Document { .. } => BoxType::Block,
             Node::Element {
@@ -1417,7 +1450,7 @@ impl<'a> LayoutEngine<'a> {
                     &child_box.style,
                     self.context.viewport_width,
                 );
-                let margins = resolve_edges(
+                let margins = resolve_margins(
                     &self.context,
                     child_box.style.margin,
                     &child_box.style,
@@ -1460,15 +1493,13 @@ impl<'a> LayoutEngine<'a> {
                     max_width,
                     child_width(child_box.intrinsic.max_content_width),
                 );
-                let margins = self.context.dimension(
-                    child_box.style.margin.top,
-                    child_box.style.font_size,
-                    self.context.viewport_width,
-                ) + self.context.dimension(
-                    child_box.style.margin.bottom,
-                    child_box.style.font_size,
-                    self.context.viewport_width,
-                );
+                let margins = self
+                    .context
+                    .signed_dimension(child_box.style.margin.top, self.context.viewport_width)
+                    + self.context.signed_dimension(
+                        child_box.style.margin.bottom,
+                        self.context.viewport_width,
+                    );
                 height += child_box.intrinsic.natural_height + max(0.0, margins);
             } else if child_box.contributes_children_to_inline_flow() {
                 inline_children.push(child);
@@ -1509,8 +1540,8 @@ impl<'a> LayoutEngine<'a> {
             let mut seen = false;
             for child in children.by_ref() {
                 let item = &self.tree.boxes[child.0 as usize];
-                min += item.intrinsic.min_content_width;
-                max_width += item.intrinsic.max_content_width;
+                min += self.flex_outer_width(child, self.context.viewport_width, true);
+                max_width += self.flex_outer_width(child, self.context.viewport_width, false);
                 height = max(height, item.intrinsic.natural_height);
                 if seen {
                     min += layout_box.style.column_gap;
@@ -1547,12 +1578,35 @@ impl<'a> LayoutEngine<'a> {
     /// Pass 2: arrange a border box at `(x, y)`.  Block widths are constrained
     /// against the containing block; child coordinates are assigned only after
     /// the parent's padding edge is known.
+    fn establishes_float_context(&self, id: LayoutId) -> bool {
+        let b = &self.tree.boxes[id.0 as usize];
+        b.parent.is_none()
+            || b.style.float != FloatSide::None
+            || matches!(b.style.display, Display::InlineBlock | Display::Flex)
+            || b.parent
+                .is_some_and(|p| self.tree.boxes[p.0 as usize].style.display == Display::Flex)
+    }
+
     fn arrange(&mut self, id: LayoutId, available_width: f32, available_height: f32) -> f32 {
+        self.arrange_in_flow(id, available_width, available_height, &[])
+            .0
+    }
+
+    fn arrange_in_flow(
+        &mut self,
+        id: LayoutId,
+        available_width: f32,
+        available_height: f32,
+        inherited: &[(Rect, FloatSide)],
+    ) -> (f32, Vec<(Rect, FloatSide)>) {
         let index = id.0 as usize;
         let style = self.tree.boxes[index].style.clone();
         if style.display == Display::None {
-            return 0.0;
+            return (0.0, Vec::new());
         }
+        let independent_flow = self.establishes_float_context(id);
+        let inherited = if independent_flow { &[][..] } else { inherited };
+        let mut outgoing_floats = Vec::new();
         let padding = Edges::new(
             self.context
                 .dimension(style.padding.top, style.font_size, available_width),
@@ -1566,13 +1620,13 @@ impl<'a> LayoutEngine<'a> {
         let border = style.border;
         let mut margins = Edges::new(
             self.context
-                .dimension(style.margin.top, style.font_size, available_width),
+                .signed_dimension(style.margin.top, available_width),
             self.context
-                .dimension(style.margin.right, style.font_size, available_width),
+                .signed_dimension(style.margin.right, available_width),
             self.context
-                .dimension(style.margin.bottom, style.font_size, available_width),
+                .signed_dimension(style.margin.bottom, available_width),
             self.context
-                .dimension(style.margin.left, style.font_size, available_width),
+                .signed_dimension(style.margin.left, available_width),
         );
         self.tree.boxes[index].used_padding = padding;
         let outer_horizontal = padding.horizontal() + border.left + border.right;
@@ -1601,7 +1655,9 @@ impl<'a> LayoutEngine<'a> {
                 .width
                     + outer_horizontal
             }
-            (None, _) if style.display == Display::InlineBlock => {
+            (None, _)
+                if style.display == Display::InlineBlock || style.float != FloatSide::None =>
+            {
                 let intrinsic = self.tree.boxes[index].intrinsic;
                 max(
                     intrinsic.min_content_width,
@@ -1626,7 +1682,7 @@ impl<'a> LayoutEngine<'a> {
         let content_width = max(0.0, border_width - outer_horizontal);
         // Auto margins absorb positive free space only in normal block flow.
         // Inline-level auto margins remain zero; text-align positions the line.
-        if self.tree.boxes[index].is_block_container() {
+        if self.tree.boxes[index].is_block_container() && style.float == FloatSide::None {
             let free = max(0.0, available_width - border_width - margins.horizontal());
             match (
                 style.margin.left == Dimension::Auto,
@@ -1658,6 +1714,24 @@ impl<'a> LayoutEngine<'a> {
         );
         self.tree.boxes[index].border_box = Rect::new(x, y, border_width, 0.0);
 
+        let specified_height = match style.height {
+            Dimension::Auto => None,
+            value => Some(
+                self.context
+                    .dimension(value, style.font_size, available_height),
+            ),
+        };
+        let definite_content_height = specified_height.map(|value| {
+            max(
+                0.0,
+                value
+                    - if style.box_sizing == BoxSizing::BorderBox {
+                        padding.vertical() + border.vertical()
+                    } else {
+                        0.0
+                    },
+            )
+        });
         let content_height = match &self.tree.boxes[index].kind {
             BoxType::Image(_) | BoxType::Form(_) => {
                 let mut size = replaced_content_size(
@@ -1675,26 +1749,24 @@ impl<'a> LayoutEngine<'a> {
                 size.height
             }
             _ => match self.tree.boxes[index].style.display {
-                Display::Flex => {
-                    self.arrange_flex_children(id, content_width, available_height);
-                    self.tree.boxes[index]
-                        .children
-                        .iter()
-                        .map(|child| {
-                            let child_box = &self.tree.boxes[child.0 as usize];
-                            child_box.margin_box.bottom() - margin_top(child_box)
-                        })
-                        .fold(0.0_f32, max)
+                Display::Flex => self.arrange_flex_children(
+                    id,
+                    content_width,
+                    available_height,
+                    definite_content_height,
+                ),
+                _ => {
+                    let (height, floats) = self.arrange_block_children(
+                        id,
+                        content_width,
+                        available_height,
+                        inherited,
+                        independent_flow,
+                    );
+                    outgoing_floats = floats;
+                    height
                 }
-                _ => self.arrange_block_children(id, content_width, available_height),
             },
-        };
-        let specified_height = match style.height {
-            Dimension::Auto => None,
-            value => Some(
-                self.context
-                    .dimension(value, style.font_size, available_height),
-            ),
         };
         let mut border_height = specified_height
             .map(|height| {
@@ -1725,7 +1797,14 @@ impl<'a> LayoutEngine<'a> {
             border_height - padding.vertical() - border.top - border.bottom,
         );
         self.set_box_heights(index, content_height, padding, border);
-        border_height + margins.top + margins.bottom
+        (
+            border_height + margins.top + margins.bottom,
+            if independent_flow {
+                Vec::new()
+            } else {
+                outgoing_floats
+            },
+        )
     }
 
     fn set_box_heights(
@@ -1754,55 +1833,206 @@ impl<'a> LayoutEngine<'a> {
         self.tree.boxes[index].margin_box = margin_box;
     }
 
-    fn arrange_block_children(&mut self, parent: LayoutId, width: f32, height: f32) -> f32 {
+    fn arrange_block_children(
+        &mut self,
+        parent: LayoutId,
+        width: f32,
+        height: f32,
+        inherited: &[(Rect, FloatSide)],
+        independent_flow: bool,
+    ) -> (f32, Vec<(Rect, FloatSide)>) {
         let children = self.tree.boxes[parent.0 as usize].children.clone();
-        let origin_x = self.tree.boxes[parent.0 as usize].content_box.x;
-        let origin_y = self.tree.boxes[parent.0 as usize].content_box.y;
+        let origin = self.tree.boxes[parent.0 as usize].content_box;
+        // Ordinary descendant blocks share float exclusions and clearance.
+        // Coordinates are converted at the content edge, preserving each
+        // block's full width, margins, padding and background geometry.
+        let mut floats: Vec<(Rect, FloatSide)> = inherited
+            .iter()
+            .map(|(r, side)| {
+                (
+                    Rect::new(r.x - origin.x, r.y - origin.y, r.width, r.height),
+                    *side,
+                )
+            })
+            .collect();
+        let inherited_count = floats.len();
         let mut inline_run = Vec::new();
         let mut cursor = 0.0_f32;
         let mut pending_margin = 0.0_f32;
-        let flush_inline = |engine: &mut Self, run: &mut Vec<LayoutId>, cursor: &mut f32| {
+        let flush_inline = |engine: &mut Self,
+                            run: &mut Vec<LayoutId>,
+                            cursor: &mut f32,
+                            floats: &[(Rect, FloatSide)]| {
             if run.is_empty() {
                 return;
             }
-            let run_rect =
-                engine.arrange_inline_run(parent, run, origin_x, origin_y + *cursor, width);
-            *cursor += run_rect.height;
+            let rect = engine.arrange_inline_run_in_flow(
+                parent,
+                run,
+                origin.x,
+                origin.y + *cursor,
+                width,
+                floats,
+                *cursor,
+            );
+            *cursor += rect.height;
             run.clear();
         };
         for child in children {
-            let child_index = child.0 as usize;
-            if self.tree.boxes[child_index].is_block_container() {
-                flush_inline(self, &mut inline_run, &mut cursor);
-                let child_style = self.tree.boxes[child_index].style.clone();
-                let child_margin_top =
-                    self.context
-                        .dimension(child_style.margin.top, child_style.font_size, width);
-                let collapsed = if cursor == 0.0 && pending_margin == 0.0 {
-                    child_margin_top
-                } else if cursor == 0.0 {
-                    pending_margin + child_margin_top
-                } else if pending_margin == 0.0 {
-                    child_margin_top
-                } else if child_margin_top == 0.0 {
-                    pending_margin
-                } else {
-                    collapse_margins(pending_margin, child_margin_top)
-                };
-                cursor += collapsed;
-                let child_y = origin_y + cursor;
-                self.arrange_child(child, origin_x, child_y, width, height);
-                let child_margin_bottom =
-                    self.context
-                        .dimension(child_style.margin.bottom, child_style.font_size, width);
-                cursor += self.tree.boxes[child_index].border_box.height;
-                pending_margin = child_margin_bottom;
+            let index = child.0 as usize;
+            let style = self.tree.boxes[index].style.clone();
+            if style.float != FloatSide::None {
+                flush_inline(self, &mut inline_run, &mut cursor, &floats);
+                // Sizing percentages always use the containing block. Auto
+                // widths shrink to fit its currently available float area.
+                let mut y = cursor + pending_margin;
+                y = clearance(&floats, style.clear, y);
+                loop {
+                    let (left, right) = float_span(&floats, y, 0.0, width);
+                    let margins = resolve_margins(&self.context, style.margin, &style, width);
+                    let padding = resolve_edges(&self.context, style.padding, &style, width);
+                    let outer = padding.horizontal() + style.border.horizontal();
+                    let intrinsic = self.tree.boxes[index].intrinsic;
+                    let available = max(0.0, right - left - margins.horizontal() - outer);
+                    let auto_width = if matches!(
+                        self.tree.boxes[index].kind,
+                        BoxType::Image(_) | BoxType::Form(_)
+                    ) {
+                        replaced_content_size(&self.context, &self.tree.boxes[index], width, height)
+                            .width
+                    } else {
+                        max(
+                            intrinsic.min_content_width,
+                            min(intrinsic.max_content_width, available),
+                        )
+                    };
+                    // Keep the containing width for percentage margins and
+                    // padding while assigning only the used auto content size.
+                    if style.width == Dimension::Auto {
+                        self.tree.boxes[index].style.width = Dimension::Px(
+                            auto_width
+                                + if style.box_sizing == BoxSizing::BorderBox {
+                                    outer
+                                } else {
+                                    0.0
+                                },
+                        );
+                    }
+                    self.arrange(child, width, height);
+                    self.tree.boxes[index].style.width = style.width;
+                    let margin_box = self.tree.boxes[index].margin_box;
+                    if margin_box.width <= right - left + EPSILON
+                        || next_float_bottom(&floats, y).is_none()
+                    {
+                        let x = if style.float == FloatSide::Right {
+                            right - margin_box.width
+                        } else {
+                            left
+                        };
+                        translate_subtree(
+                            &mut self.tree.boxes,
+                            child,
+                            origin.x + x - margin_box.x,
+                            origin.y + y - margin_box.y,
+                        );
+                        let placed = self.tree.boxes[index].margin_box;
+                        floats.push((
+                            Rect::new(
+                                placed.x - origin.x,
+                                placed.y - origin.y,
+                                placed.width,
+                                placed.height,
+                            ),
+                            style.float,
+                        ));
+                        break;
+                    }
+                    y = next_float_bottom(&floats, y).unwrap();
+                }
+            } else if self.tree.boxes[index].is_block_container() {
+                flush_inline(self, &mut inline_run, &mut cursor, &floats);
+                let top = self.context.signed_dimension(style.margin.top, width);
+                cursor += collapse_margins(pending_margin, top);
+                cursor = clearance(&floats, style.clear, cursor);
+                let exclusions: Vec<_> = floats
+                    .iter()
+                    .map(|(r, side)| {
+                        (
+                            Rect::new(r.x + origin.x, r.y + origin.y, r.width, r.height),
+                            *side,
+                        )
+                    })
+                    .collect();
+                let descendants = self.arrange_child_in_flow(
+                    child,
+                    origin.x,
+                    origin.y + cursor,
+                    width,
+                    height,
+                    &exclusions,
+                );
+                floats.extend(descendants.into_iter().map(|(r, side)| {
+                    (
+                        Rect::new(r.x - origin.x, r.y - origin.y, r.width, r.height),
+                        side,
+                    )
+                }));
+                cursor += self.tree.boxes[index].border_box.height;
+                pending_margin = self.context.signed_dimension(style.margin.bottom, width);
             } else {
                 inline_run.push(child);
             }
         }
-        flush_inline(self, &mut inline_run, &mut cursor);
-        cursor + collapse_margins(0.0, pending_margin)
+        flush_inline(self, &mut inline_run, &mut cursor, &floats);
+        let normal_bottom = cursor + pending_margin;
+        let bottom = if independent_flow {
+            floats
+                .iter()
+                .fold(normal_bottom, |bottom, (r, _)| max(bottom, r.bottom()))
+        } else {
+            normal_bottom
+        };
+        let outgoing = floats
+            .into_iter()
+            .skip(inherited_count)
+            .map(|(r, side)| {
+                (
+                    Rect::new(r.x + origin.x, r.y + origin.y, r.width, r.height),
+                    side,
+                )
+            })
+            .collect();
+        (bottom, outgoing)
+    }
+
+    fn arrange_child_in_flow(
+        &mut self,
+        child: LayoutId,
+        parent_x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        inherited: &[(Rect, FloatSide)],
+    ) -> Vec<(Rect, FloatSide)> {
+        let top = self
+            .context
+            .signed_dimension(self.tree.boxes[child.0 as usize].style.margin.top, width);
+        let exclusions: Vec<_> = inherited
+            .iter()
+            .map(|(r, side)| {
+                (
+                    Rect::new(r.x - parent_x, r.y - y + top, r.width, r.height),
+                    *side,
+                )
+            })
+            .collect();
+        let (_, outgoing) = self.arrange_in_flow(child, width, height, &exclusions);
+        let dy = y - self.tree.boxes[child.0 as usize].border_box.y;
+        translate_subtree(&mut self.tree.boxes, child, parent_x, dy);
+        outgoing
+            .into_iter()
+            .map(|(r, side)| (Rect::new(r.x + parent_x, r.y + dy, r.width, r.height), side))
+            .collect()
     }
 
     fn arrange_child(&mut self, child: LayoutId, parent_x: f32, y: f32, width: f32, height: f32) {
@@ -1811,104 +2041,124 @@ impl<'a> LayoutEngine<'a> {
         translate_subtree(&mut self.tree.boxes, child, parent_x, y - local_y);
     }
 
-    fn arrange_flex_children(&mut self, parent: LayoutId, width: f32, height: f32) {
-        let parent_index = parent.0 as usize;
-        let parent_style = self.tree.boxes[parent_index].style.clone();
-        let origin_x = self.tree.boxes[parent_index].content_box.x;
-        let origin_y = self.tree.boxes[parent_index].content_box.y;
-        let children: Vec<_> = self.tree.boxes[parent_index]
-            .children
-            .iter()
-            .copied()
-            .collect();
-        if parent_style.flex_direction == FlexDirection::Row {
-            let gap = parent_style.column_gap;
-            let fixed: f32 = children.iter().fold(0.0, |sum, child| {
-                sum + self.tree.boxes[child.0 as usize]
-                    .style
-                    .width
-                    .fixed()
-                    .unwrap_or(
-                        self.tree.boxes[child.0 as usize]
-                            .intrinsic
-                            .max_content_width,
-                    )
-            });
-            let total_gap = gap * children.len().saturating_sub(1) as f32;
-            let free = max(0.0, width - fixed - total_gap);
-            let (offset, distributed_gap) =
-                distribute_main_axis(parent_style.justify_content, free, children.len());
-            let mut x = offset;
-            for (index, child) in children.iter().copied().enumerate() {
-                let child_width = self.tree.boxes[child.0 as usize]
-                    .style
-                    .width
-                    .fixed()
-                    .unwrap_or(
-                        self.tree.boxes[child.0 as usize]
-                            .intrinsic
-                            .max_content_width,
-                    );
-                self.arrange_child(child, origin_x + x, origin_y, child_width, height);
-                self.align_flex_cross_axis(child, origin_y, height, parent_style.align_items, true);
-                x += child_width + gap + distributed_gap;
-                if index + 1 == children.len() {
-                    x -= distributed_gap;
-                }
-            }
+    // Intrinsic widths are content widths; add each item's own border,
+    // padding and signed margins exactly once before distributing free space.
+    fn flex_outer_width(&self, child: LayoutId, width: f32, minimum: bool) -> f32 {
+        let b = &self.tree.boxes[child.0 as usize];
+        let padding = resolve_edges(&self.context, b.style.padding, &b.style, width);
+        let margins = resolve_margins(&self.context, b.style.margin, &b.style, width);
+        let outer = padding.horizontal() + b.style.border.horizontal();
+        let intrinsic = if matches!(b.kind, BoxType::Image(_) | BoxType::Form(_)) {
+            replaced_content_size(&self.context, b, width, self.context.viewport_height).width
+        } else if minimum {
+            b.intrinsic.min_content_width
         } else {
-            let gap = parent_style.row_gap;
-            let fixed: f32 = children.iter().fold(0.0, |sum, child| {
-                sum + self.tree.boxes[child.0 as usize]
-                    .style
-                    .height
-                    .fixed()
-                    .unwrap_or(self.tree.boxes[child.0 as usize].intrinsic.natural_height)
-            });
-            let total_gap = gap * children.len().saturating_sub(1) as f32;
-            let free = max(0.0, height - fixed - total_gap);
-            let (offset, distributed_gap) =
-                distribute_main_axis(parent_style.justify_content, free, children.len());
-            let mut y = offset;
-            for (index, child) in children.iter().copied().enumerate() {
-                let child_height = self.tree.boxes[child.0 as usize]
-                    .style
-                    .height
-                    .fixed()
-                    .unwrap_or(self.tree.boxes[child.0 as usize].intrinsic.natural_height);
-                self.arrange_child(child, origin_x, origin_y + y, width, child_height);
-                self.align_flex_cross_axis(child, origin_x, width, parent_style.align_items, false);
-                y += child_height + gap + distributed_gap;
-                if index + 1 == children.len() {
-                    y -= distributed_gap;
-                }
-            }
-        }
+            b.intrinsic.max_content_width
+        };
+        constrain_border_width(
+            &self.context,
+            &b.style,
+            width,
+            used_border_dimension(
+                &self.context,
+                b.style.width,
+                &b.style,
+                width,
+                intrinsic,
+                outer,
+            ),
+            outer,
+        ) + margins.horizontal()
     }
 
-    fn align_flex_cross_axis(
+    fn arrange_flex_children(
         &mut self,
-        child: LayoutId,
-        _origin: f32,
-        extent: f32,
-        alignment: CrossAxisAlignment,
-        horizontal: bool,
-    ) {
-        let box_ = &self.tree.boxes[child.0 as usize];
-        let child_extent = if horizontal {
-            box_.margin_box.height
+        parent: LayoutId,
+        width: f32,
+        height: f32,
+        definite_height: Option<f32>,
+    ) -> f32 {
+        let p = parent.0 as usize;
+        let style = self.tree.boxes[p].style.clone();
+        let origin = self.tree.boxes[p].content_box;
+        let children = self.tree.boxes[p].children.clone();
+        let row = style.flex_direction == FlexDirection::Row;
+        let gap = if row { style.column_gap } else { style.row_gap };
+        let sizes: Vec<f32> = children
+            .iter()
+            .map(|&c| {
+                if row {
+                    self.flex_outer_width(c, width, false)
+                } else {
+                    self.arrange(c, width, height);
+                    self.tree.boxes[c.0 as usize].margin_box.height
+                }
+            })
+            .collect();
+        let gaps = gap * children.len().saturating_sub(1) as f32;
+        let extent = if row {
+            width
         } else {
-            box_.margin_box.width
+            definite_height.unwrap_or(sizes.iter().sum::<f32>() + gaps)
         };
-        let delta = match alignment {
-            CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => 0.0,
-            CrossAxisAlignment::End => extent - child_extent,
-            CrossAxisAlignment::Center => (extent - child_extent) * 0.5,
-        };
-        if horizontal {
-            translate_subtree(&mut self.tree.boxes, child, 0.0, delta);
+        let free = max(0.0, extent - sizes.iter().sum::<f32>() - gaps);
+        let (mut cursor, distributed_gap) =
+            distribute_main_axis(style.justify_content, free, children.len());
+        let mut cross: f32 = 0.0;
+        for (i, &child) in children.iter().enumerate() {
+            let m = self.tree.boxes[child.0 as usize].style.margin;
+            self.arrange_child(
+                child,
+                origin.x + if row { cursor } else { 0.0 },
+                origin.y
+                    + if row {
+                        self.context.signed_dimension(m.top, width)
+                    } else {
+                        cursor + self.context.signed_dimension(m.top, width)
+                    },
+                if row { sizes[i] } else { width },
+                height,
+            );
+            let b = &self.tree.boxes[child.0 as usize];
+            cross = max(
+                cross,
+                if row {
+                    b.margin_box.height
+                } else {
+                    b.margin_box.width
+                },
+            );
+            cursor += sizes[i] + gap + distributed_gap;
+        }
+        let cross_extent = if row {
+            definite_height.unwrap_or(cross)
         } else {
-            translate_subtree(&mut self.tree.boxes, child, delta, 0.0);
+            width
+        };
+        for child in children {
+            let b = &self.tree.boxes[child.0 as usize];
+            let child_extent = if row {
+                b.margin_box.height
+            } else {
+                b.margin_box.width
+            };
+            let free = cross_extent - child_extent;
+            let delta = match style.align_items {
+                CrossAxisAlignment::End => free,
+                CrossAxisAlignment::Center => free * 0.5,
+                _ => 0.0,
+            };
+            translate_subtree(
+                &mut self.tree.boxes,
+                child,
+                if row { 0.0 } else { delta },
+                if row { delta } else { 0.0 },
+            );
+        }
+        if row {
+            cross
+        } else {
+            max(0.0, cursor - gap - distributed_gap)
         }
     }
 
@@ -2130,7 +2380,7 @@ fn collect_inline_tokens<'a>(
                     || item.style.display == Display::InlineBlock =>
             {
                 let padding = resolve_edges(context, item.style.padding, &item.style, available);
-                let margins = resolve_edges(context, item.style.margin, &item.style, available);
+                let margins = resolve_margins(context, item.style.margin, &item.style, available);
                 let outer_x = padding.horizontal() + item.style.border.horizontal();
                 let outer_y = padding.vertical() + item.style.border.vertical();
                 let content = match item.kind {
@@ -2208,6 +2458,59 @@ fn collect_inline_tokens<'a>(
         }
     }
     tokens
+}
+
+fn float_span(floats: &[(Rect, FloatSide)], y: f32, height: f32, width: f32) -> (f32, f32) {
+    let mut left: f32 = 0.0;
+    let mut right = width;
+    for (r, side) in floats {
+        if r.bottom() > y + EPSILON && r.y <= y + height + EPSILON {
+            match side {
+                FloatSide::Left => left = max(left, r.right()),
+                FloatSide::Right => right = min(right, r.x),
+                _ => {}
+            }
+        }
+    }
+    (left, right)
+}
+fn next_float_bottom(floats: &[(Rect, FloatSide)], y: f32) -> Option<f32> {
+    floats
+        .iter()
+        .map(|(r, _)| r.bottom())
+        .filter(|&bottom| bottom > y + EPSILON)
+        .reduce(min)
+}
+fn clearance(floats: &[(Rect, FloatSide)], clear: FloatSide, y: f32) -> f32 {
+    floats
+        .iter()
+        .filter(|(_, side)| {
+            clear == FloatSide::Both || (clear != FloatSide::None && clear == *side)
+        })
+        .fold(y, |y, (r, _)| max(y, r.bottom()))
+}
+
+fn float_side(value: &str) -> FloatSide {
+    match value {
+        "left" => FloatSide::Left,
+        "right" => FloatSide::Right,
+        "both" => FloatSide::Both,
+        _ => FloatSide::None,
+    }
+}
+
+fn resolve_margins(
+    context: &GeometryContext<'_>,
+    edges: Edges<Dimension>,
+    _style: &LayoutStyle<'_>,
+    containing: f32,
+) -> Edges<f32> {
+    Edges::new(
+        context.signed_dimension(edges.top, containing),
+        context.signed_dimension(edges.right, containing),
+        context.signed_dimension(edges.bottom, containing),
+        context.signed_dimension(edges.left, containing),
+    )
 }
 
 fn resolve_edges(
@@ -2573,6 +2876,8 @@ struct InlinePlacement<'a> {
 
 #[derive(Default)]
 struct InlineLine<'a> {
+    offset_x: f32,
+    offset_y: f32,
     items: Vec<InlinePlacement<'a>>,
     width: f32,
     ascent: f32,
@@ -2613,6 +2918,55 @@ fn inline_lines<'a>(
     available: Option<f32>,
     nowrap: bool,
 ) -> (Vec<InlineLine<'a>>, f32) {
+    inline_lines_in_flow(context, tokens, available, nowrap, &[], 0.0, 0.0)
+}
+
+fn finish_inline_line<'a>(
+    line: &mut InlineLine<'a>,
+    lines: &mut Vec<InlineLine<'a>>,
+    y: &mut f32,
+    line_height: f32,
+) {
+    line.offset_y = max(line.offset_y, *y);
+    *y = line.offset_y + max(line.height(), line_height);
+    lines.push(core::mem::take(line));
+}
+
+fn prepare_float_line(
+    line: &mut InlineLine<'_>,
+    y: &mut f32,
+    available: Option<f32>,
+    floats: &[(Rect, FloatSide)],
+    flow_y: f32,
+    line_height: f32,
+    item_width: f32,
+) -> Option<f32> {
+    let width = available?;
+    loop {
+        let (left, right) = float_span(floats, flow_y + *y, max(line.height(), line_height), width);
+        let limit = max(0.0, right - left);
+        if line.items.is_empty() && limit + EPSILON < item_width && limit < width - EPSILON {
+            if let Some(bottom) = next_float_bottom(floats, flow_y + *y) {
+                *y = bottom - flow_y;
+                continue;
+            }
+        }
+        line.offset_x = left;
+        line.offset_y = *y;
+        return Some(limit);
+    }
+}
+
+fn inline_lines_in_flow<'a>(
+    context: &GeometryContext<'_>,
+    tokens: Vec<InlineToken<'a>>,
+    available: Option<f32>,
+    nowrap: bool,
+    floats: &[(Rect, FloatSide)],
+    flow_y: f32,
+    line_height: f32,
+) -> (Vec<InlineLine<'a>>, f32) {
+    let mut y = 0.0;
     let mut lines = Vec::new();
     let mut line = InlineLine::default();
     let mut pending_space = false;
@@ -2641,13 +2995,30 @@ fn inline_lines<'a>(
                             let tab = chunk.ends_with('\t');
                             let chunk = chunk.strip_suffix('\t').unwrap_or(chunk);
                             let width = text_advance(context, &style, chunk);
+                            let limit = prepare_float_line(
+                                &mut line,
+                                &mut y,
+                                available,
+                                floats,
+                                flow_y,
+                                max(line_height, style.line_height),
+                                width,
+                            );
                             let wrap = style.white_space == WhiteSpace::PreWrap
                                 && !nowrap
                                 && !line.items.is_empty()
-                                && available
-                                    .is_some_and(|limit| line.width + width > limit + EPSILON);
+                                && limit.is_some_and(|limit| line.width + width > limit + EPSILON);
                             if wrap {
-                                lines.push(core::mem::take(&mut line));
+                                finish_inline_line(&mut line, &mut lines, &mut y, line_height);
+                                prepare_float_line(
+                                    &mut line,
+                                    &mut y,
+                                    available,
+                                    floats,
+                                    flow_y,
+                                    max(line_height, style.line_height),
+                                    width,
+                                );
                             }
                             if !chunk.is_empty() {
                                 line.push(
@@ -2676,7 +3047,7 @@ fn inline_lines<'a>(
                         line.ascent = max(line.ascent, text_baseline(&style));
                         line.descent = max(line.descent, style.line_height - text_baseline(&style));
                         if newline {
-                            lines.push(core::mem::take(&mut line));
+                            finish_inline_line(&mut line, &mut lines, &mut y, line_height);
                         }
                     }
                     continue;
@@ -2692,13 +3063,31 @@ fn inline_lines<'a>(
                     } else {
                         0.0
                     };
+                    let limit = prepare_float_line(
+                        &mut line,
+                        &mut y,
+                        available,
+                        floats,
+                        flow_y,
+                        max(line_height, style.line_height),
+                        width,
+                    );
                     let wrap = !nowrap
                         && style.white_space != WhiteSpace::Nowrap
-                        && available
+                        && limit
                             .is_some_and(|limit| line.width + separator + width > limit + EPSILON)
                         && !line.items.is_empty();
                     if wrap {
-                        lines.push(core::mem::take(&mut line));
+                        finish_inline_line(&mut line, &mut lines, &mut y, line_height);
+                        prepare_float_line(
+                            &mut line,
+                            &mut y,
+                            available,
+                            floats,
+                            flow_y,
+                            max(line_height, style.line_height),
+                            width,
+                        );
                     }
                     line.push(
                         layout_id,
@@ -2725,12 +3114,30 @@ fn inline_lines<'a>(
                 } else {
                     0.0
                 };
+                let limit = prepare_float_line(
+                    &mut line,
+                    &mut y,
+                    available,
+                    floats,
+                    flow_y,
+                    max(line_height, size.height),
+                    size.width,
+                );
                 let wrap = !nowrap
-                    && available
+                    && limit
                         .is_some_and(|limit| line.width + separator + size.width > limit + EPSILON)
                     && !line.items.is_empty();
                 if wrap {
-                    lines.push(core::mem::take(&mut line));
+                    finish_inline_line(&mut line, &mut lines, &mut y, line_height);
+                    prepare_float_line(
+                        &mut line,
+                        &mut y,
+                        available,
+                        floats,
+                        flow_y,
+                        max(line_height, size.height),
+                        size.width,
+                    );
                 }
                 line.push(
                     layout_id,
@@ -2742,7 +3149,8 @@ fn inline_lines<'a>(
                 pending_space = false;
             }
             InlineToken::Break => {
-                lines.push(core::mem::take(&mut line));
+                line.offset_y = y;
+                finish_inline_line(&mut line, &mut lines, &mut y, line_height);
                 pending_space = false;
             }
         }
@@ -2775,13 +3183,15 @@ fn measure_inline<'a>(
 }
 
 impl<'a> LayoutEngine<'a> {
-    fn arrange_inline_run(
+    fn arrange_inline_run_in_flow(
         &mut self,
         parent: LayoutId,
         ids: &[LayoutId],
         origin_x: f32,
         origin_y: f32,
         available: f32,
+        floats: &[(Rect, FloatSide)],
+        flow_y: f32,
     ) -> Rect {
         // Atomic inline boxes establish their own formatting context before
         // being positioned in the containing visual line.
@@ -2799,11 +3209,14 @@ impl<'a> LayoutEngine<'a> {
         }
         let style = self.tree.boxes[parent.0 as usize].style.clone();
         let tokens = collect_inline_tokens(&self.context, &self.tree.boxes, ids, available, true);
-        let (lines, _) = inline_lines(
+        let (lines, _) = inline_lines_in_flow(
             &self.context,
             tokens,
             Some(available),
             style.white_space == WhiteSpace::Nowrap,
+            floats,
+            flow_y,
+            style.line_height,
         );
         let mut y = 0.0;
         let mut widest = 0.0_f32;
@@ -2816,13 +3229,18 @@ impl<'a> LayoutEngine<'a> {
                 line.ascent = style.line_height;
                 line.descent = 0.0;
             }
-            let offset = match style.text_align {
-                TextAlign::Center => max(0.0, available - line.width) * 0.5,
-                TextAlign::End => max(0.0, available - line.width),
-                _ => 0.0,
-            };
+            let (left, right) =
+                float_span(floats, flow_y + line.offset_y, line.height(), available);
+            let line_width = max(0.0, right - left);
+            let offset = left
+                + match style.text_align {
+                    TextAlign::Center => max(0.0, line_width - line.width) * 0.5,
+                    TextAlign::End => max(0.0, line_width - line.width),
+                    _ => 0.0,
+                };
             widest = max(widest, line.width);
             let height = line.height();
+            y = line.offset_y;
             for item in line.items {
                 let rect = absolute(
                     item.bounds,
@@ -2904,7 +3322,7 @@ fn distribute_main_axis(alignment: MainAxisAlignment, free: f32, count: usize) -
             let gap = free / (count + 1) as f32;
             (gap, gap)
         }
-        _ => (free * 0.5, 0.0),
+        _ => (0.0, 0.0),
     }
 }
 
@@ -2912,12 +3330,6 @@ fn collapse_margins(first: f32, second: f32) -> f32 {
     let positive = max(0.0, first).max(max(0.0, second));
     let negative = min(0.0, first).min(min(0.0, second));
     positive + negative
-}
-
-fn margin_top(layout_box: &LayoutBox<'_>) -> f32 {
-    layout_box.content_box.y
-        - layout_box.border_box.y
-        - layout_box.style.padding.top.resolve(0.0, 0.0)
 }
 
 fn resolve_output_style<'src>(layout_box: &LayoutBox<'src>) -> ResolvedStyle<'src> {

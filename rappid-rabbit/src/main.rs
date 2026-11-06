@@ -610,6 +610,7 @@ impl RabbitApp {
             .header("content-type")
             .map_or("(missing)", |value| value);
         let body_size = result.body.len();
+        trace_resource("html", &final_url, &result.body);
         self.log_heap_stage("after response completion", generation, Some(body_size));
 
         self.status = format!("HTTP {status_code} {status_text}");
@@ -716,6 +717,9 @@ impl RabbitApp {
                         self.patch_all_controls();
                         debug_log(&format!("[RABBIT][LAYOUT] initial gen={} viewport={}x{} style_ms={} layout_ms={} worker=yes", generation, viewport.w, viewport.h, style_ms, layout_started.elapsed().as_millis()));
                         self.log_render_scene("initial scene");
+                        if TRACE_DOCUMENT.load(core::sync::atomic::Ordering::Relaxed) {
+                            trace_layout(self.render_state.as_ref().unwrap());
+                        }
                         self.developer_tools.dom.set_document_with_styles(
                             self.render_state.as_ref().unwrap().dom.clone(),
                             self.render_state.as_ref().unwrap().styles.clone(),
@@ -932,6 +936,7 @@ impl RabbitApp {
             response
         };
 
+        trace_resource("css", &response.final_url, &response.body);
         let css = match core::str::from_utf8(&response.body) {
             Ok(css) => css,
             Err(_) => {
@@ -3143,11 +3148,89 @@ impl App for RabbitApp {
     }
 }
 
+// Explicit diagnostic capture stays on the document worker. Disabled by default;
+// it never selects a renderer or changes document/network ownership.
+static TRACE_DOCUMENT: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+fn trace_resource(kind: &str, url: &str, bytes: &[u8]) {
+    if !TRACE_DOCUMENT.load(core::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    debug_log(&format!(
+        "[RABBIT][CAPTURE] begin kind={kind} bytes={} url={url}",
+        bytes.len()
+    ));
+    for (i, chunk) in bytes.chunks(64).enumerate() {
+        let mut line = String::with_capacity(320);
+        let _ = write!(line, "[RABBIT][CAPTURE] data offset={} hex=", i * 64);
+        for byte in chunk {
+            let _ = write!(line, "{byte:02x}");
+        }
+        debug_log(&line);
+    }
+    debug_log("[RABBIT][CAPTURE] end");
+}
+
+#[cfg(feature = "dom")]
+fn trace_layout(state: &DocumentRenderState) {
+    use rappid_rabbit::css::Property;
+    debug_log(&format!(
+        "[RABBIT][TREE] begin url={} viewport={}x{}",
+        state.final_url, state.viewport.w, state.viewport.h
+    ));
+    for g in &state.layout_geometry {
+        let id = g.node_id;
+        let mut line = format!(
+            "[RABBIT][TREE] node={} parent={:?} tag={:?} attrs={:?} content={:?} border={:?}",
+            id,
+            state.dom.parent(id),
+            state.dom.tag_name(id),
+            state.dom.attributes(id),
+            g.content_box,
+            g.border_box
+        );
+        if let Some(style) = state.styles.style_for(id) {
+            for property in [
+                Property::Display,
+                Property::Float,
+                Property::Clear,
+                Property::Width,
+                Property::Height,
+                Property::MarginLeft,
+                Property::MarginRight,
+                Property::MarginTop,
+                Property::MarginBottom,
+                Property::AlignItems,
+                Property::JustifyContent,
+                Property::BackgroundColor,
+            ] {
+                if let Some(value) = style.value(&property) {
+                    let _ = write!(line, " {}={}", property.name(), value.display());
+                }
+            }
+        }
+        // Serial debug messages are bounded by the syscall. Chunk long attribute
+        // values without splitting UTF-8, keeping every DOM/layout record.
+        while line.len() > 200 {
+            let mut end = 200;
+            while !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            debug_log(&line[..end]);
+            line.drain(..end);
+        }
+        debug_log(&line);
+    }
+    debug_log("[RABBIT][TREE] end");
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut initial_url = None;
     for argument in std::env::args().skip(1) {
         if let Some(trace) = launch_trace::parse_launch_arg(argument.as_bytes()) {
             launch_trace::set_current(trace);
+        } else if argument == "--trace-document" {
+            TRACE_DOCUMENT.store(true, core::sync::atomic::Ordering::Relaxed);
         } else if initial_url.is_none() {
             initial_url =
                 rappid_rabbit::launch_url::initial_url_from_values(&[argument.as_bytes()])

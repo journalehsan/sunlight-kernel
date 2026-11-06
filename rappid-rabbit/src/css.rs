@@ -2667,8 +2667,20 @@ fn compute_element_style(
     let mut custom_winners: Vec<(String, CascadeKey, MatchedDeclaration)> = Vec::new();
     let mut all_candidates: Vec<MatchedDeclaration> = Vec::new();
     let mut source_order = 0usize;
-    for (sheet_index, sheet) in sheets.iter().enumerate() {
+    for sheet in sheets {
         for rule in &sheet.rules {
+            // Declaration indices are local to a rule. Reserve its complete
+            // range so a long earlier rule cannot outrank a later short rule.
+            // Keep the same source positions when media conditions change.
+            let rule_order = source_order;
+            source_order = source_order.saturating_add(
+                rule.declarations
+                    .iter()
+                    .map(|d| d.order)
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(1),
+            );
             if let Some(media) = &rule.media {
                 if !import_media_active(media, viewport_width).0 {
                     continue;
@@ -2689,7 +2701,7 @@ fn compute_element_style(
                                 1
                             },
                             specificity,
-                            order: source_order.saturating_add(declaration.order),
+                            order: rule_order.saturating_add(declaration.order),
                         };
                         let matched = MatchedDeclaration {
                             property: declaration.property.clone(),
@@ -2700,7 +2712,7 @@ fn compute_element_style(
                             specificity,
                             inherited: false,
                             important: declaration.important,
-                            source_order: source_order.saturating_add(declaration.order),
+                            source_order: rule_order.saturating_add(declaration.order),
                             location: rule.location,
                         };
                         all_candidates.push(matched.clone());
@@ -2726,7 +2738,7 @@ fn compute_element_style(
                             1
                         },
                         specificity,
-                        order: source_order.saturating_add(declaration.order),
+                        order: rule_order.saturating_add(declaration.order),
                     };
                     let matched = MatchedDeclaration {
                         property: declaration.property.clone(),
@@ -2737,7 +2749,7 @@ fn compute_element_style(
                         specificity,
                         inherited: false,
                         important: declaration.important,
-                        source_order: source_order.saturating_add(declaration.order),
+                        source_order: rule_order.saturating_add(declaration.order),
                         location: rule.location,
                     };
                     all_candidates.push(matched.clone());
@@ -2749,9 +2761,7 @@ fn compute_element_style(
                     }
                 }
             }
-            source_order = source_order.saturating_add(1);
         }
-        source_order = source_order.saturating_add(sheet_index.saturating_add(1));
     }
     if let Some(Node::Element { attributes, .. }) = document.get(node_id) {
         if let Some(style) = attribute_value(attributes, "style") {
@@ -3822,6 +3832,44 @@ mod tests {
         assert!(
             matches!(style.value(&Property::BoxShadow), Some(PropertyValue::Keyword(value)) if value.contains("inset"))
         );
+    }
+
+    #[test]
+    fn later_rules_follow_all_declarations_in_earlier_rules() {
+        let document = parse_html("<style>.base{color:red;background:white;width:auto;height:auto;border:0 solid black;margin:12px;padding:10px 24px;--pad:24px}.compact{padding:10px 12px;--pad:12px}@media(max-width:800px){.compact{padding-left:8px;--pad:8px}}</style><a class='base compact'>Sign in</a>").unwrap();
+        let id = document.find_first_element("a").unwrap();
+        let sheets = collect_embedded_stylesheets(&document);
+        for (width, left) in [(1056, 12), (756, 8)] {
+            let styles = StyleContext::build_with_viewport(&document, &sheets, width);
+            let style = styles.style_for(id).unwrap();
+            assert_eq!(
+                style.value(&Property::PaddingLeft),
+                Some(&PropertyValue::LengthPx(left))
+            );
+            assert_eq!(
+                style.value(&Property::PaddingRight),
+                Some(&PropertyValue::LengthPx(12))
+            );
+            assert_eq!(
+                style
+                    .custom_properties
+                    .iter()
+                    .find(|(name, _, _)| name == "--pad")
+                    .unwrap()
+                    .1
+                    .display(),
+                format!("{left}px")
+            );
+            let winner = style
+                .properties
+                .iter()
+                .find(|p| p.property == Property::PaddingRight)
+                .unwrap()
+                .matched
+                .as_ref()
+                .unwrap();
+            assert_eq!(winner.selector, ".compact");
+        }
     }
 
     #[test]
