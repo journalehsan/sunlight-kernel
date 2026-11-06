@@ -714,7 +714,7 @@ struct Window {
     /// Monotonic identity of the currently attached client surface. Generation
     /// one is the CREATE_WINDOW surface; zero is never published.
     surface_generation: u64,
-    desktop_overlay: Option<Rect>,
+    desktop_overlays: [Option<Rect>; MAX_DESKTOP_OVERLAYS],
     x: u32, // chrome top-left on screen
     y: u32,
     // Saved normal geometry for restore from maximized/fullscreen.
@@ -1531,7 +1531,7 @@ fn desktop_overlay_idx(state: &CompositorState) -> Option<usize> {
     }
     state.windows.iter().rposition(|win| {
         win.config.window_type == WindowType::Desktop
-            && win.desktop_overlay.is_some()
+            && win.desktop_overlays.iter().any(|rect| rect.is_some())
             && is_window_visible(state, win)
     })
 }
@@ -1551,6 +1551,27 @@ fn desktop_overlay_from_commit(win: &Window, caller: u64, xy: u64, wh: u64) -> O
         return None;
     }
     Some(Rect::new(x as i32, y as i32, w, h))
+}
+
+/// Parse every overlay rectangle carried by a `COMMIT_FRAME`. Clients that
+/// predate multi-rectangle publication send only the first pair, which stays
+/// valid; zero-sized or rejected slots clear their entry.
+fn desktop_overlays_from_commit(
+    win: &Window,
+    caller: u64,
+    msg: &IpcMsg,
+) -> [Option<Rect>; MAX_DESKTOP_OVERLAYS] {
+    let mut overlays = [None; MAX_DESKTOP_OVERLAYS];
+    let pairs = msg.word_count.saturating_sub(1) as usize / 2;
+    for (index, slot) in overlays.iter_mut().enumerate().take(pairs) {
+        *slot = desktop_overlay_from_commit(
+            win,
+            caller,
+            msg.words[1 + index * 2],
+            msg.words[2 + index * 2],
+        );
+    }
+    overlays
 }
 
 fn focused_window_idx(state: &CompositorState) -> Option<usize> {
@@ -2964,6 +2985,8 @@ fn solar_decoration_metrics(state: &CompositorState) -> SolarDecorationMetrics {
 // its exact bottom edge. Fullscreen windows intentionally cover everything.
 const FLOATING_PANEL_RESERVED_H: u32 = 50;
 const INTEGRATED_PANEL_H: u32 = 36;
+/// Number of modal shell rectangles a Desktop surface may publish per frame.
+const MAX_DESKTOP_OVERLAYS: usize = 3;
 
 // Maximum time between two titlebar clicks to be treated as a double-click
 // (roll-up / shade gesture, like old FVWM/CDE desktops).
@@ -4521,8 +4544,10 @@ fn reblit_desktop_panel_strip(state: &CompositorState, back_buffer: &mut [u32]) 
         state.fb_width,
         top_panel_strip_height(state).min(state.fb_height),
     );
-    let overlay = desktop_overlay_idx(state).and_then(|idx| state.windows[idx].desktop_overlay);
-    for rect in [Some(panel), overlay].into_iter().flatten() {
+    let overlays = desktop_overlay_idx(state)
+        .map(|idx| state.windows[idx].desktop_overlays)
+        .unwrap_or([None; MAX_DESKTOP_OVERLAYS]);
+    for rect in core::iter::once(Some(panel)).chain(overlays).flatten() {
         let x = rect.x.max(0) as u32;
         let y = rect.y.max(0) as u32;
         let width = rect.w.min(state.fb_width.saturating_sub(x));
@@ -5642,7 +5667,7 @@ mod tests {
             surface_stride_bytes: w as usize * surface::BYTES_PER_PIXEL as usize,
             surface_len_bytes: w as usize * h as usize * surface::BYTES_PER_PIXEL as usize,
             surface_generation: 1,
-            desktop_overlay: None,
+            desktop_overlays: [None; MAX_DESKTOP_OVERLAYS],
             x,
             y,
             saved_x: x,
@@ -6986,7 +7011,7 @@ mod tests {
             WindowState::Fullscreen,
             ZIndexType::Normal,
         );
-        desktop.desktop_overlay = Some(Rect::new(100, 100, 300, 400));
+        desktop.desktop_overlays[0] = Some(Rect::new(100, 100, 300, 400));
         let app = test_window(
             2,
             20,
@@ -7008,7 +7033,7 @@ mod tests {
         assert_eq!(topmost_window_id_at(&state, 200, 200), Some(2));
         assert_eq!(desktop_overlay_idx(&state), None);
         state.lock_generation = 0;
-        state.windows[0].desktop_overlay = None;
+        state.windows[0].desktop_overlays[0] = None;
         assert_eq!(focused_window_id(&state), Some(2));
         assert_eq!(topmost_window_id_at(&state, 200, 200), Some(2));
         assert_eq!(topmost_window_id_at(&state, 200, 20), Some(1));
@@ -7044,6 +7069,52 @@ mod tests {
     }
 
     #[test]
+    fn desktop_overlay_commit_publishes_multiple_rectangles() {
+        let desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        let msg = IpcMsg::with_label(SgpMsg::COMMIT_FRAME)
+            .word(0, 1)
+            .word(1, 100 | (100u64 << 32))
+            .word(2, 300 | (400u64 << 32))
+            .word(3, 500 | (10u64 << 32))
+            .word(4, 200 | (100u64 << 32));
+        let overlays = desktop_overlays_from_commit(&desktop, 1, &msg);
+        assert_eq!(overlays[0], Some(Rect::new(100, 100, 300, 400)));
+        assert_eq!(overlays[1], Some(Rect::new(500, 10, 200, 100)));
+        assert_eq!(overlays[2], None);
+    }
+
+    #[test]
+    fn desktop_overlay_commit_accepts_legacy_single_rectangle() {
+        let desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        let msg = IpcMsg::with_label(SgpMsg::COMMIT_FRAME)
+            .word(0, 1)
+            .word(1, 100 | (100u64 << 32))
+            .word(2, 300 | (400u64 << 32));
+        let overlays = desktop_overlays_from_commit(&desktop, 1, &msg);
+        assert_eq!(overlays[0], Some(Rect::new(100, 100, 300, 400)));
+        assert_eq!(overlays[1], None);
+        assert_eq!(overlays[2], None);
+    }
+
+    #[test]
     fn desktop_overlay_reblit_preserves_application_pixels_outside_popup() {
         let mut pixels = vec![0x00123456u32; 800 * 600];
         let mut desktop = test_window(
@@ -7057,7 +7128,7 @@ mod tests {
             ZIndexType::Normal,
         );
         desktop.buffer = pixels.as_mut_ptr();
-        desktop.desktop_overlay = Some(Rect::new(100, 100, 300, 400));
+        desktop.desktop_overlays[0] = Some(Rect::new(100, 100, 300, 400));
         let mut state = test_state(vec![desktop]);
         let mut output = vec![0x00654321; 800 * 600];
         reblit_desktop_panel_strip(&state, &mut output);
@@ -7066,10 +7137,34 @@ mod tests {
         assert_eq!(output[499 * 800 + 399], 0x00123456);
         assert_eq!(output[500 * 800 + 399], 0x00654321);
         assert_eq!(output[200 * 800 + 400], 0x00654321);
-        state.windows[0].desktop_overlay = None;
+        state.windows[0].desktop_overlays[0] = None;
         output.fill(0x00654321);
         reblit_desktop_panel_strip(&state, &mut output);
         assert_eq!(output[200 * 800 + 200], 0x00654321);
+    }
+
+    #[test]
+    fn desktop_overlay_reblit_copies_every_published_rectangle() {
+        let mut pixels = vec![0x00123456u32; 800 * 600];
+        let mut desktop = test_window(
+            1,
+            0,
+            0,
+            800,
+            600,
+            WindowType::Desktop,
+            WindowState::Fullscreen,
+            ZIndexType::Normal,
+        );
+        desktop.buffer = pixels.as_mut_ptr();
+        desktop.desktop_overlays[0] = Some(Rect::new(100, 100, 300, 400));
+        desktop.desktop_overlays[1] = Some(Rect::new(500, 300, 200, 100));
+        let state = test_state(vec![desktop]);
+        let mut output = vec![0x00654321; 800 * 600];
+        reblit_desktop_panel_strip(&state, &mut output);
+        assert_eq!(output[200 * 800 + 200], 0x00123456);
+        assert_eq!(output[350 * 800 + 600], 0x00123456);
+        assert_eq!(output[450 * 800 + 600], 0x00654321);
     }
 
     #[test]
@@ -7758,7 +7853,7 @@ pub extern "C" fn _start() -> ! {
                                 surface_stride_bytes: layout.stride_bytes,
                                 surface_len_bytes: layout.surface_len_bytes,
                                 surface_generation: 1,
-                                desktop_overlay: None,
+                                desktop_overlays: [None; MAX_DESKTOP_OVERLAYS],
                                 x: win_x,
                                 y: win_y,
                                 saved_x: win_x,
@@ -8357,13 +8452,9 @@ pub extern "C" fn _start() -> ! {
                     .iter()
                     .position(|w| w.id == win_id && w.owner_pid == msg.badge)
                 {
-                    let overlay = desktop_overlay_from_commit(
-                        &state.windows[win_idx],
-                        msg.badge,
-                        msg.words[1],
-                        msg.words[2],
-                    );
-                    state.windows[win_idx].desktop_overlay = overlay;
+                    let overlays =
+                        desktop_overlays_from_commit(&state.windows[win_idx], msg.badge, &msg);
+                    state.windows[win_idx].desktop_overlays = overlays;
                     let (chrome_rect, owner_pid, first_present, trace, subject) = {
                         let win = &state.windows[win_idx];
                         let trace = trace_for_pid(&state, win.owner_pid);
@@ -8491,19 +8582,6 @@ pub extern "C" fn _start() -> ! {
                             win.pending_keys.pop()
                         }
                     };
-                    if let Some(packed) = key_event {
-                        let (keycode, pressed, _, ctrl, _, _, ascii) =
-                            sunlight_ipc::unpack_key_event(packed);
-                        if INPUT_DEBUG && pressed {
-                            debug_log(&alloc::format!(
-                                "[DISPLAY] deliver key win={} keycode={:#x} ctrl={} ascii={}\n",
-                                win_id,
-                                keycode,
-                                ctrl,
-                                ascii.unwrap_or(0)
-                            ));
-                        }
-                    }
                     let (mouse_word, button_word, button_event_dequeued, wheel_event_dequeued) =
                         if lock_isolates_this {
                             // Keep WINDOW_VALID, but never deliver pointer ownership or
@@ -8596,6 +8674,15 @@ pub extern "C" fn _start() -> ! {
             // -------------------------------------------------------------------
             sunlight_ipc::KbdMsg::KEY_EVENT => {
                 let packed = msg.words[0];
+                if sunlight_ipc::is_text_commit(packed) {
+                    if state.session_active && sunlight_ipc::unpack_text_commit(packed).is_some() {
+                        if let Some(index) = focused_window_idx(&state) {
+                            state.windows[index].pending_keys.push(packed);
+                        }
+                    }
+                    let _ = ipc_reply(IpcMsg::with_label(SgpMsg::REPLY));
+                    continue;
+                }
                 let (keycode, pressed, shift, ctrl, alt, super_key, _) =
                     sunlight_ipc::unpack_key_event(packed);
                 let was_down = state.keyboard.update_key(keycode, pressed);
@@ -8703,24 +8790,6 @@ pub extern "C" fn _start() -> ! {
                 if !consumed && state.session_active {
                     if let Some(focused_idx) = focused_window_idx(&state) {
                         let win = &mut state.windows[focused_idx];
-                        let (
-                            queued_keycode,
-                            queued_pressed,
-                            _queued_shift,
-                            queued_ctrl,
-                            _queued_alt,
-                            _queued_super,
-                            queued_ascii,
-                        ) = sunlight_ipc::unpack_key_event(packed);
-                        if INPUT_DEBUG && queued_pressed {
-                            debug_log(&alloc::format!(
-                                "[DISPLAY] queued key win={} keycode={:#x} ctrl={} ascii={}\n",
-                                win.id,
-                                queued_keycode,
-                                queued_ctrl,
-                                queued_ascii.unwrap_or(0)
-                            ));
-                        }
                         win.pending_keys.push(packed);
                     }
                 }

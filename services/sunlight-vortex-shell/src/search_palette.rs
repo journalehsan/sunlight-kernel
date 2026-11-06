@@ -14,7 +14,7 @@ use sunlight_ui::{
         SearchPalettePanel, SearchResultState, SearchResultView, SEARCH_FIELD_CAP,
         SEARCH_PAGE_ROWS,
     },
-    Canvas, Event, Point, Theme,
+    Canvas, Event, Point, Rect, Theme,
 };
 use sunshell::calc::CalcSession;
 
@@ -680,6 +680,12 @@ impl SearchPaletteState {
         SearchPaletteLayout::compute(screen_w, screen_h, rows, self.page_count())
     }
 
+    /// Panel rectangle published to the compositor so the palette renders above
+    /// application windows instead of inside the desktop layer.
+    pub(crate) fn overlay_rect(&self, screen_w: u32, screen_h: u32) -> Option<Rect> {
+        self.open.then(|| self.layout(screen_w, screen_h).panel)
+    }
+
     pub(crate) fn contains(&self, point: Point, screen_w: u32, screen_h: u32) -> bool {
         self.open && self.layout(screen_w, screen_h).contains(point)
     }
@@ -993,6 +999,19 @@ impl SearchPaletteState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn overlay_rect_tracks_panel_and_clears_when_closed() {
+        let mut palette = SearchPaletteState::new();
+        assert!(palette.overlay_rect(1280, 900).is_none());
+        palette.open();
+        assert_eq!(
+            palette.overlay_rect(1280, 900),
+            Some(palette.layout(1280, 900).panel)
+        );
+        palette.close();
+        assert!(palette.overlay_rect(1280, 900).is_none());
+    }
 
     fn titles_for(query: &str) -> alloc::vec::Vec<&'static str> {
         let mut hits = [RankedHit {

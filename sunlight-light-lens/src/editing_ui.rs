@@ -1339,6 +1339,7 @@ impl LightLensApp {
                 shift,
                 alt,
                 super_key,
+                ..
             } => {
                 if alt || super_key {
                     return false;

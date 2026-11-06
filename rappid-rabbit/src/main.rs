@@ -3226,6 +3226,10 @@ fn trace_layout(state: &DocumentRenderState) {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "js-dom-fixture")]
+    if std::env::args().any(|arg| arg == "--account-fixture") {
+        return rappid_rabbit::account_fixture::run();
+    }
     let mut initial_url = None;
     for argument in std::env::args().skip(1) {
         if let Some(trace) = launch_trace::parse_launch_arg(argument.as_bytes()) {

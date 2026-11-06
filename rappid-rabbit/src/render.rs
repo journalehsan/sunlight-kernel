@@ -309,14 +309,32 @@ impl DocumentRenderState {
         }) else {
             return false;
         };
+        let password = self
+            .dom
+            .get_attribute(control_id.0 as usize, "type")
+            .is_some_and(|v| v.eq_ignore_ascii_case("password"));
         let desired_value = match state {
-            FormControlState::Text { state, .. } => Some(&state.current_value),
-            FormControlState::Button { .. } => None,
+            FormControlState::Text { state, .. } => Some(if password {
+                "*".repeat(state.current_value.chars().count())
+            } else {
+                state.current_value.clone()
+            }),
+            FormControlState::Button {
+                kind: crate::form::FormControlKind::Checkbox { checked },
+                ..
+            } => Some(if *checked { "[x]" } else { "[ ]" }.into()),
+            _ => None,
         };
         let desired_caret = match state {
-            FormControlState::Text { state, .. } if focused => Some(measurer.measure_width(
-                &state.current_value[..state.cursor_position.min(state.current_value.len())],
-            )),
+            FormControlState::Text { state, .. } if focused => {
+                let prefix =
+                    &state.current_value[..state.cursor_position.min(state.current_value.len())];
+                Some(measurer.measure_width(&if password {
+                    "*".repeat(prefix.chars().count())
+                } else {
+                    prefix.into()
+                }))
+            }
             _ => None,
         };
         if let RenderObjectKind::Control {
@@ -328,7 +346,9 @@ impl DocumentRenderState {
         {
             if *visual_focus == focused
                 && *caret_offset == desired_caret
-                && desired_value.is_none_or(|desired| value == desired)
+                && desired_value
+                    .as_ref()
+                    .is_none_or(|desired| value == desired)
             {
                 return false;
             }

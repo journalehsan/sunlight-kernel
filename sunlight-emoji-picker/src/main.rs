@@ -1411,6 +1411,7 @@ impl App for EmojiPickerApp {
                 ctrl,
                 alt,
                 super_key,
+                extended,
             } => {
                 if self.search.active {
                     if keycode == KEY_ESC {
@@ -1425,6 +1426,7 @@ impl App for EmojiPickerApp {
                         ctrl,
                         alt,
                         super_key,
+                        extended,
                     });
                     if changed && self.search.value().len() != old_len {
                         self.filter_emojis();

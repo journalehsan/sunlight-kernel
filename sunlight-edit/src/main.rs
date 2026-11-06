@@ -1364,6 +1364,7 @@ impl EditApp {
                 ctrl,
                 alt: false,
                 super_key: false,
+                extended: false,
             })
         {
             return true;
@@ -1415,6 +1416,7 @@ impl EditApp {
                 ctrl: true,
                 alt: false,
                 super_key: false,
+                extended: false,
             });
         }
         match keycode {
@@ -1446,6 +1448,7 @@ impl EditApp {
                     ctrl: false,
                     alt: false,
                     super_key: false,
+                    extended: false,
                 };
                 let changed = if self.focus == FocusTarget::Find {
                     self.find.query.update(event)

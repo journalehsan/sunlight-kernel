@@ -461,9 +461,6 @@ pub fn handle_irq1() {
         let mut port: Port<u8> = Port::new(DATA_PORT);
         port.read()
     };
-    if IRQ_COUNT.load(Ordering::Relaxed) == 1 {
-        serial_println!("[KBD] first scan code={:#04x}", scancode);
-    }
 
     // 2. Push to ring buffer (non-blocking)
     let pushed = push_scancode(scancode);

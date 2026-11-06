@@ -1,6 +1,8 @@
 [package]
 name = "rappid-rabbit"
-version = "0.2.6526-alpha.2"
+version = "0.2.6555-alpha.2"
+
+
 
 
 
@@ -395,7 +397,12 @@ path = "src/lib.rs"
 name = "js_dom_smoke"
 required-features = ["js-dom-fixture"]
 
+[[example]]
+name = "account_snapshots"
+required-features = ["js-dom-fixture"]
+
 [dependencies]
+unicode-segmentation = { version = "1.12", default-features = false }
 sun-font = { path = "../sun-font" }
 sunlight-fetch = { path = "../sunlight-fetch", default-features = false, features = ["sunlightos"] }
 sunlight-http = { path = "../sunlight-http" }

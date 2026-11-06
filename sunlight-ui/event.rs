@@ -52,6 +52,8 @@ pub enum Event {
     /// Raw key transition for non-text controls.
     KeyPress {
         keycode: u8,
+        /// PS/2 E0 location flag; distinguishes keypad keys and right modifiers.
+        extended: bool,
         pressed: bool,
         shift: bool,
         ctrl: bool,
@@ -109,6 +111,7 @@ impl Event {
             ctrl,
             alt,
             super_key,
+            extended: false,
         }
     }
 

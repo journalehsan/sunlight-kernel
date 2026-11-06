@@ -277,8 +277,21 @@ fn main() {
             workspace_root.join(input).display()
         );
     }
-    let rabbit_status = Command::new("bash")
-        .arg(workspace_root.join("tools/build_rappid_rabbit.sh"))
+    println!("cargo:rerun-if-env-changed=SUNLIGHT_ACCOUNT_FIXTURE");
+    let mut rabbit_command = Command::new("bash");
+    if env::var_os("SUNLIGHT_ACCOUNT_FIXTURE").is_some() {
+        rabbit_command.args([
+            workspace_root
+                .join("tools/build_rappid_rabbit.sh")
+                .to_str()
+                .unwrap(),
+            "--features",
+            "js-dom-fixture",
+        ]);
+    } else {
+        rabbit_command.arg(workspace_root.join("tools/build_rappid_rabbit.sh"));
+    }
+    let rabbit_status = rabbit_command
         .env("CARGO_TARGET_DIR", &scratch_target_dir)
         .current_dir(workspace_root)
         .status()

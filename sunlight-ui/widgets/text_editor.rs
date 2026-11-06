@@ -339,6 +339,7 @@ impl<'a> TextEditor<'a> {
                 ctrl,
                 alt: false,
                 super_key: false,
+                ..
             } if self.state.focused => {
                 if keycode == KEY_ESC && self.state.menu.take().is_some() {
                     TextEditorResponse::consumed()

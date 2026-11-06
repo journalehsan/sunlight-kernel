@@ -5414,6 +5414,7 @@ mod tests {
             ctrl: false,
             alt: false,
             shift: false,
+            extended: false,
         }
     }
 

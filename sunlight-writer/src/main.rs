@@ -2184,6 +2184,7 @@ impl App for WriterApp {
                 ctrl,
                 alt,
                 super_key,
+                ..
             } => {
                 if !pressed {
                     return false;
@@ -2402,7 +2403,8 @@ mod tests {
                 shift: false,
                 ctrl: true,
                 alt: false,
-                super_key: false
+                super_key: false,
+                extended: false,
             }));
         }
         app.update(Event::Key('x'));

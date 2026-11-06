@@ -71,5 +71,5 @@ pub use theme::{ChromeRoles, Color, Theme};
 #[cfg(feature = "app")]
 pub use app::{
     request_close, set_client_cursor, App, CursorShape, EventPollCounters, Window, WindowConfig,
-    WindowDecoration, WindowMaterial,
+    WindowDecoration, WindowMaterial, MAX_DESKTOP_OVERLAYS,
 };

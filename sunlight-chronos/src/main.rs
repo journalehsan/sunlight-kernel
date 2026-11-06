@@ -2487,6 +2487,7 @@ mod tests {
             ctrl: false,
             alt: false,
             super_key: false,
+            extended: false,
         }));
         assert!(app.update(Event::Key('A')));
         app.update(Event::Tick);

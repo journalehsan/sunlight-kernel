@@ -1836,23 +1836,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                         if !vt_is_active(active_vt, VirtualTerminal::Tty) {
                             // Forward keyboard event to display_server when Desktop session is active.
-                            let (
-                                fwd_keycode,
-                                fwd_pressed,
-                                _fwd_shift,
-                                fwd_ctrl,
-                                _fwd_alt,
-                                _fwd_super,
-                                fwd_ascii,
-                            ) = unpack_key_event(msg.words[0]);
-                            if fwd_pressed {
-                                debug_log(&alloc::format!(
-                                    "[TTY->DISPLAY] shell forward keycode={:#x} ctrl={} ascii={}\n",
-                                    fwd_keycode,
-                                    fwd_ctrl,
-                                    fwd_ascii.unwrap_or(0)
-                                ));
-                            }
                             let _ = send_display_request(&mut display_cap, msg);
                             break 'kbd;
                         }

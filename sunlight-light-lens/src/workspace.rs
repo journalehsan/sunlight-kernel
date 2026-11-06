@@ -860,6 +860,7 @@ impl LightLensApp {
                 alt: false,
                 super_key: false,
                 shift,
+                ..
             } if self.selected_object().is_some()
                 && matches!(keycode, 0x4b | 0x4d | 0x48 | 0x50) =>
             {

@@ -109,7 +109,9 @@ impl Calibration {
         if !self.is_valid() {
             return Err(ClockError::Uncalibrated);
         }
-        let dt = counter.checked_sub(self.origin).ok_or(ClockError::BeforeOrigin)?;
+        let dt = counter
+            .checked_sub(self.origin)
+            .ok_or(ClockError::BeforeOrigin)?;
         // `dt` and `mul` are u64: the product fits u128, so the intermediate
         // cannot overflow; only the final narrowing to u64 can.
         let ns = ((dt as u128) * (self.mul as u128)) >> SHIFT;
@@ -175,8 +177,8 @@ pub fn fixed_point_mul(tsc_hz: u64) -> Option<u64> {
     if tsc_hz == 0 {
         return None;
     }
-        let mul = ((1_000_000_000u128) << SHIFT) / (tsc_hz as u128);
-        if mul == 0 || mul >= (1u128 << 63) {
+    let mul = ((1_000_000_000u128) << SHIFT) / (tsc_hz as u128);
+    if mul == 0 || mul >= (1u128 << 63) {
         return None;
     }
     Some(mul as u64)
@@ -209,7 +211,10 @@ mod tests {
 
     #[test]
     fn invalid_calibration_is_rejected() {
-        assert_eq!(Calibration::INVALID.to_ns(10), Err(ClockError::Uncalibrated));
+        assert_eq!(
+            Calibration::INVALID.to_ns(10),
+            Err(ClockError::Uncalibrated)
+        );
         let mut zero_mul = cal(1_000_000_000);
         zero_mul.mul = 0;
         assert!(!zero_mul.is_valid());
@@ -233,9 +238,24 @@ mod tests {
 
     #[test]
     fn elapsed_rejects_cross_cpu_and_backward() {
-        let a = Stamp { cpu: 0, epoch: 1, ns: 100, flags: 0 };
-        let b = Stamp { cpu: 0, epoch: 1, ns: 260, flags: 0 };
-        let other = Stamp { cpu: 1, epoch: 1, ns: 260, flags: 0 };
+        let a = Stamp {
+            cpu: 0,
+            epoch: 1,
+            ns: 100,
+            flags: 0,
+        };
+        let b = Stamp {
+            cpu: 0,
+            epoch: 1,
+            ns: 260,
+            flags: 0,
+        };
+        let other = Stamp {
+            cpu: 1,
+            epoch: 1,
+            ns: 260,
+            flags: 0,
+        };
         assert_eq!(elapsed_ns(&a, &b), Ok(160));
         assert_eq!(elapsed_ns(&a, &other), Err(ClockError::CrossCpu));
         assert_eq!(elapsed_ns(&b, &a), Err(ClockError::Backward));
@@ -243,9 +263,24 @@ mod tests {
 
     #[test]
     fn elapsed_rejects_epoch_change_and_uncalibrated() {
-        let a = Stamp { cpu: 0, epoch: 1, ns: 10, flags: 0 };
-        let stale = Stamp { cpu: 0, epoch: 2, ns: 20, flags: 0 };
-        let none = Stamp { cpu: 0, epoch: 0, ns: 20, flags: 0 };
+        let a = Stamp {
+            cpu: 0,
+            epoch: 1,
+            ns: 10,
+            flags: 0,
+        };
+        let stale = Stamp {
+            cpu: 0,
+            epoch: 2,
+            ns: 20,
+            flags: 0,
+        };
+        let none = Stamp {
+            cpu: 0,
+            epoch: 0,
+            ns: 20,
+            flags: 0,
+        };
         assert_eq!(elapsed_ns(&a, &stale), Err(ClockError::StaleEpoch));
         assert_eq!(elapsed_ns(&a, &none), Err(ClockError::Uncalibrated));
     }

@@ -13,7 +13,7 @@ use sunlight_ui::{
         WorkspaceCardState, WorkspaceCardView, WorkspaceSwitcherLayout, WorkspaceSwitcherPanel,
         WORKSPACE_CARD_COUNT, WORKSPACE_ICON_SLOTS,
     },
-    Canvas, Event, Point, Theme,
+    Canvas, Event, Point, Rect, Theme,
 };
 
 use crate::{AppId, AppLaunchState, DockAppState, ShellWindowType, WindowSnapshot};
@@ -172,6 +172,19 @@ impl WorkspaceSwitcherState {
         dock_top_y: i32,
     ) -> WorkspaceSwitcherLayout {
         WorkspaceSwitcherLayout::compute(screen_w, screen_h, top_inset, dock_top_y)
+    }
+
+    /// Panel rectangle published to the compositor so the switcher renders
+    /// above application windows instead of inside the desktop layer.
+    pub(crate) fn overlay_rect(
+        &self,
+        screen_w: u32,
+        screen_h: u32,
+        top_inset: i32,
+        dock_top_y: i32,
+    ) -> Option<Rect> {
+        self.open
+            .then(|| self.layout(screen_w, screen_h, top_inset, dock_top_y).panel)
     }
 
     pub(crate) fn contains(
@@ -598,6 +611,19 @@ mod tests {
         assert_eq!(sw.focus_index(), 2);
         sw.open(1);
         assert_eq!(sw.focus_index(), 0);
+    }
+
+    #[test]
+    fn overlay_rect_tracks_panel_and_clears_when_closed() {
+        let mut sw = WorkspaceSwitcherState::new();
+        assert!(sw.overlay_rect(1366, 768, 48, 716).is_none());
+        sw.open(1);
+        assert_eq!(
+            sw.overlay_rect(1366, 768, 48, 716),
+            Some(sw.layout(1366, 768, 48, 716).panel)
+        );
+        sw.close();
+        assert!(sw.overlay_rect(1366, 768, 48, 716).is_none());
     }
 
     #[test]

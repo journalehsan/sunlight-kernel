@@ -934,6 +934,7 @@ mod tests {
                 ctrl: false,
                 alt: false,
                 super_key: false,
+                extended: false,
             },
         ] {
             let mut page = AccountsPage::new();

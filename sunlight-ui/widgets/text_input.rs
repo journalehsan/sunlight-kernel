@@ -277,6 +277,7 @@ impl<'a, const N: usize> TextInput<'a, N> {
                 ctrl,
                 alt: false,
                 super_key: false,
+                ..
             } if self.active => {
                 if keycode == KEY_ESC && self.menu.take().is_some() {
                     true

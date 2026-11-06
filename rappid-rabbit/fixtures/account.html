@@ -1,0 +1,21 @@
+<!doctype html><html><head><title>SunlightOS Account Lab</title><style>
+body { background:#eef3f7; color:#203044; font-family:sans-serif; margin:32px; }
+main { background:white; padding:24px; width:440px; border:1px solid #bccbd6; }
+h1 { font-size:20px; } p { margin:12px 0; } label { display:block; margin-top:12px; }
+input { padding:8px; border:1px solid #8195a8; } button { width:240px; padding:10px; margin-top:14px; background:#dceafa; }
+.error { color:#a52332; } .loading { color:#275d8c; } .success { color:#12654a; }
+#show { width:38px; height:28px; padding:0; } #remember { width:38px; height:28px; padding:0; }
+a { color:#245f98; } .hidden { display:none; }
+</style></head><body><main>
+<p>SunlightOS / Account Lab</p><h1 id="heading">Connect a demo account</h1>
+<p>Local simulation. Use invented details only. Nothing is sent or saved.</p>
+<form id="connect" method="post">
+<label for="email">Demo email</label><input id="email" type="email" name="email" placeholder="demo@example.test">
+<label for="password">Demo password (invented, 4+ characters)</label><input id="password" type="password" name="password">
+<label for="show"><input id="show" type="checkbox"> Show demo password</label>
+<label for="remember"><input id="remember" type="checkbox"> Remember demo account (this view only)</label>
+<button id="submit" type="submit">Simulate connection</button>
+</form>
+<p id="status" role="status">Ready for a local test.</p>
+<a id="about" href="#about">About this simulation</a>
+</main></body></html>

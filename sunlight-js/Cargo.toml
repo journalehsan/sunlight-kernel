@@ -1,5 +1,7 @@
 [package]
 name = "sunlight-js"
-version = "0.1.0"
+version = "0.2.6555-alpha.2"
+
+
 edition = "2021"
 description = "Capability-free, strict JavaScript subset interpreter"

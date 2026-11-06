@@ -5,15 +5,15 @@ pub mod fastlane_operation;
 #[cfg(any(test, feature = "experimental-fastlane-authority"))]
 mod fastlane_operation_ipc;
 
-pub mod supervision;
 pub mod cpu_accounting;
-pub mod measurement_clock;
-pub mod resource_ledger;
 pub mod display_metrics;
 pub mod display_modes;
+pub mod measurement_clock;
 pub mod pty;
+pub mod resource_ledger;
 pub mod session_completion;
 pub mod spawn_env;
+pub mod supervision;
 pub mod swap_policy;
 pub mod vfs_grants;
 pub use display_metrics::{
@@ -581,7 +581,18 @@ pub fn service_capability_mask_to_names(mask: u64) -> impl Iterator<Item = &'sta
 
 pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::DemandFixture.bit() != 0
-        && ["d1-fixture", "d1-denied", "d1-activate-only", "d2-fixture", "d2-dependent", "d3-parent", "d3-leaf", "d3-client"].iter().any(|name| name_key == name_to_u64(name))
+        && [
+            "d1-fixture",
+            "d1-denied",
+            "d1-activate-only",
+            "d2-fixture",
+            "d2-dependent",
+            "d3-parent",
+            "d3-leaf",
+            "d3-client",
+        ]
+        .iter()
+        .any(|name| name_key == name_to_u64(name))
     {
         return true;
     }
@@ -615,7 +626,9 @@ pub fn service_capability_allows_hashed_name(mask: u64, name_key: u64) -> bool {
     if mask & ServiceCapability::HostKeyAdmin.bit() != 0 && name_key == name_to_u64("vfs") {
         return true;
     }
-    if mask & (ServiceCapability::ServiceLifecycle.bit() | ServiceCapability::ServiceNotify.bit()) != 0 && name_key == name_to_u64("sunlightd")
+    if mask & (ServiceCapability::ServiceLifecycle.bit() | ServiceCapability::ServiceNotify.bit())
+        != 0
+        && name_key == name_to_u64("sunlightd")
     {
         return true;
     }
@@ -1176,10 +1189,12 @@ pub mod sgp {
     pub mod SgpMsg {
         // Client -> Display Server Requests
         pub const CREATE_WINDOW: u64 = 0xA101;
-        /// words[0]=window id. For an owned Desktop surface only, words[1]
-        /// packs overlay x/y (u32), words[2] packs width/height (u32).
+        /// words[0]=window id. For an owned Desktop surface only, words[1..]
+        /// carry up to three overlay rectangles as (x/y, width/height) pairs:
+        /// words[1]/[2] = first, words[3]/[4] = second, words[5]/[6] = third.
         /// A nonempty, in-bounds rectangle is a modal shell overlay; zero size
-        /// clears it. Geometry and pixels are published in the same commit.
+        /// clears that slot. Geometry and pixels are published in the same
+        /// commit. Clients that only send words[1]/[2] publish one overlay.
         pub const COMMIT_FRAME: u64 = 0xA102;
         pub const EVENT_POLL: u64 = 0xA103;
         /// EVENT_POLL reply words[3] low byte is the physical button mask.
@@ -4169,6 +4184,30 @@ impl SpawnRequest {
     }
 }
 
+/// Text commits use a separate tag and a complete Unicode scalar. A sequence
+/// of these words is a UTF-8 string after `char::encode_utf8`; it is never a
+/// sequence of independently decoded UTF-8 bytes. Invalid scalars are rejected.
+pub const TEXT_COMMIT_TAG: u64 = 1 << 63;
+/// Physical events from a producer that also sends separate text commits.
+/// Low legacy ASCII bits are retained solely for older terminal consumers.
+pub const KEY_SEPARATE_TEXT: u64 = 1 << 56;
+/// Set-1 E0 prefix: distinguishes right modifiers and navigation from keypad keys.
+pub const KEY_EXTENDED: u64 = 1 << 57;
+/// Private preedit key: applications must not execute its default action.
+pub const KEY_COMPOSING: u64 = 1 << 58;
+pub fn pack_text_commit(text: char) -> u64 {
+    TEXT_COMMIT_TAG | text as u64
+}
+pub fn is_text_commit(word: u64) -> bool {
+    word & TEXT_COMMIT_TAG != 0
+}
+pub fn unpack_text_commit(word: u64) -> Option<char> {
+    if !is_text_commit(word) || word & !(TEXT_COMMIT_TAG | 0x1f_ffff) != 0 {
+        return None;
+    }
+    char::from_u32((word & 0x1f_ffff) as u32)
+}
+
 /// Pack a key event into a single u64 word for IPC transport.
 /// Layout: keycode(u8) | pressed(u8) << 8 | mods_byte(u8) << 16 | ascii(u8) << 24
 pub fn pack_key_event(
@@ -4191,6 +4230,9 @@ pub fn pack_key_event(
 
 /// Unpack a key event from a u64 word.
 pub fn unpack_key_event(val: u64) -> (u8, bool, bool, bool, bool, bool, Option<u8>) {
+    if is_text_commit(val) {
+        return (0, false, false, false, false, false, None);
+    }
     let keycode = (val & 0xFF) as u8;
     let pressed = ((val >> 8) & 0xFF) != 0;
     let mods = (val >> 16) & 0xFF;
@@ -6565,8 +6607,8 @@ mod audio_protocol_tests {
     }
 }
 
-pub mod accounts;
 pub mod account_session;
+pub mod accounts;
 pub mod demand;
 
 /// Native caller-owned execution lifecycle. IDs are never reused.

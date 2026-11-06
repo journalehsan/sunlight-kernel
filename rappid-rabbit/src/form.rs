@@ -408,7 +408,7 @@ impl FormState {
         if state.cursor_position == 0 || state.current_value.is_empty() {
             return false;
         }
-        // Delete the UTF-8 character before cursor
+        // Delete the preceding extended grapheme cluster.
         let boundary = find_prev_char_boundary(&state.current_value, state.cursor_position);
         state.current_value.drain(boundary..state.cursor_position);
         state.cursor_position = boundary;
@@ -697,22 +697,20 @@ pub fn is_post_form(document: &Document, form_node_id: DomNodeId) -> bool {
 // ── helpers ─────────────────────────────────────────────────────────
 
 fn find_prev_char_boundary(text: &str, pos: usize) -> usize {
-    if pos == 0 {
-        return 0;
-    }
-    let mut prev = pos.saturating_sub(1);
-    while prev > 0 && !text.is_char_boundary(prev) {
-        prev = prev.saturating_sub(1);
-    }
-    prev
+    use unicode_segmentation::UnicodeSegmentation;
+    text.grapheme_indices(true)
+        .map(|(i, _)| i)
+        .take_while(|i| *i < pos)
+        .last()
+        .unwrap_or(0)
 }
 
 fn find_next_char_boundary(text: &str, pos: usize) -> usize {
-    let mut next = pos.saturating_add(1);
-    while next < text.len() && !text.is_char_boundary(next) {
-        next = next.saturating_add(1);
-    }
-    next.min(text.len())
+    use unicode_segmentation::UnicodeSegmentation;
+    text.grapheme_indices(true)
+        .map(|(i, _)| i)
+        .find(|i| *i > pos)
+        .unwrap_or(text.len())
 }
 
 fn find_form_by_id(document: &Document, id: &str) -> Option<DocumentNodeId> {
@@ -1179,5 +1177,24 @@ mod tests {
         // Tab to next
         state.focus_next_control(&_doc);
         assert_eq!(state.focused_control, Some(ids[1]));
+    }
+}
+
+#[cfg(test)]
+mod grapheme_tests {
+    use super::*;
+    #[test]
+    fn editing_boundaries_keep_combining_sequences_and_emoji_together() {
+        let text = "aé\u{301}👩\u{200d}💻🇮🇷z";
+        let mut p = 0;
+        let mut boundaries = vec![0];
+        while p < text.len() {
+            let next = find_next_char_boundary(text, p);
+            assert_eq!(find_prev_char_boundary(text, next), p);
+            assert!(text.is_char_boundary(next));
+            boundaries.push(next);
+            p = next;
+        }
+        assert_eq!(boundaries.len(), 6);
     }
 }

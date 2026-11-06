@@ -296,6 +296,13 @@ impl SidebarState {
                 .contains(point)
     }
 
+    /// Panel rectangle published to the compositor so the Sidebar renders above
+    /// application windows instead of inside the desktop layer.
+    pub(crate) fn overlay_rect(&self, screen_w: u32, top: i32, bottom: i32) -> Option<Rect> {
+        self.open
+            .then(|| SidebarLayout::compute(screen_w, top, bottom, self.scroll).panel)
+    }
+
     /// Accepts the shell's already-owned telemetry snapshot. Hidden Sidebars
     /// do not request updates and retain only one last-valid sample.
     ///
@@ -995,6 +1002,19 @@ mod tests {
     fn weather_preview_is_deterministic() {
         assert_eq!(WEATHER_PREVIEW.location, "Tehran");
         assert_eq!(WEATHER_PREVIEW.temperature_c, 24);
+    }
+
+    #[test]
+    fn overlay_rect_tracks_panel_and_clears_when_closed() {
+        let mut sidebar = SidebarState::new();
+        assert!(sidebar.overlay_rect(1280, 48, 700).is_none());
+        sidebar.open();
+        assert_eq!(
+            sidebar.overlay_rect(1280, 48, 700),
+            Some(SidebarLayout::compute(1280, 48, 700, 0).panel)
+        );
+        sidebar.close();
+        assert!(sidebar.overlay_rect(1280, 48, 700).is_none());
     }
 
     #[test]

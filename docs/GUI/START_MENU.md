@@ -62,19 +62,26 @@ button) — while the Start Menu owns discovery of everything else.
 
 ## Compositor stacking and input
 
-Start Menu and the top-panel calendar publish their visible rectangle through
-`App::desktop_overlay_rect()` with each `COMMIT_FRAME`. The display service
-validates the owner and surface bounds, then copies that rectangle above normal
-and on-top application windows, using the same desktop surface as the top panel.
-The wallpaper stays in the desktop layer; only the popup rectangle is promoted.
+Shell overlays publish their visible rectangles through
+`App::desktop_overlay_rects()` with each `COMMIT_FRAME`. A frame can carry up to
+three rectangles (`sunlight_ui::MAX_DESKTOP_OVERLAYS`), which covers a Sidebar
+plus one top-panel popup. The display service validates the owner and surface
+bounds, then copies each rectangle above normal and on-top application windows,
+using the same desktop surface as the top panel. The wallpaper stays in the
+desktop layer; only the popup rectangles are promoted.
+
+The Start Menu, Search Palette, Workspace Switcher, Sidebar, calendar, system
+menu, and the network/sound/notification/logout popups all publish rectangles.
+The shell clips every rectangle to the desktop surface because the compositor
+rejects out-of-bounds overlays; an unclipped popup would stay hidden.
 
 While a popup is published, the shell owns keyboard and pointer input, including
-outside clicks for dismissal. Closing or launching clears the rectangle in the
+outside clicks for dismissal. Closing or launching clears the rectangles in the
 next frame and restores application focus without changing application z-order.
 The lock screen and display-mode confirmation take priority. Ordinary application
 windows cannot publish a desktop overlay. Both the shell and display service must
-be rebuilt for this behavior; older commits with zero rectangle fields remain
-compatible.
+be rebuilt for this behavior; clients that send only the first rectangle pair
+keep the original single-overlay behavior.
 
 ### Calendar responsiveness and layout
 

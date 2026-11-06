@@ -94,6 +94,14 @@ pub fn doorbell_wait(h: Handle, observed: u64) -> Result<(), Error> {
 /// exact role and mapping lifetime. Release store / Acquire load on x86-64.
 /// The kernel admits one publication and one acknowledgement per fresh channel.
 pub fn transfer_word(h: Handle, store: bool, index: u64, value: u64) -> Result<u64, Error> {
-    call(if store { 19 } else { 18 }, h, index, SessionRef { id: value, epoch: 0 })
-        .map(|r| r.0)
+    call(
+        if store { 19 } else { 18 },
+        h,
+        index,
+        SessionRef {
+            id: value,
+            epoch: 0,
+        },
+    )
+    .map(|r| r.0)
 }

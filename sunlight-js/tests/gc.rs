@@ -152,3 +152,16 @@ fn iterative_trace_and_native_capture_edges() {
     drop(root);
     assert_eq!(js.collect_garbage().unwrap().live_objects, baseline);
 }
+
+#[test]
+fn bounded_host_turns_share_fuel_with_reentrant_evaluation() {
+    let mut js = Context::default();
+    js.register_native("nested", |js, _, _| js.eval("while(true){}", "nested"))
+        .unwrap();
+    let error = js.host_turn(|js| js.eval("nested()", "outer")).unwrap_err();
+    assert_eq!(error.kind, sunlight_js::ErrorKind::Limit);
+    assert_eq!(
+        js.host_turn(|js| js.eval("40+2", "fresh")).unwrap(),
+        Value::Number(42.0)
+    );
+}

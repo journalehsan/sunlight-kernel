@@ -333,6 +333,7 @@ pub enum BoxType<'a> {
 /// The interactive form widget rendered by a [`BoxType::Form`] box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FormWidgetKind {
+    Checkbox,
     Text,
     Search,
     Password,
@@ -346,13 +347,16 @@ impl FormWidgetKind {
     /// single-line field/select in the retained scene.
     pub fn control_kind(self) -> u8 {
         match self {
-            FormWidgetKind::Submit | FormWidgetKind::Button => 1,
+            FormWidgetKind::Submit | FormWidgetKind::Button | FormWidgetKind::Checkbox => 1,
             _ => 0,
         }
     }
 
     pub fn is_button(self) -> bool {
-        matches!(self, FormWidgetKind::Submit | FormWidgetKind::Button)
+        matches!(
+            self,
+            FormWidgetKind::Submit | FormWidgetKind::Button | FormWidgetKind::Checkbox
+        )
     }
 }
 
@@ -1092,9 +1096,17 @@ fn form_object_kind(
         color => color,
     };
     RenderObjectKind::Control {
-        label: String::from(widget.label),
+        label: if widget.kind == FormWidgetKind::Checkbox {
+            String::new()
+        } else {
+            String::from(widget.label)
+        },
         placeholder: String::from(widget.placeholder),
-        value: String::from(widget.value),
+        value: if widget.kind == FormWidgetKind::Password {
+            "*".repeat(widget.value.chars().count())
+        } else {
+            String::from(widget.value)
+        },
         color: style.color,
         background,
         border_color,
@@ -2658,6 +2670,7 @@ fn form_content_size(
     widget: &FormWidget<'_>,
 ) -> RectSize {
     match widget.kind {
+        FormWidgetKind::Checkbox => RectSize::new(38.0, 28.0),
         FormWidgetKind::Submit | FormWidgetKind::Button => {
             let caption = if widget.label.is_empty() {
                 widget.value
@@ -2740,6 +2753,7 @@ fn form_widget<'a>(
             "button" | "reset" => FormWidgetKind::Button,
             "search" => FormWidgetKind::Search,
             "password" => FormWidgetKind::Password,
+            "checkbox" => FormWidgetKind::Checkbox,
             // Every single-line text-like input shares the same "size columns"
             // metric.  `email`, `tel`, etc. are not yet distinguished visually,
             // but they must not fall back to plain block flow.
@@ -2755,7 +2769,20 @@ fn form_widget<'a>(
             kind,
             label: if kind.is_button() { value } else { "" },
             placeholder: attribute_value(attributes, "placeholder").unwrap_or(""),
-            value: if kind.is_button() { "" } else { value },
+            value: if kind == FormWidgetKind::Checkbox {
+                if attributes
+                    .iter()
+                    .any(|a| a.name().eq_ignore_ascii_case("checked"))
+                {
+                    "[x]"
+                } else {
+                    "[ ]"
+                }
+            } else if kind.is_button() {
+                ""
+            } else {
+                value
+            },
             disabled,
             editable: !kind.is_button() && !readonly && !disabled,
             size: attribute_value(attributes, "size").and_then(|raw| raw.parse::<u32>().ok()),
@@ -3955,9 +3982,8 @@ mod tests {
 
     #[test]
     fn unsupported_input_types_do_not_become_widgets() {
-        // Checkboxes and files still fall back to plain boxes; only the
-        // single-line text-like family is modelled.
-        for input_type in ["checkbox", "radio", "file", "range"] {
+        // Radio, file, and range controls still fall back to plain boxes.
+        for input_type in ["radio", "file", "range"] {
             let html = format!("<style>body{{margin:0}}</style><input type={input_type}>");
             let result = layout(&html, 320);
             assert_eq!(

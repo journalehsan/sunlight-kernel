@@ -121,6 +121,10 @@ Current limitations:
   Widget-type overlay panel window with `ZIndexType::OnTop` would be the robust fix.
 - Bottom dock panels are part of the Desktop-layer canvas and sit behind normal
   windows in compositor z-order; this is acceptable for now.
+- The Start Menu, Search Palette, Workspace Switcher, Sidebar, calendar, system
+  menu, and top-panel popups publish up to three rectangles per `COMMIT_FRAME`
+  (`App::desktop_overlay_rects()`), so they are re-blitted above application
+  windows instead of staying inside the Desktop layer.
 
 ### Titlebar double-click roll-up (shade)
 

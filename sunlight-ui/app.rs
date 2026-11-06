@@ -45,6 +45,9 @@ const WINDOW_CREATE_MAX_TIMEOUT_MS: u64 = 15_000;
 const MIB_BYTES: u64 = 1024 * 1024;
 const SURFACE_BYTES_PER_PIXEL: usize = core::mem::size_of::<u32>();
 const MAX_CLIENT_SURFACE_DIM: u32 = 8192;
+/// Maximum number of desktop overlay rectangles a frame can publish. The
+/// display service promotes each rectangle above application windows.
+pub const MAX_DESKTOP_OVERLAYS: usize = 3;
 static CLOSE_REQUESTED: AtomicBool = AtomicBool::new(false);
 static CLIENT_CURSOR: AtomicU8 = AtomicU8::new(u8::MAX);
 static CLIENT_WIDTH: AtomicU32 = AtomicU32::new(0);
@@ -120,24 +123,40 @@ fn decode_resize_surface_reply(reply: &IpcMsg) -> Option<ResizeSurfaceReply> {
 /// backspace, and enter without Ctrl/Alt/Super become [`Event::Key`]; everything else becomes
 /// [`Event::KeyPress`] (including key-up and pure modifiers).
 fn decode_key_event_word(key_word: u64) -> Option<Event> {
+    if sunlight_ipc::is_text_commit(key_word) {
+        return sunlight_ipc::unpack_text_commit(key_word)
+            .filter(|c| !c.is_control())
+            .map(Event::key);
+    }
     if key_word == 0 {
         return None;
     }
     let (keycode, pressed, shift, ctrl, alt, super_key, ascii) =
         sunlight_ipc::unpack_key_event(key_word);
+    if key_word & sunlight_ipc::KEY_COMPOSING != 0 {
+        return None;
+    }
     if pressed && !ctrl && !alt && !super_key {
         if let Some(ch) = ascii {
             match ch {
-                0x20..=0x7E => return Some(Event::key(ch as char)),
+                0x20..=0x7E if key_word & sunlight_ipc::KEY_SEPARATE_TEXT == 0 => {
+                    return Some(Event::key(ch as char))
+                }
                 0x08 => return Some(Event::key('\u{8}')),
                 b'\r' | b'\n' => return Some(Event::key('\n')),
                 _ => {}
             }
         }
     }
-    Some(Event::key_press(
-        keycode, pressed, shift, ctrl, alt, super_key,
-    ))
+    Some(Event::KeyPress {
+        keycode,
+        extended: key_word & sunlight_ipc::KEY_EXTENDED != 0,
+        pressed,
+        shift,
+        ctrl,
+        alt,
+        super_key,
+    })
 }
 
 /// Park until the existing poll deadline. This private endpoint does not
@@ -705,10 +724,10 @@ impl Window {
     /// compositor dequeues it, leaving a newly created window permanently
     /// non-visible. The display server always acknowledges accepted commits.
     pub fn commit(&mut self) {
-        self.commit_with_desktop_overlay(None);
+        self.commit_with_desktop_overlay([None; MAX_DESKTOP_OVERLAYS]);
     }
 
-    fn commit_with_desktop_overlay(&mut self, overlay: Option<Rect>) {
+    fn commit_with_desktop_overlay(&mut self, overlays: [Option<Rect>; MAX_DESKTOP_OVERLAYS]) {
         let frame_len = self.frame_len();
         let draw_offset = self.draw_buffer_offset();
         if draw_offset != 0 {
@@ -718,14 +737,17 @@ impl Window {
                 ptr::copy_nonoverlapping(self.buffer.add(draw_offset), self.buffer, frame_len);
             }
         }
-        let rect = overlay.unwrap_or_default();
-        let _ = ipc_call(
-            self.display_ep,
-            IpcMsg::with_label(SgpMsg::COMMIT_FRAME)
-                .word(0, self.win_id)
-                .word(1, rect.x as u32 as u64 | ((rect.y as u32 as u64) << 32))
-                .word(2, rect.w as u64 | ((rect.h as u64) << 32)),
-        );
+        let mut msg = IpcMsg::with_label(SgpMsg::COMMIT_FRAME).word(0, self.win_id);
+        for (index, overlay) in overlays.iter().enumerate() {
+            let rect = overlay.unwrap_or_default();
+            msg = msg
+                .word(
+                    1 + index * 2,
+                    rect.x as u32 as u64 | ((rect.y as u32 as u64) << 32),
+                )
+                .word(2 + index * 2, rect.w as u64 | ((rect.h as u64) << 32));
+        }
+        let _ = ipc_call(self.display_ep, msg);
     }
 
     /// Tell the compositor to remove this window.
@@ -856,7 +878,7 @@ impl Window {
         {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit_with_desktop_overlay(app.desktop_overlay_rect());
+            self.commit_with_desktop_overlay(app.desktop_overlay_rects());
         }
 
         // First frame is committed and visible. Fire on_ready() so the app
@@ -872,7 +894,7 @@ impl Window {
         if app.on_ready() {
             let mut c = self.canvas();
             app.view(&mut c, theme);
-            self.commit_with_desktop_overlay(app.desktop_overlay_rect());
+            self.commit_with_desktop_overlay(app.desktop_overlay_rects());
         }
         launch_trace::log_phase_now(
             self.launch_trace,
@@ -942,7 +964,7 @@ impl Window {
             if needs_redraw {
                 let mut c = self.canvas();
                 app.view(&mut c, theme);
-                self.commit_with_desktop_overlay(app.desktop_overlay_rect());
+                self.commit_with_desktop_overlay(app.desktop_overlay_rects());
             }
         }
     }
@@ -971,6 +993,38 @@ mod tests {
                 SgpMsg::EVENT_FLAG_WINDOW_VALID | SgpMsg::EVENT_FLAG_RESIZED,
             )
             .with_cap(0, CapabilityToken(7))
+    }
+
+    #[test]
+    fn unicode_commits_reject_malformed_words_and_do_not_duplicate_text() {
+        let physical = sunlight_ipc::pack_key_event(0x4b, true, false, false, false, false, None)
+            | sunlight_ipc::KEY_EXTENDED;
+        assert!(matches!(
+            decode_key_event_word(physical),
+            Some(Event::KeyPress {
+                extended: true,
+                keycode: 0x4b,
+                ..
+            })
+        ));
+        for c in ['é', 'م', '😠', '\u{301}'] {
+            assert_eq!(
+                decode_key_event_word(sunlight_ipc::pack_text_commit(c)),
+                Some(Event::Key(c))
+            );
+        }
+        for word in [0xd800, 0x110000, 1 << 40] {
+            assert_eq!(
+                decode_key_event_word(sunlight_ipc::TEXT_COMMIT_TAG | word),
+                None
+            );
+        }
+        let raw = sunlight_ipc::pack_key_event(0x1e, true, false, false, false, false, Some(b'a'))
+            | (1 << 56);
+        assert!(matches!(
+            decode_key_event_word(raw),
+            Some(Event::KeyPress { .. })
+        ));
     }
 
     #[test]
@@ -1111,9 +1165,16 @@ impl Drop for Window {
 /// }
 /// ```
 pub trait App {
-    /// Desktop-only modal rectangle, published with the painted frame. The
-    /// compositor restores this region above applications and gives the desktop
-    /// input until the next commit clears it. Ordinary windows ignore it.
+    /// Desktop-only modal rectangles, published with the painted frame. The
+    /// compositor restores each region above applications and gives the desktop
+    /// input until the next commit clears them. Ordinary windows ignore them.
+    fn desktop_overlay_rects(&self) -> [Option<Rect>; MAX_DESKTOP_OVERLAYS] {
+        let mut overlays = [None; MAX_DESKTOP_OVERLAYS];
+        overlays[0] = self.desktop_overlay_rect();
+        overlays
+    }
+
+    /// Compatibility for applications publishing a single desktop overlay.
     fn desktop_overlay_rect(&self) -> Option<Rect> {
         None
     }

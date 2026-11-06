@@ -98,7 +98,7 @@ use sunlight_ui::{
         mime_icon, IconImage, RgbaImage,
     },
     set_client_cursor, App, Canvas, Color, CursorShape, Event, EventPollCounters, Point, Rect,
-    Theme, Window, WindowConfig,
+    Theme, Window, WindowConfig, MAX_DESKTOP_OVERLAYS,
 };
 mod wallpaper_buffer;
 mod wallpaper_worker;
@@ -6197,6 +6197,36 @@ fn system_menu_rect(brand_zone: Rect, screen_w: u32) -> Rect {
     )
 }
 
+/// Clip a shell overlay rectangle to the desktop surface. The compositor
+/// rejects out-of-bounds overlays, so an unclipped popup would silently stay
+/// hidden behind application windows on small displays.
+fn clip_overlay_rect(rect: Rect, screen_w: u32, screen_h: u32) -> Option<Rect> {
+    let x = rect.x.max(0);
+    let y = rect.y.max(0);
+    let right = rect.right().min(screen_w as i32);
+    let bottom = rect.bottom().min(screen_h as i32);
+    if right <= x || bottom <= y {
+        return None;
+    }
+    Some(Rect::new(x, y, (right - x) as u32, (bottom - y) as u32))
+}
+
+fn notif_panel_rect(cw: u32, ch: u32, presentation: PanelPresentation) -> Rect {
+    let pw = NOTIF_CENTER_W.min(cw.saturating_sub(24));
+    let ph = ch.saturating_sub(72).clamp(180, 520);
+    let x = cw as i32 - pw as i32 - 12;
+    let y = top_bar_rect(cw, presentation).bottom() + 8;
+    Rect::new(x, y, pw, ph)
+}
+
+fn logout_confirm_rect(screen_w: u32, screen_h: u32) -> Rect {
+    let dw = 240u32;
+    let dh = 80u32;
+    let x = (screen_w / 2) as i32 - (dw / 2) as i32;
+    let y = (screen_h / 2) as i32 - (dh / 2) as i32;
+    Rect::new(x, y, dw, dh)
+}
+
 fn system_menu_item_rect(menu: Rect, index: usize) -> Rect {
     Rect::new(
         menu.x + SYSTEM_MENU_PAD,
@@ -7624,11 +7654,7 @@ impl VortexShell {
     }
 
     fn draw_notif_panel(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        let pw = NOTIF_CENTER_W.min(canvas.width.saturating_sub(24));
-        let ph = canvas.height.saturating_sub(72).clamp(180, 520);
-        let x = canvas.width as i32 - pw as i32 - 12;
-        let y = top_bar_rect(canvas.width, self.top_panel_presentation).bottom() + 8;
-        let panel = Rect::new(x, y, pw, ph);
+        let panel = notif_panel_rect(canvas.width, canvas.height, self.top_panel_presentation);
         canvas.fill_rounded_rect(panel, 10, theme.panel);
         canvas.stroke_rounded_rect(panel, 10, 1, theme.border);
 
@@ -7817,11 +7843,9 @@ impl VortexShell {
     }
 
     fn draw_logout_confirm(&mut self, canvas: &mut Canvas, theme: &Theme, _cw: u32, _ch: u32) {
-        let dw = 240u32;
-        let dh = 80u32;
-        let x = (self.screen_w / 2) as i32 - (dw / 2) as i32;
-        let y = (self.screen_h / 2) as i32 - (dh / 2) as i32;
-        let panel = Rect::new(x, y, dw, dh);
+        let panel = logout_confirm_rect(self.screen_w, self.screen_h);
+        let (dw, dh) = (panel.w, panel.h);
+        let (x, y) = (panel.x, panel.y);
         canvas.fill_rounded_rect(panel, 8, theme.panel);
         canvas.stroke_rounded_rect(panel, 8, 1, theme.border);
 
@@ -8114,13 +8138,68 @@ mod shelf_control_tests {
 // ---------------------------------------------------------------------------
 
 impl App for VortexShell {
-    fn desktop_overlay_rect(&self) -> Option<Rect> {
-        self.start_menu
-            .overlay_rect(self.screen_w, self.screen_h, &self.recent_apps)
-            .or_else(|| {
-                self.show_calendar_popover
-                    .then(|| self.calendar_popover_rect(self.screen_w))
-            })
+    fn desktop_overlay_rects(&self) -> [Option<Rect>; MAX_DESKTOP_OVERLAYS] {
+        let top_inset = top_bar_rect(self.screen_w, self.top_panel_presentation).bottom() + 8;
+        let sidebar = self
+            .sidebar
+            .overlay_rect(self.screen_w, top_inset, bot_y(self.screen_h) - 8);
+        let start_menu =
+            self.start_menu
+                .overlay_rect(self.screen_w, self.screen_h, &self.recent_apps);
+        let workspace_switcher = self.workspace_switcher.overlay_rect(
+            self.screen_w,
+            self.screen_h,
+            top_inset,
+            bot_y(self.screen_h),
+        );
+        let search = self
+            .search_palette
+            .overlay_rect(self.screen_w, self.screen_h);
+        let calendar = self
+            .show_calendar_popover
+            .then(|| self.calendar_popover_rect(self.screen_w));
+        let system_menu = self
+            .show_system_menu
+            .then(|| system_menu_rect(self.brand_zone, self.screen_w));
+        let network = self
+            .show_network_popover
+            .then(|| self.network_popover_rect(self.screen_w, self.screen_h));
+        let sound = self
+            .show_sound_popover
+            .then(|| self.sound_popover_rect(self.screen_w, self.screen_h));
+        let notifications = self
+            .show_notif_panel
+            .then(|| notif_panel_rect(self.screen_w, self.screen_h, self.top_panel_presentation));
+        let logout = self
+            .show_logout_confirm
+            .then(|| logout_confirm_rect(self.screen_w, self.screen_h));
+
+        let mut overlays = [None; MAX_DESKTOP_OVERLAYS];
+        let mut count = 0;
+        for rect in [
+            sidebar,
+            start_menu,
+            workspace_switcher,
+            search,
+            calendar,
+            system_menu,
+            network,
+            sound,
+            notifications,
+            logout,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(clipped) = clip_overlay_rect(rect, self.screen_w, self.screen_h) {
+                if count == MAX_DESKTOP_OVERLAYS {
+                    break;
+                }
+                overlays[count] = Some(clipped);
+                count += 1;
+            }
+        }
+        overlays
     }
 
     fn poll_timeout_ms(&self) -> u64 {
@@ -8463,6 +8542,7 @@ impl App for VortexShell {
                 ctrl,
                 alt: false,
                 super_key,
+                ..
             } if (ctrl && !super_key) || (super_key && !ctrl)
         ) {
             return self.open_search_palette();

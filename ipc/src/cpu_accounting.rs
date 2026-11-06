@@ -114,7 +114,10 @@ impl ActorTime {
         self.switches = self.switches.saturating_add(1);
         let Some(delta) = now.checked_sub(self.since_ns) else {
             self.discontinuities = self.discontinuities.saturating_add(1);
-            return Charge::Backward { start: self.since_ns, now };
+            return Charge::Backward {
+                start: self.since_ns,
+                now,
+            };
         };
         match self.committed_ns.checked_add(delta) {
             Some(total) => {
@@ -123,7 +126,9 @@ impl ActorTime {
             }
             None => {
                 self.discontinuities = self.discontinuities.saturating_add(1);
-                Charge::Exhausted { committed: self.committed_ns }
+                Charge::Exhausted {
+                    committed: self.committed_ns,
+                }
             }
         }
     }
@@ -135,11 +140,16 @@ impl ActorTime {
             return Charge::Ok(self.committed_ns);
         }
         let Some(delta) = now.checked_sub(self.since_ns) else {
-            return Charge::Backward { start: self.since_ns, now };
+            return Charge::Backward {
+                start: self.since_ns,
+                now,
+            };
         };
         match self.committed_ns.checked_add(delta) {
             Some(total) => Charge::Ok(total),
-            None => Charge::Exhausted { committed: self.committed_ns },
+            None => Charge::Exhausted {
+                committed: self.committed_ns,
+            },
         }
     }
 }
@@ -161,13 +171,24 @@ pub fn reconcile(parts: &[u64], total_ns: u64) -> Reconcile {
     for part in parts {
         match sum.checked_add(*part) {
             Some(v) => sum = v,
-            None => return Reconcile::Inconsistent { sum: u64::MAX, total: total_ns },
+            None => {
+                return Reconcile::Inconsistent {
+                    sum: u64::MAX,
+                    total: total_ns,
+                }
+            }
         }
     }
     if sum > total_ns {
-        Reconcile::Inconsistent { sum, total: total_ns }
+        Reconcile::Inconsistent {
+            sum,
+            total: total_ns,
+        }
     } else {
-        Reconcile::Consistent { sum, slack: total_ns - sum }
+        Reconcile::Consistent {
+            sum,
+            slack: total_ns - sum,
+        }
     }
 }
 
@@ -242,7 +263,13 @@ mod tests {
     fn backward_clock_is_a_discontinuity_not_a_negative_charge() {
         let mut t = ActorTime::IDLE;
         t.open_at(500);
-        assert_eq!(t.close_at(400), Charge::Backward { start: 500, now: 400 });
+        assert_eq!(
+            t.close_at(400),
+            Charge::Backward {
+                start: 500,
+                now: 400
+            }
+        );
         assert_eq!(t.committed_ns, 0);
         assert_eq!(t.discontinuities, 1);
     }
@@ -252,15 +279,35 @@ mod tests {
         let mut t = ActorTime::IDLE;
         t.committed_ns = u64::MAX - 1;
         t.open_at(0);
-        assert_eq!(t.close_at(10), Charge::Exhausted { committed: u64::MAX - 1 });
+        assert_eq!(
+            t.close_at(10),
+            Charge::Exhausted {
+                committed: u64::MAX - 1
+            }
+        );
         assert_eq!(t.discontinuities, 1);
     }
 
     #[test]
     fn reconciliation_accepts_slack_and_rejects_double_charging() {
-        assert_eq!(reconcile(&[10, 20, 30], 100), Reconcile::Consistent { sum: 60, slack: 40 });
-        assert_eq!(reconcile(&[60, 60], 100), Reconcile::Inconsistent { sum: 120, total: 100 });
-        assert_eq!(reconcile(&[u64::MAX, 1], 5), Reconcile::Inconsistent { sum: u64::MAX, total: 5 });
+        assert_eq!(
+            reconcile(&[10, 20, 30], 100),
+            Reconcile::Consistent { sum: 60, slack: 40 }
+        );
+        assert_eq!(
+            reconcile(&[60, 60], 100),
+            Reconcile::Inconsistent {
+                sum: 120,
+                total: 100
+            }
+        );
+        assert_eq!(
+            reconcile(&[u64::MAX, 1], 5),
+            Reconcile::Inconsistent {
+                sum: u64::MAX,
+                total: 5
+            }
+        );
     }
 
     #[test]

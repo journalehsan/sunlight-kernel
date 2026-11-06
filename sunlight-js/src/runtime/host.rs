@@ -1,6 +1,29 @@
 use super::*;
 
 impl Context {
+    /// Validate a listener/task callback without invoking user code.
+    pub fn is_callable(&self, value: &Value) -> bool {
+        self.callable(value).is_ok()
+    }
+
+    /// Run one bounded host turn. Nested evaluations share this turn's fuel.
+    /// The closure must not retain unrooted JavaScript values across calls.
+    pub fn host_turn<T>(&mut self, turn: impl FnOnce(&mut Context) -> JsResult<T>) -> JsResult<T> {
+        self.check()?;
+        if self.running >= self.limits.call_depth {
+            return Err(Error::new(ErrorKind::Limit, "host turn reentry limit"));
+        }
+        if self.running == 0 {
+            self.fuel = self.limits.fuel;
+        }
+        self.running += 1;
+        self.frames.push(Frame::default());
+        let result = turn(self);
+        self.frames.pop();
+        self.running -= 1;
+        result
+    }
+
     pub fn create_object(&mut self, prototype: Option<Handle>) -> JsResult<Handle> {
         self.alloc(ObjectKind::Ordinary, prototype)
     }
