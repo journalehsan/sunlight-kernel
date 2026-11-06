@@ -1,0 +1,13 @@
+{
+  "timeout": false,
+  "command": [
+    "objcopy",
+    "--strip-debug",
+    "target/x86_64-unknown-none/debug/sunlight-kernel",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T190513.145747Z-t4a-compatibility/kernel.elf"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 1.0795938570227008
+}

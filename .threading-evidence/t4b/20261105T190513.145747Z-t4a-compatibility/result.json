@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "attempts": [
+    ".threading-evidence/t4b/20261105T190513.676073Z-t4a-compat-build",
+    ".threading-evidence/t4b/20261105T190541.359848Z-t4a-compat-freeze",
+    ".threading-evidence/t4b/20261105T190542.986000Z-t4a-compat-iso"
+  ],
+  "guest": ".threading-evidence/t4b/20261105T190546.070122Z-t4a-compat-2cpu",
+  "kernel_sha256": "c758837e8a8d94096c2fcfc8c28542416066ef31afab22d1f42297f5c3c924cf",
+  "iso_sha256": "90add1ea94a28d839560f059049e555b19666090a9373a8be6d9604f9cb6083b"
+}

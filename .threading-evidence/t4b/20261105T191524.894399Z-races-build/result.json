@@ -1,0 +1,18 @@
+{
+  "timeout": false,
+  "command": [
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--offline",
+    "--features",
+    "futex_lifecycle_test"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 10.335740891983733
+}

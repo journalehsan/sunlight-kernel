@@ -1,0 +1,29 @@
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185606.930505Z-races-host-kernel
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185617.969565Z-races-host-linux
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185618.747731Z-races-host-scheduler
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185621.519458Z-races-lifecycle-host
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185622.296630Z-races-receipts
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185623.072958Z-races-build
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185631.654868Z-races-freeze
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185632.467285Z-races-abi
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185633.285520Z-races-iso
+PASS
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185638.419324Z-races-2cpu
+FAIL
+/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T185606.632018Z-suite-races
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t4b_run.py", line 81, in <module>
+    if __name__=='__main__':raise SystemExit(main())
+                                             ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/threading_t4b_run.py", line 71, in main
+    if not ok: raise RuntimeError('2-CPU pilot failed; native expansion stopped')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: 2-CPU pilot failed; native expansion stopped

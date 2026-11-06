@@ -1,0 +1,23 @@
+{
+  "pass": false,
+  "suite": "races",
+  "attempts": [
+    ".threading-evidence/t4b/20261105T185606.930505Z-races-host-kernel",
+    ".threading-evidence/t4b/20261105T185617.969565Z-races-host-linux",
+    ".threading-evidence/t4b/20261105T185618.747731Z-races-host-scheduler",
+    ".threading-evidence/t4b/20261105T185621.519458Z-races-lifecycle-host",
+    ".threading-evidence/t4b/20261105T185622.296630Z-races-receipts",
+    ".threading-evidence/t4b/20261105T185623.072958Z-races-build",
+    ".threading-evidence/t4b/20261105T185631.654868Z-races-freeze",
+    ".threading-evidence/t4b/20261105T185632.467285Z-races-abi",
+    ".threading-evidence/t4b/20261105T185633.285520Z-races-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": false,
+      "attempt": ".threading-evidence/t4b/20261105T185638.419324Z-races-2cpu"
+    }
+  },
+  "kernel_sha256": "bc0b69647d5359b45cecb630a556d723ea9402d510f17ae5b2b2deca0036d250",
+  "iso_sha256": "270dac12d06d5ac69beaacaf84ff6d68d7bb328f30855a05b0b7bb8f30d9475d"
+}

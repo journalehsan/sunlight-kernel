@@ -1,0 +1,28 @@
+{
+  "pass": true,
+  "suite": "production",
+  "attempts": [
+    ".threading-evidence/t4b/20261105T190617.775609Z-production-restore-supervisor",
+    ".threading-evidence/t4b/20261105T190619.123144Z-production-debug",
+    ".threading-evidence/t4b/20261105T190639.877103Z-production-release",
+    ".threading-evidence/t4b/20261105T190705.211281Z-production-freeze",
+    ".threading-evidence/t4b/20261105T190706.449531Z-production-abi",
+    ".threading-evidence/t4b/20261105T190710.640237Z-production-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261105T190719.059718Z-production-2cpu"
+    }
+  },
+  "kernel_sha256": "52bd1ba8827d56cc0459eea25eae477f5467cacf3467384e806cb784accf395a",
+  "iso_sha256": "a0620739ca10b314f5c2164d86f345a7c2bdc2236d1a9bc626ced7cf56d3ea55",
+  "production_exclusion": {
+    "T4B ": true,
+    "[T4B]": true,
+    "t4a_fixture": true,
+    "t4b_fixture": true,
+    "[T3R] begin": true,
+    "[T2] begin": true
+  }
+}

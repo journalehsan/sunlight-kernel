@@ -1,0 +1,476 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 12
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=2026-11-05T18:55:08Z
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0xf1dbca0 (61916 frames, 241 MiB)
+[PMM] 1318/1559 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=129152 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11912 end_count=7911 elapsed_counts=4001 tsc_delta=8338517 tsc_hz=2486720417
+[TIME] TSC calibrated ~2486720417 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff8d68f0f8 ist_df=0xffffffff8e823158 ist_nmi=0xffffffff8ee1b160
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62640700 lapic_initial_count=626407 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2486720417
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x05 hour=0x18 minute=0x56 second=0x59 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-05T18:56:59Z assumed_basis=UTC
+wall: utc=2026-11-05T18:56:59Z unix=1793905019 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff80003e78
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8e824140..0xffffffff8e834140
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff80003e78
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff8d68f168 ist_df=0xffffffff8e834140 ist_nmi=0xffffffff8ee1f160
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=38f3 memsz=38f3 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=684 memsz=684 prot=Read
+[ELF] PT_LOAD off=5688 vaddr=404688 filesz=58 memsz=58 prot=ReadWrite
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=150 memsz=121150 prot=ReadWrite
+[SCHED] CREATED process #1 't4b-owner' idx=0 burst_score=256 tier=High
+[T4B] begin cpus=2 owner=58368 inc=1 vm=AddressSpaceIdentity { pml4_phys: 270422016, generation: 1 } heap=1935568 frames=332701
+[SCHED] process 0 't4b-owner' state=Ready
+[SCHED] Entering process 0 't4b-owner' at rsp=0xffffffff900087a0
+[T4B] created case=0 role=0 tid=58369 inc=2 vm=1 stack=0xffffffff901e4540 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58369 trampoline=0x400000
+[T4B] created case=0 role=2 tid=58370 inc=3 vm=1 stack=0xffffffff901eed40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58370 trampoline=0x400000
+[T4B] created case=0 role=1 tid=58371 inc=4 vm=1 stack=0xffffffff901f9540 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58371 trampoline=0x400000
+[T4B] registered case=0 role=0 seq=1 tid=58369 inc=2
+[T4B] terminal case=0 role=0 seq=1 tid=58369 inc=2 result=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58371 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58371 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58371 name='t4b-owner'
+[SCHED] process_reaped pid=58371 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58371 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58371 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58369 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58369 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58369 name='t4b-owner'
+[SCHED] process_reaped pid=58369 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58369 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58369 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58370 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58370 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58370 name='t4b-owner'
+[SCHED] process_reaped pid=58370 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58370 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58370 cleared_msgs=0
+[THREAD-LIFECYCLE] created=3 finished=3 reaped=3 borrower_reclaim_skipped=3 stale_wake_rejected=0 borrower_slots_reused=0 max_live=3
+[T4B] case=0 registered=1 completed=1 selected=1 result=0 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=0 ticks=5466 userspace_selected=0
+[T4B] created case=1 role=0 tid=58372 inc=5 vm=1 stack=0xffffffff901eed40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58372 trampoline=0x400000
+[T4B] created case=1 role=2 tid=58373 inc=6 vm=1 stack=0xffffffff901f9540 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58373 trampoline=0x400000
+[T4B] created case=1 role=1 tid=58374 inc=7 vm=1 stack=0xffffffff90201540 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58374 trampoline=0x400000
+[T4B] registered case=1 role=0 seq=1 tid=58372 inc=5
+[T4B] terminal case=1 role=0 seq=1 tid=58372 inc=5 result=2
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58374 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58374 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58374 name='t4b-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58372 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58372 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58372 name='t4b-owner'
+[SCHED] process_reaped pid=58372 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58372 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58372 cleared_msgs=0
+[SCHED] process_reaped pid=58374 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58374 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58374 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58373 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58373 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58373 name='t4b-owner'
+[SCHED] process_reaped pid=58373 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58373 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58373 cleared_msgs=0
+[THREAD-LIFECYCLE] created=6 finished=6 reaped=6 borrower_reclaim_skipped=6 stale_wake_rejected=0 borrower_slots_reused=3 max_live=3
+[T4B] case=1 registered=1 completed=1 selected=0 result=2 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=1 ticks=2463 userspace_selected=0
+[T4B] created case=2 role=0 tid=58375 inc=8 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58375 trampoline=0x400000
+[T4B] created case=2 role=2 tid=58376 inc=9 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58376 trampoline=0x400000
+[T4B] created case=2 role=1 tid=58377 inc=10 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58377 trampoline=0x400000
+[T4B] registered case=2 role=0 seq=1 tid=58375 inc=8
+[T4B] terminal case=2 role=0 seq=1 tid=58375 inc=8 result=2
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58377 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58377 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58377 name='t4b-owner'
+[SCHED] process_mark_finished pid=58375 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58375 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58375 name='t4b-owner'
+[SCHED] process_reaped pid=58375 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58375 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58375 cleared_msgs=0
+[SCHED] process_reaped pid=58377 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58377 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58377 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58376 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58376 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58376 name='t4b-owner'
+[SCHED] process_reaped pid=58376 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58376 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58376 cleared_msgs=0
+[THREAD-LIFECYCLE] created=9 finished=9 reaped=9 borrower_reclaim_skipped=9 stale_wake_rejected=0 borrower_slots_reused=6 max_live=3
+[T4B] case=2 registered=1 completed=1 selected=0 result=2 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=2 ticks=2484 userspace_selected=0
+[T4B] created case=3 role=0 tid=58378 inc=11 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58378 trampoline=0x400000
+[T4B] created case=3 role=2 tid=58379 inc=12 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58379 trampoline=0x400000
+[T4B] created case=3 role=1 tid=58380 inc=13 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58380 trampoline=0x400000
+[T4B] registered case=3 role=0 seq=1 tid=58378 inc=11
+[T4B] terminal case=3 role=0 seq=1 tid=58378 inc=11 result=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58380 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58380 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58380 name='t4b-owner'
+[SCHED] process_reaped pid=58380 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58380 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58380 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58378 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58378 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58378 name='t4b-owner'
+[SCHED] process_reaped pid=58378 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58378 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58378 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58379 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58379 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58379 name='t4b-owner'
+[SCHED] process_reaped pid=58379 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58379 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58379 cleared_msgs=0
+[THREAD-LIFECYCLE] created=12 finished=12 reaped=12 borrower_reclaim_skipped=12 stale_wake_rejected=0 borrower_slots_reused=9 max_live=3
+[T4B] case=3 registered=1 completed=1 selected=0 result=0 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=3 ticks=6 userspace_selected=0
+[T4B] created case=4 role=0 tid=58381 inc=14 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58381 trampoline=0x400000
+[T4B] created case=4 role=2 tid=58382 inc=15 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58382 trampoline=0x400000
+[T4B] created case=4 role=1 tid=58383 inc=16 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58383 trampoline=0x400000
+[T4B] registered case=4 role=0 seq=1 tid=58381 inc=14
+[T4B] terminal case=4 role=0 seq=1 tid=58381 inc=14 result=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58381 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58381 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58381 name='t4b-owner'
+[SCHED] process_mark_finished pid=58383 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58383 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58383 name='t4b-owner'
+[SCHED] process_reaped pid=58381 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58381 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58381 cleared_msgs=0
+[SCHED] process_reaped pid=58383 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58383 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58383 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58382 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58382 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58382 name='t4b-owner'
+[SCHED] process_reaped pid=58382 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58382 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58382 cleared_msgs=0
+[THREAD-LIFECYCLE] created=15 finished=15 reaped=15 borrower_reclaim_skipped=15 stale_wake_rejected=0 borrower_slots_reused=12 max_live=3
+[T4B] case=4 registered=1 completed=1 selected=1 result=0 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=4 ticks=2 userspace_selected=0
+[T4B] created case=5 role=0 tid=58384 inc=17 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58384 trampoline=0x400000
+[T4B] created case=5 role=2 tid=58385 inc=18 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58385 trampoline=0x400000
+[T4B] created case=5 role=1 tid=58386 inc=19 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58386 trampoline=0x400000
+[T4B] registered case=5 role=0 seq=1 tid=58384 inc=17
+[T4B] terminal case=5 role=0 seq=1 tid=58384 inc=17 result=2
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58386 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58386 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58386 name='t4b-owner'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58384 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58384 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58384 name='t4b-owner'
+[SCHED] process_reaped pid=58384 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58384 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58384 cleared_msgs=0
+[SCHED] process_reaped pid=58386 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58386 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58386 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58385 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58385 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58385 name='t4b-owner'
+[SCHED] process_reaped pid=58385 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58385 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58385 cleared_msgs=0
+[THREAD-LIFECYCLE] created=18 finished=18 reaped=18 borrower_reclaim_skipped=18 stale_wake_rejected=0 borrower_slots_reused=15 max_live=3
+[T4B] case=5 registered=1 completed=1 selected=0 result=2 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=5 ticks=2522 userspace_selected=0
+[T4B] created case=6 role=0 tid=58387 inc=20 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58387 trampoline=0x400000
+[T4B] created case=6 role=2 tid=58388 inc=21 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58388 trampoline=0x400000
+[T4B] created case=6 role=1 tid=58389 inc=22 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58389 trampoline=0x400000
+[T4B] registered case=6 role=0 seq=1 tid=58387 inc=20
+[SCHED] process_exit_begin external pid=58387 reason=t4b-waiting-exit
+[SCHED] process_mark_finished pid=58387 name='t4b-owner' reason=t4b-waiting-exit code=37 (external)
+[T4B] terminal case=6 role=0 seq=1 tid=58387 inc=20 result=0
+[SCHED] FINISHED process pid=58387 name='t4b-owner'
+[SCHED] terminating pid=58387 name='t4b-owner' reason=t4b-waiting-exit
+[SCHED] process_reaped pid=58387 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58387 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58387 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58389 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58389 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58389 name='t4b-owner'
+[SCHED] process_reaped pid=58389 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58389 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58389 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58388 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58388 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58388 name='t4b-owner'
+[SCHED] process_reaped pid=58388 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58388 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58388 cleared_msgs=0
+[THREAD-LIFECYCLE] created=21 finished=21 reaped=21 borrower_reclaim_skipped=21 stale_wake_rejected=0 borrower_slots_reused=18 max_live=3
+[T4B] case=6 registered=1 completed=1 selected=0 result=0 dispatch0=0x1 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=6 ticks=2 userspace_selected=0
+[T4B] created case=7 role=0 tid=58390 inc=23 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58390 trampoline=0x400000
+[T4B] created case=7 role=2 tid=58391 inc=24 vm=1 stack=0xffffffff901f3d40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58391 trampoline=0x400000
+[T4B] created case=7 role=1 tid=58392 inc=25 vm=1 stack=0xffffffff901fbd40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58392 trampoline=0x400000
+[T4B] registered case=7 role=0 seq=1 tid=58390 inc=23
+[T4B] terminal case=7 role=0 seq=1 tid=58390 inc=23 result=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58392 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58392 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58392 name='t4b-owner'
+[SCHED] process_reaped pid=58392 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58392 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58392 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58390 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58390 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58390 name='t4b-owner'
+[SCHED] process_reaped pid=58390 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58390 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58390 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=58391 name='t4b-owner' reason=exit code=0
+[SCHED] terminating pid=58391 name='t4b-owner' reason=exit
+[SCHED] FINISHED process pid=58391 name='t4b-owner'
+[SCHED] process_reaped pid=58391 name='t4b-owner' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=58391 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=58391 cleared_msgs=0
+[THREAD-LIFECYCLE] created=24 finished=24 reaped=24 borrower_reclaim_skipped=24 stale_wake_rejected=0 borrower_slots_reused=21 max_live=3
+[T4B] case=7 registered=1 completed=1 selected=1 result=0 dispatch0=0x3 heap=1966288 frames=332701 active=0 deadlines=0 receipts=0 queues=0 pins=0 refs=3
+[T4B] progress case=7 ticks=3 userspace_selected=0
+[T4B] created case=8 role=0 tid=58393 inc=26 vm=1 stack=0xffffffff901ebd40 tls=0x406008
+[SYSCALL] thread_spawn: parent=58368 tid=58393 trampoline=0x400000
+[T4B] created case=8 role=1 tid=58394 inc=27 vm=1 stack=0xffffffff901f3d40 tls=0x406010
+[SYSCALL] thread_spawn: parent=58368 tid=58394 trampoline=0x400000
+[T4B] created case=8 role=2 tid=58395 inc=28 vm=1 stack=0xffffffff901fbd40 tls=0x406018
+[SYSCALL] thread_spawn: parent=58368 tid=58395 trampoline=0x400000
+[T4B] created case=8 role=3 tid=58396 inc=29 vm=1 stack=0xffffffff90203d40 tls=0x406020
+[SYSCALL] thread_spawn: parent=58368 tid=58396 trampoline=0x400000
+[T4B] registered case=8 role=1 seq=1 tid=58394 inc=27
+[T4B] created case=8 role=4 tid=58397 inc=30 vm=1 stack=0xffffffff9020e540 tls=0x406028
+[SYSCALL] thread_spawn: parent=58368 tid=58397 trampoline=0x400000
+[T4B] registered case=8 role=4 seq=1 tid=58397 inc=30
+[T4B] registered case=8 role=3 seq=1 tid=58396 inc=29
+[T4B] created case=8 role=5 tid=58398 inc=31 vm=1 stack=0xffffffff90218d40 tls=0x406030
+[SYSCALL] thread_spawn: parent=58368 tid=58398 trampoline=0x400000
+[T4B] created case=8 role=6 tid=58399 inc=32 vm=1 stack=0xffffffff90223540 tls=0x406038
+[SYSCALL] thread_spawn: parent=58368 tid=58399 trampoline=0x400000
+[T4B] created case=8 role=7 tid=58400 inc=33 vm=1 stack=0xffffffff9022dd40 tls=0x406040
+[SYSCALL] thread_spawn: parent=58368 tid=58400 trampoline=0x400000
+[T4B] registered case=8 role=6 seq=1 tid=58399 inc=32
+[T4B] created case=8 role=8 tid=58401 inc=34 vm=1 stack=0xffffffff90238540 tls=0x406048
+[SYSCALL] thread_spawn: parent=58368 tid=58401 trampoline=0x400000
+[T4B] created case=8 role=9 tid=58402 inc=35 vm=1 stack=0xffffffff90242d40 tls=0x406050
+[SYSCALL] thread_spawn: parent=58368 tid=58402 trampoline=0x400000
+[T4B] created case=8 role=10 tid=58403 inc=36 vm=1 stack=0xffffffff9024d540 tls=0x406058
+[SYSCALL] thread_spawn: parent=58368 tid=58403 trampoline=0x400000
+[T4B] created case=8 role=11 tid=58404 inc=37 vm=1 stack=0xffffffff90257d40 tls=0x406060
+[SYSCALL] thread_spawn: parent=58368 tid=58404 trampoline=0x400000
+[T4B] registered case=8 role=5 seq=1 tid=58398 inc=31
+[T4B] created case=8 role=12 tid=58405 inc=38 vm=1 stack=0xffffffff90262540 tls=0x406068
+[SYSCALL] thread_spawn: parent=58368 tid=58405 trampoline=0x400000
+[T4B] created case=8 role=13 tid=58406 inc=39 vm=1 stack=0xffffffff9026cd40 tls=0x406070
+[SYSCALL] thread_spawn: parent=58368 tid=58406 trampoline=0x400000
+[T4B] created case=8 role=14 tid=58407 inc=40 vm=1 stack=0xffffffff90277540 tls=0x406078
+[SYSCALL] thread_spawn: parent=58368 tid=58407 trampoline=0x400000
+[T4B] registered case=8 role=13 seq=1 tid=58406 inc=39
+[T4B] created case=8 role=15 tid=58408 inc=41 vm=1 stack=0xffffffff90281d40 tls=0x406080
+[SYSCALL] thread_spawn: parent=58368 tid=58408 trampoline=0x400000
+[T4B] created case=8 role=16 tid=58409 inc=42 vm=1 stack=0xffffffff9028c540 tls=0x406088
+[SYSCALL] thread_spawn: parent=58368 tid=58409 trampoline=0x400000
+[T4B] created case=8 role=17 tid=58410 inc=43 vm=1 stack=0xffffffff90296d40 tls=0x406090
+[SYSCALL] thread_spawn: parent=58368 tid=58410 trampoline=0x400000
+[T4B] registered case=8 role=12 seq=1 tid=58405 inc=38
+[T4B] created case=8 role=18 tid=58411 inc=44 vm=1 stack=0xffffffff902a1540 tls=0x406098
+[SYSCALL] thread_spawn: parent=58368 tid=58411 trampoline=0x400000
+[T4B] created case=8 role=19 tid=58412 inc=45 vm=1 stack=0xffffffff902abd40 tls=0x4060a0
+[SYSCALL] thread_spawn: parent=58368 tid=58412 trampoline=0x400000
+[T4B] created case=8 role=20 tid=58413 inc=46 vm=1 stack=0xffffffff902b6540 tls=0x4060a8
+[SYSCALL] thread_spawn: parent=58368 tid=58413 trampoline=0x400000
+[T4B] registered case=8 role=11 seq=1 tid=58404 inc=37
+[T4B] created case=8 role=21 tid=58414 inc=47 vm=1 stack=0xffffffff902c0d40 tls=0x4060b0
+[SYSCALL] thread_spawn: parent=58368 tid=58414 trampoline=0x400000
+[T4B] registered case=8 role=10 seq=1 tid=58403 inc=36
+[T4B] created case=8 role=22 tid=58415 inc=48 vm=1 stack=0xffffffff902cb540 tls=0x4060b8
+[SYSCALL] thread_spawn: parent=58368 tid=58415 trampoline=0x400000
+[T4B] created case=8 role=23 tid=58416 inc=49 vm=1 stack=0xffffffff902d5d40 tls=0x4060c0
+[SYSCALL] thread_spawn: parent=58368 tid=58416 trampoline=0x400000
+[T4B] created case=8 role=24 tid=58417 inc=50 vm=1 stack=0xffffffff902e0540 tls=0x4060c8
+[SYSCALL] thread_spawn: parent=58368 tid=58417 trampoline=0x400000
+[T4B] registered case=8 role=23 seq=1 tid=58416 inc=49
+[T4B] created case=8 role=25 tid=58418 inc=51 vm=1 stack=0xffffffff902ead40 tls=0x4060d0
+[SYSCALL] thread_spawn: parent=58368 tid=58418 trampoline=0x400000
+[T4B] created case=8 role=26 tid=58419 inc=52 vm=1 stack=0xffffffff902f5540 tls=0x4060d8
+[SYSCALL] thread_spawn: parent=58368 tid=58419 trampoline=0x400000
+[T4B] created case=8 role=27 tid=58420 inc=53 vm=1 stack=0xffffffff902ffd40 tls=0x4060e0
+[SYSCALL] thread_spawn: parent=58368 tid=58420 trampoline=0x400000
+[T4B] created case=8 role=28 tid=58421 inc=54 vm=1 stack=0xffffffff9030a540 tls=0x4060e8
+[SYSCALL] thread_spawn: parent=58368 tid=58421 trampoline=0x400000
+[T4B] created case=8 role=29 tid=58422 inc=55 vm=1 stack=0xffffffff90314d40 tls=0x4060f0
+[SYSCALL] thread_spawn: parent=58368 tid=58422 trampoline=0x400000
+[T4B] created case=8 role=30 tid=58423 inc=56 vm=1 stack=0xffffffff9031f540 tls=0x4060f8
+[SYSCALL] thread_spawn: parent=58368 tid=58423 trampoline=0x400000
+[T4B] registered case=8 role=22 seq=1 tid=58415 inc=48
+[T4B] created case=8 role=31 tid=58424 inc=57 vm=1 stack=0xffffffff90329d40 tls=0x406100
+[SYSCALL] thread_spawn: parent=58368 tid=58424 trampoline=0x400000
+[T4B] registered case=8 role=21 seq=1 tid=58414 inc=47
+
+[KERNEL PANIC] panicked at kernel/src/sched/t4b_fixture.rs:378:19:
+T4B userspace failure case=8 role=None

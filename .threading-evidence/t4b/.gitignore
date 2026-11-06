@@ -1,0 +1,6 @@
+# Generated host test executables and compiler metadata.
+production-helpers
+production-admission
+before-correction
+*.rmeta
+/initial/status.z

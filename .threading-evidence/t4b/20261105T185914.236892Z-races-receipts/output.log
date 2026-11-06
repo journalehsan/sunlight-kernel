@@ -1,0 +1,7 @@
+test_positive (test_threading_t4b.Receipts.test_positive) ... ok
+test_reject_missing_or_corrupt_proof (test_threading_t4b.Receipts.test_reject_missing_or_corrupt_proof) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.020s
+
+OK

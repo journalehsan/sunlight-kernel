@@ -1,0 +1,10 @@
+{
+  "baseline": ".threading-evidence/t4a/clippy/current-completion/clippy.jsonl",
+  "baseline_sha256": "0bb9532120b3e7aed750717b7a5ef28b3970e5c643fd40882683dd742926df55",
+  "baseline_records": 155,
+  "current_records": 155,
+  "added": [],
+  "removed": [],
+  "changed_span_intersections": [],
+  "status": "BASELINE_FAILURE_NO_NEW_DIAGNOSTICS"
+}

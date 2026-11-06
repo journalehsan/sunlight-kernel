@@ -1,0 +1,17 @@
+{
+  "timeout": false,
+  "command": [
+    "clippy-driver",
+    "tools/helios-probes/futex-lifecycle-probe.rs",
+    "--edition=2021",
+    "--target=x86_64-unknown-none",
+    "-Cpanic=abort",
+    "--emit=metadata",
+    "-o",
+    ".threading-evidence/t4b/probe-clippy.rmeta"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 2.1060717850050423
+}

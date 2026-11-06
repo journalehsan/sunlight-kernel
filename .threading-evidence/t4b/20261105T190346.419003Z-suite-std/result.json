@@ -1,0 +1,32 @@
+{
+  "pass": true,
+  "suite": "std",
+  "attempts": [
+    ".threading-evidence/t4b/20261105T190346.816155Z-std-users",
+    ".threading-evidence/t4b/20261105T190348.640459Z-std-supervisor",
+    ".threading-evidence/t4b/20261105T190349.679081Z-std-kernel",
+    ".threading-evidence/t4b/20261105T190405.989613Z-std-freeze",
+    ".threading-evidence/t4b/20261105T190406.834439Z-std-abi",
+    ".threading-evidence/t4b/20261105T190407.827963Z-std-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261105T190410.419486Z-std-2cpu"
+    },
+    "1": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261105T190445.359008Z-std-1cpu"
+    },
+    "4": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261105T190445.359430Z-std-4cpu"
+    },
+    "12": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261105T190556.715137Z-std-12cpu"
+    }
+  },
+  "kernel_sha256": "71038f7a68aa60052f819d05474bf41e1950de2a3592cb3ee7f71974fa17d596",
+  "iso_sha256": "948646c082cfaa5379dc3121f2c5417b4b6ebcc83701d0ef672de4330ddcdd30"
+}

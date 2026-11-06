@@ -1,0 +1,42 @@
+{
+  "timeout": false,
+  "iso_sha256": "171659edcfe64717566ad370c48f5cb3e21e8012d445e876a1faa9c191be62af",
+  "cpus": 4,
+  "markers": [
+    "[NATIVE-STD] T4A mutex/condvar handoffs=1536 independent=4 progress/TLS/resources OK",
+    "[NATIVE-STD] collections/clocks/locks/TLS/join OK",
+    "[NATIVE-STD] T2 Hayro workers=4 concurrent render/join OK",
+    "[NATIVE-STD] shared descriptors/OOM/group exit OK",
+    "[DOCSERV] native Hayro IPC open/render/close OK"
+  ],
+  "command": [
+    "qemu-system-x86_64",
+    "-accel",
+    "tcg,thread=multi",
+    "-cpu",
+    "max",
+    "-smp",
+    "4",
+    "-m",
+    "2048",
+    "-cdrom",
+    "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T191729.731959Z-suite-std/boot.iso",
+    "-serial",
+    "file:/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261105T191829.809495Z-std-4cpu/serial.log",
+    "-display",
+    "none",
+    "-nic",
+    "none",
+    "-device",
+    "virtio-rng-pci,disable-modern=on",
+    "-device",
+    "isa-debug-exit,iobase=0xf4,iosize=0x04",
+    "-no-reboot",
+    "-no-shutdown"
+  ],
+  "exit_code": 0,
+  "serial_sha256": "04a9c89215c52a20f85baa5a27a7ae804947efffe366b5a618cafde12d78672a",
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 40.00511628299137
+}

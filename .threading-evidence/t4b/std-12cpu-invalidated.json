@@ -1,0 +1,7 @@
+{
+  "attempt": ".threading-evidence/t4b/20261105T190556.715137Z-std-12cpu",
+  "original_reported_pass": true,
+  "accepted": false,
+  "status": "FAIL",
+  "reason": "native futex wait failed; supervisor restart hid initial failure from inherited marker parser"
+}

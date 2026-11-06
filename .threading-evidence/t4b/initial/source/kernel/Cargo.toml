@@ -1,0 +1,780 @@
+[package]
+name = "sunlight-kernel"
+version = "0.2.6324-alpha.2"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+build = "build.rs"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+edition = "2021"
+
+[[bin]]
+name = "sunlight-kernel"
+path = "src/main.rs"
+
+[lib]
+name = "sunlight_kernel_mm2a"
+path = "src/mm2a_host.rs"
+
+[dependencies]
+sunlight-fastlane-doorbell = { path = "../fastlane-doorbell", optional = true }
+x86_64 = { version = "0.15", default-features = false, features = ["instructions", "abi_x86_interrupt"] }
+uart_16550 = "0.3"
+limine = "0.6"
+spin = "0.9"
+heapless = "0.8"
+linked_list_allocator = "0.10"
+sunlight-tui = { path = "../sunlight-tui" }
+sunlight-virtio = { path = "../sunlight-virtio" }
+sunlight-block = { path = "../sunlight-block" }
+sunlight-fat = { path = "../sunlight-fat" }
+sunlight-elf = { path = "../sunlight-elf" }
+sunlight-fs = { path = "../sunlight-fs" }
+sunlight-compat-linux = { path = "../compat-linux" }
+sunlight-net = { path = "../sunlight-net" }
+sunlight-ipc = { path = "../ipc" }
+sunlight-smbios = { path = "../sunlight-smbios" }
+sunlight-sensors = { path = "../sunlight-sensors" }
+lz4_flex = { version = "0.11", default-features = false }
+
+[features]
+# Isolated bounded thread admission and allocation fault controls; debug only.
+thread_admission_test = []
+thread_lifecycle_race_test = []
+# T4A bounded ring-3 futex race controls; excluded from production.
+atomic_futex_test = []
+thread_migration_test = []
+# Isolated hostile-RSP and sibling-stack controls, debug images only.
+syscall_stack_test = ["scheduler_b_test"]
+syscall_stack_auth_test = ["cap_issuance_test"]
+fastlane_contract_test = ["fastlane_shared_ring_test"]
+fastlane_hybrid_lifecycle_test = ["fastlane_contract_test"]
+fastlane_mediated_accounting_test = ["fastlane_measurement_test"]
+fastlane_measurement_test = ["fastlane_shared_ring_test"]
+fastlane_shared_ring_test = ["fastlane_repeated_test"]
+fastlane_repeated_test = ["fastlane_transfer_test"]
+demand_test = []
+idle_test = ["demand_test"]
+dependency_test = ["idle_test"]
+recovery_test = ["dependency_test"]
+# Native Hayro/viewer artifacts are built with tools/build_docserv.sh.
+# The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
+default = []
+native_std_probe = []
+document_service = []
+native_document_service = ["document_service"]
+native_document_viewer = ["native_document_service", "document_viewer"]
+document_viewer = ["document_service"]
+document_postscript = ["document_service"]
+key_inject = []
+launch_trace = []
+# Deterministic PMM allocation failures for the focused MM-2A QEMU gate only.
+mm2a_test_injection = []
+# Focused 12-core remote TLB replacement gate.
+mm2b_smp_test = []
+# Focused bounded address-space ledger consistency gate.
+mm2c_ledger_test = []
+# Focused policy-aware anonymous munmap/shootdown gate. Reuses the MM-2B test
+# mailbox transport without running the historical MM-2B replacement gate.
+mm2d_munmap_test = ["mm2b_smp_test"]
+# Focused four-core present-anonymous mprotect and permission shootdown gate.
+mm2e_mprotect_test = ["mm2b_smp_test"]
+# Audit/lifetime prerequisite gate only. Does not expose FastLane syscalls.
+fastlane_f1_audit = ["mm2b_smp_test", "mm2a_test_injection"]
+# F1.1 authority counterexamples only; no restricted-memory ABI is exposed.
+fastlane_f11_audit = ["fastlane_f1_audit"]
+# Instance-local issuance fault injection + isolated native authority fixture.
+cap_issuance_test = []
+production_grant_test = []
+# Global broker exhaustion after the ordinary production fixture. OFF by default.
+grant_history_test = ["production_grant_test"]
+grant_history_transport_test = ["production_grant_test"]
+native_session_race_test = []
+# Authority only: debug-only, no mappings, payload or Doorbell API.
+fastlane_mapping_test = ["fastlane_channel_test"]
+fastlane_transfer_test = ["fastlane_doorbell_test"]
+fastlane_doorbell_test = ["fastlane_mapping_test", "dep:sunlight-fastlane-doorbell", "sunlight-fastlane-doorbell/fixture"]
+# M5R bounded diagnostics and explicit pre-repair interrupt-state control.
+fastlane_doorbell_trace = ["fastlane_doorbell_test"]
+fastlane_doorbell_if_control = ["fastlane_doorbell_trace"]
+# Bounded ownership observations only; absent from release and ordinary images.
+fastlane_census_trace = ["fastlane_mapping_test"]
+# Opt-in M3.1B page-table retention / VM teardown fixture. Observation only;
+# absent from release and ordinary images.
+fastlane_m31_retention_test = ["fastlane_census_trace"]
+# Debug-only evidence switch for the M3.1B fixture: omit the SHM empty-table
+# reclaim so the pre-repair retention mechanism is reproducible. Never enabled
+# in production; requires fastlane_m31_retention_test.
+fastlane_m31_prerepair = ["fastlane_m31_retention_test"]
+fastlane_channel_test = ["native_session_race_test"]
+# M5.1R2 bounded controls; never enabled by the normal fixture or production.
+fastlane_coord_diag = ["fastlane_channel_test"]
+fastlane_coord_spin = ["fastlane_coord_diag"]
+fastlane_coord_same_cpu = ["fastlane_coord_diag"]
+
+native_session_h4_test = ["native_session_race_test"]
+authenticated_reply_test = ["native_session_h4_test"]
+# Observation-only per-object Account exec retirement trace. Debug images only.
+authenticated_exec_test = ["native_session_h4_test"]
+authenticated_cancel_test = ["authenticated_exec_test"]
+# Bounded two-actor syscall coordination; absent from ordinary images.
+authenticated_completion_race_test = ["authenticated_cancel_test"]
+authenticated_completion_exit_test = ["authenticated_cancel_test"]
+# Opt-in deferred reply generation/lifecycle boot-method regressions.
+ipc_deferred_test = []
+# Concurrent kernel-method fixture. Never authenticates an Account session.
+ipc_reply_race_test = ["ipc_deferred_test"]
+# Focused SWAP-1 multi-pool pressure/recovery gate.
+swap1_test = ["mm2b_smp_test"]
+# Physical memory accounting Phase 1 native ISO gate.
+memory_accounting_test = []
+# Verbose per-tick / per-alloc diagnostics over the serial port. OFF by default:
+# these logs are written while the global scheduler lock is held and block the
+# UART, stalling every core. Enable only for debugging.
+verbose_diag = []
+# Bounded CPU audit reports and wakeup/scheduler event counters.
+cpu_accounting_diag = []
+# Isolated D3.8-W userspace receive and service lifecycle regression probe.
+idle_wakeup_test = []
+# Isolated real ring-3 scheduler lifecycle gate; never enabled by default.
+scheduler_b_test = []
+remote_wake_test = []
+native_doorbell_test = ["dep:sunlight-fastlane-doorbell", "sunlight-fastlane-doorbell/fixture"]
+pin_release_test = []
+pin_release_ordering_test = ["pin_release_test"]
+# R2D initial-pin/exit and delayed-dispatch/new-pin native fixtures. Reuses the
+# R2V ELF probe and handoff primitives; never enabled in an ordinary image.
+pin_release_r2d_test = ["pin_release_test"]
+# Fixed-size per-CPU scheduler performance instrumentation; disabled by default.
+scheduler_perf_diag = []
+# Automatically launch the bounded C1.2A guest CPU contention workload.
+# This is a test-only boot image feature and is disabled for normal boots.
+scheduler_guest_bench = []
+# Bounded same-CPU timer/IPC stage trace; never enabled in ordinary images.
+scheduler_timer_trace = ["scheduler_guest_bench"]
+scheduler_mixed_bench = ["scheduler_timer_trace"]
+
+[dev-dependencies]
+sunlight-fastlane-doorbell = { path = "../fastlane-doorbell", features = ["fixture"] }

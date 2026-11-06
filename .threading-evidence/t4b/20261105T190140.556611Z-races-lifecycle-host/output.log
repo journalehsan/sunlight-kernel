@@ -1,0 +1,13 @@
+{"control":"C1","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C2","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C3","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C6","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C4","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C5","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C7","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C8","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C9/D","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C10","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"C12","status":"PASS","scope":"production helpers; placement stub"}
+{"control":"EINTR/pthread_cancel","status":"UNSUPPORTED"}
+C11: production syscall mismatch/register/one-shot receipt PASS; VM/trap adapters

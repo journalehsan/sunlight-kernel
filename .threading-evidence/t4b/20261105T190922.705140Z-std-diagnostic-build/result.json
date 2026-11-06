@@ -1,0 +1,20 @@
+{
+  "timeout": false,
+  "command": [
+    "env",
+    "SUNLIGHT_INJECT_PHASE=document-service",
+    "cargo",
+    "build",
+    "-p",
+    "sunlight-kernel",
+    "--bin",
+    "sunlight-kernel",
+    "--offline",
+    "--features",
+    "key_inject,document_service,native_document_service,futex_lifecycle_diag"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 12.304614979977487
+}

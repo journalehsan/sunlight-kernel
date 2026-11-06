@@ -1,0 +1,7 @@
+{
+  "initial_source": ".threading-evidence/t4b/initial/source/kernel/src/arch/x86_64/syscall.rs",
+  "compiled": true,
+  "exit_code": 101,
+  "expected_assertion": "initial WAIT returned 0 before a terminal completion; expected replay syscall number 155",
+  "regression_detected": true
+}
