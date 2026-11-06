@@ -389,6 +389,8 @@ pub enum PropertyValue {
     Normal,
     Keyword(String),
     Raw(String),
+    /// Deferred until custom properties are substituted on the consuming element.
+    BackgroundShorthand(String),
 }
 
 impl PropertyValue {
@@ -404,6 +406,7 @@ impl PropertyValue {
             Self::Percentage(value) => format!("{}%", *value as f32 / 100.0),
             Self::Auto => String::from("auto"),
             Self::Normal => String::from("normal"),
+            Self::BackgroundShorthand(value) => value.clone(),
             Self::Keyword(value) | Self::Raw(value) => value.clone(),
         }
     }
@@ -609,7 +612,72 @@ pub fn parse_stylesheet(css: &str, source: StylesheetSource) -> Stylesheet {
     let clean = strip_comments(css);
     let mut rules = Vec::new();
     parse_rule_block(&clean, None, &mut rules, &css, None);
+    if let StylesheetSource::External(url) = &source {
+        if let Ok(base) = sunlight_http::ParsedUrl::parse(url) {
+            for rule in &mut rules {
+                for declaration in &mut rule.declarations {
+                    let resolved = resolve_css_urls(&declaration.raw_value, &base);
+                    declaration.value =
+                        if matches!(declaration.value, PropertyValue::BackgroundShorthand(_)) {
+                            PropertyValue::BackgroundShorthand(resolved.clone())
+                        } else {
+                            parse_value(&declaration.property, &resolved)
+                        };
+                    declaration.raw_value = resolved;
+                }
+            }
+        }
+    }
     Stylesheet { source, rules }
+}
+
+/// Resolve URLs at the declaration's stylesheet, before var() inheritance.
+/// The supported image subset accepts one ordinary url(), without CSS escapes.
+pub fn css_image_url(raw: &str) -> Option<&str> {
+    let raw = raw.trim();
+    let inside = raw.get(4..raw.len().checked_sub(1)?)?;
+    if !raw.get(..4)?.eq_ignore_ascii_case("url(") || !raw.ends_with(')') {
+        return None;
+    }
+    let inside = inside.trim();
+    if let Some(quote) = inside.chars().next().filter(|c| matches!(c, '\"' | '\'')) {
+        let value = inside.strip_prefix(quote)?.strip_suffix(quote)?;
+        if value.contains(['\\', '\"', '\'']) {
+            return None;
+        }
+        Some(value)
+    } else if inside
+        .chars()
+        .any(|c| c.is_ascii_whitespace() || matches!(c, '(' | ')' | '\"' | '\'' | '\\'))
+    {
+        None
+    } else {
+        Some(inside)
+    }
+}
+
+fn resolve_css_urls(raw: &str, base: &sunlight_http::ParsedUrl) -> String {
+    let mut out = String::new();
+    let mut rest = raw;
+    while let Some(start) = rest.to_ascii_lowercase().find("url(") {
+        out.push_str(&rest[..start]);
+        let Some(end) = rest[start + 4..].find(')') else {
+            out.push_str(&rest[start..]);
+            return out;
+        };
+        let end = start + 4 + end + 1;
+        let token = &rest[start..end];
+        if let Some(url) = css_image_url(token)
+            .and_then(|url| crate::resources::discovery::resolve_url(base, url).ok())
+        {
+            out.push_str(&format!("url(\"{url}\")"));
+        } else {
+            out.push_str(token);
+        }
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Extract valid, leading statement-form `@import` rules without treating
@@ -1272,12 +1340,51 @@ fn parse_declarations(body: &str) -> Vec<Declaration> {
         let name = name.trim();
         let (raw_value, important) = strip_important(raw_value.trim());
         if name == "background" {
-            for declaration in expand_background(raw_value, order, important) {
+            for declaration in [
+                Property::BackgroundColor,
+                Property::BackgroundImage,
+                Property::BackgroundRepeat,
+                Property::BackgroundAttachment,
+                Property::BackgroundPositionX,
+                Property::BackgroundPositionY,
+                Property::BackgroundSize,
+            ]
+            .into_iter()
+            .map(|property| Declaration {
+                property,
+                value: PropertyValue::BackgroundShorthand(String::from(raw_value)),
+                raw_value: String::from(raw_value),
+                order,
+                important,
+            }) {
                 if out.len() < MAX_DECLARATIONS_PER_RULE {
                     out.push(declaration);
                 }
             }
             order = order.saturating_add(1);
+            continue;
+        }
+        if name == "background-position" {
+            let tokens = css_value_tokens(raw_value);
+            for (property, token) in [
+                (
+                    Property::BackgroundPositionX,
+                    tokens.first().copied().unwrap_or("0%"),
+                ),
+                (
+                    Property::BackgroundPositionY,
+                    tokens.get(1).copied().unwrap_or("50%"),
+                ),
+            ] {
+                out.push(Declaration {
+                    value: parse_value(&property, token),
+                    property,
+                    raw_value: String::from(token),
+                    order,
+                    important,
+                });
+            }
+            order += 1;
             continue;
         }
         if name == "margin" || name == "padding" {
@@ -1323,6 +1430,7 @@ fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaratio
             important,
         });
     }
+    let mut position_axis = 0;
     for token in tokens {
         let property = if looks_like_color_token(token) {
             Property::BackgroundColor
@@ -1343,6 +1451,16 @@ fn expand_background(raw: &str, order: usize, important: bool) -> Vec<Declaratio
             "contain" | "cover" | "auto"
         ) {
             Property::BackgroundSize
+        } else if parse_length(token).is_some()
+            || matches!(token, "0" | "left" | "right" | "top" | "bottom" | "center")
+        {
+            let property = if position_axis == 0 {
+                Property::BackgroundPositionX
+            } else {
+                Property::BackgroundPositionY
+            };
+            position_axis += 1;
+            property
         } else {
             continue;
         };
@@ -2230,6 +2348,8 @@ use golden_fish::{Document, Node, NodeId};
 #[cfg(feature = "dom")]
 #[derive(Debug, Clone, Default)]
 pub struct StyleContext {
+    sheets: alloc::sync::Arc<Vec<Stylesheet>>,
+    viewport_width: u32,
     styles: Vec<Option<ComputedStyle>>,
     root_font_size: i32,
 }
@@ -2248,6 +2368,8 @@ impl StyleContext {
         let mut stylesheets = vec![user_agent_stylesheet()];
         stylesheets.extend_from_slice(document_stylesheets);
         let mut context = Self {
+            sheets: alloc::sync::Arc::new(document_stylesheets.to_vec()),
+            viewport_width,
             styles: vec![None; document.node_count()],
             root_font_size: 16,
         };
@@ -2286,6 +2408,21 @@ impl StyleContext {
             resolve_root_relative_values(style, context.root_font_size);
         }
         context
+    }
+
+    pub fn viewport_changes_rules(&self, viewport_width: u32) -> bool {
+        self.sheets.iter().any(|sheet| {
+            sheet.rules.iter().any(|rule| {
+                rule.media.as_ref().is_some_and(|media| {
+                    import_media_active(media, self.viewport_width).0
+                        != import_media_active(media, viewport_width).0
+                })
+            })
+        })
+    }
+
+    pub fn for_viewport(&self, document: &Document, viewport_width: u32) -> Self {
+        Self::build_with_viewport(document, &self.sheets, viewport_width)
     }
 
     pub fn style_for(&self, node_id: NodeId) -> Option<&ComputedStyle> {
@@ -2720,7 +2857,17 @@ fn compute_element_style(
             } else if expanded.eq_ignore_ascii_case("inherit") {
                 computed.properties[index].value = computed.properties[index].value.clone();
             } else if !expanded.is_empty() {
-                computed.properties[index].value = parse_value(&matched.property, &expanded);
+                computed.properties[index].value =
+                    if matches!(matched.value, PropertyValue::BackgroundShorthand(_)) {
+                        expand_background(&expanded, 0, matched.important)
+                            .into_iter()
+                            .rev()
+                            .find(|d| d.property == matched.property)
+                            .map(|d| d.value)
+                            .unwrap_or_else(|| initial_value(&matched.property))
+                    } else {
+                        parse_value(&matched.property, &expanded)
+                    };
             }
             if matched.property == Property::BorderBottom && !expanded.is_empty() {
                 // A custom property can contain the complete border value;

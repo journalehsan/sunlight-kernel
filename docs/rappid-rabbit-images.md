@@ -56,8 +56,28 @@ Text/fonts, nested image resources (including data URLs), use expansion,
 markers, filters, patterns, masks, scripts, animation and foreignObject are
 rejected. DTDs/entities and SVGZ are rejected. Both image resolvers are disabled;
 no SVG can read a local file or initiate a network fetch. No system fonts are
-loaded. CSS background images remain an explicitly unsupported paint feature
-of the current two-pass renderer; discovery alone does not paint them.
+loaded.
+
+CSS URL backgrounds now use that same cache and retained Image paint path.
+External stylesheet declarations resolve URLs against the final stylesheet URL
+before custom-property inheritance/substitution. Background shorthand expansion
+waits for var() substitution. Discovery covers computed inline/embedded styles
+and URL declarations in loaded sheets, including inactive media rules; reflow
+uses cached pixels without refetching. Existing cache/decoder failures leave the
+background absent and the background color visible.
+
+The implemented subset is one ordinary url() layer on block/inline boxes,
+scroll attachment, padding-box positioning and border-box clipping. It supports
+natural/auto sizing, one/two pixel or percentage sizes, contain/cover, x/y pixel
+or percentage positions (and the axis keywords), and repeat, no-repeat,
+repeat-x and repeat-y. Arch's navbar uses a stylesheet custom-property URL,
+190×40 box, background-size:100%, no-repeat, and 0 0 positioning. Parent color,
+image and border paint before descendant content/backgrounds. There is a
+4096-tile document budget; excess tiles are omitted. This is not complete CSS
+Backgrounds: multiple layers, escaped URLs, background-origin/clip overrides,
+fixed/local attachment, round/space repeat and shorthand slash sizing are not
+implemented. The raster retains SVG natural dimensions; large upscales may be
+soft.
 
 ## Budgets and diagnostics
 
@@ -105,7 +125,11 @@ The full shared test invocation (including doctests) additionally exposes an
 existing failing doctest at `sunlight-ui/horizon.rs:5`: its indented control
 diagram is interpreted as Rust. Unit/integration tests pass independently.
 
-## Observed guest results
+## Observed guest results (earlier image-pipeline baseline)
+
+These are the prior image-only results. The subsequent Render-default,
+background, parser and reflow validation is recorded in
+[rappid-rabbit-visual-fixes.md](rappid-rabbit-visual-fixes.md).
 
 The rebuilt ISO was booted in QEMU TCG with 2 vCPUs and 3 GiB RAM, using the
 normal root login and desktop. Artifacts are in

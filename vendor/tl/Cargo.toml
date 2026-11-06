@@ -1,0 +1,8 @@
+[package]
+name = "tl"
+version = "0.7.8"
+edition = "2021"
+license = "MIT"
+[features]
+__INTERNALS_DO_NOT_USE = []
+simd = []

@@ -297,3 +297,6 @@ mod tests {
         );
     }
 }
+
+#[cfg(feature = "dom")]
+mod backgrounds;

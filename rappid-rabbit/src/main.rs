@@ -208,14 +208,14 @@ impl<const N: usize> core::fmt::Write for LogBuf<N> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FocusPane {
     Source,
     Render,
     DeveloperTools,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DocumentView {
     Source,
     Render,
@@ -255,7 +255,19 @@ struct NavigationOutput {
     document_lifecycle: DocumentLifecycle,
 }
 
+#[cfg(feature = "dom")]
+struct ReflowOutput {
+    version: u64,
+    state: DocumentRenderState,
+}
+
 struct RabbitApp {
+    #[cfg(feature = "dom")]
+    reflow_completion: Option<oneshot::Receiver<ReflowOutput>>,
+    #[cfg(feature = "dom")]
+    viewport_version: u64,
+    #[cfg(feature = "dom")]
+    latest_viewport: Size,
     navigation_url: String,
     runtime: Option<Handle>,
     completion: Option<oneshot::Receiver<NavigationOutput>>,
@@ -307,6 +319,7 @@ impl RabbitApp {
         url_input.set_text("http://example.com/");
 
         let mut developer_tools = DeveloperToolsState::default();
+        developer_tools.panel.close();
         developer_tools.console.push(
             ConsoleSeverity::Quiet,
             ConsoleSource::Browser,
@@ -326,6 +339,12 @@ impl RabbitApp {
         );
 
         let mut app = Self {
+            #[cfg(feature = "dom")]
+            reflow_completion: None,
+            #[cfg(feature = "dom")]
+            viewport_version: 0,
+            #[cfg(feature = "dom")]
+            latest_viewport: Size::new(0, 0),
             navigation_url: String::new(),
             runtime: None,
             completion: None,
@@ -334,12 +353,12 @@ impl RabbitApp {
             url_action_hovered: false,
             status: String::from("Idle"),
             pending_fetch: false,
-            focus: FocusPane::Source,
+            focus: FocusPane::Render,
             source_scroll: 0,
             source: SourceContent::Placeholder(
                 "Enter a URL, then click Fetch/Open to inspect the response body.",
             ),
-            document_view: DocumentView::Source,
+            document_view: DocumentView::Render,
             render_scroll: 0,
             render_status: String::from(
                 "No rendered document yet. Enter a URL and select Fetch/Open.",
@@ -369,6 +388,13 @@ impl RabbitApp {
     fn queue_fetch(&mut self) {
         if self.pending_fetch {
             return;
+        }
+        // Navigation is an explicit request to show a new page. Completion
+        // never changes this choice, so Source/DevTools opened while loading
+        // retain focus on success and failure alike.
+        self.document_view = DocumentView::Render;
+        if self.focus != FocusPane::DeveloperTools {
+            self.focus = FocusPane::Render;
         }
         self.pending_fetch = true;
         self.status = String::from("Fetching...");
@@ -536,6 +562,8 @@ impl RabbitApp {
         #[cfg(feature = "dom")]
         {
             self.render_state = None;
+            self.reflow_completion = None; // the bounded worker drops cancelled output
+            self.viewport_version = self.viewport_version.wrapping_add(1);
             self.form_state = FormState::new();
         }
         self.developer_tools.network.clear_for_new_page();
@@ -646,15 +674,7 @@ impl RabbitApp {
                                     &document, base_url,
                                 );
                             linked_stylesheets = self.fetch_external_stylesheets(&candidates);
-                            let mut all_candidates = candidates;
-                            discover_stylesheet_images(
-                                &mut all_candidates,
-                                &linked_stylesheets,
-                                base_url,
-                            );
-                            self.resource_queue.replace_from_candidates(&all_candidates);
-                            self.fetch_images(&all_candidates);
-                            self.discovered_resources = all_candidates;
+                            self.discovered_resources = candidates;
                         }
                         let stylesheets = order_document_stylesheets(
                             &document,
@@ -662,10 +682,24 @@ impl RabbitApp {
                             linked_stylesheets,
                         );
                         let viewport = self.render_viewport();
+                        let layout_started = std::time::Instant::now();
                         let style_context =
                             StyleContext::build_with_viewport(&document, &stylesheets, viewport.w);
-                        let inspector_document = document.clone();
-                        let inspector_styles = style_context.clone();
+                        let style_ms = layout_started.elapsed().as_millis();
+                        if let Some(base_url) = final_url_parsed.as_ref() {
+                            discover_background_images(
+                                &mut self.discovered_resources,
+                                &document,
+                                &style_context,
+                                &stylesheets,
+                                base_url,
+                            );
+                            let candidates = core::mem::take(&mut self.discovered_resources);
+                            self.resource_queue.replace_from_candidates(&candidates);
+                            self.fetch_images(&candidates);
+                            self.discovered_resources = candidates;
+                        }
+                        let layout_started = std::time::Instant::now();
                         self.render_scroll = 0;
                         self.render_state = Some(DocumentRenderState::new_with_images(
                             generation,
@@ -680,10 +714,12 @@ impl RabbitApp {
                             self.form_state.build_from_dom(&render_state.dom);
                         }
                         self.patch_all_controls();
+                        debug_log(&format!("[RABBIT][LAYOUT] initial gen={} viewport={}x{} style_ms={} layout_ms={} worker=yes", generation, viewport.w, viewport.h, style_ms, layout_started.elapsed().as_millis()));
                         self.log_render_scene("initial scene");
-                        self.developer_tools
-                            .dom
-                            .set_document_with_styles(inspector_document, inspector_styles);
+                        self.developer_tools.dom.set_document_with_styles(
+                            self.render_state.as_ref().unwrap().dom.clone(),
+                            self.render_state.as_ref().unwrap().styles.clone(),
+                        );
                         let visible_rows = self.developer_tools.dom.visible_row_count();
                         let _ = self.document_lifecycle.finish_ready(generation);
                         self.log_dom_result(
@@ -1487,24 +1523,106 @@ impl RabbitApp {
     #[cfg(feature = "dom")]
     fn refresh_render_viewport(&mut self) {
         let viewport = self.render_viewport();
-        let changed = if let Some(render_state) = self.render_state.as_mut() {
-            if render_state.rebuild_for_viewport(viewport, &RABBIT_FONTS) {
-                self.render_scroll = self
-                    .render_scroll
-                    .min(render_state.current_scene.max_scroll_y(viewport.h));
-                true
-            } else {
-                false
+        if viewport != self.latest_viewport {
+            self.latest_viewport = viewport;
+            self.viewport_version = self.viewport_version.wrapping_add(1);
+        }
+        // Resize handlers only publish the latest request. A tick submits at
+        // most one owned layout snapshot; intervening events coalesce here.
+    }
+
+    #[cfg(feature = "dom")]
+    fn poll_reflow(&mut self) -> bool {
+        let ui_started = std::time::Instant::now();
+        let mut changed = false;
+        if let Some(receiver) = self.reflow_completion.as_mut() {
+            match receiver.try_recv() {
+                Ok(output) => {
+                    self.reflow_completion = None;
+                    let current = self.render_state.as_ref();
+                    if output.version == self.viewport_version
+                        && output.state.document_id == self.document_lifecycle.generation()
+                        && current.is_some_and(|state| {
+                            state.image_revision == output.state.image_revision
+                        })
+                    {
+                        self.developer_tools
+                            .dom
+                            .update_styles(output.state.styles.clone());
+                        self.render_state = Some(output.state);
+                        self.patch_all_controls();
+                        self.clamp_scrolls();
+                        // Counts are already computed on the worker. Avoid
+                        // rescanning the scene and serializing every image URL
+                        // during the UI commit.
+                        self.developer_tools.console.push(
+                            ConsoleSeverity::Quiet,
+                            ConsoleSource::Browser,
+                            self.render_state.as_ref().unwrap().diagnostics.summary(),
+                        );
+                        debug_log(&format!("[RABBIT][LAYOUT] commit gen={} version={} viewport={}x{} ui_us={} ui_thread=yes",
+                            self.document_lifecycle.generation(), self.viewport_version, self.latest_viewport.w, self.latest_viewport.h, ui_started.elapsed().as_micros()));
+                        changed = true;
+                    } else {
+                        debug_log(&format!(
+                            "[RABBIT][LAYOUT] discard gen={} version={} latest={}",
+                            output.state.document_id, output.version, self.viewport_version
+                        ));
+                    }
+                }
+                Err(oneshot::error::TryRecvError::Empty) => return false,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    self.reflow_completion = None;
+                    self.render_status = String::from("Layout worker stopped");
+                    // Do not retry a failed worker on every tick.
+                    self.render_state = None;
+                    return true;
+                }
             }
-        } else {
-            false
+        }
+        if self.pending_fetch {
+            return changed;
+        }
+        let (Some(state), Some(runtime)) = (self.render_state.as_ref(), self.runtime.as_ref())
+        else {
+            return changed;
         };
-        if changed {
-            self.patch_all_controls();
+        if state.viewport == self.latest_viewport {
+            return changed;
         }
-        if changed {
-            self.log_render_scene("viewport reflow");
-        }
+        let mut snapshot = state.reflow_snapshot();
+        let viewport = self.latest_viewport;
+        let version = self.viewport_version;
+        let (sender, receiver) = oneshot::channel();
+        self.reflow_completion = Some(receiver);
+        debug_log(&format!(
+            "[RABBIT][LAYOUT] submit gen={} version={} viewport={}x{} ui_us={}",
+            self.document_lifecycle.generation(),
+            version,
+            viewport.w,
+            viewport.h,
+            ui_started.elapsed().as_micros()
+        ));
+        runtime.spawn_blocking(move || {
+            if sender.is_closed() {
+                return;
+            }
+            let start = std::time::Instant::now();
+            snapshot.rebuild_for_viewport(viewport, &RABBIT_FONTS);
+            debug_log(&format!(
+                "[RABBIT][LAYOUT] reflow gen={} version={} viewport={}x{} elapsed_ms={} worker=yes",
+                snapshot.document_id,
+                version,
+                viewport.w,
+                viewport.h,
+                start.elapsed().as_millis()
+            ));
+            let _ = sender.send(ReflowOutput {
+                version,
+                state: snapshot,
+            });
+        });
+        changed
     }
 
     #[cfg(feature = "dom")]
@@ -2244,7 +2362,9 @@ impl RabbitApp {
     }
 
     fn clamp_scrolls(&mut self) {
-        self.source_scroll = self.source_scroll.min(self.source_view().max_scroll());
+        if self.document_view == DocumentView::Source {
+            self.source_scroll = self.source_scroll.min(self.source_view().max_scroll());
+        }
         #[cfg(feature = "dom")]
         {
             let viewport_h = self.render_viewport().h;
@@ -2643,50 +2763,85 @@ impl RabbitApp {
 }
 
 #[cfg(feature = "dom")]
-fn discover_stylesheet_images(
+fn discover_background_images(
     candidates: &mut Vec<ResourceCandidate>,
-    sheets: &[Option<Vec<rappid_rabbit::css::Stylesheet>>],
+    document: &golden_fish::Document,
+    styles: &StyleContext,
+    sheets: &[Stylesheet],
     document_url: &ParsedUrl,
 ) {
-    for sheet in sheets.iter().flatten().flatten() {
-        let base = match &sheet.source {
-            StylesheetSource::External(url) => ParsedUrl::parse(url).ok(),
-            _ => Some(document_url.clone()),
-        };
-        let Some(base) = base else { continue };
+    // Retain backgrounds from inactive media rules as well: a viewport change
+    // can then reuse decoded pixels without doing network work in a reflow.
+    for sheet in sheets {
         for rule in &sheet.rules {
             for declaration in &rule.declarations {
-                let raw = declaration.raw_value.trim();
-                let Some(start) = raw.find("url(") else {
-                    continue;
-                };
-                let Some(end_rel) = raw[start + 4..].find(')') else {
-                    continue;
-                };
-                let value = raw[start + 4..start + 4 + end_rel]
-                    .trim()
-                    .trim_matches(['\"', '\'']);
-                if value.is_empty() || value.starts_with("data:") {
+                if !matches!(
+                    declaration.property,
+                    rappid_rabbit::css::Property::BackgroundImage
+                        | rappid_rabbit::css::Property::Custom(_)
+                ) {
                     continue;
                 }
-                let Ok(resolved) = rappid_rabbit::resources::discovery::resolve_url(&base, value)
-                else {
+                let raw = &declaration.raw_value;
+                let Some(start) = raw.to_ascii_lowercase().find("url(") else {
                     continue;
                 };
-                if !candidates
-                    .iter()
-                    .any(|candidate| candidate.resolved_url == resolved)
+                let Some(end) = raw[start + 4..].find(')') else {
+                    continue;
+                };
+                if let Some(url) =
+                    rappid_rabbit::css::css_image_url(&raw[start..start + 4 + end + 1])
                 {
-                    candidates.push(ResourceCandidate {
-                        raw_url: String::from(value),
-                        resolved_url: resolved,
-                        resource_type: ResourceType::Image,
-                        classification: rappid_rabbit::resources::discovery::DiscoveryClassification::EmbeddedResource,
-                        enqueue_for_fetch: false,
-                    });
+                    push_background_candidate(candidates, document_url, url);
                 }
             }
         }
+    }
+    for node in 0..document.node_count() {
+        let Some(raw) = styles
+            .style_for(node)
+            .and_then(|s| s.value(&rappid_rabbit::css::Property::BackgroundImage))
+            .map(|v| v.display())
+        else {
+            continue;
+        };
+        let Some(url) = rappid_rabbit::css::css_image_url(&raw) else {
+            continue;
+        };
+        push_background_candidate(candidates, document_url, url);
+    }
+}
+
+#[cfg(feature = "dom")]
+fn push_background_candidate(
+    candidates: &mut Vec<ResourceCandidate>,
+    document_url: &ParsedUrl,
+    url: &str,
+) {
+    // Ordinary navigation links do not consume the subresource image budget.
+    if candidates
+        .iter()
+        .filter(|c| c.resource_type == ResourceType::Image)
+        .count()
+        >= rappid_rabbit::MAX_DISCOVERED_RESOURCES
+    {
+        return;
+    }
+    let Ok(resolved) = rappid_rabbit::resources::discovery::resolve_url(document_url, url) else {
+        return;
+    };
+    if !candidates
+        .iter()
+        .any(|c| c.resource_type == ResourceType::Image && c.resolved_url == resolved)
+    {
+        candidates.push(ResourceCandidate {
+            raw_url: String::from(url),
+            resolved_url: resolved,
+            resource_type: ResourceType::Image,
+            classification:
+                rappid_rabbit::resources::discovery::DiscoveryClassification::EmbeddedResource,
+            enqueue_for_fetch: false,
+        });
     }
 }
 
@@ -2748,6 +2903,9 @@ impl App for RabbitApp {
                     }
                     return changed;
                 }
+                #[cfg(feature = "dom")]
+                return self.poll_reflow();
+                #[cfg(not(feature = "dom"))]
                 false
             }
             Event::MouseDown { x, y, button: 0 } => {
@@ -2833,8 +2991,13 @@ impl App for RabbitApp {
                 if devtools_button.hit_test(x, y) {
                     if self.developer_tools.panel.open {
                         self.developer_tools.panel.close();
+                        self.focus = match self.document_view {
+                            DocumentView::Source => FocusPane::Source,
+                            DocumentView::Render => FocusPane::Render,
+                        };
                     } else {
                         self.developer_tools.panel.open();
+                        self.focus = FocusPane::DeveloperTools;
                     }
                     #[cfg(feature = "dom")]
                     self.refresh_render_viewport();
@@ -3223,5 +3386,277 @@ mod navigation_tests {
             .get("http://example.com/photo.jpg")
             .is_none());
         assert!(weak.upgrade().is_none());
+    }
+}
+
+#[cfg(all(test, feature = "dom"))]
+mod view_and_reflow_tests {
+    use super::*;
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap()
+    }
+    fn app() -> RabbitApp {
+        let mut app = RabbitApp::new(None);
+        app.document_lifecycle.begin_navigation();
+        let dom = golden_fish::parse_html(
+            "<style>body{margin:0}p{width:100%}</style><p>owned worker reflow text</p>",
+        )
+        .unwrap();
+        let styles = StyleContext::build(&dom, &collect_embedded_stylesheets(&dom));
+        let viewport = app.render_viewport();
+        app.render_state = Some(DocumentRenderState::new(
+            1,
+            "https://example.com/".into(),
+            dom,
+            styles,
+            viewport,
+            &RABBIT_FONTS,
+        ));
+        app.refresh_render_viewport();
+        app
+    }
+    fn click_view(app: &mut RabbitApp) {
+        let rect = app.view_button_rect();
+        app.update(Event::Click {
+            x: rect.x + 1,
+            y: rect.y + 1,
+        });
+    }
+    fn click_tools(app: &mut RabbitApp) {
+        let rect = app.devtools_button_rect();
+        app.update(Event::Click {
+            x: rect.x + 1,
+            y: rect.y + 1,
+        });
+    }
+    fn settle(app: &mut RabbitApp) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            app.poll_reflow();
+            if app.reflow_completion.is_none()
+                && app.render_state.as_ref().unwrap().viewport == app.latest_viewport
+            {
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+    #[test]
+    fn startup_and_explicit_view_actions() {
+        let mut app = RabbitApp::new(None);
+        assert_eq!(app.document_view, DocumentView::Render);
+        assert_eq!(app.focus, FocusPane::Render);
+        assert!(!app.developer_tools.panel.open);
+        click_view(&mut app);
+        assert_eq!(app.document_view, DocumentView::Source);
+        click_tools(&mut app);
+        assert_eq!(app.focus, FocusPane::DeveloperTools);
+        assert!(app.developer_tools.panel.open);
+        click_tools(&mut app);
+        assert_eq!(app.focus, FocusPane::Source);
+        click_view(&mut app);
+        assert_eq!(app.document_view, DocumentView::Render);
+    }
+    #[test]
+    fn navigation_opens_render_but_success_and_failure_preserve_deliberate_views() {
+        for success in [true, false] {
+            for chosen_view in [DocumentView::Source, DocumentView::Render] {
+                let mut app = app();
+                app.document_view = DocumentView::Source;
+                app.queue_fetch();
+                assert_eq!(app.document_view, DocumentView::Render);
+                app.document_view = chosen_view;
+                click_tools(&mut app);
+                let mut worker = RabbitApp::new(None);
+                worker.begin_navigation_session(
+                    "http://example.com/",
+                    &build_get_request(&ParsedUrl::parse("http://example.com/").unwrap()),
+                );
+                if success {
+                    let body = include_bytes!("../../golden-fish/tests/fixtures/example-live.html")
+                        .to_vec();
+                    worker.apply_result(
+                        "http://example.com/",
+                        RequestResult {
+                            response: sunlight_http::HttpResponse {
+                                status_code: 200,
+                                status_text: "OK".into(),
+                                headers: vec![("content-type".into(), "text/html".into())],
+                                header_len: 0,
+                            },
+                            body,
+                            final_url: Some(ParsedUrl::parse("http://example.com/").unwrap()),
+                            duration_ms: Some(1),
+                        },
+                    );
+                } else {
+                    worker.apply_fetch_error(FetchError::InvalidUrl("failed".into()));
+                }
+                let (send, recv) = oneshot::channel();
+                assert!(send.send(worker.into_navigation_output()).is_ok());
+                app.completion = Some(recv);
+                app.perform_pending_fetch();
+                assert_eq!(app.document_view, chosen_view);
+                assert_eq!(app.focus, FocusPane::DeveloperTools);
+                assert!(app.developer_tools.panel.open);
+                assert_eq!(app.render_state.is_some(), success);
+                app.queue_fetch();
+                assert_eq!(app.document_view, DocumentView::Render);
+            }
+        }
+    }
+    #[test]
+    fn rapid_resize_coalesces_and_commits_final_geometry_on_ui_thread() {
+        let runtime = runtime();
+        let mut app = app();
+        app.runtime = Some(runtime.handle().clone());
+        let initial_scene = app.render_state.as_ref().unwrap().current_scene.clone();
+        for width in 700..900 {
+            app.set_client_bounds(width, 500);
+        }
+        assert!(app.reflow_completion.is_none());
+        assert!(std::sync::Arc::ptr_eq(
+            &initial_scene,
+            &app.render_state.as_ref().unwrap().current_scene
+        ));
+        app.poll_reflow();
+        for width in 900..1000 {
+            app.set_client_bounds(width, 600);
+        }
+        settle(&mut app);
+        let state = app.render_state.as_ref().unwrap();
+        assert_eq!(state.viewport, app.latest_viewport);
+        assert_eq!(state.current_scene.viewport_size, state.viewport);
+        assert_eq!(state.scene_generation, 2); // discarded layouts never publish
+        let paragraph = state.dom.find_first_element("p").unwrap();
+        assert_eq!(
+            state
+                .layout_geometry
+                .iter()
+                .find(|g| g.node_id == paragraph)
+                .unwrap()
+                .content_box
+                .width,
+            state.viewport.w as f32
+        );
+    }
+    #[test]
+    fn navigation_and_late_images_invalidate_inflight_results() {
+        let runtime = runtime();
+        let mut app = app();
+        app.runtime = Some(runtime.handle().clone());
+        let mut old = app.render_state.as_ref().unwrap().reflow_snapshot();
+        app.set_client_bounds(800, 500);
+        old.rebuild_for_viewport(app.latest_viewport, &RABBIT_FONTS);
+        let (send, recv) = oneshot::channel();
+        app.reflow_completion = Some(recv);
+        let decoded = decode_image(
+            include_bytes!("../../sun-img/tests/fixtures/gray.jpg"),
+            None,
+            "a.jpg",
+        )
+        .unwrap();
+        let mut images = ImageCache::default();
+        images.insert_decoded("https://example.com/a.jpg".into(), decoded);
+        app.render_state
+            .as_mut()
+            .unwrap()
+            .complete_images(1, &RABBIT_FONTS, images);
+        assert!(send
+            .send(ReflowOutput {
+                version: app.viewport_version,
+                state: old
+            })
+            .is_ok());
+        app.poll_reflow();
+        settle(&mut app);
+        assert_eq!(app.render_state.as_ref().unwrap().image_revision, 1);
+        app.set_client_bounds(1000, 600);
+        app.poll_reflow();
+        let parsed = ParsedUrl::parse("http://other.example/").unwrap();
+        app.begin_navigation_session("http://other.example/", &build_get_request(&parsed));
+        assert!(app.reflow_completion.is_none());
+        assert!(app.render_state.is_none());
+        assert_eq!(app.document_lifecycle.generation(), 2);
+        runtime.shutdown_timeout(std::time::Duration::from_secs(1));
+    }
+    #[test]
+    fn media_rules_recompute_for_latest_viewport() {
+        let mut app = app();
+        let runtime = runtime();
+        app.runtime = Some(runtime.handle().clone());
+        let state = app.render_state.as_mut().unwrap();
+        state.styles = std::sync::Arc::new(StyleContext::build(
+            &state.dom,
+            &[parse_stylesheet(
+                "p{width:100px}@media(max-width:600px){p{width:50px}}",
+                StylesheetSource::Embedded,
+            )],
+        ));
+        app.set_client_bounds(500, 400);
+        settle(&mut app);
+        assert_eq!(
+            app.render_state
+                .as_ref()
+                .unwrap()
+                .layout_geometry
+                .iter()
+                .find(|g| app.render_state.as_ref().unwrap().dom.tag_name(g.node_id) == Some("p"))
+                .unwrap()
+                .content_box
+                .width,
+            50.0
+        );
+        let first_styles = app.render_state.as_ref().unwrap().styles.clone();
+        app.set_client_bounds(450, 400);
+        settle(&mut app);
+        assert!(std::sync::Arc::ptr_eq(
+            &first_styles,
+            &app.render_state.as_ref().unwrap().styles
+        ));
+        app.set_client_bounds(900, 600);
+        settle(&mut app);
+        assert!(!std::sync::Arc::ptr_eq(
+            &first_styles,
+            &app.render_state.as_ref().unwrap().styles
+        ));
+    }
+
+    #[test]
+    fn background_discovery_preloads_media_resources_and_deduplicates() {
+        let dom = golden_fish::parse_html(&format!(
+            "{}<div style='background-image:url(../inline.svg)'></div>",
+            (0..100)
+                .map(|i| format!("<a href='/page{i}'>link</a>"))
+                .collect::<String>()
+        ))
+        .unwrap();
+        let sheets = vec![parse_stylesheet(
+            "@media(max-width:600px){div{background-image:url(../img/mobile.svg)}}",
+            StylesheetSource::External("https://cdn.example/css/nav.css".into()),
+        )];
+        let styles = StyleContext::build_with_viewport(&dom, &sheets, 1000);
+        let base = ParsedUrl::parse("https://document.example/pages/index.html").unwrap();
+        let mut candidates = rappid_rabbit::resources::discovery::discover_resources(&dom, &base);
+        assert!(candidates.len() > rappid_rabbit::MAX_DISCOVERED_RESOURCES);
+        discover_background_images(&mut candidates, &dom, &styles, &sheets, &base);
+        discover_background_images(&mut candidates, &dom, &styles, &sheets, &base);
+        assert_eq!(
+            candidates
+                .iter()
+                .filter(|c| c.resource_type == ResourceType::Image)
+                .count(),
+            2
+        );
+        assert!(candidates
+            .iter()
+            .any(|c| c.resolved_url == "https://cdn.example/img/mobile.svg"));
+        assert!(candidates
+            .iter()
+            .any(|c| c.resolved_url == "https://document.example/inline.svg"));
     }
 }

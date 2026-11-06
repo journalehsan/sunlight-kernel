@@ -4,7 +4,7 @@
 //! retained scene objects. This module connects browser fonts, image resources,
 //! inspector geometry, diagnostics, scene diffs, and form state to that engine.
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 
 use golden_fish::{Attribute, Document, Node, NodeId};
 use sunlight_http::ParsedUrl;
@@ -128,16 +128,17 @@ pub struct LayoutGeometry {
 pub struct DocumentRenderState {
     pub document_id: u64,
     pub final_url: String,
-    pub dom: Document,
-    pub styles: StyleContext,
+    pub dom: Arc<Document>,
+    pub styles: Arc<StyleContext>,
     pub layout_geometry: Vec<LayoutGeometry>,
-    pub current_scene: DocumentScene,
-    pub previous_scene: Option<DocumentScene>,
+    pub current_scene: Arc<DocumentScene>,
+    pub previous_scene: Option<Arc<DocumentScene>>,
     pub last_patch: ScenePatch,
     pub scene_generation: u64,
     pub viewport: Size,
     pub diagnostics: LayoutDiagnostics,
     images: ImageCache,
+    pub image_revision: u64,
 }
 
 impl DocumentRenderState {
@@ -183,16 +184,17 @@ impl DocumentRenderState {
         Self {
             document_id,
             final_url,
-            dom,
-            styles,
+            dom: Arc::new(dom),
+            styles: Arc::new(styles),
             layout_geometry,
-            current_scene,
+            current_scene: Arc::new(current_scene),
             previous_scene: None,
             last_patch: ScenePatch::default(),
             scene_generation: 1,
             viewport,
             diagnostics,
             images,
+            image_revision: 0,
         }
     }
 
@@ -206,7 +208,30 @@ impl DocumentRenderState {
         true
     }
 
+    /// Cheap owned worker input: DOM, styles and decoded pixels are shared;
+    /// UI-only inspector geometry and historical scene diffs are not copied.
+    pub fn reflow_snapshot(&self) -> Self {
+        Self {
+            document_id: self.document_id,
+            final_url: self.final_url.clone(),
+            dom: self.dom.clone(),
+            styles: self.styles.clone(),
+            layout_geometry: Vec::new(),
+            current_scene: self.current_scene.clone(),
+            previous_scene: None,
+            last_patch: ScenePatch::default(),
+            scene_generation: self.scene_generation,
+            viewport: self.viewport,
+            diagnostics: LayoutDiagnostics::default(),
+            images: self.images.clone(),
+            image_revision: self.image_revision,
+        }
+    }
+
     pub fn rebuild(&mut self, viewport: Size, measurer: &dyn TextMeasurer) {
+        if viewport.w != self.viewport.w && self.styles.viewport_changes_rules(viewport.w) {
+            self.styles = Arc::new(self.styles.for_viewport(&self.dom, viewport.w));
+        }
         let (scene, layout_geometry) = render_document(
             self.document_id,
             &self.final_url,
@@ -220,7 +245,7 @@ impl DocumentRenderState {
         self.diagnostics.unsupported = unsupported_features(&self.dom, &self.styles);
         self.last_patch = diff_scenes(&self.current_scene, &scene);
         self.previous_scene = Some(self.current_scene.clone());
-        self.current_scene = scene;
+        self.current_scene = Arc::new(scene);
         self.layout_geometry = layout_geometry;
         self.viewport = viewport;
         self.scene_generation = self.scene_generation.saturating_add(1);
@@ -242,6 +267,7 @@ impl DocumentRenderState {
             return false;
         }
         self.images = images;
+        self.image_revision = self.image_revision.wrapping_add(1);
         self.rebuild(self.viewport, measurer);
         true
     }
@@ -254,14 +280,40 @@ impl DocumentRenderState {
         focused: bool,
         measurer: &dyn TextMeasurer,
     ) -> bool {
-        let previous = self.current_scene.clone();
         let Some(index) = self.current_scene.objects.iter().position(|object| {
             object.owner_node_id == control_id
                 && matches!(object.kind, RenderObjectKind::Control { .. })
         }) else {
             return false;
         };
-        let object = &mut self.current_scene.objects[index];
+        let desired_value = match state {
+            FormControlState::Text { state, .. } => Some(&state.current_value),
+            FormControlState::Button { .. } => None,
+        };
+        let desired_caret = match state {
+            FormControlState::Text { state, .. } if focused => Some(measurer.measure_width(
+                &state.current_value[..state.cursor_position.min(state.current_value.len())],
+            )),
+            _ => None,
+        };
+        if let RenderObjectKind::Control {
+            value,
+            focused: visual_focus,
+            caret_offset,
+            ..
+        } = &self.current_scene.objects[index].kind
+        {
+            if *visual_focus == focused
+                && *caret_offset == desired_caret
+                && desired_value.is_none_or(|desired| value == desired)
+            {
+                return false;
+            }
+        }
+        // Unchanged controls must not make Arc::make_mut clone the entire
+        // retained scene on the UI thread after every worker completion.
+        let previous = self.current_scene.clone();
+        let object = &mut Arc::make_mut(&mut self.current_scene).objects[index];
         let RenderObjectKind::Control {
             value,
             focused: visual_focus,
@@ -272,16 +324,11 @@ impl DocumentRenderState {
             return false;
         };
         *visual_focus = focused;
-        match state {
-            FormControlState::Text { state, .. } => {
-                *value = state.current_value.clone();
-                *caret_offset = Some(measurer.measure_width(
-                    &state.current_value[..state.cursor_position.min(state.current_value.len())],
-                ));
-            }
-            FormControlState::Button { .. } => *caret_offset = None,
+        *caret_offset = desired_caret;
+        if let Some(desired) = desired_value {
+            *value = desired.clone();
         }
-        self.current_scene.finalize();
+        Arc::make_mut(&mut self.current_scene).finalize();
         self.last_patch = diff_scenes(&previous, &self.current_scene);
         self.previous_scene = Some(previous);
         true
@@ -395,12 +442,13 @@ fn render_document(
             margin_box: item.margin_box,
         })
         .collect();
-    let scene = layout::into_document_scene_with_images(
+    let mut scene = layout::into_document_scene_with_images(
         document_id,
         viewport,
         &result,
         &scene_image_source,
     );
+    crate::backgrounds::paint(&mut scene, &result, styles, &scene_image_source);
     (scene, geometry)
 }
 
@@ -457,7 +505,10 @@ fn unsupported_features(dom: &Document, styles: &StyleContext) -> Vec<&'static s
         }
         if style
             .and_then(|style| style.value(&Property::BackgroundImage))
-            .is_some()
+            .is_some_and(|v| {
+                let raw = v.display();
+                raw != "none" && crate::css::css_image_url(&raw).is_none()
+            })
         {
             push_unique(&mut unsupported, "background-image");
         }
@@ -568,6 +619,28 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_control_keeps_shared_scene_and_edits_still_patch() {
+        let mut state = render("<input value=hello>");
+        let mut forms = crate::form::FormState::new();
+        forms.build_from_dom(&state.dom);
+        let (&id, control) = forms.controls.iter().next().unwrap();
+        let control = control.clone();
+        let snapshot = state.reflow_snapshot();
+        assert!(!state.patch_control(id, &control, false, &TestMeasure));
+        assert!(Arc::ptr_eq(&snapshot.current_scene, &state.current_scene));
+        assert!(state.patch_control(id, &control, true, &TestMeasure));
+        let focused_scene = state.current_scene.clone();
+        assert!(!state.patch_control(id, &control, true, &TestMeasure));
+        assert!(Arc::ptr_eq(&focused_scene, &state.current_scene));
+        let mut edited = control;
+        if let crate::form::FormControlState::Text { state, .. } = &mut edited {
+            state.current_value = String::from("changed");
+        }
+        assert!(state.patch_control(id, &edited, true, &TestMeasure));
+        assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Control {value, ..} if value == "changed")));
+    }
+
+    #[test]
     fn none_is_excluded_and_text_wraps_and_breaks() {
         let state = render("<style>p{display:block;width:40px} .gone{display:none}</style><p>one two<br>three</p><p class=gone>hidden</p>");
         let words: Vec<_> = state
@@ -644,7 +717,7 @@ mod tests {
             .find(|object| matches!(&object.kind, RenderObjectKind::Text { text, .. } if text == "unchanged"))
             .map(|object| object.id)
             .unwrap();
-        if let Some(Node::Text { content }) = state.dom.get_mut(before_node) {
+        if let Some(Node::Text { content }) = Arc::make_mut(&mut state.dom).get_mut(before_node) {
             *content = String::from("after");
         } else {
             panic!("expected paragraph text node");
@@ -673,13 +746,13 @@ mod tests {
             .find(|object| matches!(&object.kind, RenderObjectKind::Text { text, .. } if text == "unchanged"))
             .map(|object| object.id)
             .unwrap();
-        state.styles = StyleContext::build(
+        state.styles = Arc::new(StyleContext::build(
             &state.dom,
             &[parse_stylesheet(
                 ".notice { color: blue; background-color: #dddddd; }",
                 StylesheetSource::Embedded,
             )],
-        );
+        ));
         state.rebuild(Size::new(320, 240), &TestMeasure);
         assert!(state.last_patch.operations.iter().any(|operation| matches!(
             operation,

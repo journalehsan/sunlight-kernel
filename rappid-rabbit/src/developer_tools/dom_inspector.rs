@@ -76,9 +76,9 @@ pub struct DomInspectorState {
     #[cfg(feature = "dom")]
     tree_rebuild_count: usize,
     #[cfg(feature = "dom")]
-    document: Option<Document>,
+    document: Option<alloc::sync::Arc<Document>>,
     #[cfg(feature = "dom")]
-    style_context: Option<StyleContext>,
+    style_context: Option<alloc::sync::Arc<StyleContext>>,
 }
 
 impl Default for DomInspectorState {
@@ -207,7 +207,13 @@ impl DomInspectorState {
     }
 
     #[cfg(feature = "dom")]
-    pub fn set_document_with_styles(&mut self, document: Document, style_context: StyleContext) {
+    pub fn set_document_with_styles(
+        &mut self,
+        document: impl Into<alloc::sync::Arc<Document>>,
+        style_context: impl Into<alloc::sync::Arc<StyleContext>>,
+    ) {
+        let document = document.into();
+        let style_context = style_context.into();
         let expanded_ids = default_expanded_nodes(&document);
         let selected_node = default_selected_node(&document);
 
@@ -228,8 +234,15 @@ impl DomInspectorState {
     }
 
     #[cfg(feature = "dom")]
+    pub fn update_styles(&mut self, styles: alloc::sync::Arc<StyleContext>) {
+        self.style_context = Some(styles);
+        self.styles_text_dirty = true;
+        self.properties_text_dirty = true;
+    }
+
+    #[cfg(feature = "dom")]
     pub fn document(&self) -> Option<&Document> {
-        self.document.as_ref()
+        self.document.as_deref()
     }
 
     #[cfg(not(feature = "dom"))]

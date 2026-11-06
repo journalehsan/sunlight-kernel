@@ -60,7 +60,8 @@ fn convert_node(
     match tl_node {
         tl::Node::Tag(tag) => {
             let tag_name = tag.name().as_utf8_str().into_owned();
-            let decode_child_text = !matches!(tag_name.as_str(), "script" | "style");
+            let decode_child_text = !(tag_name.eq_ignore_ascii_case("script")
+                || tag_name.eq_ignore_ascii_case("style"));
 
             // Attributes: iter() yields (Cow<str>, Option<Cow<str>>)
             let mut attrs: Vec<Attribute> = Vec::new();

@@ -68,9 +68,11 @@ preformatted whitespace/overflow, and stable scene/inspector rebuilds.
 Normal block and inline flow, common adjoining-margin collapse, intrinsic image
 sizing, single-line flex rows/columns, and single-line form controls are
 supported. Floats, full table layout, textarea and other unsupported controls,
-and multiline flex wrapping are approximated by normal flow. Background images,
-gradients, box shadows, and text shadows remain unsupported by the painter.
-Diagnostics continue to report float/table/control and background-image/shadow
+and multiline flex wrapping are approximated by normal flow. Single-URL CSS
+background images now use the shared image painter; the supported subset is
+listed in `rappid-rabbit-images.md`. Gradients, box shadows and text shadows
+remain unsupported by the painter.
+Diagnostics continue to report float/table/control and unsupported background/shadow
 features. List markers currently use outside placement and decimal or basic
 bullet labels; inside placement and alphabetic/Roman numbering are not modeled.
 There is no runtime route back to the retired renderer.

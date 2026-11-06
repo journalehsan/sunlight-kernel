@@ -13,7 +13,32 @@ UI. UI ticks poll the channel without waiting and redraw when state changes.
 A navigation already in progress rejects additional fetch clicks, bounding the
 number of live pipelines and buffers. Completion preserves URL edits and the
 current developer-panel configuration, checks the document generation, and
-reflows if the window changed size during loading.
+requests a worker reflow if the window changed size during loading. Startup
+selects Render with DevTools closed. Explicit navigation selects Render; an
+asynchronous completion never overrides Source/DevTools choices made during
+loading, on success or failure.
+
+Viewport events only replace a latest viewport request and increment its
+version. UI ticks submit at most one reflow to the same bounded blocking pool.
+The snapshot shares immutable Arc DOM, computed styles, retained scene and
+raster pixels; it does not contain widgets or borrow UI objects. Layout,
+geometry construction and scene diffing run on the worker. Width-dependent
+media styles are recomputed there when necessary. A result commits on the UI
+thread only when document generation, viewport version and image revision all
+match. Superseded results are dropped and the latest request is submitted next.
+The displayed scene remains usable until replacement; no queue of resize jobs
+accumulates. Navigation drops the reflow receiver, and queued work checks it
+before starting. An already executing layout is not interrupted mid-pass.
+
+The UI still applies changed form-state patches, clamps visible scroll positions
+and paints the scene. Unchanged controls preserve the shared scene without a
+copy/diff; reflow commits use cached diagnostic counts rather than serializing
+all image objects again. Hidden Source text is not scanned to clamp its scroll. Reflow reapplies current form state after acceptance so edits
+made while the worker ran survive. Inspector DOM/styles share the same owned
+snapshots, and accepted media styles invalidate its text caches. Image completion
+revision checks prevent an old reflow from replacing newly attached pixels.
+Initial navigation still waits for bounded subresource fetch/decode; this change
+does not add concurrent image tasks or expand the heap/cache limits.
 
 The previous source, DOM and caches are released when navigation begins. Worker
 scratch spaces and fetch responses are dropped when pipeline processing ends;

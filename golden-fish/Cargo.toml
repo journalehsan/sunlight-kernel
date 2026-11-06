@@ -382,4 +382,4 @@ description = "HTML parsing and DOM construction engine for SunlightOS (Rappid R
 path = "src/lib.rs"
 
 [target.'cfg(not(target_os = "none"))'.dependencies]
-tl = "0.7.8"
+tl = { path = "../vendor/tl" }

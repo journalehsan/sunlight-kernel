@@ -269,6 +269,7 @@ fn main() {
     for input in [
         "rappid-rabbit",
         "golden-fish",
+        "vendor/tl",
         "tools/build_rappid_rabbit.sh",
     ] {
         println!(
