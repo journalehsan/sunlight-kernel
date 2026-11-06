@@ -368,7 +368,7 @@ if [ "$BUILD_FIRST" = true ]; then
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release
-    RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release
+    bash tools/build_rappid_rabbit.sh
     RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release
     bash tools/build_svg_apps.sh -p sunlight-dialogd
     echo -e "${YELLOW}Building Control Panel (includes generated monochrome PNG icon assets)...${NC}"

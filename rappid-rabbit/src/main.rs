@@ -1,15 +1,11 @@
-#![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "dom", allow(dead_code, unused_imports))]
-#![cfg_attr(not(test), no_main)]
-// Required for the custom OOM handler below; matches kernel/src/main.rs.
-#![feature(alloc_error_handler)]
 
 extern crate alloc;
 
 use alloc::{borrow::Cow, collections::BTreeMap, format, string::String, vec::Vec};
-// Needed for `write!`/`writeln!` against the stack-buffer writer in the fatal handlers.
+// Heap diagnostics use a stack buffer to avoid allocating while logging.
 use core::fmt::Write as _;
-use linked_list_allocator::LockedHeap;
+use tokio::{runtime::Handle, sync::oneshot};
 
 #[cfg(feature = "dom")]
 use rappid_rabbit::images::{decode_image, ImageCache, MAX_IMAGE_RESPONSE_BYTES};
@@ -52,9 +48,7 @@ use sunlight_http::{HttpRequest, ParsedUrl};
 use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
-    process_yield, ProcessExit,
 };
-use sunlight_libc::crt0;
 use sunlight_ui::widgets::{
     Button, ButtonState, Column as TableColumn, DocumentCanvas, DocumentCanvasPresentation, Label,
     Panel, TabBar, Table, TextInput, TextView, TreeHitTarget, TreeView,
@@ -166,20 +160,17 @@ const KEY_PGDN: u8 = 0x51;
 const NETWORK_LIST_MIN_W: u32 = 320;
 const NETWORK_DETAIL_MIN_W: u32 = 320;
 
-const HEAP_SIZE: usize = 32 * 1024 * 1024;
-
-static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
-#[cfg_attr(not(test), global_allocator)]
-static ALLOC: LockedHeap = LockedHeap::empty();
+const HEAP_SIZE: usize = 128 * 1024 * 1024;
 
 fn heap_used() -> usize {
-    ALLOC.lock().used()
-}
-
-unsafe fn init_heap() {
-    ALLOC
-        .lock()
-        .init(core::ptr::addr_of_mut!(HEAP).cast::<u8>(), HEAP_SIZE);
+    #[cfg(target_os = "sunlightos")]
+    {
+        sunlight_libc::alloc::heap_stats().allocated_backing_bytes
+    }
+    #[cfg(not(target_os = "sunlightos"))]
+    {
+        0
+    }
 }
 
 /// Stack-buffer writer for fatal-handler messages. Implements `core::fmt::Write` over a
@@ -217,40 +208,6 @@ impl<const N: usize> core::fmt::Write for LogBuf<N> {
     }
 }
 
-#[cfg(not(test))]
-#[panic_handler]
-fn panic(info: &core::panic::PanicInfo) -> ! {
-    let mut buf = LogBuf::<256>::new();
-    let _ = write!(buf, "[RABBIT] panic");
-    if let Some(loc) = info.location() {
-        let _ = write!(buf, " at {}:{}:{}", loc.file(), loc.line(), loc.column());
-    }
-    // `PanicInfo::message()` returns a `PanicMessage` (Display) on this nightly, which is
-    // what surfaces the OOM reason ("memory allocation of N bytes failed") when applicable.
-    let _ = write!(buf, ": {}", info.message());
-    let _ = writeln!(buf);
-    debug_log(buf.as_str());
-    // Clean exit instead of an infinite loop: a panic is now a visible one-liner in the
-    // QEMU log and the app closes, rather than silently freezing the window.
-    ProcessExit::exit(1);
-}
-
-#[cfg(not(test))]
-#[alloc_error_handler]
-fn alloc_error(layout: core::alloc::Layout) -> ! {
-    let mut buf = LogBuf::<160>::new();
-    let _ = writeln!(
-        buf,
-        "[RABBIT] OOM: alloc {} bytes (align {}) failed; heap {}/{}",
-        layout.size(),
-        layout.align(),
-        heap_used(),
-        HEAP_SIZE
-    );
-    debug_log(buf.as_str());
-    ProcessExit::exit(1);
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum FocusPane {
     Source,
@@ -281,7 +238,27 @@ impl SourceContent {
     }
 }
 
+struct NavigationOutput {
+    final_url: String,
+    status: String,
+    source: SourceContent,
+    render_status: String,
+    #[cfg(feature = "dom")]
+    render_state: Option<DocumentRenderState>,
+    form_state: FormState,
+    active_navigation_request_id: Option<u64>,
+    developer_tools: DeveloperToolsState,
+    discovered_resources: Vec<ResourceCandidate>,
+    resource_queue: ResourceQueue,
+    #[cfg(feature = "dom")]
+    image_cache: ImageCache,
+    document_lifecycle: DocumentLifecycle,
+}
+
 struct RabbitApp {
+    navigation_url: String,
+    runtime: Option<Handle>,
+    completion: Option<oneshot::Receiver<NavigationOutput>>,
     url_input: TextInput<'static, URL_INPUT_CAP>,
     url_hovered: bool,
     url_action_hovered: bool,
@@ -342,6 +319,9 @@ impl RabbitApp {
         );
 
         let mut app = Self {
+            navigation_url: String::new(),
+            runtime: None,
+            completion: None,
             url_input,
             url_hovered: false,
             url_action_hovered: false,
@@ -380,6 +360,9 @@ impl RabbitApp {
     }
 
     fn queue_fetch(&mut self) {
+        if self.pending_fetch {
+            return;
+        }
         self.pending_fetch = true;
         self.status = String::from("Fetching...");
         self.render_status = String::from("Loading rendered document...");
@@ -390,7 +373,121 @@ impl RabbitApp {
         );
     }
 
-    fn perform_pending_fetch(&mut self) {
+    // A single in-flight navigation bounds source/DOM scratch memory. The
+    // blocking pool performs DNS, TLS, subresources, parsing and initial layout.
+    fn perform_pending_fetch(&mut self) -> bool {
+        if let Some(receiver) = self.completion.as_mut() {
+            match receiver.try_recv() {
+                Ok(output) => {
+                    self.completion = None;
+                    self.pending_fetch = false;
+                    if output.document_lifecycle.generation()
+                        != self.document_lifecycle.generation()
+                    {
+                        return true;
+                    }
+                    let panel = self.developer_tools.panel.clone();
+                    if self.url_input.value().trim() == self.navigation_url.as_str() {
+                        self.url_input.set_text(&output.final_url);
+                    }
+                    self.status = output.status;
+                    self.source = output.source;
+                    self.render_status = output.render_status;
+                    #[cfg(feature = "dom")]
+                    {
+                        self.render_state = output.render_state;
+                    }
+                    self.form_state = output.form_state;
+                    self.active_navigation_request_id = output.active_navigation_request_id;
+                    self.developer_tools = output.developer_tools;
+                    self.discovered_resources = output.discovered_resources;
+                    self.resource_queue = output.resource_queue;
+                    #[cfg(feature = "dom")]
+                    {
+                        self.image_cache = output.image_cache;
+                    }
+                    self.document_lifecycle = output.document_lifecycle;
+                    self.developer_tools.panel = panel;
+                    self.source_scroll = 0;
+                    self.render_scroll = 0;
+                    #[cfg(feature = "dom")]
+                    self.refresh_render_viewport();
+                }
+                Err(oneshot::error::TryRecvError::Empty) => return false,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    self.completion = None;
+                    self.pending_fetch = false;
+                    self.set_navigation_error("Navigation worker stopped");
+                }
+            }
+            return true;
+        }
+        let Some(runtime) = self.runtime.as_ref() else {
+            self.pending_fetch = false;
+            self.set_navigation_error("Navigation runtime unavailable");
+            return true;
+        };
+        let runtime = runtime.clone();
+        let normalized = match normalize_url_input(self.url_input.value()) {
+            Ok(url) => url,
+            Err(error) => {
+                self.pending_fetch = false;
+                self.set_error(format!("{error}"));
+                return true;
+            }
+        };
+        let parsed = match ParsedUrl::parse(&normalized) {
+            Ok(url) => url,
+            Err(error) => {
+                self.pending_fetch = false;
+                self.set_error(format!("{error}"));
+                return true;
+            }
+        };
+        let lifecycle = self.document_lifecycle.clone();
+        self.url_input.set_text(&normalized);
+        self.navigation_url = normalized.clone();
+        self.begin_navigation_session(&normalized, &build_get_request(&parsed));
+        // Release the previous source before allocating the next response.
+        self.source = SourceContent::Placeholder("Loading...");
+        let bounds = self.client_bounds;
+        let panel = self.developer_tools.panel.clone();
+        let (sender, receiver) = oneshot::channel();
+        self.completion = Some(receiver);
+        runtime.spawn_blocking(move || {
+            let mut worker = RabbitApp::new(None);
+            worker.url_input.set_text(&normalized);
+            worker.document_lifecycle = lifecycle;
+            worker.developer_tools.panel = panel;
+            worker.set_client_bounds(bounds.w, bounds.h);
+            worker.perform_fetch_sync();
+            let output = worker.into_navigation_output();
+            // A closed window drops the receiver and the completed document.
+            let _ = sender.send(output);
+        });
+        true
+    }
+
+    fn into_navigation_output(self) -> NavigationOutput {
+        NavigationOutput {
+            final_url: String::from(self.url_input.value()),
+            status: self.status,
+            source: self.source,
+            render_status: self.render_status,
+            #[cfg(feature = "dom")]
+            render_state: self.render_state,
+            form_state: self.form_state,
+            active_navigation_request_id: self.active_navigation_request_id,
+            developer_tools: self.developer_tools,
+            discovered_resources: self.discovered_resources,
+            resource_queue: self.resource_queue,
+            #[cfg(feature = "dom")]
+            image_cache: self.image_cache,
+            document_lifecycle: self.document_lifecycle,
+        }
+    }
+
+    fn perform_fetch_sync(&mut self) {
         self.pending_fetch = false;
         self.source_scroll = 0;
 
@@ -469,9 +566,7 @@ impl RabbitApp {
             .as_ref()
             .map(format_url)
             .unwrap_or_else(|| String::from(requested_url));
-        // Navigation is currently performed from the next local tick, but
-        // retain this equality guard so a future asynchronous completion never
-        // overwrites a URL the user has begun editing.
+        // Follow redirects only while the requested URL is still displayed.
         if self.url_input.value().trim() == requested_url {
             self.url_input.set_text(&final_url);
         }
@@ -1197,6 +1292,15 @@ impl RabbitApp {
             ConsoleSource::Fetch,
             format!("{err}"),
         );
+    }
+
+    fn set_navigation_error(&mut self, message: &str) {
+        self.status = String::from("Navigation failed");
+        self.render_status = String::from(message);
+        self.source = SourceContent::Message(String::from(message));
+        self.developer_tools
+            .console
+            .push(ConsoleSeverity::Error, ConsoleSource::Browser, message);
     }
 
     fn set_error(&mut self, message: String) {
@@ -2671,9 +2775,11 @@ impl App for RabbitApp {
         match event {
             Event::Tick => {
                 if self.pending_fetch {
-                    self.perform_pending_fetch();
-                    self.clamp_scrolls();
-                    return true;
+                    let changed = self.perform_pending_fetch();
+                    if changed {
+                        self.clamp_scrolls();
+                    }
+                    return changed;
                 }
                 false
             }
@@ -2907,13 +3013,17 @@ impl App for RabbitApp {
     }
 }
 
-#[cfg(not(test))]
-#[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const u8) -> ! {
-    unsafe {
-        init_heap();
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut initial_url = None;
+    for argument in std::env::args().skip(1) {
+        if let Some(trace) = launch_trace::parse_launch_arg(argument.as_bytes()) {
+            launch_trace::set_current(trace);
+        } else if initial_url.is_none() {
+            initial_url =
+                rappid_rabbit::launch_url::initial_url_from_values(&[argument.as_bytes()])
+                    .map(String::from);
+        }
     }
-    sunlight_libc::launch_trace::init_from_argv(argc, argv);
     let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
     launch_trace::log_phase_now(
         trace,
@@ -2921,41 +3031,28 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8, _envp: *const *const
         "app_main_started",
         Some(sunlight_ipc::getpid()),
     );
-
-    let mut app = RabbitApp::new(initial_url_from_argv(argc, argv));
-    let Some(mut window) = Window::connect(WindowConfig {
+    // No socket reactor: SunlightOS networking uses the capability IPC backend.
+    // Native std supplies threads, parking, TLS and monotonic time to Tokio.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .max_blocking_threads(1)
+        .thread_stack_size(4 * 1024 * 1024)
+        .build()?;
+    let mut app = RabbitApp::new(initial_url.as_deref());
+    app.runtime = Some(runtime.handle().clone());
+    let mut window = Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
         title: "Rappid Rabbit",
         decoration: WindowDecoration::Normal,
-    }) else {
-        debug_log("[RABBIT] failed to connect window\n");
-        loop {
-            process_yield();
-        }
-    };
+    })
+    .ok_or("failed to connect window")?;
     window.run(&mut app);
-    ProcessExit::exit(0);
-}
-
-/// Read only a bounded first HTTP(S) URL from launch argv. Launch-trace
-/// metadata and unknown arguments are ignored, keeping regular startup
-/// behavior intact while allowing the shell's centralized launcher handoff.
-fn initial_url_from_argv(argc: u64, argv: *const *const u8) -> Option<&'static str> {
-    let mut raw = [core::ptr::null::<u8>(); 8];
-    let count = unsafe { crt0::collect_raw_args(argc, argv, &mut raw) };
-    for pointer in raw.iter().take(count).skip(1) {
-        let len = unsafe { crt0::cstr_len(*pointer, URL_INPUT_CAP) };
-        if len == 0 || len >= URL_INPUT_CAP {
-            continue;
-        }
-        let value: &'static [u8] = unsafe { core::slice::from_raw_parts(*pointer, len) };
-        let values = [value];
-        if let Some(url) = rappid_rabbit::launch_url::initial_url_from_values(&values) {
-            return Some(url);
-        }
-    }
-    None
+    drop(app);
+    // Blocking IPC cannot be aborted by Tokio. Do not hold window close up
+    // waiting for a network timeout; native std group exit reaps all workers.
+    runtime.shutdown_timeout(std::time::Duration::ZERO);
+    Ok(())
 }
 
 fn adjust_scroll(
@@ -3039,5 +3136,97 @@ mod responsive_tests {
         let first = RabbitApp::compute_layout(large);
         let _ = RabbitApp::compute_layout(Rect::new(0, 0, 600, 240));
         assert_eq!(first, RabbitApp::compute_layout(large));
+    }
+}
+
+#[cfg(all(test, feature = "dom"))]
+mod navigation_tests {
+    use super::*;
+
+    fn document_output() -> NavigationOutput {
+        let mut worker = RabbitApp::new(None);
+        let url = "http://example.com/";
+        let parsed = ParsedUrl::parse(url).unwrap();
+        worker.begin_navigation_session(url, &build_get_request(&parsed));
+        let body = format!(
+            "<html><body>{}</body></html>",
+            "<p>Rabbit worker document</p>".repeat(1000)
+        );
+        worker.apply_result(
+            url,
+            RequestResult {
+                response: sunlight_http::HttpResponse {
+                    status_code: 200,
+                    status_text: String::from("OK"),
+                    headers: vec![(String::from("content-type"), String::from("text/html"))],
+                    header_len: 0,
+                },
+                body: body.into_bytes(),
+                final_url: Some(parsed),
+                duration_ms: Some(1),
+            },
+        );
+        worker.into_navigation_output()
+    }
+
+    #[test]
+    fn large_document_crosses_worker_channel_while_ui_keeps_running() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let (sender, receiver) = oneshot::channel();
+        let (release, wait) = std::sync::mpsc::channel();
+        let ui_thread = std::thread::current().id();
+        runtime.spawn_blocking(move || {
+            assert_ne!(ui_thread, std::thread::current().id());
+            wait.recv().unwrap();
+            assert!(sender.send(document_output()).is_ok());
+        });
+        let mut app = RabbitApp::new(None);
+        app.document_lifecycle.begin_navigation();
+        app.pending_fetch = true;
+        app.completion = Some(receiver);
+        app.navigation_url = String::from("http://example.com/");
+        app.url_input.set_text("http://edited.example/");
+        app.developer_tools.panel.open();
+        app.perform_pending_fetch(); // Empty channel must not wait for the worker.
+        assert!(app.pending_fetch);
+        app.set_client_bounds(840, 540);
+        release.send(()).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while app.pending_fetch {
+            assert!(std::time::Instant::now() < deadline);
+            app.perform_pending_fetch();
+            std::thread::yield_now();
+        }
+        assert_eq!(app.url_input.value(), "http://edited.example/");
+        assert!(app.developer_tools.panel.open);
+        let state = app.render_state.as_ref().unwrap();
+        assert!(state.dom.node_count() > 900);
+        assert_eq!(app.document_lifecycle.parse_attempts(), 1);
+    }
+
+    #[test]
+    fn stale_completion_and_closed_worker_do_not_replace_document() {
+        let mut app = RabbitApp::new(None);
+        app.document_lifecycle.begin_navigation();
+        app.document_lifecycle.begin_navigation();
+        let (sender, receiver) = oneshot::channel();
+        assert!(sender.send(document_output()).is_ok());
+        app.completion = Some(receiver);
+        app.pending_fetch = true;
+        app.perform_pending_fetch();
+        assert!(app.render_state.is_none());
+        assert_eq!(app.document_lifecycle.generation(), 2);
+        let (sender, receiver) = oneshot::channel();
+        drop(sender);
+        app.completion = Some(receiver);
+        app.pending_fetch = true;
+        app.perform_pending_fetch();
+        assert!(!app.pending_fetch);
+        assert!(app.completion.is_none());
+        assert!(app.source.as_str().contains("worker stopped"));
     }
 }

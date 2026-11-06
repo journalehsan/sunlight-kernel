@@ -266,6 +266,28 @@ fn main() {
         }
     }
 
+    for input in [
+        "rappid-rabbit",
+        "golden-fish",
+        "tools/build_rappid_rabbit.sh",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            workspace_root.join(input).display()
+        );
+    }
+    let rabbit_status = Command::new("bash")
+        .arg(workspace_root.join("tools/build_rappid_rabbit.sh"))
+        .env("CARGO_TARGET_DIR", &scratch_target_dir)
+        .current_dir(workspace_root)
+        .status()
+        .expect("invoke native Rabbit builder");
+    assert!(rabbit_status.success(), "failed to build native Rabbit");
+    let rabbit_source = scratch_target_dir.join("x86_64-sunlightos/release/rappid-rabbit");
+    let rabbit_dest = target_dir.join("x86_64-sunlightos/release/rappid-rabbit");
+    fs::create_dir_all(rabbit_dest.parent().unwrap()).expect("create native Rabbit directory");
+    fs::copy(rabbit_source, rabbit_dest).expect("stage native Rabbit");
+
     // Yazi is embedded unconditionally; ordinary kernel builds must prepare it
     // too, rather than relying on a previous Yazi-specific test run.
     let yazi_script = workspace_root.join("tools/build_yazi.sh");
@@ -999,12 +1021,6 @@ fn main() {
         EmbeddedBinary {
             package: "sunlight-devices",
             output: "sunlight-devices",
-            rustflags: service_rustflags,
-            args: &["--release"],
-        },
-        EmbeddedBinary {
-            package: "rappid-rabbit",
-            output: "rappid-rabbit",
             rustflags: service_rustflags,
             args: &["--release"],
         },

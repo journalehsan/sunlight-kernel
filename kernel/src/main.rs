@@ -365,7 +365,7 @@ static SUNLIGHT_DEVICES_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-devices");
 // Rappid Rabbit: native HTTP inspection application.
 static RAPPID_RABBIT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/rappid-rabbit");
+    include_bytes!("../../target/x86_64-sunlightos/release/rappid-rabbit");
 // Sunlight API Lab: native REST/API testing application.
 static SUNLIGHT_API_LAB_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-api-lab");

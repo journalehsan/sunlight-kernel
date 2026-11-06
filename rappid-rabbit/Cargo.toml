@@ -399,16 +399,22 @@ sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 golden-fish = { path = "../golden-fish", optional = true }
-linked_list_allocator = "0.10"
+tokio = { version = "1.48", default-features = false, features = ["rt", "sync", "time"] }
 miniz_oxide = "0.8"
-# Optional host/bring-up adapter. resvg currently requires `std`; keep it
-# explicit until the freestanding target supplies a compatible build.
+# Optional SVG renderer on the native std target.
 resvg = { version = "0.45.1", default-features = false, optional = true }
 
 [features]
-default = []
+default = ["std", "dom"]
+# Rabbit always links std; retained as an explicit platform capability flag.
+std = []
 svg = ["dep:resvg"]
 # "dom" enables Golden Fish HTML parsing and the interactive DOM tree inspector.
-# Golden Fish uses `tl` on std-capable targets and a no_std fallback parser on
-# SunlightOS freestanding builds, so this feature is supported in both places.
+# Native std uses Golden Fish's `tl` parser.
 dom = ["dep:golden-fish"]
+
+[target.'cfg(target_os = "sunlightos")'.dependencies]
+sunlight-libc = { path = "../sunlight-libc", features = ["native-std", "dynamic-heap-128m"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }

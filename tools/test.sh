@@ -640,7 +640,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-writer --release >
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-calendar --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-reminders --release >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-devices --release >>"$BUILD_LOG" 2>&1
-RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package rappid-rabbit --features dom --release >>"$BUILD_LOG" 2>&1
+bash tools/build_rappid_rabbit.sh >>"$BUILD_LOG" 2>&1
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-api-lab --release >>"$BUILD_LOG" 2>&1
 bash tools/build_svg_apps.sh -p sunlight-dialogd >>"$BUILD_LOG" 2>&1
 bash tools/build_svg_apps.sh -p sunlight-control-panel >>"$BUILD_LOG" 2>&1
