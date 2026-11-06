@@ -215,6 +215,9 @@ pub struct Process {
     pub trusted_pty_service: bool,
     /// Set only for the embedded Mezzo session-lock policy service.
     pub trusted_lock_service: bool,
+    /// Set only for the embedded sunlight-kv daemon. It may resolve the real
+    /// credentials of an IPC caller through the narrow KV credential syscall.
+    pub trusted_kv_service: bool,
     /// Set only for the kernel-loaded TTY/login session service.
     pub trusted_tty_session_service: bool,
     /// Set only for the native desktop session manager service.
@@ -228,6 +231,11 @@ pub struct Process {
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
     pub trusted_vfs_service: bool,
+    /// Kernel-provenance service identity key (`name_to_u64` of the registered
+    /// service name), or 0 for user/unknown processes. Supplied to trusted
+    /// brokers (e.g. sunlight-kv) so callers can be classified as
+    /// `Caller::Service(key)` without trusting user-supplied names.
+    pub service_identity: u64,
     /// When set, this process may only resolve nameserver entries that map to
     /// the declared service capability profile.
     pub service_lookup_restrictions: Option<u64>,
@@ -534,6 +542,7 @@ impl Process {
             trusted_zram_diagnostic: false,
             trusted_pty_service: false,
             trusted_lock_service: false,
+            trusted_kv_service: false,
             trusted_tty_session_service: false,
             trusted_session_service: false,
             trusted_wiseowl_braind: false,
@@ -542,6 +551,7 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,
+            service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,           // SCHED_NORMAL
@@ -769,6 +779,7 @@ impl Process {
             trusted_zram_diagnostic: false,
             trusted_pty_service: false,
             trusted_lock_service: false,
+            trusted_kv_service: false,
             trusted_tty_session_service: false,
             trusted_session_service: false,
             trusted_wiseowl_braind: false,
@@ -777,6 +788,7 @@ impl Process {
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,
+            service_identity: 0,
             service_lookup_restrictions: None,
             mmap_next: 0,
             sched_type: 0,

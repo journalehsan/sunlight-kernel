@@ -1071,6 +1071,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         101 => sys_set_fs_base(frame),
         102 => sys_mint_auth_session_grant(frame),
         103 => sys_pty_get_credentials(frame),
+        108 => sys_kv_get_caller_credentials(frame),
         104 => sys_tty_publish_winsize(frame),
         105 => sys_tty_attach_process(frame),
         106 => sys_tty_get_winsize(),
@@ -3554,6 +3555,18 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
             process.trusted_control_panel =
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            // Service provenance survives re-exec only for a root-owned
+            // embedded daemon image; a user process never receives a key.
+            let exec_uid = process.uid;
+            let embedded_daemon =
+                exec_uid == 0 && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            process.trusted_kv_service =
+                embedded_daemon && crate::process::spawn::is_trusted_kv_service_path(path_str);
+            process.service_identity = if embedded_daemon {
+                crate::process::spawn::trusted_service_identity_for_path(path_str)
+            } else {
+                0
+            };
             crate::serial_println!("[SYSCALL] exec: success, entry={:#x}", entry);
             #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
             crate::serial_println!("[FL-P1-K] event=exec-installed caller={} ci={} new_vm={} entry={:#x}", process.pid, process.foreground.incarnation, process.address_space.identity().generation, entry);
@@ -3945,6 +3958,20 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             child.trusted_control_panel =
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            // The KV credential syscall can observe every caller's UID, so the
+            // trusted marker is granted only to a root-launched embedded
+            // sunlight-kv image, never to a same-named user program.
+            child.trusted_kv_service = uid == 0
+                && crate::process::spawn::is_trusted_kv_service_path(path_str)
+                && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            // Provenance key for every root-launched embedded daemon so services
+            // such as sunlight-tls are classified as Caller::Service, not Root.
+            child.service_identity =
+                if uid == 0 && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok() {
+                    crate::process::spawn::trusted_service_identity_for_path(path_str)
+                } else {
+                    0
+                };
             // [LAUNCH-TRACE] Point 5: spawn returned successfully
             trace.spawn_returned_ns = now_ns();
         }
@@ -4427,6 +4454,36 @@ fn sys_pty_get_credentials(frame: &mut SyscallFrame) -> u64 {
     // Threads may share a VM generation. Authenticate this publication,
     // which remains unique even when a PID or address space is reused.
     frame.r9 = target.foreground.incarnation;
+    target.uid as u64 | ((target.gid as u64) << 32)
+}
+
+/// Return kernel-authenticated credentials for an IPC caller of sunlight-kv.
+///
+/// This mirrors the narrow PTY credential syscall: it is available only to the
+/// embedded sunlight-kv daemon, so user space can never turn an arbitrary PID
+/// into another process's UID/GID or service identity. The returned UID/GID and
+/// generation are authoritative; the service key is stamped by the kernel for
+/// trusted embedded daemons and is zero for ordinary user processes.
+///
+/// rdi = caller pid from the kernel-populated IPC badge
+/// rax = uid | (gid << 32); r8 = pid; r9 = generation; r10 = service key.
+/// Returns u64::MAX on failure.
+fn sys_kv_get_caller_credentials(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_kv_service {
+        return u64::MAX;
+    }
+    let Some(target) = sched.processes.iter().find(|process| {
+        process.pid == target_pid
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    frame.r8 = target.pid as u64;
+    // Generation is unique even when a PID or address space is reused.
+    frame.r9 = target.address_space.identity().generation;
+    frame.r10 = target.service_identity;
     target.uid as u64 | ((target.gid as u64) << 32)
 }
 

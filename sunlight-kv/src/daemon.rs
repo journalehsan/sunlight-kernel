@@ -4,7 +4,8 @@
 //!   Frame: u32 little-endian length || bincode(Request) / bincode(Response)
 //!
 //! Caller identity is obtained from SO_PEERCRED on each accepted connection.
-//! "root" (uid 0) bypasses all ACL checks.
+//! UID 0 is [`Caller::Root`] (administrative bypass); other callers are
+//! [`Caller::User(uid)`] and are subject to the namespace + per-key ACL checks.
 
 use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
@@ -14,6 +15,7 @@ use std::thread;
 
 use log::{error, info, warn};
 
+use crate::acl::Caller;
 use crate::ipc::{Request, Response};
 use crate::storage::{StorageEngine, StorageError};
 
@@ -95,8 +97,6 @@ pub fn run_daemon(cfg: DaemonConfig) -> Result<(), DaemonError> {
 
 /// Handle a single client connection: loop reading requests until EOF.
 fn handle_client(mut stream: UnixStream, storage: Arc<Mutex<StorageEngine>>) -> io::Result<()> {
-    let caller = resolve_caller_identity(&stream);
-
     loop {
         let request = match recv_request(&mut stream) {
             Ok(Some(r)) => r,
@@ -111,6 +111,7 @@ fn handle_client(mut stream: UnixStream, storage: Arc<Mutex<StorageEngine>>) -> 
             }
         };
 
+        let caller = resolve_caller_identity(&stream);
         let response = {
             let mut guard = storage.lock().expect("storage mutex poisoned");
             dispatch(&mut *guard, &caller, request)
@@ -123,7 +124,7 @@ fn handle_client(mut stream: UnixStream, storage: Arc<Mutex<StorageEngine>>) -> 
 }
 
 /// Map a Request + caller into a Response using the storage engine.
-fn dispatch(storage: &mut StorageEngine, caller: &str, req: Request) -> Response {
+fn dispatch(storage: &mut StorageEngine, caller: &Caller, req: Request) -> Response {
     match req {
         Request::KV_PUT { key, value } => match storage.put(&key, &value, caller) {
             Ok(()) => {
@@ -158,16 +159,16 @@ fn dispatch(storage: &mut StorageEngine, caller: &str, req: Request) -> Response
             Err(e) => Response::ERROR(e.to_string()),
         },
         Request::KV_SCAN { prefix } => {
-            let keys = storage.scan_prefix(&prefix);
+            let keys = storage.scan_prefix(&prefix, caller);
             Response::SCAN_RESULT(keys)
         }
     }
 }
 
 /// Resolve caller identity from SO_PEERCRED.
-/// uid==0 => "root" (full bypass).
-/// Otherwise "uid:<uid>".
-fn resolve_caller_identity(stream: &UnixStream) -> String {
+/// uid==0 => [`Caller::Root`] (full bypass).
+/// Otherwise [`Caller::User(uid)`].
+fn resolve_caller_identity(stream: &UnixStream) -> Caller {
     unsafe {
         let fd = stream.as_raw_fd();
         #[repr(C)]
@@ -188,13 +189,13 @@ fn resolve_caller_identity(stream: &UnixStream) -> String {
         );
         if ret == 0 {
             if cred.uid == 0 {
-                return "root".to_string();
+                return Caller::Root;
             }
-            return format!("uid:{}", cred.uid);
+            return Caller::User(cred.uid);
         }
     }
     // Fallback when getsockopt fails (very rare).
-    "unknown".to_string()
+    Caller::Unknown
 }
 
 // -------------------------------------------------------------------------

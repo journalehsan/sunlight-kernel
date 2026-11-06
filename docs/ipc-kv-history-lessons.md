@@ -177,3 +177,31 @@ Run these checks after any change to IPC, KV, shell, or tty_server:
 - [ ] No plain `ipc_call()` in calculator history (grep `ipc_call\b` in calc.rs).
 - [ ] `cargo build --package sunlight-kernel` passes.
 - [ ] `./tools/test.sh sunlightd` passes.
+
+---
+
+## 8. Caller identity and ACLs in SunlightOS mode
+
+**What broke:** Every KV operation handler in SunlightOS mode hardcoded the
+caller string `"root"`. Because the KV endpoint is on the `UserSession` IPC
+allow-list, any unprivileged process could read, mutate or delete arbitrary keys
+and bypass all ACL checks. `scan_prefix` additionally returned every matching
+key name regardless of ACL, leaking key names across users.
+
+**Root cause:** The SunlightOS build never resolved a real caller identity; only
+the host (`SO_PEERCRED`) build did, and even there the identity was a bare
+string.
+
+**Fix:** The kernel stamps the real sender PID into `IpcMsg.badge`. The daemon
+resolves it through the narrow, service-gated `KvGetCallerCredentials` syscall
+(108) — the same pattern as `PtyGetCredentials` (103) — to obtain the caller's
+UID/GID and, for trusted embedded daemons, a kernel-stamped service-identity
+key. That maps to `Caller::{Root, Service(key), User(uid), Unknown}`. The
+namespace gate (`account:<uid>:*`, `vault:*`, public `tls.*`/`pki.*`, general)
+and the per-key ACL are evaluated for `Get`/`Set`/`Delete`/`Scan`.
+
+**Rule:** Never derive caller identity from the message payload; only from
+`msg.badge` plus kernel metadata. Never reintroduce a hardcoded `"root"` in a
+handler. `scan_prefix` must filter by namespace and read ACL, never return raw
+matching key names. Public TLS/PKI keys are world-readable by policy so legacy
+`root`-only records keep working after an upgrade. See `docs/kv-security.md`.

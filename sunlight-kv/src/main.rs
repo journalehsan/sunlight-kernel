@@ -94,6 +94,8 @@ use sunlight_kv::stats_wire::{
     STATS_BYTES, STATS_CLIENT_SLOTS, STATS_MAGIC, STATS_VERSION,
 };
 #[cfg(feature = "sunlightos")]
+use sunlight_kv::Caller;
+#[cfg(feature = "sunlightos")]
 use sunlight_libc::{self as libc, Fd};
 
 // Rust GlobalAlloc is provided by sunlight-libc (`global-alloc` feature) with
@@ -256,16 +258,82 @@ fn sm_read_file(path: &[u8]) -> Option<Vec<u8>> {
     None
 }
 
-/// Append a delta record (header+key+val+acl) to the log via sm: read-modify-write the full log.
+/// Maximum bytes for one appended record batch, bounded by the single shared
+/// page the storage manager accepts (`SmMsg::PAGE_CAPACITY` minus the store
+/// path length). Batches larger than this are split by the caller.
 #[cfg(feature = "sunlightos")]
-fn sm_append_record(record: &[u8]) -> bool {
-    const STORE: &[u8] = b"/var/lib/sunlight/kv.store";
-    let existing = sm_read_file(STORE).unwrap_or_default();
+const SM_STORE_PATH: &[u8] = b"/var/lib/sunlight/kv.store";
+
+/// Validate record framing before it is ever committed to a shared-memory
+/// frame. Each length is a `u32` in the on-disk header, so an oversized key,
+/// value or ACL would silently truncate; reject it explicitly instead.
+#[cfg(feature = "sunlightos")]
+fn validate_record_bounds(key: &str, value: &[u8], acl_bytes: &[u8]) -> bool {
+    // Bound the frame to one storage-manager page payload. A single record must
+    // itself be representable; otherwise the append can never succeed and must
+    // be reported, not attempted forever.
+    let payload = key.len() + value.len() + acl_bytes.len();
+    if key.is_empty() {
+        return false;
+    }
+    if key.len() > u32::MAX as usize
+        || value.len() > u32::MAX as usize
+        || acl_bytes.len() > u32::MAX as usize
+    {
+        return false;
+    }
+    if payload + RecordHeader::SIZE + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+        return false;
+    }
+    true
+}
+
+/// Append one or more delta records to the log via sm in a single
+/// read-modify-write.
+///
+/// The store is a single append-only file and the storage manager overwrites it
+/// wholesale, so each flush pays O(log size). Flushing a whole batch at once
+/// amortises that cost across every queued record instead of rewriting the log
+/// once per mutation. Returns `Ok(())` only when the combined batch was written.
+#[cfg(feature = "sunlightos")]
+fn sm_append_records(records: &[Vec<u8>]) -> bool {
+    if records.is_empty() {
+        return true;
+    }
+    let batch_len: usize = records.iter().map(|r| r.len()).sum();
+    if SM_STORE_PATH.len() + batch_len > SmMsg::PAGE_CAPACITY {
+        // Caller must split; this is a programming error, not a silent drop.
+        serial_println!(
+            "[KV][SM] append batch too large path+recs={} cap={}",
+            SM_STORE_PATH.len() + batch_len,
+            SmMsg::PAGE_CAPACITY
+        );
+        return false;
+    }
+    let existing = sm_read_file(SM_STORE_PATH).unwrap_or_default();
+    if existing.len() + batch_len > SmMsg::PAGE_CAPACITY {
+        // The store has reached the single-page ceiling. Report explicitly so
+        // the operator can compact; do not silently stop persisting.
+        serial_println!(
+            "[KV][SM] store full existing={} batch={} cap={}",
+            existing.len(),
+            batch_len,
+            SmMsg::PAGE_CAPACITY
+        );
+        return false;
+    }
     let mut combined = existing;
-    combined.extend_from_slice(record);
-    let ok = sm_write_file(STORE, &combined);
+    combined.reserve(batch_len);
+    for record in records {
+        combined.extend_from_slice(record);
+    }
+    let ok = sm_write_file(SM_STORE_PATH, &combined);
     if ok {
-        serial_println!("[KV][SM] appended record via sm len={}", record.len());
+        serial_println!(
+            "[KV][SM] appended {} record(s) via sm total_len={}",
+            records.len(),
+            combined.len()
+        );
     }
     ok
 }
@@ -447,10 +515,34 @@ fn deserialize_acl(bytes: &[u8]) -> Option<sunlight_kv::Acl> {
     Some(sunlight_kv::Acl { owner, read, write })
 }
 
+/// Resolve the authenticated caller identity for an incoming IPC message.
+///
+/// The kernel stamps the real sender PID into `msg.badge`; nothing in the
+/// payload is trusted for identity. We then ask the kernel for that PID's
+/// authoritative UID/GID and, for trusted embedded daemons, a provenance
+/// service key:
+///
+/// * `service_identity != 0` → [`Caller::Service(key)`] (e.g. sunlight-tls).
+/// * `uid == 0` with no service key → [`Caller::Root`] (kernel/admin).
+/// * any other uid → [`Caller::User(uid)`].
+/// * lookup failure (dead peer, unexpected badge) → [`Caller::Unknown`] which
+///   is denied everything except world-readable keys.
+///
+/// This replaces the previous hardcoded `"root"` caller in every handler.
 #[cfg(feature = "sunlightos")]
-fn pack_acl_default(caller: &str) -> Vec<u8> {
-    let acl = sunlight_kv::Acl::new(caller);
-    serialize_acl(&acl)
+fn resolve_caller(badge: u64) -> Caller {
+    match sunlight_ipc::kv_caller_credentials(badge) {
+        Some(creds) => {
+            if creds.service_identity != 0 {
+                Caller::Service(creds.service_identity)
+            } else if creds.uid == 0 {
+                Caller::Root
+            } else {
+                Caller::User(creds.uid)
+            }
+        }
+        None => Caller::Unknown,
+    }
 }
 
 // KV IPC protocol (sunlightos IpcMsg). Register IPC currently transports only
@@ -874,6 +966,20 @@ fn build_record_bytes(key: &str, value: &[u8], acl_bytes: &[u8], flags: u16) -> 
 
 #[cfg(feature = "sunlightos")]
 fn queue_persist_record(key: &str, rec: Vec<u8>) {
+    // Boundary validation before the frame is committed. A record that can
+    // never fit the storage-manager page is dropped here with an explicit
+    // counter + log line, rather than silently truncated or retried forever.
+    if rec.len() + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+        unsafe {
+            sat_inc(&mut DIAG.persist_skipped_volatile);
+        }
+        serial_println!(
+            "[KV][SM] record too large for page; volatile-only key={} rec_len={}",
+            key,
+            rec.len()
+        );
+        return;
+    }
     unsafe {
         if VOLATILE_ONLY {
             sat_inc(&mut DIAG.persist_skipped_volatile);
@@ -899,56 +1005,116 @@ fn queue_persist_record(key: &str, rec: Vec<u8>) {
     }
 }
 
+/// Number of queued records coalesced into a single storage-manager flush.
+/// Batching amortises the O(log size) full-store rewrite across many mutations.
+#[cfg(feature = "sunlightos")]
+const PERSIST_BATCH: usize = 16;
+
 #[cfg(feature = "sunlightos")]
 fn flush_one_persist() {
-    let pending = unsafe {
-        if let Some(queue) = &mut PERSIST_QUEUE {
-            queue.pop_front()
-        } else {
-            None
-        }
-    };
-    let Some(record) = pending else {
+    // Once persistence is known unavailable, do not spin: the in-memory store is
+    // authoritative and uncommitted records stay queued (not dropped) for this
+    // process's lifetime. Retrying every tick would only log-storm the console.
+    if unsafe { VOLATILE_ONLY } {
         return;
-    };
+    }
+    // Drain up to PERSIST_BATCH frames, but never split a batch that cannot fit
+    // the page: stop accumulating as soon as the combined size would exceed the
+    // storage-manager payload budget.
+    let mut batch: Vec<Vec<u8>> = Vec::new();
+    let mut batch_bytes = 0usize;
+    let mut keys: Vec<String> = Vec::new();
+    unsafe {
+        if let Some(queue) = &mut PERSIST_QUEUE {
+            while batch.len() < PERSIST_BATCH {
+                let Some(front) = queue.front() else { break };
+                let next = batch_bytes + front.bytes.len();
+                if next + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+                    break;
+                }
+                let record = queue.pop_front().expect("front present");
+                batch_bytes = next;
+                batch.push(record.bytes);
+                keys.push(record.key);
+            }
+        }
+    }
+    if batch.is_empty() {
+        return;
+    }
 
-    if sm_append_record(&record.bytes) {
+    if sm_append_records(&batch) {
         unsafe {
             sat_inc(&mut DIAG.persist_flush_ok);
-            sat_add(&mut DIAG.persist_record_bytes, record.bytes.len() as u64);
+            sat_add(&mut DIAG.persist_record_bytes, batch_bytes as u64);
         }
     } else {
+        // Persistence is unavailable: switch to volatile-only and requeue the
+        // uncommitted records at the FRONT so the dirty state is not silently
+        // dropped. A later successful flush (if sm recovers) still commits them;
+        // in volatile mode the in-memory store remains authoritative and correct.
         unsafe {
             VOLATILE_ONLY = true;
             if PERSIST_QUEUE.is_none() {
                 PERSIST_QUEUE = Some(VecDeque::new());
             }
             if let Some(queue) = &mut PERSIST_QUEUE {
-                queue.clear();
+                for (bytes, key) in batch.into_iter().zip(keys.iter()).rev() {
+                    queue.push_front(PersistRecord {
+                        key: key.clone(),
+                        bytes,
+                    });
+                }
             }
             sat_inc(&mut DIAG.persist_flush_fail);
         }
         diag_note_error(diag_err::PERSIST_FAIL);
         serial_println!(
-            "[KV][SM] persistence failed; volatile store updated key={}",
-            record.key
+            "[KV][SM] persistence failed; volatile store retains {} dirty record(s)",
+            keys.len()
         );
     }
 }
 
+/// PUT with a concrete [`Caller`]: namespace + per-key ACL are enforced before
+/// the in-memory store is mutated.
 #[cfg(feature = "sunlightos")]
-fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
-    let (acl, old_len) =
+fn do_put_caller(key: &str, value: &[u8], caller: &Caller) -> Result<(), sunlight_kv::KvError> {
+    if !sunlight_kv::namespace_allows_write(caller, key) {
+        return Err(sunlight_kv::KvError::PermissionDenied);
+    }
+    if key.is_empty() {
+        return Err(sunlight_kv::KvError::InvalidRequest);
+    }
+    let (mut acl, old_len) =
         if let Some((old_val, existing_acl)) = unsafe { LIVE.as_ref().and_then(|m| m.get(key)) } {
             if !existing_acl.allows_write(caller) {
-                return false;
+                return Err(sunlight_kv::KvError::PermissionDenied);
             }
+            // The existing ACL (including any world-read flag) is inherited.
             (existing_acl.clone(), Some(old_val.len() as u64))
+        } else if sunlight_kv::acl::is_public_key(key) {
+            (sunlight_kv::Acl::public_read(caller), None)
         } else {
-            (sunlight_kv::Acl::new(caller), None)
+            (sunlight_kv::Acl::for_caller(caller), None)
         };
+    // Migrate legacy public-namespace records (which may still carry a
+    // root-only ACL) to broad read access on the next write.
+    if sunlight_kv::acl::is_public_key(key) {
+        acl.ensure_public_read();
+    }
 
     let acl_bytes = serialize_acl(&acl);
+    // Reject oversized frames before they can be committed to a shared-memory
+    // page; the on-disk header stores lengths as u32 and the SM page is bounded.
+    if !validate_record_bounds(key, value, &acl_bytes) {
+        serial_println!(
+            "[KV] put rejected: record exceeds page budget key_len={} val_len={}",
+            key.len(),
+            value.len()
+        );
+        return Err(sunlight_kv::KvError::InvalidRequest);
+    }
     let rec = build_record_bytes(key, value, &acl_bytes, FLAG_PUT);
 
     unsafe {
@@ -966,27 +1132,37 @@ fn do_put(key: &str, value: &[u8], caller: &str) -> bool {
         sat_inc(&mut DIAG.mutations);
     }
     queue_persist_record(key, rec);
-    true
+    Ok(())
 }
 
+/// GET with a concrete [`Caller`]: namespace + per-key read ACL enforced.
 #[cfg(feature = "sunlightos")]
-fn do_get(key: &str, caller: &str) -> Result<Vec<u8>, ()> {
+fn do_get_caller(key: &str, caller: &Caller) -> Result<Vec<u8>, sunlight_kv::KvError> {
+    if !sunlight_kv::namespace_allows(caller, key) {
+        return Err(sunlight_kv::KvError::PermissionDenied);
+    }
     unsafe {
         if let Some(map) = &LIVE {
             if let Some((val, acl)) = map.get(key) {
-                if acl.allows_read(caller) {
+                // Public-namespace keys are world-readable by policy so a
+                // legacy root-only record stays readable after upgrade.
+                if sunlight_kv::acl::read_allowed(caller, key, acl) {
                     return Ok(val.clone());
                 } else {
-                    return Err(());
+                    return Err(sunlight_kv::KvError::PermissionDenied);
                 }
             }
         }
     }
-    Err(())
+    Err(sunlight_kv::KvError::NotFound)
 }
 
+/// DELETE with a concrete [`Caller`]: namespace + per-key write ACL enforced.
 #[cfg(feature = "sunlightos")]
-fn do_delete(key: &str, caller: &str) -> bool {
+fn do_delete_caller(key: &str, caller: &Caller) -> Result<(), sunlight_kv::KvError> {
+    if !sunlight_kv::namespace_allows_write(caller, key) {
+        return Err(sunlight_kv::KvError::PermissionDenied);
+    }
     let can = unsafe {
         if let Some(map) = &LIVE {
             if let Some((_, acl)) = map.get(key) {
@@ -999,14 +1175,14 @@ fn do_delete(key: &str, caller: &str) -> bool {
         }
     };
     if !can {
-        return false;
+        return Err(sunlight_kv::KvError::PermissionDenied);
     }
 
     let acl_bytes = unsafe {
         LIVE.as_ref()
             .and_then(|m| m.get(key))
             .map(|(_, a)| serialize_acl(a))
-            .unwrap_or_else(|| pack_acl_default(caller))
+            .unwrap_or_else(|| serialize_acl(&sunlight_kv::Acl::for_caller(caller)))
     };
 
     let rec = build_record_bytes(key, &[], &acl_bytes, FLAG_DELETE);
@@ -1019,15 +1195,21 @@ fn do_delete(key: &str, caller: &str) -> bool {
         sat_inc(&mut DIAG.mutations);
     }
     queue_persist_record(key, rec);
-    true
+    Ok(())
 }
 
 #[cfg(feature = "sunlightos")]
-fn do_scan(prefix: &str) -> Vec<String> {
+fn do_scan(prefix: &str, caller: &Caller) -> Vec<String> {
     unsafe {
         if let Some(map) = &LIVE {
             map.keys()
                 .filter(|k| k.starts_with(prefix))
+                .filter(|k| sunlight_kv::namespace_allows(caller, k))
+                .filter(|k| {
+                    map.get(*k)
+                        .map(|(_, acl)| sunlight_kv::acl::read_allowed(caller, k, acl))
+                        .unwrap_or(false)
+                })
                 .cloned()
                 .collect()
         } else {
@@ -1258,22 +1440,30 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     // so the reply is prompt. If sunlight-sm cannot persist the record the
     // volatile store remains correct and keeps serving GET/PUT/DELETE.
     //
-    // Set TRACE_KV=true only when debugging KV protocol; otherwise every
+    // Per-request caller tracing is opt-in and off by default; build with
+    // SUNLIGHT_KV_TRACE=1 only when auditing ACL resolution, otherwise every
     // calculator history save/load produces multiple serial log lines.
-    const TRACE_KV: bool = false;
+    const TRACE_KV: bool = matches!(option_env!("SUNLIGHT_KV_TRACE"), Some(_));
 
     unsafe {
         sat_inc(&mut DIAG.recv_blocking);
     }
     let mut msg = ipc_recv(ep);
     loop {
-        if TRACE_KV {
-            serial_println!("[KV] request label={:#x}", msg.label);
-        }
-
         // Kernel overwrites badge with the real sender PID (authoritative).
         let caller_pid = msg.badge;
         diag_note_request_start(msg.label, caller_pid);
+        // Derive the authenticated caller identity once per request from
+        // kernel-authoritative metadata. Never from the message payload.
+        let caller = resolve_caller(caller_pid);
+        if TRACE_KV {
+            serial_println!(
+                "[KV] request label={:#x} pid={} caller={}",
+                msg.label,
+                caller_pid,
+                caller.identity()
+            );
+        }
 
         let mut reply = IpcMsg::empty();
         reply.label = KV_REPLY;
@@ -1291,8 +1481,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     decode_error = true;
                     diag_note_error(diag_err::EMPTY_KEY);
                 } else {
-                    let caller = "root";
-                    if do_put(&key, &val, caller) {
+                    if do_put_caller(&key, &val, &caller).is_ok() {
                         if TRACE_KV {
                             serial_println!("[KV] put key={} len={} ok (inline)", key, val.len());
                         }
@@ -1311,8 +1500,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     decode_error = true;
                     diag_note_error(diag_err::EMPTY_KEY);
                 } else {
-                    let caller = "root";
-                    match do_get(&key, caller) {
+                    match do_get_caller(&key, &caller) {
                         Ok(v) => {
                             if TRACE_KV {
                                 serial_println!("[KV] get key={} len={} hit", key, v.len());
@@ -1333,7 +1521,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                                 }
                             }
                         }
-                        Err(()) => {
+                        Err(_) => {
                             if TRACE_KV {
                                 serial_println!("[KV] get key={} not-found", key);
                             }
@@ -1359,7 +1547,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                         Ok(ptr) => {
                             let val = unsafe { core::slice::from_raw_parts(ptr, vlen) }.to_vec();
                             let _ = shm_free(tok);
-                            if do_put(&key, &val, "root") {
+                            if do_put_caller(&key, &val, &caller).is_ok() {
                                 if TRACE_KV {
                                     serial_println!("[KV] put key={} len={} ok (shm)", key, vlen);
                                 }
@@ -1387,14 +1575,14 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     decode_error = true;
                     diag_note_error(diag_err::EMPTY_KEY);
                 } else {
-                    match do_get(&key, "root") {
+                    match do_get_caller(&key, &caller) {
                         Ok(v) => {
                             send_shm_value_reply(&mut reply, &v);
                             if reply.label == KV_ERROR {
                                 diag_note_error(diag_err::SHM_ALLOC);
                             }
                         }
-                        Err(()) => {
+                        Err(_) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
                             diag_note_error(diag_err::ACL_OR_MISSING);
@@ -1432,7 +1620,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
-                    Ok(key) if !key.is_empty() && do_put(&key, &value, "root") => {
+                    Ok(key) if !key.is_empty() && do_put_caller(&key, &value, &caller).is_ok() => {
                         reply.words[0] = 0;
                     }
                     _ => {
@@ -1455,14 +1643,14 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
-                    Ok(key) if !key.is_empty() => match do_get(&key, "root") {
+                    Ok(key) if !key.is_empty() => match do_get_caller(&key, &caller) {
                         Ok(v) => {
                             send_shm_value_reply(&mut reply, &v);
                             if reply.label == KV_ERROR {
                                 diag_note_error(diag_err::SHM_ALLOC);
                             }
                         }
-                        Err(()) => {
+                        Err(_) => {
                             reply.label = KV_ERROR;
                             reply.words[0] = 2;
                             diag_note_error(diag_err::ACL_OR_MISSING);
@@ -1489,7 +1677,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     continue;
                 };
                 match String::from_utf8(key_bytes) {
-                    Ok(key) if !key.is_empty() && do_delete(&key, "root") => {
+                    Ok(key) if !key.is_empty() && do_delete_caller(&key, &caller).is_ok() => {
                         reply.words[0] = 0;
                     }
                     _ => {
@@ -1506,8 +1694,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                     decode_error = true;
                     diag_note_error(diag_err::EMPTY_KEY);
                 } else {
-                    let caller = "root";
-                    if do_delete(&key, caller) {
+                    if do_delete_caller(&key, &caller).is_ok() {
                         reply.words[0] = 0;
                     } else {
                         reply.label = KV_ERROR;
@@ -1517,7 +1704,7 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
             }
             KV_SCAN => {
                 let prefix = unpack_str(&msg.words, 0, IPC_REGISTER_WORDS * 8);
-                let keys = do_scan(&prefix);
+                let keys = do_scan(&prefix, &caller);
                 reply.words[0] = keys.len() as u64;
                 let mut wi = 1usize;
                 for k in keys.iter().take(3) {

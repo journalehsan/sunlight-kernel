@@ -31,7 +31,7 @@ use bincode::Error as BincodeError;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom};
 
-use crate::acl::Acl;
+use crate::acl::{self, namespace_allows, namespace_allows_write, Acl, Caller};
 use crate::storage::index::{Index, IndexEntry};
 use crate::storage::record::{read_record, write_record, RecordHeader, FLAG_DELETE, FLAG_PUT};
 
@@ -196,7 +196,15 @@ impl StorageEngine {
     /// Store or overwrite a value.
     /// On first insert: caller becomes owner with default ACL (self only).
     /// On update: previous ACL is inherited (read from the old record).
-    pub fn put(&mut self, key: &str, value: &[u8], caller: &str) -> Result<(), StorageError> {
+    pub fn put(&mut self, key: &str, value: &[u8], caller: &Caller) -> Result<(), StorageError> {
+        // Namespace gate first: a caller may not even reach another user's
+        // account namespace or the vault, regardless of the per-key ACL.
+        if !namespace_allows_write(caller, key) {
+            return Err(StorageError::PermissionDenied {
+                key: key.to_string(),
+                caller: caller.to_string(),
+            });
+        }
         // Determine ACL to use for the new record.
         // Copy the entry (small struct) so we release the immutable borrow on self.index
         // before calling any &mut self methods.
@@ -209,11 +217,19 @@ impl StorageEngine {
                 });
             }
             // Read the old record's ACL (ignore value).
-            let (_old_val, old_acl) = self.read_value_and_acl_at(&entry)?;
+            let (_old_val, mut old_acl) = self.read_value_and_acl_at(&entry)?;
+            // Migrate legacy public-namespace records to broad read access.
+            if acl::is_public_key(key) {
+                old_acl.ensure_public_read();
+            }
             old_acl
         } else {
-            // New key: caller is owner.
-            Acl::new(caller)
+            // New key: caller is owner. Public namespaces default to world-read.
+            if acl::is_public_key(key) {
+                Acl::public_read(caller)
+            } else {
+                Acl::for_caller(caller)
+            }
         };
 
         let acl_bytes = bincode::serialize(&acl)?;
@@ -239,7 +255,13 @@ impl StorageEngine {
     }
 
     /// Retrieve value for key (after permission check).
-    pub fn get(&mut self, key: &str, caller: &str) -> Result<Vec<u8>, StorageError> {
+    pub fn get(&mut self, key: &str, caller: &Caller) -> Result<Vec<u8>, StorageError> {
+        if !namespace_allows(caller, key) {
+            return Err(StorageError::PermissionDenied {
+                key: key.to_string(),
+                caller: caller.to_string(),
+            });
+        }
         let entry = self
             .index
             .get(key)
@@ -249,7 +271,7 @@ impl StorageEngine {
         // Permission check requires reading the ACL.
         let (value, acl) = self.read_value_and_acl_at(&entry)?;
 
-        if !acl.allows_read(caller) {
+        if !acl::read_allowed(caller, key, &acl) {
             return Err(StorageError::PermissionDenied {
                 key: key.to_string(),
                 caller: caller.to_string(),
@@ -260,7 +282,13 @@ impl StorageEngine {
     }
 
     /// Delete a key by writing a tombstone record and removing from index.
-    pub fn delete(&mut self, key: &str, caller: &str) -> Result<(), StorageError> {
+    pub fn delete(&mut self, key: &str, caller: &Caller) -> Result<(), StorageError> {
+        if !namespace_allows_write(caller, key) {
+            return Err(StorageError::PermissionDenied {
+                key: key.to_string(),
+                caller: caller.to_string(),
+            });
+        }
         let entry = self
             .index
             .get(key)
@@ -300,14 +328,30 @@ impl StorageEngine {
         Ok(())
     }
 
-    /// Return all keys with the given prefix, in arbitrary order.
-    /// Permission is not required to discover keys via SCAN (only for subsequent GET).
-    /// This matches many KV designs; adjust if stronger semantics desired.
-    pub fn scan_prefix(&self, prefix: &str) -> Vec<String> {
-        self.index
+    /// Return all keys with the given prefix that `caller` is authorised to read.
+    ///
+    /// Previously SCAN leaked every matching key name regardless of ACL. Now the
+    /// result is filtered by both the namespace gate and the per-key read ACL, so
+    /// a scan can never disclose another user's keys or a private vault entry.
+    pub fn scan_prefix(&mut self, prefix: &str, caller: &Caller) -> Vec<String> {
+        let keys: Vec<String> = self
+            .index
             .keys()
             .filter(|k| k.starts_with(prefix))
             .cloned()
+            .collect();
+        keys.into_iter()
+            .filter(|k| namespace_allows(caller, k))
+            .filter(|k| {
+                self.index
+                    .get(k)
+                    .copied()
+                    .map(|entry| match self.read_value_and_acl_at(&entry) {
+                        Ok((_v, acl)) => acl::read_allowed(caller, k, &acl),
+                        Err(_) => false,
+                    })
+                    .unwrap_or(false)
+            })
             .collect()
     }
 
@@ -316,7 +360,7 @@ impl StorageEngine {
     // ---------------------------------------------------------------------
 
     /// Check write permission using only the IndexEntry (must read ACL from disk).
-    fn check_write_permission_from_entry(&mut self, entry: &IndexEntry, caller: &str) -> bool {
+    fn check_write_permission_from_entry(&mut self, entry: &IndexEntry, caller: &Caller) -> bool {
         if let Ok((_v, acl)) = self.read_value_and_acl_at(entry) {
             acl.allows_write(caller)
         } else {
@@ -393,27 +437,27 @@ mod tests {
     #[test]
     fn create_and_read_key() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
 
-        kv.put("mykey", b"hello world", owner).unwrap();
-        let v = kv.get("mykey", owner).unwrap();
+        kv.put("mykey", b"hello world", &owner).unwrap();
+        let v = kv.get("mykey", &owner).unwrap();
         assert_eq!(v, b"hello world");
     }
 
     #[test]
     fn overwrite_key_preserves_acl_and_updates_value() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
 
-        kv.put("k", b"v1", owner).unwrap();
-        kv.put("k", b"v2", owner).unwrap(); // overwrite by same owner
+        kv.put("k", b"v1", &owner).unwrap();
+        kv.put("k", b"v2", &owner).unwrap(); // overwrite by same owner
 
-        let v = kv.get("k", owner).unwrap();
+        let v = kv.get("k", &owner).unwrap();
         assert_eq!(v, b"v2");
 
         // Different caller without rights must be rejected even for read.
-        let other = "svc-beta";
-        let err = kv.get("k", other).unwrap_err();
+        let other = Caller::User(1001);
+        let err = kv.get("k", &other).unwrap_err();
         match err {
             StorageError::PermissionDenied { .. } => {}
             other => panic!("expected permission denied, got {:?}", other),
@@ -423,14 +467,14 @@ mod tests {
     #[test]
     fn delete_key_and_not_found_after() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
 
-        kv.put("temp", b"data", owner).unwrap();
-        assert!(kv.get("temp", owner).is_ok());
+        kv.put("temp", b"data", &owner).unwrap();
+        assert!(kv.get("temp", &owner).is_ok());
 
-        kv.delete("temp", owner).unwrap();
+        kv.delete("temp", &owner).unwrap();
 
-        let err = kv.get("temp", owner).unwrap_err();
+        let err = kv.get("temp", &owner).unwrap_err();
         match err {
             StorageError::NotFound(_) => {}
             other => panic!("expected not found after delete, got {:?}", other),
@@ -440,95 +484,169 @@ mod tests {
     #[test]
     fn scan_prefix() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
 
-        kv.put("user:1", b"a", owner).unwrap();
-        kv.put("user:2", b"b", owner).unwrap();
-        kv.put("config:foo", b"c", owner).unwrap();
+        kv.put("user:1", b"a", &owner).unwrap();
+        kv.put("user:2", b"b", &owner).unwrap();
+        kv.put("config:foo", b"c", &owner).unwrap();
 
-        let mut users: Vec<_> = kv.scan_prefix("user:");
+        let mut users: Vec<_> = kv.scan_prefix("user:", &owner);
         users.sort();
         assert_eq!(users, vec!["user:1".to_string(), "user:2".to_string()]);
 
-        let configs = kv.scan_prefix("config:");
+        let configs = kv.scan_prefix("config:", &owner);
         assert_eq!(configs, vec!["config:foo".to_string()]);
 
-        let none = kv.scan_prefix("nonexistent:");
+        let none = kv.scan_prefix("nonexistent:", &owner);
         assert!(none.is_empty());
     }
 
     #[test]
     fn reject_unauthorized_access() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
-        let intruder = "svc-evil";
+        let owner = Caller::User(1000);
+        let intruder = Caller::User(1001);
 
         // Intruder cannot create? First write always succeeds for the caller (they become owner).
         // But we test that the owner can, and a different identity cannot read/write afterwards.
-        kv.put("secret", b"s3cr3t", owner).unwrap();
+        kv.put("secret", b"s3cr3t", &owner).unwrap();
 
         // Intruder cannot read
         assert!(matches!(
-            kv.get("secret", intruder),
+            kv.get("secret", &intruder),
             Err(StorageError::PermissionDenied { .. })
         ));
 
         // Intruder cannot overwrite
         assert!(matches!(
-            kv.put("secret", b"nope", intruder),
+            kv.put("secret", b"nope", &intruder),
             Err(StorageError::PermissionDenied { .. })
         ));
 
         // Intruder cannot delete
         assert!(matches!(
-            kv.delete("secret", intruder),
+            kv.delete("secret", &intruder),
             Err(StorageError::PermissionDenied { .. })
         ));
 
         // Owner still can
-        assert!(kv.get("secret", owner).is_ok());
-        kv.delete("secret", owner).unwrap();
+        assert!(kv.get("secret", &owner).is_ok());
+        kv.delete("secret", &owner).unwrap();
     }
 
     #[test]
     fn crash_recovery_rebuilds_index_and_tombstones() {
         let (mut kv, path) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
 
-        kv.put("a", b"one", owner).unwrap();
-        kv.put("b", b"two", owner).unwrap();
-        kv.delete("a", owner).unwrap(); // tombstone for a
+        kv.put("a", b"one", &owner).unwrap();
+        kv.put("b", b"two", &owner).unwrap();
+        kv.delete("a", &owner).unwrap(); // tombstone for a
 
         // Simulate crash: drop and reopen (forces recovery).
         drop(kv);
         let mut kv2 = StorageEngine::open(&path).expect("reopen after crash");
 
         // a was deleted -> not present
-        assert!(kv2.get("a", owner).is_err());
+        assert!(kv2.get("a", &owner).is_err());
         // b still present
-        assert_eq!(kv2.get("b", owner).unwrap(), b"two");
+        assert_eq!(kv2.get("b", &owner).unwrap(), b"two");
 
         // Re-put a as different owner? No: new first writer becomes new owner.
         // Here we re-create as same logical owner string.
-        kv2.put("a", b"three", owner).unwrap();
-        assert_eq!(kv2.get("a", owner).unwrap(), b"three");
+        kv2.put("a", b"three", &owner).unwrap();
+        assert_eq!(kv2.get("a", &owner).unwrap(), b"three");
     }
 
     #[test]
     fn root_bypasses_acl() {
         let (mut kv, _p) = fresh_store();
-        let owner = "svc-alpha";
+        let owner = Caller::Service(acl::name_to_u64("svc-alpha"));
+        let root = Caller::Root;
 
-        kv.put("root-test", b"data", owner).unwrap();
+        kv.put("root-test", b"data", &owner).unwrap();
 
-        // "root" can read, write, delete regardless of ACL lists.
-        assert_eq!(kv.get("root-test", "root").unwrap(), b"data");
-        kv.put("root-test", b"root-overwrite", "root").unwrap();
-        assert_eq!(kv.get("root-test", owner).unwrap(), b"root-overwrite");
-        kv.delete("root-test", "root").unwrap();
+        // Root can read, write, delete regardless of ACL lists.
+        assert_eq!(kv.get("root-test", &root).unwrap(), b"data");
+        kv.put("root-test", b"root-overwrite", &root).unwrap();
+        assert_eq!(kv.get("root-test", &owner).unwrap(), b"root-overwrite");
+        kv.delete("root-test", &root).unwrap();
         assert!(matches!(
-            kv.get("root-test", owner),
+            kv.get("root-test", &owner),
             Err(StorageError::NotFound(_))
         ));
+    }
+
+    #[test]
+    fn user_cross_namespace_denied() {
+        let (mut kv, _p) = fresh_store();
+        let alice = Caller::User(1000);
+        let bob = Caller::User(1001);
+
+        kv.put("account:1000:token", b"a-token", &alice).unwrap();
+
+        // Bob must not read alice's account token.
+        assert!(matches!(
+            kv.get("account:1000:token", &bob),
+            Err(StorageError::PermissionDenied { .. })
+        ));
+        // Bob cannot read/write the vault either.
+        assert!(matches!(
+            kv.put("vault:root-secret", b"x", &bob),
+            Err(StorageError::PermissionDenied { .. })
+        ));
+        // Root and the auth broker can.
+        assert!(kv.get("account:1000:token", &Caller::Root).is_ok());
+        assert!(kv
+            .get(
+                "account:1000:token",
+                &Caller::Service(acl::AUTH_BROKER_SERVICE)
+            )
+            .is_ok());
+    }
+
+    #[test]
+    fn scan_filters_unauthorized_keys() {
+        let (mut kv, _p) = fresh_store();
+        let alice = Caller::User(1000);
+        let bob = Caller::User(1001);
+
+        kv.put("account:1000:a", b"1", &alice).unwrap();
+        kv.put("account:1001:b", b"2", &bob).unwrap();
+        kv.put("public-note", b"p", &alice).unwrap();
+
+        // Bob scanning "account:" must see only his own key, never Alice's.
+        let bob_keys = kv.scan_prefix("account:", &bob);
+        assert_eq!(bob_keys, vec!["account:1001:b".to_string()]);
+
+        // Alice sees only her key.
+        let alice_keys = kv.scan_prefix("account:", &alice);
+        assert_eq!(alice_keys, vec!["account:1000:a".to_string()]);
+    }
+
+    #[test]
+    fn public_tls_key_readable_by_world_writable_only_by_root() {
+        let (mut kv, _p) = fresh_store();
+        let tls = Caller::Service(acl::TLS_SERVICE);
+        let user = Caller::User(1000);
+
+        // TLS seeds a public trust anchor.
+        kv.put("tls.ca.roots", b"CA-BUNDLE", &tls).unwrap();
+
+        // Any user (and even Unknown) may read it; the handshake path relies on this.
+        assert_eq!(kv.get("tls.ca.roots", &user).unwrap(), b"CA-BUNDLE");
+        assert_eq!(
+            kv.get("tls.ca.roots", &Caller::Unknown).unwrap(),
+            b"CA-BUNDLE"
+        );
+
+        // But a plain user cannot overwrite the trust anchor.
+        assert!(matches!(
+            kv.put("tls.ca.roots", b"evil", &user),
+            Err(StorageError::PermissionDenied { .. })
+        ));
+        // Root may rotate it.
+        kv.put("tls.ca.roots", b"NEW", &Caller::Root).unwrap();
+        assert_eq!(kv.get("tls.ca.roots", &user).unwrap(), b"NEW");
     }
 }

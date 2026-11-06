@@ -70,6 +70,40 @@ pub fn is_trusted_control_panel_path(path: &str) -> bool {
     )
 }
 
+/// True only for the exact embedded sunlight-kv daemon path. It may resolve
+/// kernel-authenticated IPC caller credentials through the KV credential
+/// syscall, mirroring `is_trusted_pty_service_path`.
+pub fn is_trusted_kv_service_path(path: &str) -> bool {
+    matches!(path, "/sbin/sunlight-kv" | "/usr/sbin/sunlight-kv")
+}
+
+/// Kernel-provenance service identity key for a trusted embedded daemon path.
+///
+/// Returns the canonical service key ([`sunlight_ipc::name_to_u64`] of the
+/// service name) for embedded system daemons, or 0 for everything else. This is
+/// how the KV daemon classifies a caller as `Caller::Service(key)` without ever
+/// trusting a client-supplied service name: the key is stamped by the kernel at
+/// load/exec time from the exact embedded executable path.
+pub fn trusted_service_identity_for_path(path: &str) -> u64 {
+    match path {
+        "/sbin/sunlight-kv" | "/usr/sbin/sunlight-kv" => sunlight_ipc::service_identity::KV,
+        "/sbin/sunlight-tls" | "/usr/sbin/sunlight-tls" => sunlight_ipc::service_identity::TLS,
+        "/sbin/uac_service" | "/usr/sbin/uac_service" => {
+            sunlight_ipc::service_identity::AUTH_BROKER
+        }
+        "/sbin/sunlight-sm" | "/usr/sbin/sunlight-sm" => {
+            sunlight_ipc::service_identity::STORAGE_MANAGER
+        }
+        "/sbin/sunlightd" | "/usr/sbin/sunlightd" => {
+            sunlight_ipc::service_identity::SERVICE_MANAGER
+        }
+        "/sbin/sunlight-sessiond" | "/usr/sbin/sunlight-sessiond" => {
+            sunlight_ipc::service_identity::SESSION_MANAGER
+        }
+        _ => 0,
+    }
+}
+
 const LOCK_PRESENTER_ENTRY_MAGIC: u64 = 0x4C4F_434B_5052_4553;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +146,7 @@ pub fn exec_into_process(
     let old_trusted_swap_admin = process.trusted_swap_admin_service;
     let old_trusted_zram_diagnostic = process.trusted_zram_diagnostic;
     let old_trusted_pty_service = process.trusted_pty_service;
+    let old_trusted_kv_service = process.trusted_kv_service;
     let old_trusted_session_service = process.trusted_session_service;
     let old_trusted_wiseowl_braind = process.trusted_wiseowl_braind;
     let old_trusted_wiseowl_console = process.trusted_wiseowl_console;
@@ -119,10 +154,13 @@ pub fn exec_into_process(
     let old_personality = process.personality;
     let old_linux_tgid = process.linux_tgid;
     let old_linux_sysv_semadj = process.linux_sysv_semadj.take();
+    let old_service_identity = process.service_identity;
     process.trusted_display_service = false;
     process.trusted_swap_admin_service = false;
     process.trusted_zram_diagnostic = false;
     process.trusted_pty_service = false;
+    process.trusted_kv_service = false;
+    process.service_identity = 0;
     process.trusted_session_service = false;
     process.trusted_wiseowl_braind = false;
     process.trusted_wiseowl_console = false;
@@ -150,6 +188,7 @@ pub fn exec_into_process(
             process.trusted_swap_admin_service = old_trusted_swap_admin;
             process.trusted_zram_diagnostic = old_trusted_zram_diagnostic;
             process.trusted_pty_service = old_trusted_pty_service;
+            process.trusted_kv_service = old_trusted_kv_service;
             process.trusted_session_service = old_trusted_session_service;
             process.trusted_wiseowl_braind = old_trusted_wiseowl_braind;
             process.trusted_wiseowl_console = old_trusted_wiseowl_console;
@@ -157,6 +196,7 @@ pub fn exec_into_process(
             process.personality = old_personality;
             process.linux_tgid = old_linux_tgid;
             process.linux_sysv_semadj = old_linux_sysv_semadj;
+            process.service_identity = old_service_identity;
             if !activate_on_success {
                 unsafe {
                     process
@@ -731,7 +771,17 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_zram_diagnostic = is_trusted_zram_diagnostic_path(path);
     process.trusted_pty_service = is_trusted_pty_service_path(path);
     process.trusted_lock_service = is_trusted_lock_service_path(path);
+    // The KV credential syscall observes every caller's UID, so the marker is
+    // granted only to a root-launched embedded sunlight-kv image.
+    process.trusted_kv_service = uid == 0 && is_trusted_kv_service_path(path);
     process.trusted_session_service = is_trusted_session_service_path(path);
+    // A service identity is only meaningful for a root-launched embedded
+    // daemon; user processes never carry one.
+    process.service_identity = if uid == 0 {
+        trusted_service_identity_for_path(path)
+    } else {
+        0
+    };
     #[cfg(feature = "native_session_race_test")]
     if process.trusted_session_service && sched.online_cores > 1 {
         process.cpu_mask = 2;

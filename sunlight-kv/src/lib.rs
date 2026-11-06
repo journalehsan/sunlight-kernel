@@ -18,7 +18,10 @@ pub mod daemon;
 #[cfg(feature = "host")]
 pub mod storage;
 
-pub use acl::Acl;
+pub use acl::{
+    classify, name_to_u64, namespace_allows, namespace_allows_write, read_allowed, Acl, Caller,
+    KvError, Namespace, AUTH_BROKER_SERVICE, TLS_SERVICE,
+};
 pub use ipc::{Request, Response};
 pub use stats_wire::{StatsSnapshotV1, STATS_BYTES, STATS_MAGIC, STATS_VERSION};
 

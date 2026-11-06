@@ -214,6 +214,78 @@ pub enum SunlightSyscall {
     DebugLog = 99,
     /// Trusted PTY service credential lookup for an IPC caller PID.
     PtyGetCredentials = 103,
+    /// Trusted KV-service credential lookup for an IPC caller PID. Returns the
+    /// kernel-authenticated UID/GID, process generation and, for authenticated
+    /// system daemons, a stable service-identity key. Gated to sunlight-kv.
+    KvGetCallerCredentials = 108,
+}
+
+/// Canonical, kernel-authoritative service identity keys.
+///
+/// A service key is [`name_to_u64`] of the canonical service name. The kernel
+/// stamps the key for exactly the embedded service paths it trusts, and the
+/// `sunlight-kv` daemon derives matching keys from ACL identity strings, so the
+/// two sides agree without ever trusting a user-supplied service name.
+pub mod service_identity {
+    /// Key for the TLS/network service (`sunlight-tls`).
+    pub const TLS: u64 = super::name_to_u64("sunlight-tls");
+    /// Key for the authentication broker (`sunlight-uac`).
+    pub const AUTH_BROKER: u64 = super::name_to_u64("sunlight-uac");
+    /// Key for the key-value daemon itself (`sunlight-kv`).
+    pub const KV: u64 = super::name_to_u64("sunlight-kv");
+    /// Key for the storage manager (`sunlight-sm`).
+    pub const STORAGE_MANAGER: u64 = super::name_to_u64("sunlight-sm");
+    /// Key for the service manager (`sunlightd`).
+    pub const SERVICE_MANAGER: u64 = super::name_to_u64("sunlightd");
+    /// Key for the desktop session manager (`sunlight-sessiond`).
+    pub const SESSION_MANAGER: u64 = super::name_to_u64("sunlight-sessiond");
+}
+
+/// Kernel-authenticated credentials for an IPC caller, as returned by the
+/// trusted `KvGetCallerCredentials` syscall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallerCredentials {
+    /// Live caller PID (echoes the IPC badge).
+    pub pid: u64,
+    /// Address-space identity generation, for PID-reuse discrimination.
+    pub generation: u64,
+    /// Real UID from the kernel's process table.
+    pub uid: u32,
+    /// Real GID from the kernel's process table.
+    pub gid: u32,
+    /// Kernel-provenance service key, or 0 for user/unknown processes.
+    pub service_identity: u64,
+}
+
+/// Resolve the kernel-authenticated credentials of `caller_pid`.
+///
+/// Restricted to the trusted sunlight-kv daemon: an arbitrary process cannot
+/// turn a PID into another process's UID/GID or service identity. Returns `None`
+/// when the syscall is denied or the target is not live.
+pub fn kv_caller_credentials(caller_pid: u64) -> Option<CallerCredentials> {
+    // SAFETY: the kernel validates both the service identity and target PID.
+    let (packed, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::KvGetCallerCredentials,
+            caller_pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if packed == u64::MAX {
+        return None;
+    }
+    Some(CallerCredentials {
+        pid: reply.words[0],
+        generation: reply.words[1],
+        uid: packed as u32,
+        gid: (packed >> 32) as u32,
+        service_identity: reply.words[2],
+    })
 }
 
 /// Public SMBIOS-derived system identity (never includes serial/UUID).
@@ -4966,7 +5038,7 @@ fn notification_identity(owner: &str, title: &str) -> u64 {
     }
 }
 
-pub fn name_to_u64(name: &str) -> u64 {
+pub const fn name_to_u64(name: &str) -> u64 {
     let bytes = name.as_bytes();
     let mut hash = 0xcbf29ce484222325u64;
     let mut i = 0;
