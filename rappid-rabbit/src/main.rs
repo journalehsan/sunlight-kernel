@@ -42,7 +42,7 @@ use rappid_rabbit::css::{
 #[cfg(feature = "dom")]
 use rappid_rabbit::resources::request::{ResourcePriority, ResourceType};
 use sun_font::{FontRole, VecFont};
-use sunlight_fetch::backend::{perform_request, RequestResult};
+use sunlight_fetch::backend::{perform_request, perform_request_limited, RequestResult};
 use sunlight_fetch::FetchError;
 use sunlight_http::{HttpRequest, ParsedUrl};
 use sunlight_ipc::{
@@ -1026,159 +1026,143 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn fetch_images(&mut self, candidates: &[ResourceCandidate]) {
-        for candidate in candidates {
-            if candidate.resource_type != ResourceType::Image {
+        use rappid_rabbit::images::{detect_format, ImageFormat};
+        for candidate in candidates
+            .iter()
+            .filter(|c| c.resource_type == ResourceType::Image)
+        {
+            let url = &candidate.resolved_url;
+            if self.image_cache.get(url).is_some() {
                 continue;
             }
-            if self.image_cache.get(&candidate.resolved_url).is_some() {
-                self.developer_tools.console.push(
-                    ConsoleSeverity::Quiet,
-                    ConsoleSource::Fetch,
-                    format!("[RABBIT][IMAGE] cache hit url={}", candidate.resolved_url),
-                );
-                continue;
-            }
-            self.developer_tools.console.push(
-                ConsoleSeverity::Quiet,
-                ConsoleSource::Fetch,
-                format!("[RABBIT][IMAGE] discovered url={}", candidate.resolved_url),
-            );
-            let parsed_url = match ParsedUrl::parse(&candidate.resolved_url) {
+            self.log_image("fetch", url, "unknown", None, "started");
+            let parsed = match ParsedUrl::parse(url) {
                 Ok(url) => url,
                 Err(error) => {
-                    let reason = format!("invalid image URL: {error}");
+                    self.log_image("fetch", url, "unknown", None, &format!("failed: {error}"));
                     self.image_cache
-                        .insert_failed(candidate.resolved_url.clone(), reason.clone());
-                    self.developer_tools.console.push(
-                        ConsoleSeverity::Warn,
-                        ConsoleSource::Fetch,
-                        format!("[RABBIT][IMAGE] failed reason={reason}"),
-                    );
+                        .insert_failed(url.clone(), format!("invalid URL: {error}"));
                     continue;
                 }
             };
-            let request = build_get_request(&parsed_url);
+            let request = build_get_request(&parsed);
             let request_id = self.developer_tools.network.begin_request(
                 request.method,
-                candidate.resolved_url.clone(),
+                url.clone(),
                 request.headers.clone(),
                 ResourceType::Image,
                 ResourcePriority::Embedded,
-                RequestState::Queued,
+                RequestState::Connecting,
             );
-            self.developer_tools
-                .network
-                .set_request_state(request_id, RequestState::Connecting);
-            self.developer_tools.console.push(
-                ConsoleSeverity::Quiet,
-                ConsoleSource::Fetch,
-                format!(
-                    "[RABBIT][IMAGE] request started url={}",
-                    candidate.resolved_url
-                ),
-            );
-            match perform_request(parsed_url, request) {
+            match perform_request_limited(parsed, request, MAX_IMAGE_RESPONSE_BYTES) {
                 Ok(result) => {
-                    let status_code = result.response.status_code;
-                    let status_text = if result.response.status_text.is_empty() {
-                        String::from("(no reason phrase)")
-                    } else {
-                        result.response.status_text.clone()
-                    };
-                    let final_url = result.final_url.as_ref().map(format_url);
+                    let status = result.response.status_code;
                     let content_type = result.response.header("content-type").map(String::from);
-                    let byte_size = result.body.len();
+                    let final_url = result.final_url.as_ref().map(format_url);
+                    let format = detect_format(
+                        &result.body,
+                        content_type.as_deref(),
+                        final_url.as_deref().unwrap_or(url),
+                    );
+                    let dimensions =
+                        sunlight_ui::image::inspect_image_dimensions(&result.body).ok();
+                    self.log_image(
+                        "response",
+                        url,
+                        format.label(),
+                        dimensions,
+                        &format!(
+                            "status={status} bytes={} type={}",
+                            result.body.len(),
+                            content_type.as_deref().unwrap_or("missing")
+                        ),
+                    );
                     self.developer_tools.network.complete_request(
                         request_id,
-                        final_url.clone(),
-                        status_code,
-                        status_text.clone(),
+                        final_url,
+                        status,
+                        result.response.status_text.clone(),
                         result.duration_ms,
-                        Some(byte_size),
+                        Some(result.body.len()),
                         content_type.clone(),
                         result.response.headers.clone(),
                         None,
                         Some(false),
                         Some(false),
                     );
-                    if !(200..400).contains(&status_code) {
-                        let reason = format!("HTTP {status_code} {status_text}");
-                        self.image_cache
-                            .insert_failed(candidate.resolved_url.clone(), reason.clone());
-                        self.developer_tools.console.push(
-                            ConsoleSeverity::Warn,
-                            ConsoleSource::Fetch,
-                            format!("[RABBIT][IMAGE] failed reason={reason}"),
-                        );
+                    if !(200..300).contains(&status) {
+                        let reason = format!("HTTP {status}");
+                        self.log_image("http", url, format.label(), dimensions, &reason);
+                        self.image_cache.insert_failed(url.clone(), reason);
                         continue;
                     }
-                    if byte_size > MAX_IMAGE_RESPONSE_BYTES {
-                        let reason =
-                            format!("response exceeds {MAX_IMAGE_RESPONSE_BYTES} byte limit");
-                        self.image_cache
-                            .insert_failed(candidate.resolved_url.clone(), reason.clone());
-                        self.developer_tools.console.push(
-                            ConsoleSeverity::Warn,
-                            ConsoleSource::Fetch,
-                            format!("[RABBIT][IMAGE] failed reason={reason}"),
-                        );
-                        continue;
+                    #[cfg(target_os = "sunlightos")]
+                    if let Some((width, height)) = dimensions {
+                        // Progressive coefficients + raw RGB + conversion and
+                        // allocator overhead. No concurrent decodes exist.
+                        let reserve = (width as usize)
+                            .checked_mul(height as usize)
+                            .and_then(|n| n.checked_mul(12))
+                            .and_then(|n| n.checked_add(4 * 1024 * 1024));
+                        if reserve.is_none_or(|n| n > HEAP_SIZE.saturating_sub(heap_used())) {
+                            let reason = "native decode working-set limit";
+                            self.log_image(
+                                "size_validation",
+                                url,
+                                format.label(),
+                                dimensions,
+                                reason,
+                            );
+                            self.image_cache.insert_failed(url.clone(), reason);
+                            continue;
+                        }
                     }
-                    match decode_image(
-                        &result.body,
-                        content_type.as_deref(),
-                        final_url
-                            .as_deref()
-                            .unwrap_or(candidate.resolved_url.as_str()),
-                    ) {
+                    match decode_image(&result.body, content_type.as_deref(), url) {
                         Ok(decoded) => {
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Quiet,
-                                ConsoleSource::Fetch,
-                                format!(
-                                    "[RABBIT][IMAGE] response url={} status={} content_type={} bytes={}",
-                                    candidate.resolved_url,
-                                    status_code,
-                                    content_type.as_deref().unwrap_or("(missing)"),
-                                    byte_size,
-                                ),
+                            self.log_image(
+                                "decode",
+                                url,
+                                format.label(),
+                                Some((decoded.image.width, decoded.image.height)),
+                                "ok",
                             );
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Quiet,
-                                ConsoleSource::Fetch,
-                                format!(
-                                    "[RABBIT][IMAGE] decode url={} result=ok format={} size={}x{} pixels={}",
-                                    candidate.resolved_url,
-                                    decoded.format.label(),
-                                    decoded.image.width,
-                                    decoded.image.height,
-                                    decoded.image.pixels.len(),
-                                ),
-                            );
-                            self.image_cache
-                                .insert_decoded(candidate.resolved_url.clone(), decoded);
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Quiet,
-                                ConsoleSource::Fetch,
-                                format!(
-                                    "[RABBIT][IMAGE] cache key={} state=Decoded",
-                                    candidate.resolved_url
-                                ),
-                            );
+                            self.image_cache.insert_decoded(url.clone(), decoded);
+                            if self.image_cache.decoded(url).is_none() {
+                                self.log_image(
+                                    "scene_attachment",
+                                    url,
+                                    format.label(),
+                                    dimensions,
+                                    "cache rejected image",
+                                );
+                            }
                         }
                         Err(reason) => {
-                            self.image_cache
-                                .insert_failed(candidate.resolved_url.clone(), reason.clone());
-                            self.developer_tools.console.push(
-                                ConsoleSeverity::Warn,
-                                ConsoleSource::Fetch,
-                                format!("[RABBIT][IMAGE] failed reason={reason}"),
+                            let stage = if format == ImageFormat::Unknown
+                                || reason.contains("unavailable")
+                            {
+                                "unsupported_format"
+                            } else if reason.contains("limit")
+                                || reason.contains("overflow")
+                                || reason.contains("LimitExceeded")
+                            {
+                                "size_validation"
+                            } else {
+                                "decode"
+                            };
+                            self.log_image(
+                                stage,
+                                url,
+                                format.label(),
+                                dimensions,
+                                &format!("failed: {reason}"),
                             );
+                            self.image_cache.insert_failed(url.clone(), reason);
                         }
                     }
                 }
                 Err(error) => {
-                    let reason = format!("image request failed: {error}");
+                    let reason = format!("{error}");
                     self.developer_tools.network.fail_request(
                         request_id,
                         None,
@@ -1186,16 +1170,27 @@ impl RabbitApp {
                         None,
                         reason.clone(),
                     );
-                    self.image_cache
-                        .insert_failed(candidate.resolved_url.clone(), reason.clone());
-                    self.developer_tools.console.push(
-                        ConsoleSeverity::Warn,
-                        ConsoleSource::Fetch,
-                        format!("[RABBIT][IMAGE] failed reason={reason}"),
-                    );
+                    self.log_image("fetch", url, "unknown", None, &format!("failed: {reason}"));
+                    self.image_cache.insert_failed(url.clone(), reason);
                 }
             }
         }
+    }
+
+    #[cfg(feature = "dom")]
+    fn log_image(
+        &mut self,
+        stage: &str,
+        url: &str,
+        format: &str,
+        dimensions: Option<(u32, u32)>,
+        result: &str,
+    ) {
+        let (width, height) = dimensions.unwrap_or((0, 0));
+        self.developer_tools.console.push(ConsoleSeverity::Quiet, ConsoleSource::Fetch, format!(
+            "[RABBIT][IMAGE] gen={} stage={stage} url={url} format={format} size={width}x{height} {result}",
+            self.document_lifecycle.generation(),
+        ));
     }
 
     fn log_heap_stage(&self, stage: &str, generation: u64, body_bytes: Option<usize>) {
@@ -1531,7 +1526,8 @@ impl RabbitApp {
                 RenderObjectKind::Image { source_url, .. } => {
                     image_count += 1;
                     image_transitions.push(format!(
-                        "[RABBIT][IMAGE] scene node={} object={} kind=Image url={} bounds={},{} {}x{}",
+                        "[RABBIT][IMAGE] scene gen={} node={} object={} kind=Image url={} bounds={},{} {}x{}",
+                        render_state.document_id,
                         object.owner_node_id.0,
                         object.id.0,
                         source_url,
@@ -1544,7 +1540,8 @@ impl RabbitApp {
                 RenderObjectKind::ImagePlaceholder { src, .. } => {
                     placeholder_count += 1;
                     image_transitions.push(format!(
-                        "[RABBIT][IMAGE] scene node={} object={} kind=ImagePlaceholder url={} bounds={},{} {}x{}",
+                        "[RABBIT][IMAGE] scene gen={} node={} object={} kind=ImagePlaceholder url={} bounds={},{} {}x{}",
+                        render_state.document_id,
                         object.owner_node_id.0,
                         object.id.0,
                         src,
@@ -3198,5 +3195,33 @@ mod navigation_tests {
         assert!(!app.pending_fetch);
         assert!(app.completion.is_none());
         assert!(app.source.as_str().contains("worker stopped"));
+    }
+
+    #[test]
+    fn stale_image_pixels_are_dropped_even_when_loading_the_same_url_again() {
+        let mut output = document_output();
+        let decoded = decode_image(
+            include_bytes!("../../sun-img/tests/fixtures/gray.jpg"),
+            None,
+            "photo.jpg",
+        )
+        .unwrap();
+        let weak = std::sync::Arc::downgrade(&decoded.image);
+        output
+            .image_cache
+            .insert_decoded("http://example.com/photo.jpg".into(), decoded);
+        let mut app = RabbitApp::new(None);
+        app.document_lifecycle.begin_navigation();
+        app.document_lifecycle.begin_navigation(); // same URL, new generation
+        let (sender, receiver) = oneshot::channel();
+        assert!(sender.send(output).is_ok());
+        app.completion = Some(receiver);
+        app.pending_fetch = true;
+        assert!(app.perform_pending_fetch());
+        assert!(app
+            .image_cache
+            .get("http://example.com/photo.jpg")
+            .is_none());
+        assert!(weak.upgrade().is_none());
     }
 }

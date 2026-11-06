@@ -5,6 +5,23 @@ const JPEG: &[u8] = include_bytes!("fixtures/baseline.jpg");
 const EXPECTED: &[u8] = &[255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 0, 12, 34, 56, 64];
 
 #[test]
+fn direct_argb_jpeg_matches_rgba_without_an_intermediate_copy() {
+    for bytes in [
+        JPEG,
+        include_bytes!("fixtures/progressive.jpg").as_slice(),
+        include_bytes!("fixtures/gray.jpg").as_slice(),
+        include_bytes!("fixtures/cmyk.jpg").as_slice(),
+    ] {
+        let rgba = decode_image(bytes).unwrap();
+        let (w, h, argb) = sun_img::decode_jpeg_argb(bytes).unwrap();
+        assert_eq!((w, h), (rgba.width, rgba.height));
+        for (p, c) in argb.iter().zip(rgba.pixels.chunks_exact(4)) {
+            assert_eq!(*p, u32::from_be_bytes([c[3], c[0], c[1], c[2]]));
+        }
+    }
+}
+
+#[test]
 fn dimensions_can_be_read_without_pixel_data() {
     assert_eq!(sun_img::inspect_dimensions(&RGBA[..33]).unwrap(), (2, 2));
     let sof = JPEG.windows(2).position(|p| p == [0xff, 0xc0]).unwrap();

@@ -14,7 +14,7 @@ use core::fmt;
 
 mod compressed;
 pub mod crc32;
-pub use compressed::{decode_jpeg, decode_png};
+pub use compressed::{decode_jpeg, decode_jpeg_argb, decode_png};
 pub mod simg_v2;
 
 pub use simg_v2::{

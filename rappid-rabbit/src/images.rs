@@ -3,16 +3,17 @@
 //! The browser keeps decoded pixels in `sunlight_ui`'s generic raster image
 //! container so the retained scene and shared canvas remain HTML-independent.
 
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
-use miniz_oxide::inflate::decompress_to_vec_zlib_with_limit;
 use sunlight_ui::widgets::RasterImage;
 
 pub const MAX_IMAGE_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-pub const MAX_IMAGE_DECODED_BYTES: usize = 8 * 1024 * 1024;
+// A 2000x2588 portrait needs 19.7 MiB. JPEG conversion releases decoder
+// scratch before building ARGB; the single worker bounds concurrent decodes.
+pub const MAX_IMAGE_DECODED_BYTES: usize = 24 * 1024 * 1024;
 pub const MAX_IMAGE_DIMENSION: u32 = 4_096;
 pub const MAX_IMAGE_CACHE_ENTRIES: usize = 32;
-pub const MAX_IMAGE_CACHE_BYTES: usize = 12 * 1024 * 1024;
+pub const MAX_IMAGE_CACHE_BYTES: usize = 28 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -188,26 +189,29 @@ pub fn decode_image(
     }
     let format = detect_format(bytes, content_type, url);
     let image = match format {
-        ImageFormat::Png => decode_png(bytes)?,
-        ImageFormat::Tga => decode_tga(bytes)?,
+        ImageFormat::Png => {
+            let (width, height) = sunlight_ui::image::inspect_image_dimensions(bytes)
+                .map_err(|_| String::from("invalid PNG header"))?;
+            validate_pixels(width, height, width as usize * height as usize)?;
+            decode_raster(bytes)?
+        }
+        ImageFormat::Tga => {
+            let (width, height) = sunlight_ui::image::inspect_image_dimensions(bytes)
+                .map_err(|_| String::from("invalid TGA header"))?;
+            validate_pixels(width, height, width as usize * height as usize)?;
+            decode_raster(bytes)?
+        }
         ImageFormat::Jpeg => {
             let (width, height) = sunlight_ui::image::inspect_image_dimensions(bytes)
                 .map_err(|_| String::from("invalid JPEG header"))?;
             validate_pixels(width, height, width as usize * height as usize)?;
-            decode_tga(bytes)?
+            decode_raster(bytes)?
         }
         ImageFormat::Svg => {
             #[cfg(feature = "svg")]
             {
                 return Ok(DecodedImage {
-                    image: Arc::new(crate::svg::rasterize(
-                        &crate::svg::parse(bytes)?,
-                        crate::svg::SvgRasterKey {
-                            target_width: 256,
-                            target_height: 256,
-                            scale_factor: 1,
-                        },
-                    )?),
+                    image: Arc::new(crate::svg::decode(bytes)?),
                     format,
                     byte_size: bytes.len(),
                 });
@@ -226,8 +230,8 @@ pub fn decode_image(
     })
 }
 
-fn decode_tga(bytes: &[u8]) -> Result<RasterImage, String> {
-    let image = sunlight_ui::image::decode_simg(bytes).map_err(|error| format_tga_error(error))?;
+fn decode_raster(bytes: &[u8]) -> Result<RasterImage, String> {
+    let image = sunlight_ui::image::decode_image(bytes).map_err(|error| format_tga_error(error))?;
     validate_pixels(image.width, image.height, image.pixels.len())?;
     Ok(RasterImage {
         width: image.width,
@@ -254,249 +258,6 @@ fn format_tga_error(error: sunlight_ui::image::DecodeError) -> String {
     }
 }
 
-fn decode_png(bytes: &[u8]) -> Result<RasterImage, String> {
-    if bytes.len() < 33 || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        return Err(String::from("invalid PNG signature"));
-    }
-    let mut offset = 8usize;
-    let mut width = 0u32;
-    let mut height = 0u32;
-    let mut bit_depth = 0u8;
-    let mut color_type = 0u8;
-    let mut interlace = 0u8;
-    let mut palette = Vec::new();
-    let mut palette_alpha = Vec::new();
-    let mut idat = Vec::new();
-    let mut saw_ihdr = false;
-    while offset.checked_add(12).is_some_and(|end| end <= bytes.len()) {
-        let length = be_u32(&bytes[offset..offset + 4]) as usize;
-        let data_start = offset
-            .checked_add(8)
-            .ok_or_else(|| String::from("PNG chunk overflow"))?;
-        let data_end = data_start
-            .checked_add(length)
-            .ok_or_else(|| String::from("PNG chunk overflow"))?;
-        let next = data_end
-            .checked_add(4)
-            .ok_or_else(|| String::from("PNG chunk overflow"))?;
-        if next > bytes.len() {
-            return Err(String::from("truncated PNG chunk"));
-        }
-        let kind = &bytes[offset + 4..offset + 8];
-        let data = &bytes[data_start..data_end];
-        if kind == b"IHDR" {
-            if saw_ihdr || data.len() != 13 {
-                return Err(String::from("invalid PNG IHDR"));
-            }
-            width = be_u32(&data[0..4]);
-            height = be_u32(&data[4..8]);
-            bit_depth = data[8];
-            color_type = data[9];
-            if data[10] != 0 || data[11] != 0 {
-                return Err(String::from("unsupported PNG compression or filter method"));
-            }
-            interlace = data[12];
-            saw_ihdr = true;
-        } else if kind == b"IDAT" {
-            if !saw_ihdr {
-                return Err(String::from("PNG data before IHDR"));
-            }
-            if idat.len().saturating_add(data.len()) > MAX_IMAGE_RESPONSE_BYTES {
-                return Err(String::from("PNG compressed data exceeds limit"));
-            }
-            idat.extend_from_slice(data);
-        } else if kind == b"PLTE" {
-            if !saw_ihdr || !idat.is_empty() || data.is_empty() || data.len() % 3 != 0 {
-                return Err(String::from("invalid PNG palette"));
-            }
-            if data.len() / 3 > 256 {
-                return Err(String::from("PNG palette exceeds 256 entries"));
-            }
-            palette.clear();
-            palette.extend_from_slice(data);
-        } else if kind == b"tRNS" {
-            if !saw_ihdr || !idat.is_empty() {
-                return Err(String::from("invalid PNG transparency chunk"));
-            }
-            if color_type != 3 {
-                return Err(String::from(
-                    "PNG transparency is only supported for indexed images",
-                ));
-            }
-            palette_alpha.clear();
-            palette_alpha.extend_from_slice(data);
-        } else if kind == b"IEND" {
-            break;
-        }
-        offset = next;
-    }
-    if !saw_ihdr || idat.is_empty() {
-        return Err(String::from("PNG is missing required data"));
-    }
-    if width == 0 || height == 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
-        return Err(String::from("PNG dimensions exceed limit"));
-    }
-    if bit_depth != 8 || interlace != 0 || !matches!(color_type, 0 | 2 | 3 | 4 | 6) {
-        return Err(String::from("unsupported PNG color format"));
-    }
-    if color_type == 3 && (palette.is_empty() || palette.len() % 3 != 0) {
-        return Err(String::from("indexed PNG is missing a valid palette"));
-    }
-    if palette_alpha.len() > palette.len() / 3 {
-        return Err(String::from("PNG transparency exceeds palette size"));
-    }
-    let channels = match color_type {
-        0 => 1usize,
-        2 => 3,
-        3 => 1,
-        4 => 2,
-        6 => 4,
-        _ => return Err(String::from("unsupported PNG color format")),
-    };
-    let row_bytes = (width as usize)
-        .checked_mul(channels)
-        .ok_or_else(|| String::from("PNG row overflow"))?;
-    let inflated_len = (row_bytes
-        .checked_add(1)
-        .ok_or_else(|| String::from("PNG row overflow"))?)
-    .checked_mul(height as usize)
-    .ok_or_else(|| String::from("PNG output overflow"))?;
-    if inflated_len > MAX_IMAGE_DECODED_BYTES {
-        return Err(String::from("PNG decoded data exceeds limit"));
-    }
-    let inflated = decompress_to_vec_zlib_with_limit(&idat, inflated_len)
-        .map_err(|_| String::from("PNG decompression failed"))?;
-    if inflated.len() != inflated_len {
-        return Err(String::from("truncated PNG pixels"));
-    }
-    let pixel_count = (width as usize)
-        .checked_mul(height as usize)
-        .ok_or_else(|| String::from("PNG pixel overflow"))?;
-    let pixel_bytes = pixel_count
-        .checked_mul(core::mem::size_of::<u32>())
-        .ok_or_else(|| String::from("PNG pixel overflow"))?;
-    if pixel_bytes > MAX_IMAGE_DECODED_BYTES {
-        return Err(String::from("PNG pixel buffer exceeds limit"));
-    }
-    let mut pixels = vec![0u32; pixel_count];
-    let mut previous = vec![0u8; row_bytes];
-    let mut current = vec![0u8; row_bytes];
-    for y in 0..height as usize {
-        let row_start = y * (row_bytes + 1);
-        let filter = inflated[row_start];
-        current.copy_from_slice(&inflated[row_start + 1..row_start + 1 + row_bytes]);
-        unfilter_png_row(&mut current, &previous, channels, filter)?;
-        for x in 0..width as usize {
-            let source = &current[x * channels..x * channels + channels];
-            pixels[y * width as usize + x] = match color_type {
-                0 => {
-                    let gray = source[0] as u32;
-                    0xFF00_0000 | (gray << 16) | (gray << 8) | gray
-                }
-                2 => {
-                    0xFF00_0000
-                        | ((source[0] as u32) << 16)
-                        | ((source[1] as u32) << 8)
-                        | source[2] as u32
-                }
-                3 => {
-                    let index = source[0] as usize;
-                    let palette_offset = index.saturating_mul(3);
-                    if palette_offset + 2 >= palette.len() {
-                        return Err(String::from("PNG palette index is out of range"));
-                    }
-                    let alpha = palette_alpha.get(index).copied().unwrap_or(0xFF) as u32;
-                    (alpha << 24)
-                        | ((palette[palette_offset] as u32) << 16)
-                        | ((palette[palette_offset + 1] as u32) << 8)
-                        | palette[palette_offset + 2] as u32
-                }
-                4 => {
-                    let gray = source[0] as u32;
-                    ((source[1] as u32) << 24) | (gray << 16) | (gray << 8) | gray
-                }
-                6 => {
-                    ((source[3] as u32) << 24)
-                        | ((source[0] as u32) << 16)
-                        | ((source[1] as u32) << 8)
-                        | source[2] as u32
-                }
-                _ => 0,
-            };
-        }
-        core::mem::swap(&mut current, &mut previous);
-    }
-    Ok(RasterImage {
-        width,
-        height,
-        pixels,
-    })
-}
-
-fn unfilter_png_row(
-    current: &mut [u8],
-    previous: &[u8],
-    bytes_per_pixel: usize,
-    filter: u8,
-) -> Result<(), String> {
-    match filter {
-        0 => {}
-        1 => {
-            for index in bytes_per_pixel..current.len() {
-                current[index] = current[index].wrapping_add(current[index - bytes_per_pixel]);
-            }
-        }
-        2 => {
-            for (index, byte) in current.iter_mut().enumerate() {
-                *byte = byte.wrapping_add(previous[index]);
-            }
-        }
-        3 => {
-            for index in 0..current.len() {
-                let left = if index >= bytes_per_pixel {
-                    current[index - bytes_per_pixel]
-                } else {
-                    0
-                };
-                let up = previous[index];
-                current[index] = current[index].wrapping_add(((left as u16 + up as u16) / 2) as u8);
-            }
-        }
-        4 => {
-            for index in 0..current.len() {
-                let left = if index >= bytes_per_pixel {
-                    current[index - bytes_per_pixel]
-                } else {
-                    0
-                };
-                let up = previous[index];
-                let upper_left = if index >= bytes_per_pixel {
-                    previous[index - bytes_per_pixel]
-                } else {
-                    0
-                };
-                current[index] = current[index].wrapping_add(paeth(left, up, upper_left));
-            }
-        }
-        _ => return Err(String::from("unsupported PNG row filter")),
-    }
-    Ok(())
-}
-
-fn paeth(left: u8, up: u8, upper_left: u8) -> u8 {
-    let prediction = left as i32 + up as i32 - upper_left as i32;
-    let left_distance = (prediction - left as i32).unsigned_abs();
-    let up_distance = (prediction - up as i32).unsigned_abs();
-    let upper_left_distance = (prediction - upper_left as i32).unsigned_abs();
-    if left_distance <= up_distance && left_distance <= upper_left_distance {
-        left
-    } else if up_distance <= upper_left_distance {
-        up
-    } else {
-        upper_left
-    }
-}
-
 fn validate_pixels(width: u32, height: u32, pixel_count: usize) -> Result<(), String> {
     if width == 0 || height == 0 || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION {
         return Err(String::from("image dimensions exceed limit"));
@@ -510,14 +271,10 @@ fn validate_pixels(width: u32, height: u32, pixel_count: usize) -> Result<(), St
     Ok(())
 }
 
-fn be_u32(bytes: &[u8]) -> u32 {
-    u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use miniz_oxide::deflate::compress_to_vec_zlib;
+    use alloc::vec;
 
     #[test]
     fn jpeg_uses_shared_decoder_and_browser_limits() {
@@ -594,64 +351,17 @@ mod tests {
     }
 
     #[test]
-    fn decodes_indexed_png_with_palette_and_transparency() {
-        let png = png_with_chunks(
-            2,
-            1,
-            3,
-            &[b"PLTE", &[0xFF, 0, 0, 0, 0x80, 0xFF]],
-            &[b"tRNS", &[0xFF, 0x80]],
-            &[b"IDAT", &compress_to_vec_zlib(&[0, 0, 1], 6)],
-        );
-        let decoded = decode_image(&png, Some("image/png"), "https://x/indexed.png").unwrap();
-        assert_eq!(decoded.image.width, 2);
-        assert_eq!(decoded.image.height, 1);
-        assert_eq!(decoded.image.pixels, vec![0xFFFF_0000, 0x8000_80FF]);
-    }
-
-    #[test]
-    fn indexed_png_without_palette_reports_its_specific_error() {
-        let png = png_with_chunks(
-            1,
-            1,
-            3,
-            &[],
-            &[],
-            &[b"IDAT", &compress_to_vec_zlib(&[0, 0], 6)],
-        );
-        assert_eq!(
-            decode_image(&png, Some("image/png"), "https://x/indexed.png"),
-            Err(String::from("indexed PNG is missing a valid palette"))
-        );
-    }
-
-    fn png_with_chunks(
-        width: u32,
-        height: u32,
-        color_type: u8,
-        first: &[&[u8]],
-        second: &[&[u8]],
-        idat: &[&[u8]],
-    ) -> Vec<u8> {
-        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
-        let mut ihdr = Vec::new();
-        ihdr.extend_from_slice(&width.to_be_bytes());
-        ihdr.extend_from_slice(&height.to_be_bytes());
-        ihdr.extend_from_slice(&[8, color_type, 0, 0, 0]);
-        push_png_chunk(&mut png, b"IHDR", &ihdr);
-        for chunk in [first, second, idat] {
-            if let [kind, data] = chunk {
-                push_png_chunk(&mut png, kind, data);
-            }
+    fn shared_png_palette_transparency_and_adam7_reach_rabbit() {
+        for bytes in [
+            include_bytes!("../../sun-img/tests/fixtures/palette.png").as_slice(),
+            include_bytes!("../../sun-img/tests/fixtures/adam7.png").as_slice(),
+        ] {
+            let decoded = decode_image(bytes, Some("image/png"), "https://x/image.png").unwrap();
+            assert_eq!((decoded.image.width, decoded.image.height), (2, 2));
+            assert_eq!(
+                decoded.image.pixels,
+                vec![0xffff0000, 0x8000ff00, 0x000000ff, 0x400c2238]
+            );
         }
-        push_png_chunk(&mut png, b"IEND", &[]);
-        png
-    }
-
-    fn push_png_chunk(png: &mut Vec<u8>, kind: &[u8], data: &[u8]) {
-        png.extend_from_slice(&(data.len() as u32).to_be_bytes());
-        png.extend_from_slice(kind);
-        png.extend_from_slice(data);
-        png.extend_from_slice(&0u32.to_be_bytes());
     }
 }

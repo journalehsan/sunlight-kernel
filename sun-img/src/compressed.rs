@@ -1,5 +1,5 @@
 //! Compressed interchange formats, decoded without std or platform SIMD.
-use alloc::{format, vec, vec::Vec};
+use alloc::{format, vec::Vec};
 use zune_core::{colorspace::ColorSpace, options::DecoderOptions};
 
 use crate::{ImageError, ImageRgba8, MAX_DECODED_BYTES, MAX_DIMENSION};
@@ -72,6 +72,44 @@ pub fn decode_png(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
 
 /// Decode baseline or progressive JPEG into opaque RGBA8.
 pub fn decode_jpeg(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
+    let (width, height, raw, colorspace) = decode_jpeg_raw(bytes)?;
+    let pixels = into_rgba(raw, colorspace, checked_len(width, height)?)?;
+    Ok(ImageRgba8 {
+        width,
+        height,
+        pixels,
+    })
+}
+
+/// Decode directly into the document renderer's straight ARGB pixels. Release
+/// progressive coefficient storage before conversion, and avoid an RGBA copy.
+pub fn decode_jpeg_argb(bytes: &[u8]) -> Result<(u32, u32, Vec<u32>), ImageError> {
+    let (width, height, raw, colorspace) = decode_jpeg_raw(bytes)?;
+    let components = match colorspace {
+        ColorSpace::Luma => 1,
+        ColorSpace::RGB => 3,
+        _ => return Err(ImageError::UnsupportedBitDepth),
+    };
+    let count = checked_len(width, height)? / 4;
+    if raw.len() != count * components {
+        return Err(ImageError::InvalidDimensions);
+    }
+    let mut pixels = Vec::new();
+    pixels
+        .try_reserve_exact(count)
+        .map_err(|_| decode_error("out of memory"))?;
+    for p in raw.chunks_exact(components) {
+        let (r, g, b) = if components == 1 {
+            (p[0], p[0], p[0])
+        } else {
+            (p[0], p[1], p[2])
+        };
+        pixels.push(u32::from_be_bytes([255, r, g, b]));
+    }
+    Ok((width, height, pixels))
+}
+
+fn decode_jpeg_raw(bytes: &[u8]) -> Result<(u32, u32, Vec<u8>, ColorSpace), ImageError> {
     check_input(bytes)?;
     let (width, height) = jpeg_dimensions(bytes)?;
     checked_len(width, height)?;
@@ -102,14 +140,12 @@ pub fn decode_jpeg(bytes: &[u8]) -> Result<ImageRgba8, ImageError> {
     if raw_len > len {
         return Err(ImageError::InvalidDimensions);
     }
-    let mut raw = vec![0; raw_len];
+    let mut raw = Vec::new();
+    raw.try_reserve_exact(raw_len)
+        .map_err(|_| decode_error("out of memory"))?;
+    raw.resize(raw_len, 0);
     decoder.decode_into(&mut raw).map_err(decode_error)?;
-    let pixels = into_rgba(raw, colorspace, len)?;
-    Ok(ImageRgba8 {
-        width,
-        height,
-        pixels,
-    })
+    Ok((width, height, raw, colorspace))
 }
 
 /// Read JPEG dimensions without allocating or decoding entropy data. A partial

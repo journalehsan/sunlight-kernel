@@ -400,15 +400,12 @@ sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 golden-fish = { path = "../golden-fish", optional = true }
 tokio = { version = "1.48", default-features = false, features = ["rt", "sync", "time"] }
-miniz_oxide = "0.8"
-# Optional SVG renderer on the native std target.
-resvg = { version = "0.45.1", default-features = false, optional = true }
 
 [features]
-default = ["std", "dom"]
+default = ["std", "dom", "svg"]
 # Rabbit always links std; retained as an explicit platform capability flag.
 std = []
-svg = ["dep:resvg"]
+svg = ["sunlight-ui/svg"]
 # "dom" enables Golden Fish HTML parsing and the interactive DOM tree inspector.
 # Native std uses Golden Fish's `tl` parser.
 dom = ["dep:golden-fish"]

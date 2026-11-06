@@ -1990,8 +1990,13 @@ impl<'a> DocumentCanvas<'a> {
                         Color::rgb(0x8B, 0x86, 0x80),
                     );
                 }
-                RenderObjectKind::Image { image, .. } => {
-                    draw_raster_image(canvas, clipped, bounds, image);
+                RenderObjectKind::Image {
+                    image, source_url, ..
+                } => {
+                    let painted = draw_raster_image(canvas, clipped, bounds, image);
+                    #[cfg(all(feature = "app", target_os = "sunlightos"))]
+                    log_image_paint(scene.document_id, object.id.0, source_url, image, painted);
+                    let _ = (source_url, painted);
                 }
                 RenderObjectKind::Control {
                     label,
@@ -2417,13 +2422,19 @@ fn paint_box_shadow(
     }
 }
 
-fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, image: &RasterImage) {
+fn draw_raster_image(
+    canvas: &mut Canvas,
+    clipped: Rect,
+    destination: Rect,
+    image: &RasterImage,
+) -> usize {
     if image.width == 0
         || image.height == 0
         || image.pixels.len() != (image.width as usize).saturating_mul(image.height as usize)
     {
-        return;
+        return 0;
     }
+    let mut painted = 0;
     for destination_y in clipped.y..clipped.bottom() {
         let relative_y = destination_y.saturating_sub(destination.y) as u32;
         let source_y = relative_y.saturating_mul(image.height) / destination.h.max(1);
@@ -2444,6 +2455,7 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
             let rgb = source & 0x00ff_ffff;
             if alpha == 255 {
                 canvas.pixels[destination_index] = rgb;
+                painted += 1;
                 continue;
             }
             let existing = canvas.pixels[destination_index];
@@ -2459,8 +2471,34 @@ fn draw_raster_image(canvas: &mut Canvas, clipped: Rect, destination: Rect, imag
                 (((source_red * alpha + destination_red * inverse_alpha) >> 8) << 16)
                     | (((source_green * alpha + destination_green * inverse_alpha) >> 8) << 8)
                     | ((source_blue * alpha + destination_blue * inverse_alpha) >> 8);
+            painted += 1;
         }
     }
+    painted
+}
+
+#[cfg(all(feature = "app", target_os = "sunlightos"))]
+fn log_image_paint(generation: u64, object: u64, url: &str, image: &RasterImage, painted: usize) {
+    use core::sync::atomic::{AtomicU64, Ordering};
+    // Fixed storage; report first paint per image/object/generation instead of
+    // logging every frame. No image lifetime or framebuffer ownership retained.
+    static SEEN: [AtomicU64; 64] = [const { AtomicU64::new(0) }; 64];
+    let key = (image.pixels.as_ptr() as u64)
+        .wrapping_add(generation.rotate_left(19))
+        .wrapping_add(object)
+        .max(1);
+    if SEEN[object as usize % SEEN.len()].swap(key, Ordering::Relaxed) == key {
+        return;
+    }
+    let url: String = url
+        .chars()
+        .take(512)
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[DOCUMENT][IMAGE] gen={generation} stage=paint object={object} url={url} format=argb size={}x{} painted={painted}\n",
+        image.width, image.height,
+    ));
 }
 
 /// Shared vertical-scroll geometry for retained document surfaces.

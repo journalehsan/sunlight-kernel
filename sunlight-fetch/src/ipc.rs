@@ -160,6 +160,185 @@ pub fn read_body_full(
     read_body_full_impl(handle, request_method, response, initial_body, progress)
 }
 
+/// Collect an untrusted subresource with a hard wire-byte bound. Chunk framing
+/// counts against the bound too. Reject Content-Length before allocation.
+pub fn read_body_limited(
+    handle: &mut TcpHandle,
+    request_method: &str,
+    response: &HttpResponse,
+    initial_body: &[u8],
+    limit: usize,
+) -> FetchResult<Vec<u8>> {
+    collect_body_limited(request_method, response, initial_body, limit, || {
+        handle.recv(4096)
+    })
+}
+
+fn collect_body_limited(
+    request_method: &str,
+    response: &HttpResponse,
+    initial_body: &[u8],
+    limit: usize,
+    mut receive: impl FnMut() -> FetchResult<Vec<u8>>,
+) -> FetchResult<Vec<u8>> {
+    let too_large = || FetchError::IoError(String::from("response exceeds byte limit"));
+    if response_has_no_body(request_method, response) {
+        return Ok(Vec::new());
+    }
+    if response.content_length().is_some_and(|n| n > limit) || initial_body.len() > limit {
+        return Err(too_large());
+    }
+    let expected = if response.is_chunked() {
+        None
+    } else {
+        response.content_length()
+    };
+    let mut body = Vec::new();
+    body.try_reserve_exact(initial_body.len())
+        .map_err(|_| too_large())?;
+    body.extend_from_slice(initial_body);
+    let mut chunk_offset = 0;
+    loop {
+        check_interrupted()?;
+        if response.is_chunked() && chunked_finished(&body, &mut chunk_offset)? {
+            break;
+        }
+        if expected.is_some_and(|n| body.len() >= n) {
+            break;
+        }
+        let chunk = receive()?;
+        if chunk.is_empty() {
+            break;
+        }
+        if chunk.len() > limit.saturating_sub(body.len()) {
+            return Err(too_large());
+        }
+        body.try_reserve_exact(chunk.len())
+            .map_err(|_| too_large())?;
+        body.extend_from_slice(&chunk);
+    }
+    if response.is_chunked() {
+        return decode_chunked_body(&body);
+    }
+    if let Some(expected) = expected {
+        if body.len() < expected {
+            return Err(FetchError::ChunkIntegrityError {
+                chunk_id: 0,
+                expected,
+                got: body.len(),
+            });
+        }
+        body.truncate(expected);
+    }
+    Ok(body)
+}
+
+// Scan framing incrementally, so a complete chunked resource does not wait for
+// connection EOF and fragmented chunks do not cause repeated full decoding.
+fn chunked_finished(bytes: &[u8], offset: &mut usize) -> FetchResult<bool> {
+    while let Some(end) = find_crlf(bytes, *offset) {
+        let size = core::str::from_utf8(&bytes[*offset..end])
+            .ok()
+            .and_then(|s| usize::from_str_radix(s.split(';').next()?.trim(), 16).ok())
+            .ok_or_else(|| FetchError::IoError(String::from("invalid chunk size")))?;
+        let start = end + 2;
+        if size == 0 {
+            let mut trailer = start;
+            while let Some(end) = find_crlf(bytes, trailer) {
+                if end == trailer {
+                    return Ok(true);
+                }
+                trailer = end + 2;
+            }
+            return Ok(false);
+        }
+        let end = start
+            .checked_add(size)
+            .and_then(|n| n.checked_add(2))
+            .ok_or_else(|| FetchError::IoError(String::from("chunk size overflow")))?;
+        if end > bytes.len() {
+            return Ok(false);
+        }
+        if &bytes[end - 2..end] != b"\r\n" {
+            return Err(FetchError::IoError(String::from(
+                "invalid chunk terminator",
+            )));
+        }
+        *offset = end;
+    }
+    Ok(false)
+}
+
+#[cfg(test)]
+mod body_limit_tests {
+    use super::*;
+
+    fn response(header: &str, value: &str) -> HttpResponse {
+        HttpResponse {
+            status_code: 200,
+            status_text: String::from("OK"),
+            headers: vec![(String::from(header), String::from(value))],
+            header_len: 0,
+        }
+    }
+
+    #[test]
+    fn rejects_declared_oversize_before_receiving() {
+        assert!(collect_body_limited(
+            "GET",
+            &response("content-length", "100"),
+            b"",
+            8,
+            || panic!("must reject before reading")
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn bounds_unknown_lengths_and_validates_truncation() {
+        assert!(
+            collect_body_limited("GET", &response("x", ""), b"1234", 6, || Ok(Vec::from(
+                &b"789"[..]
+            )))
+            .is_err()
+        );
+        assert!(
+            collect_body_limited("GET", &response("content-length", "5"), b"1234", 8, || Ok(
+                Vec::new()
+            ))
+            .is_err()
+        );
+        assert_eq!(
+            collect_body_limited(
+                "GET",
+                &response("content-length", "4"),
+                b"1234",
+                4,
+                || panic!("already complete")
+            )
+            .unwrap(),
+            b"1234"
+        );
+    }
+
+    #[test]
+    fn chunked_completion_is_bounded_and_does_not_wait_for_eof() {
+        let response = response("transfer-encoding", "chunked");
+        let mut chunks = [b"bc\r\n0\r".to_vec(), b"\n\r\n".to_vec()].into_iter();
+        assert_eq!(
+            collect_body_limited("GET", &response, b"3\r\na", 32, || Ok(chunks
+                .next()
+                .expect("must stop at terminating chunk")))
+            .unwrap(),
+            b"abc"
+        );
+        assert!(collect_body_limited("GET", &response, b"9\r\n", 8, || Ok(
+            b"123456789\r\n".to_vec()
+        ))
+        .is_err());
+    }
+}
+
 fn check_interrupted() -> FetchResult<()> {
     if is_interrupted() {
         Err(FetchError::Interrupted)

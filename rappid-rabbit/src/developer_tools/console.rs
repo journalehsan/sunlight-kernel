@@ -77,10 +77,22 @@ impl ConsoleState {
         source: ConsoleSource,
         message: impl Into<String>,
     ) {
+        let message: String = message.into();
+        // Image diagnostics must survive the owned worker/UI handoff and also
+        // reach serial logs. Strip control characters from untrusted URLs.
+        let message: String = message
+            .chars()
+            .take(2048)
+            .map(|c| if c.is_control() { ' ' } else { c })
+            .collect();
+        #[cfg(target_os = "sunlightos")]
+        if message.starts_with("[RABBIT][IMAGE]") {
+            sunlight_ipc::debug_log(&format!("{message}\n"));
+        }
         self.entries.push(ConsoleEntry {
             severity,
             source,
-            message: message.into(),
+            message,
             timestamp: None,
         });
         self.rendered_text_dirty = true;

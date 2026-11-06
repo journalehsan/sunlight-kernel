@@ -1992,8 +1992,6 @@ name = "rappid-rabbit"
 version = "0.2.6526-alpha.2"
 dependencies = [
  "golden-fish",
- "miniz_oxide",
- "resvg",
  "sun-font",
  "sunlight-fetch",
  "sunlight-http",

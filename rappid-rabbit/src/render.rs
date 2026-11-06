@@ -226,9 +226,24 @@ impl DocumentRenderState {
         self.scene_generation = self.scene_generation.saturating_add(1);
     }
 
-    pub fn rebuild_for_images(&mut self, measurer: &dyn TextMeasurer, images: ImageCache) {
+    pub fn rebuild_for_images(&mut self, measurer: &dyn TextMeasurer, images: ImageCache) -> bool {
+        self.complete_images(self.document_id, measurer, images)
+    }
+
+    /// Owned completion for a document generation. No parsing/fetching on the
+    /// UI thread; repeat completions need no layout or scene update.
+    pub fn complete_images(
+        &mut self,
+        document_id: u64,
+        measurer: &dyn TextMeasurer,
+        images: ImageCache,
+    ) -> bool {
+        if document_id != self.document_id || images == self.images {
+            return false;
+        }
         self.images = images;
         self.rebuild(self.viewport, measurer);
+        true
     }
 
     /// Patch one retained control after browser-owned form state changes.

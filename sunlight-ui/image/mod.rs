@@ -1,10 +1,14 @@
 pub mod blit;
+#[cfg(feature = "svg")]
+mod document_svg;
 mod icon;
 pub mod icon_theme;
 pub mod mime_icon;
 pub mod mono_icon;
 pub mod simg;
 pub mod tga;
+#[cfg(feature = "svg")]
+pub use document_svg::decode_document_svg;
 
 pub use blit::{
     apply_coverage, blend_source_over, clamp_corner_radius, map_src_fp, premultiply,

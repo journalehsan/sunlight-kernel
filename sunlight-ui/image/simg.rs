@@ -85,6 +85,15 @@ pub fn decode(data: &[u8]) -> Result<RgbaImage, DecodeError> {
     if sun_img::is_simg_v2(data) {
         return decode_simg_v2(data);
     }
+    if sun_img::detect_format(data) == sun_img::ImageFormat::Jpeg {
+        let (width, height, pixels) =
+            sun_img::decode_jpeg_argb(data).map_err(|_| DecodeError::CompressedImageInvalid)?;
+        return Ok(RgbaImage {
+            width,
+            height,
+            pixels,
+        });
+    }
     if matches!(
         sun_img::detect_format(data),
         sun_img::ImageFormat::Png | sun_img::ImageFormat::Jpeg

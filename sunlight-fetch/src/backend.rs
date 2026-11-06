@@ -62,6 +62,30 @@ pub fn perform_request(url: ParsedUrl, request: HttpRequest) -> FetchResult<Requ
     pending.read_body(None)
 }
 
+/// Bounded collection for images and other untrusted embedded resources.
+pub fn perform_request_limited(
+    url: ParsedUrl,
+    request: HttpRequest,
+    limit: usize,
+) -> FetchResult<RequestResult> {
+    ipc::acquire_capabilities()?;
+    let addr = ipc::dns_resolve(&url.host)?;
+    let mut pending = begin_request_from_resolved(url, addr, request, None, None, &[])?;
+    let body = ipc::read_body_limited(
+        &mut pending.handle,
+        pending.request_method,
+        &pending.response,
+        &pending.initial_body,
+        limit,
+    );
+    Ok(RequestResult {
+        response: pending.response,
+        body: body?,
+        final_url: Some(pending.final_url),
+        duration_ms: elapsed_ms(pending.started_at),
+    })
+}
+
 pub(crate) fn begin_request_from_resolved(
     start_url: ParsedUrl,
     start_addr: ResolvedAddr,
