@@ -2887,12 +2887,21 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
     0
 }
 
+/// A self-IPI may arrive after another userspace instruction or SYSCALL.
+/// Replay only the registered WAIT, preserving its args and original deadline,
+/// until the serialized terminal event has detached it. No lock is held here.
+fn replay_futex_wait(frame: &mut SyscallFrame, syscall: u64) -> u64 {
+    frame.rcx = frame.rcx.saturating_sub(2);
+    sched::request_reschedule_after_sysret();
+    syscall
+}
+
 /// Native private-address-space futex. Compare and registration are serialized
 /// with wake and VM mutation. Spurious wakeups are permitted; userspace loops.
 /// WAIT: rdi=u32 pointer, rsi=0, rdx=expected, r10=absolute monotonic ns
 /// (u64::MAX means indefinite). WAKE: rsi=1, rdx=maximum wake count.
 /// RESULT: rsi=2, consume this thread's completed WAIT result (0=wake, 2=timeout).
-fn sys_native_futex(frame: &SyscallFrame) -> u64 {
+fn sys_native_futex(frame: &mut SyscallFrame) -> u64 {
     let address = frame.rdi;
     if address & 3 != 0 || frame.rsi > 2 {
         return u64::MAX - 5;
@@ -2912,11 +2921,24 @@ fn sys_native_futex(frame: &SyscallFrame) -> u64 {
                 process.native_futex_result = None;
                 result
             }
-            _ => ERR_EINVAL,
+            _ => {
+                #[cfg(all(debug_assertions, feature = "futex_lifecycle_diag"))]
+                crate::serial_println!("[T4B-DIAG] missing-result cpu={} tid={} inc={} state={:?} address={:#x} wait={:?} deadline={:?} receipt={:?}",crate::sched::current_cpu_id(),process.pid,process.foreground.incarnation,process.state,address,process.native_futex_wait,process.native_futex_deadline,process.native_futex_result);
+                ERR_EINVAL
+            },
         };
     }
     if frame.rsi == 0 {
-        sched.current_process_mut().native_futex_result = None;
+        let process = sched.current_process_mut();
+        if process.futex_return_pending == Some((address, false)) {
+            if process.native_futex_wait.is_none() {
+                process.futex_return_pending = None;
+                return 0;
+            }
+            drop(sched);
+            return replay_futex_wait(frame, 155);
+        }
+        process.native_futex_result = None;
     }
     let Some(hhdm) = crate::HHDM_REQ.response().map(|r| VirtAddr::new(r.offset)) else {
         return u64::MAX;
@@ -2924,7 +2946,12 @@ fn sys_native_futex(frame: &SyscallFrame) -> u64 {
     let process = sched.current_process();
     let value = match crate::memory::user::read_process_futex_u32(process, hhdm, address) {
         Ok(value) => value,
-        Err(_) => return u64::MAX - 5,
+        Err(error) => {
+            #[cfg(all(debug_assertions, feature = "futex_lifecycle_diag"))]
+            crate::serial_println!("[T4B-DIAG] invalid-word cpu={} tid={} inc={} op={} address={:#x} error={:?}",crate::sched::current_cpu_id(),process.pid,process.foreground.incarnation,frame.rsi,address,error);
+            let _ = error;
+            return u64::MAX - 5;
+        }
     };
     let identity = process.address_space.identity();
     if frame.rsi == 1 {
@@ -2943,6 +2970,7 @@ fn sys_native_futex(frame: &SyscallFrame) -> u64 {
         return 2;
     }
     let idx = sched.current_process_index().unwrap_or(0);
+    sched.processes[idx].futex_return_pending = Some((address, false));
     sched.processes[idx].native_futex_wait = Some(address);
     sched.processes[idx].native_futex_deadline = (deadline != u64::MAX).then_some(deadline);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
@@ -2955,8 +2983,7 @@ fn sys_native_futex(frame: &SyscallFrame) -> u64 {
     drop(sched);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
     crate::sched::t4a_fixture::point(address, frame.rsi, 4);
-    sched::request_reschedule_after_sysret();
-    0
+    replay_futex_wait(frame, 155)
 }
 
 /// Only report completion once the thread no longer executes on any core.
@@ -3185,7 +3212,7 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
 /// validation, the atomic comparison, registration and BlockedOnIo with wake
 /// and mapping retirement. The deferred scheduling request cannot re-block a
 /// waiter already made Ready by another CPU.
-fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
+fn sys_linux_futex(frame: &mut SyscallFrame) -> u64 {
     let address = frame.rdi;
     let op = frame.rsi;
     let command = op & 0x7f;
@@ -3208,6 +3235,18 @@ fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
     let current = sched.current_process();
     if !current.is_linux_compat() || current.is_exiting() {
         return linux_errno(38);
+    }
+    if command == 0 && current.futex_return_pending == Some((address, true)) {
+        if current
+            .linux_state()
+            .and_then(|state| state.futex_wait)
+            .is_none()
+        {
+            sched.current_process_mut().futex_return_pending = None;
+            return 0;
+        }
+        drop(sched);
+        return replay_futex_wait(frame, 202);
     }
     let value = match crate::memory::user::read_process_futex_u32(current, hhdm, address) {
         Ok(value) => value,
@@ -3233,6 +3272,7 @@ fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
     if value != frame.rdx as u32 {
         return linux_errno(11); // EAGAIN
     }
+    sched.current_process_mut().futex_return_pending = Some((address, true));
     if let Some(state) = sched.current_process_mut().linux_state_mut() {
         state.futex_wait = Some(address);
     }
@@ -3247,8 +3287,7 @@ fn sys_linux_futex(frame: &SyscallFrame) -> u64 {
     drop(sched);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
     crate::sched::t4a_fixture::point(address, command, 4);
-    sched::request_reschedule_after_sysret();
-    0
+    replay_futex_wait(frame, 202)
 }
 
 fn sys_linux_exit_group(code: i32) -> ! {

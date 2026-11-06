@@ -113,6 +113,7 @@ pub(crate) mod t2r_fixture;
 #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
 pub(crate) mod t3r_fixture;
 #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
+#[cfg_attr(feature = "futex_lifecycle_test", path = "t4b_fixture.rs")]
 pub(crate) mod t4a_fixture;
 mod thread_admission;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);

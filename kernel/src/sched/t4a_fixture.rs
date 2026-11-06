@@ -183,7 +183,7 @@ pub(crate) fn registered(p: &Process) {
     );
     g.registered[role] += 1;
 }
-pub(crate) fn completing(p: &Process) {
+pub(crate) fn completing(p: &Process, _result: u64) {
     if p.native_futex_wait.is_none() && p.linux_state().and_then(|s| s.futex_wait).is_none() {
         return;
     }
@@ -470,6 +470,7 @@ pub(crate) fn query(command: &str) -> Option<u64> {
                     p.native_futex_wait.is_none()
                         && p.native_futex_deadline.is_none()
                         && p.native_futex_result.is_none()
+                        && p.futex_return_pending.is_none()
                 );
                 assert_eq!(p.linux_state().and_then(|st| st.futex_wait), None);
                 assert!(

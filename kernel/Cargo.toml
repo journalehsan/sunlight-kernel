@@ -672,6 +672,10 @@ thread_admission_test = []
 thread_lifecycle_race_test = []
 # T4A bounded ring-3 futex race controls; excluded from production.
 atomic_futex_test = []
+# T4B lifecycle fixture reuses the T4A hook locations; debug images only.
+futex_lifecycle_test = ["atomic_futex_test"]
+# Negative-result diagnostics for a bounded std fixture; debug only.
+futex_lifecycle_diag = []
 thread_migration_test = []
 # Isolated hostile-RSP and sibling-stack controls, debug images only.
 syscall_stack_test = ["scheduler_b_test"]

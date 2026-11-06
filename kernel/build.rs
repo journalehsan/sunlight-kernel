@@ -113,10 +113,15 @@ fn main() {
     {
         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
         let out = PathBuf::from(env::var("OUT_DIR").unwrap());
-        println!("cargo:rerun-if-changed=../tools/helios-probes/atomic-futex-probe.rs");
+        let probe = if env::var_os("CARGO_FEATURE_FUTEX_LIFECYCLE_TEST").is_some() {
+            "tools/helios-probes/futex-lifecycle-probe.rs"
+        } else {
+            "tools/helios-probes/atomic-futex-probe.rs"
+        };
+        println!("cargo:rerun-if-changed=../{probe}");
         assert!(
             Command::new(env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()))
-                .arg(root.join("tools/helios-probes/atomic-futex-probe.rs"))
+                .arg(root.join(probe))
                 .args([
                     "--edition=2021",
                     "--target=x86_64-unknown-none",

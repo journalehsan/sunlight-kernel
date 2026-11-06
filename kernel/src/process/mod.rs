@@ -142,6 +142,9 @@ pub struct Process {
     pub native_futex_deadline: Option<u64>,
     /// One-shot (address, result) receipt, owned by the waiting thread.
     pub native_futex_result: Option<(u64, u64)>,
+    /// Registered WAIT whose userspace return is still pending (address, Linux).
+    /// Completion detaches the waiter; syscall replay then retires this scalar.
+    pub futex_return_pending: Option<(u64, bool)>,
     /// Native pipe operation blocked on the ring becoming readable/writable.
     pub native_pipe_wait: Option<(u32, bool)>,
     /// Native bounded pipe-readiness set; wakeups recheck the supplied fds.
@@ -385,13 +388,14 @@ impl Process {
     pub(crate) fn clear_futex_wait(&mut self) {
         self.complete_futex_wait(0);
         self.native_futex_result = None;
+        self.futex_return_pending = None;
     }
 
     /// The first serialized completion detaches the registration and owns its
     /// result. Subsequent generic wake bookkeeping cannot overwrite it.
     pub(crate) fn complete_futex_wait(&mut self, result: u64) {
         #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
-        crate::sched::t4a_fixture::completing(self);
+        crate::sched::t4a_fixture::completing(self, result);
         if let Some(address) = self.native_futex_wait.take() {
             self.native_futex_result = Some((address, result));
         }
@@ -479,6 +483,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_futex_result: None,
+            futex_return_pending: None,
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
@@ -713,6 +718,7 @@ impl Process {
             native_futex_wait: None,
             native_futex_deadline: None,
             native_futex_result: None,
+            futex_return_pending: None,
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
