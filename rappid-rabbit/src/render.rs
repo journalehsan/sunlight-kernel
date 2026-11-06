@@ -25,6 +25,7 @@ use crate::{
     },
     form::FormControlState,
     images::ImageCache,
+    layout::{self, FontMeasurer as LayoutFontMeasurer, ImageMetrics, SceneImageSource},
     resources::discovery::resolve_url,
 };
 
@@ -36,6 +37,82 @@ pub const MAX_LIST_MARKERS: usize = 2_048;
 pub const MAX_DOCUMENT_DIMENSION: u32 = 16_384;
 /// Bump this when a future in-memory cache must invalidate retained scenes.
 pub const DOCUMENT_SCENE_FORMAT_VERSION: u32 = 1;
+
+/// Selects which layout engine produces the retained scene.
+///
+/// `New` is the primary two-pass arena engine in `crate::layout`.
+/// `Legacy` retains the `render.rs` builder for runtime fallback and diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LayoutBackend {
+    Legacy,
+    #[default]
+    New,
+}
+
+impl LayoutBackend {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Legacy => "legacy",
+            Self::New => "new",
+        }
+    }
+
+    pub const fn display_name(self) -> &'static str {
+        match self {
+            Self::Legacy => "Legacy",
+            Self::New => "Modern",
+        }
+    }
+
+    pub const fn toggled(self) -> Self {
+        match self {
+            Self::Legacy => Self::New,
+            Self::New => Self::Legacy,
+        }
+    }
+}
+
+/// One-line per-backend render diagnostic.  Emitted after every rebuild so a
+/// developer can see which engine produced the current scene and how many
+/// paint-affecting features each path covered.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LayoutDiagnostics {
+    pub backend: LayoutBackend,
+    pub object_count: usize,
+    pub image_count: usize,
+    pub placeholder_count: usize,
+    pub link_count: usize,
+    pub control_count: usize,
+    /// Painted features the selected backend could not represent, if any.
+    pub unsupported: Vec<&'static str>,
+}
+
+impl LayoutDiagnostics {
+    pub fn summary(&self) -> alloc::string::String {
+        if self.unsupported.is_empty() {
+            format!(
+                "layout backend={} objects={} images={} placeholders={} links={} controls={}",
+                self.backend.label(),
+                self.object_count,
+                self.image_count,
+                self.placeholder_count,
+                self.link_count,
+                self.control_count,
+            )
+        } else {
+            format!(
+                "layout backend={} objects={} images={} placeholders={} links={} controls={} unsupported=[{}]",
+                self.backend.label(),
+                self.object_count,
+                self.image_count,
+                self.placeholder_count,
+                self.link_count,
+                self.control_count,
+                self.unsupported.join(","),
+            )
+        }
+    }
+}
 
 /// Browser name for the generic canvas document-local node identity.
 pub type DomNodeId = DocumentNodeId;
@@ -270,6 +347,8 @@ pub struct DocumentRenderState {
     pub last_patch: ScenePatch,
     pub scene_generation: u64,
     pub viewport: Size,
+    pub backend: LayoutBackend,
+    pub diagnostics: LayoutDiagnostics,
     images: ImageCache,
 }
 
@@ -310,7 +389,23 @@ impl DocumentRenderState {
             measurer,
             &images,
         );
-        let current_scene = scene_from_layout(document_id, viewport, &layout_tree);
+        let backend = LayoutBackend::default();
+        let current_scene = match backend {
+            LayoutBackend::Legacy => scene_from_layout(document_id, viewport, &layout_tree),
+            LayoutBackend::New => new_engine_scene(
+                document_id,
+                &final_url,
+                &dom,
+                &styles,
+                viewport,
+                measurer,
+                &images,
+            ),
+        };
+        let mut diagnostics = diagnose_scene(backend, &current_scene);
+        if backend == LayoutBackend::New {
+            diagnostics.unsupported = unsupported_features_new_engine(&dom, &styles);
+        }
         Self {
             document_id,
             final_url,
@@ -322,6 +417,8 @@ impl DocumentRenderState {
             last_patch: ScenePatch::default(),
             scene_generation: 1,
             viewport,
+            backend,
+            diagnostics,
             images,
         }
     }
@@ -338,6 +435,9 @@ impl DocumentRenderState {
     }
 
     pub fn rebuild(&mut self, viewport: Size, measurer: &dyn TextMeasurer) {
+        // The legacy tree is always built so the DOM inspector keeps its layout
+        // box / float / table / marker correlation regardless of which engine
+        // produced the retained scene.  Only the scene source is switched.
         let layout_tree = build_layout_tree_for_url_with_images(
             &self.dom,
             &self.styles,
@@ -346,13 +446,42 @@ impl DocumentRenderState {
             measurer,
             &self.images,
         );
-        let scene = scene_from_layout(self.document_id, viewport, &layout_tree);
+        let scene = match self.backend {
+            LayoutBackend::Legacy => scene_from_layout(self.document_id, viewport, &layout_tree),
+            LayoutBackend::New => new_engine_scene(
+                self.document_id,
+                &self.final_url,
+                &self.dom,
+                &self.styles,
+                viewport,
+                measurer,
+                &self.images,
+            ),
+        };
+        self.diagnostics = diagnose_scene(self.backend, &scene);
+        if self.backend == LayoutBackend::New {
+            self.diagnostics.unsupported = unsupported_features_new_engine(&self.dom, &self.styles);
+        }
         self.last_patch = diff_scenes(&self.current_scene, &scene);
         self.previous_scene = Some(self.current_scene.clone());
         self.current_scene = scene;
         self.layout_tree = layout_tree;
         self.viewport = viewport;
         self.scene_generation = self.scene_generation.saturating_add(1);
+    }
+
+    /// Switches the active layout engine and rebuilds from retained state.
+    ///
+    /// Returns `true` if the backend actually changed.  The DOM, styles, and
+    /// image cache are untouched, so this is a pure relayout that preserves
+    /// current rendering inputs.
+    pub fn set_backend(&mut self, backend: LayoutBackend, measurer: &dyn TextMeasurer) -> bool {
+        if self.backend == backend {
+            return false;
+        }
+        self.backend = backend;
+        self.rebuild(self.viewport, measurer);
+        true
     }
 
     pub fn rebuild_for_images(&mut self, measurer: &dyn TextMeasurer, images: ImageCache) {
@@ -411,6 +540,212 @@ impl DocumentRenderState {
             format_version: DOCUMENT_SCENE_FORMAT_VERSION,
         }
     }
+}
+
+/// Browser-side `ImageMetrics` view of the live image cache.
+struct CacheImageMetrics<'a> {
+    cache: &'a ImageCache,
+    base_url: Option<ParsedUrl>,
+}
+
+impl CacheImageMetrics<'_> {
+    fn resolved(&self, src: &str) -> Option<String> {
+        self.base_url
+            .as_ref()
+            .and_then(|base| resolve_url(base, src).ok())
+    }
+}
+
+impl ImageMetrics for CacheImageMetrics<'_> {
+    fn intrinsic_size(&self, src: &str) -> Option<layout::RectSize> {
+        let url = self.resolved(src)?;
+        self.cache.decoded(&url).map(|decoded| {
+            layout::RectSize::new(decoded.image.width as f32, decoded.image.height as f32)
+        })
+    }
+}
+
+/// Browser-side scene resources: URL resolution and decoded pixels.
+impl SceneImageSource for CacheImageMetrics<'_> {
+    fn resolve(&self, raw: &str) -> Option<String> {
+        self.resolved(raw)
+    }
+
+    fn decoded(&self, src: &str) -> Option<alloc::sync::Arc<sunlight_ui::widgets::RasterImage>> {
+        let url = self.resolved(src)?;
+        self.cache
+            .decoded(&url)
+            .map(|decoded| decoded.image.clone())
+    }
+}
+
+/// Adapts the browser `TextMeasurer` to the new engine's `FontMeasurer`.
+///
+/// Both paths must share the exact advance used when painting, so this mirrors
+/// `TextMeasurer::measure_width_for_size` for a resolved CSS family rather than
+/// estimating from character counts.
+struct MeasurerFonts<'a> {
+    measurer: &'a dyn TextMeasurer,
+}
+
+impl LayoutFontMeasurer for MeasurerFonts<'_> {
+    fn measure_width(&self, family: &str, font_size: f32, text: &str) -> f32 {
+        let family = DocumentFontFamily::resolve_css_list(family);
+        let font_size = font_size.max(0.0).min(MAX_DOCUMENT_DIMENSION as f32) as u32;
+        self.measurer
+            .measure_width_for_size(family, font_size, text)
+            .max(0) as f32
+    }
+
+    fn line_height(&self, family: &str, font_size: f32) -> f32 {
+        let family = DocumentFontFamily::resolve_css_list(family);
+        let requested = (font_size * 1.2).max(1.0) as u32;
+        self.measurer
+            .line_height_for(family)
+            .max(requested.min(MAX_DOCUMENT_DIMENSION)) as f32
+    }
+}
+
+/// Runs the index-based engine and converts its result into a retained scene.
+fn new_engine_scene(
+    document_id: u64,
+    final_url: &str,
+    dom: &Document,
+    styles: &StyleContext,
+    viewport: Size,
+    measurer: &dyn TextMeasurer,
+    images: &ImageCache,
+) -> DocumentScene {
+    let base_url = ParsedUrl::parse(final_url).ok();
+    let fonts = MeasurerFonts { measurer };
+    let image_metrics = CacheImageMetrics {
+        cache: images,
+        base_url: base_url.clone(),
+    };
+    let result = layout::layout_document(dom, styles, viewport, &fonts, &image_metrics);
+    let scene_image_source = CacheImageMetrics {
+        cache: images,
+        base_url,
+    };
+    layout::into_document_scene_with_images(document_id, viewport, &result, &scene_image_source)
+}
+
+/// Counts retained object kinds and reports paint features the scene dropped.
+fn diagnose_scene(backend: LayoutBackend, scene: &DocumentScene) -> LayoutDiagnostics {
+    let mut diagnostics = LayoutDiagnostics {
+        backend,
+        object_count: scene.objects.len(),
+        ..LayoutDiagnostics::default()
+    };
+    for object in &scene.objects {
+        match &object.kind {
+            RenderObjectKind::Image { .. } => diagnostics.image_count += 1,
+            RenderObjectKind::ImagePlaceholder { .. } => diagnostics.placeholder_count += 1,
+            RenderObjectKind::Link { .. } => diagnostics.link_count += 1,
+            RenderObjectKind::Control { .. } => diagnostics.control_count += 1,
+            _ => {}
+        }
+    }
+    diagnostics
+}
+
+/// Reports DOM/CSS features the new engine flattens to plain block flow.
+///
+/// The live path must never silently drop a feature: an element that the new
+/// engine cannot yet express is listed here so the developer console states
+/// exactly what changed when switching backends.  The list is bounded to the
+/// feature names, not per-node counts, so it stays a one-line diagnostic.
+fn unsupported_features_new_engine(dom: &Document, styles: &StyleContext) -> Vec<&'static str> {
+    let mut unsupported = Vec::new();
+    let mut stack = vec![dom.root()];
+    while let Some(node_id) = stack.pop() {
+        let Some(node) = dom.get(node_id) else {
+            continue;
+        };
+        stack.extend(dom.children(node_id).iter().copied());
+        let Node::Element {
+            tag_name,
+            attributes,
+            ..
+        } = node
+        else {
+            continue;
+        };
+        let style = styles.nearest_element_style(dom, node_id);
+        if matches!(keyword(style, Property::Float).as_str(), "left" | "right") {
+            push_unique(&mut unsupported, "float");
+        }
+        if matches!(
+            tag_name.to_ascii_lowercase().as_str(),
+            "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th"
+        ) {
+            push_unique(&mut unsupported, "table");
+        }
+        // The new engine now lays out and paints the common single-line
+        // controls; only the widgets it still approximates are reported.
+        if form_control_is_approximated(tag_name, attributes) {
+            push_unique(&mut unsupported, "form-control");
+        }
+        if style
+            .and_then(|style| style.value(&Property::BackgroundImage))
+            .is_some()
+        {
+            push_unique(&mut unsupported, "background-image");
+        }
+        if style
+            .and_then(|style| style.value(&Property::BoxShadow))
+            .is_some()
+        {
+            push_unique(&mut unsupported, "box-shadow");
+        }
+        if style
+            .and_then(|style| style.value(&Property::TextShadow))
+            .is_some()
+        {
+            push_unique(&mut unsupported, "text-shadow");
+        }
+    }
+    unsupported
+}
+
+fn push_unique(list: &mut Vec<&'static str>, value: &'static str) {
+    if !list.contains(&value) {
+        list.push(value);
+    }
+}
+
+/// Whether the new engine still approximates this form control.
+///
+/// `input` (single-line), `button`, and `select` are now sized and painted as
+/// real controls, so they are no longer reported.  `textarea` and multi-line
+/// or otherwise unsupported input types remain approximated by block flow.
+fn form_control_is_approximated(tag_name: &str, attributes: &[Attribute]) -> bool {
+    if tag_name.eq_ignore_ascii_case("textarea") {
+        return true;
+    }
+    if tag_name.eq_ignore_ascii_case("input") {
+        let input_type = attr(attributes, "type").unwrap_or("text");
+        return !matches!(
+            input_type.to_ascii_lowercase().as_str(),
+            "text"
+                | "search"
+                | "password"
+                | "email"
+                | "tel"
+                | "url"
+                | "number"
+                | "date"
+                | "datetime-local"
+                | "month"
+                | "week"
+                | "time"
+                | "submit"
+                | "button"
+                | "reset"
+                | "hidden"
+        );
+    }
+    false
 }
 
 #[derive(Clone)]
@@ -3210,6 +3545,40 @@ mod tests {
         )
     }
 
+    // Preserve legacy-specific geometry/paint coverage independently of the default.
+    fn render_legacy(html: &str) -> DocumentRenderState {
+        let mut state = render(html);
+        assert!(state.set_backend(LayoutBackend::Legacy, &TestMeasure));
+        state
+    }
+
+    #[test]
+    fn modern_is_default_from_first_scene_and_fallback_round_trips() {
+        assert_eq!(LayoutBackend::default(), LayoutBackend::New);
+        let mut state = render("<style>.f{float:left}</style><div class=f>x</div><form><input type=hidden value=secret><input type=search value=query><input type=submit value=Go></form>");
+        assert_eq!(state.backend, LayoutBackend::New);
+        assert_eq!(state.diagnostics.backend, LayoutBackend::New);
+        assert_eq!(state.scene_generation, 1);
+        assert!(state.previous_scene.is_none());
+        assert!(state.diagnostics.unsupported.contains(&"float"));
+        assert_eq!(state.diagnostics.control_count, 2);
+        let initial = state.current_scene.clone();
+        assert!(!state.set_backend(LayoutBackend::New, &TestMeasure));
+        state.rebuild(state.viewport, &TestMeasure);
+        assert!(diff_scenes(&initial, &state.current_scene)
+            .operations
+            .is_empty());
+        assert!(state.set_backend(state.backend.toggled(), &TestMeasure));
+        assert_eq!(state.backend, LayoutBackend::Legacy);
+        assert_eq!(state.diagnostics.backend, LayoutBackend::Legacy);
+        assert!(state.diagnostics.unsupported.is_empty());
+        assert!(state.set_backend(state.backend.toggled(), &TestMeasure));
+        assert_eq!(state.backend, LayoutBackend::New);
+        assert!(diff_scenes(&initial, &state.current_scene)
+            .operations
+            .is_empty());
+    }
+
     #[test]
     fn blocks_stack_with_padding_margins_and_border() {
         let state = render("<style>body{padding:10px} p{display:block;margin:4px;border:1px solid red}</style><body><p>one</p><p>two</p></body>");
@@ -3231,8 +3600,8 @@ mod tests {
     }
 
     #[test]
-    fn block_boxes_honor_explicit_and_auto_width_and_minimum_height() {
-        let state = render(
+    fn legacy_block_boxes_honor_explicit_and_auto_width_and_minimum_height() {
+        let state = render_legacy(
             "<style>body{padding:5px} #fixed{display:block;width:80px;height:40px;padding:3px;border:2px solid black} #auto{display:block}</style><body><p id=fixed>x</p><p id=auto>y</p></body>",
         );
         let fixed = state
@@ -3285,8 +3654,8 @@ mod tests {
     }
 
     #[test]
-    fn scene_has_stable_ownership_background_border_and_link_metadata() {
-        let state = render("<style>p{display:block;background-color:#eee;border:1px solid #222} a{color:blue;font-weight:bold}</style><p><a href='/download'>Download</a></p>");
+    fn legacy_scene_has_stable_ownership_background_border_and_link_metadata() {
+        let state = render_legacy("<style>p{display:block;background-color:#eee;border:1px solid #222} a{color:blue;font-weight:bold}</style><p><a href='/download'>Download</a></p>");
         assert!(state
             .current_scene
             .objects
@@ -3334,8 +3703,8 @@ mod tests {
     }
 
     #[test]
-    fn anchor_text_uses_the_same_word_positions_and_advance_as_a_span() {
-        let state = render(
+    fn legacy_anchor_text_uses_the_same_word_positions_and_advance_as_a_span() {
+        let state = render_legacy(
             "<p><span>Linux mailing list service</span></p><p><a href='/lists'>Linux mailing list service</a></p>",
         );
         let span = state.dom.find_first_element("span").unwrap();
@@ -3413,8 +3782,8 @@ mod tests {
     }
 
     #[test]
-    fn wrapped_anchor_has_one_tight_hit_region_per_visual_line() {
-        let state = render(
+    fn legacy_wrapped_anchor_has_one_tight_hit_region_per_visual_line() {
+        let state = render_legacy(
             "<style>p{display:block;width:104px}</style><p><a href='/lists'>Linux mailing list service</a></p>",
         );
         let anchor = state.dom.find_first_element("a").unwrap();
@@ -3460,8 +3829,8 @@ mod tests {
     }
 
     #[test]
-    fn every_visible_inline_element_has_owned_scene_objects() {
-        let state = render(
+    fn legacy_every_visible_inline_element_has_owned_scene_objects() {
+        let state = render_legacy(
             "<p><span><strong>bold</strong></span> <a href='/go'>link</a><br><em>after</em></p>",
         );
         for tag in ["p", "span", "strong", "a", "br", "em"] {
@@ -3601,8 +3970,8 @@ mod tests {
     }
 
     #[test]
-    fn image_lesson_fixture_keeps_duplicate_and_failed_images_as_distinct_nodes() {
-        let state = render(include_str!("../tests/fixtures/image-lesson.html"));
+    fn legacy_image_lesson_fixture_keeps_duplicate_and_failed_images_as_distinct_nodes() {
+        let state = render_legacy(include_str!("../tests/fixtures/image-lesson.html"));
         let placeholders = state
             .current_scene
             .objects
@@ -3620,8 +3989,8 @@ mod tests {
     }
 
     #[test]
-    fn image_placeholder_keeps_owner_and_source_metadata() {
-        let state = render("<p><img src='/logo.simg' alt='Sunlight logo'></p>");
+    fn legacy_image_placeholder_keeps_owner_and_source_metadata() {
+        let state = render_legacy("<p><img src='/logo.simg' alt='Sunlight logo'></p>");
         let image_node = state.dom.find_first_element("img").unwrap();
         let image = state
             .current_scene
@@ -3642,7 +4011,7 @@ mod tests {
     }
 
     #[test]
-    fn decoded_image_uses_intrinsic_size_and_retained_image_object() {
+    fn legacy_decoded_image_uses_intrinsic_size_and_retained_image_object() {
         use crate::images::{decode_image, ImageCache};
 
         const TINY_PNG: &[u8] = &[
@@ -3664,7 +4033,7 @@ mod tests {
             )
             .unwrap(),
         );
-        let state = DocumentRenderState::new_with_images(
+        let mut state = DocumentRenderState::new_with_images(
             1,
             String::from("https://example.com/index.html"),
             dom.clone(),
@@ -3673,6 +4042,7 @@ mod tests {
             &TestMeasure,
             images,
         );
+        assert!(state.set_backend(LayoutBackend::Legacy, &TestMeasure));
         let image_node = dom.find_first_element("img").unwrap();
         let image = state
             .current_scene
@@ -3900,8 +4270,8 @@ mod tests {
     }
 
     #[test]
-    fn lists_have_owned_stable_markers_and_visible_ordinals() {
-        let mut state = render("<ol start=3><li>one</li><li style='display:none'>hidden</li><li>three</li></ol><ul><li>a</li><li>b</li></ul>");
+    fn legacy_lists_have_owned_stable_markers_and_visible_ordinals() {
+        let mut state = render_legacy("<ol start=3><li>one</li><li style='display:none'>hidden</li><li>three</li></ol><ul><li>a</li><li>b</li></ul>");
         let markers: Vec<_> = state
             .layout_tree
             .nodes
@@ -3932,8 +4302,8 @@ mod tests {
     }
 
     #[test]
-    fn typography_fixture_preserves_pre_and_emits_semantic_scene_objects() {
-        let state = render(include_str!("../tests/fixtures/typography-lists.html"));
+    fn legacy_typography_fixture_preserves_pre_and_emits_semantic_scene_objects() {
+        let state = render_legacy(include_str!("../tests/fixtures/typography-lists.html"));
         assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, .. } if text.contains("    println"))));
         assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, bold: true, .. } if text == "Bold")));
         assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind, RenderObjectKind::Text { text, italic: true, .. } if text == "italic")));
@@ -3948,8 +4318,8 @@ mod tests {
     }
 
     #[test]
-    fn flex_navigation_is_horizontal_and_suppresses_only_its_markers() {
-        let state = render(include_str!("../tests/fixtures/flex-navigation.html"));
+    fn legacy_flex_navigation_is_horizontal_and_suppresses_only_its_markers() {
+        let state = render_legacy(include_str!("../tests/fixtures/flex-navigation.html"));
         let nav_markers = state
             .layout_tree
             .nodes
@@ -3991,8 +4361,8 @@ mod tests {
     }
 
     #[test]
-    fn css_font_family_fallbacks_are_preserved_in_retained_text() {
-        let state = render(include_str!("../tests/fixtures/font-families.html"));
+    fn legacy_css_font_family_fallbacks_are_preserved_in_retained_text() {
+        let state = render_legacy(include_str!("../tests/fixtures/font-families.html"));
         assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind,
             RenderObjectKind::Text { text, font_family: DocumentFontFamily::Serif, .. } if text == "Serif:" || text == "Named")));
         assert!(state.current_scene.objects.iter().any(|object| matches!(&object.kind,
@@ -4012,11 +4382,11 @@ mod tests {
     }
 
     #[test]
-    fn classic_kernel_fixture_centers_floats_clears_and_grids_table() {
+    fn legacy_classic_kernel_fixture_centers_floats_clears_and_grids_table() {
         let html = include_str!("../tests/fixtures/kernel-classic-layout.html");
         let dom = parse_html(html).unwrap();
         let styles = StyleContext::build(&dom, &collect_embedded_stylesheets(&dom));
-        let state = DocumentRenderState::new(
+        let mut state = DocumentRenderState::new(
             9,
             String::from("https://fixture.test/"),
             dom,
@@ -4024,6 +4394,7 @@ mod tests {
             Size::new(1000, 700),
             &TestMeasure,
         );
+        assert!(state.set_backend(LayoutBackend::Legacy, &TestMeasure));
         let by_id = |id: &str| {
             (0..state.dom.node_count())
                 .find_map(|node_id| match state.dom.get(node_id) {
@@ -4094,7 +4465,7 @@ mod tests {
     }
 
     #[test]
-    fn import_dependent_kernel_cards_reach_layout_and_scene() {
+    fn legacy_import_dependent_kernel_cards_reach_layout_and_scene() {
         let dom = parse_html(include_str!(
             "../tests/fixtures/import-kernel-cards/index.html"
         ))
@@ -4114,7 +4485,7 @@ mod tests {
             ),
         ];
         let styles = StyleContext::build(&dom, &sheets);
-        let state = DocumentRenderState::new(
+        let mut state = DocumentRenderState::new(
             10,
             String::from("https://fixture.test/index.html"),
             dom,
@@ -4122,6 +4493,7 @@ mod tests {
             Size::new(1000, 700),
             &TestMeasure,
         );
+        assert!(state.set_backend(LayoutBackend::Legacy, &TestMeasure));
         let by_id = |id: &str| {
             (0..state.dom.node_count())
                 .find(|node_id| match state.dom.get(*node_id) {
@@ -4168,12 +4540,12 @@ mod tests {
     }
 
     #[test]
-    fn kernel_style_gradients_nth_child_and_text_shadow_reach_the_scene() {
+    fn legacy_kernel_style_gradients_nth_child_and_text_shadow_reach_the_scene() {
         let html = include_str!("../tests/fixtures/css-gradients.html");
         let dom = parse_html(html).unwrap();
         let styles =
             StyleContext::build_with_viewport(&dom, &collect_embedded_stylesheets(&dom), 1000);
-        let state = DocumentRenderState::new(
+        let mut state = DocumentRenderState::new(
             11,
             String::from("https://fixture.test/"),
             dom,
@@ -4181,6 +4553,7 @@ mod tests {
             Size::new(1000, 700),
             &TestMeasure,
         );
+        assert!(state.set_backend(LayoutBackend::Legacy, &TestMeasure));
         let by_id = |id: &str| {
             (0..state.dom.node_count())
                 .find(|node_id| match state.dom.get(*node_id) {
@@ -4274,5 +4647,377 @@ mod tests {
             matches!(&object.kind, RenderObjectKind::Text { text, color, .. }
                 if text.contains("foreground") && *color == Color::rgb(255, 255, 255))
         }));
+    }
+
+    // ── dual-engine comparison harness ────────────────────────────────
+    //
+    // Everything below compares the legacy `render.rs` scene and the new
+    // `layout.rs` scene produced from the *same* DOM, styles, viewport, font
+    // metrics, and image cache.  Differences the new path cannot yet honour
+    // are captured as explicit expectations or reported feature gaps, never
+    // silently smoothed over.
+
+    fn render_both(html: &str) -> (DocumentRenderState, DocumentRenderState) {
+        let dom = parse_html(html).unwrap();
+        let embedded = collect_embedded_stylesheets(&dom);
+        let styles = StyleContext::build(&dom, &embedded);
+        let mut legacy = DocumentRenderState::new(
+            1,
+            String::from("http://example.test/"),
+            dom.clone(),
+            styles.clone(),
+            Size::new(320, 240),
+            &TestMeasure,
+        );
+        assert!(legacy.set_backend(LayoutBackend::Legacy, &TestMeasure));
+        let new = DocumentRenderState::new(
+            1,
+            String::from("http://example.test/"),
+            dom,
+            styles,
+            Size::new(320, 240),
+            &TestMeasure,
+        );
+        assert_eq!(new.backend, LayoutBackend::New);
+        (legacy, new)
+    }
+
+    fn text_objects(state: &DocumentRenderState) -> Vec<(String, Rect)> {
+        state
+            .current_scene
+            .objects
+            .iter()
+            .filter_map(|object| match &object.kind {
+                RenderObjectKind::Text { text, .. } => Some((text.clone(), object.bounds)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn link_objects(state: &DocumentRenderState) -> Vec<(String, Rect)> {
+        state
+            .current_scene
+            .objects
+            .iter()
+            .filter_map(|object| match &object.kind {
+                RenderObjectKind::Link { href, .. } => Some((href.clone(), object.bounds)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn margin_auto_centers_block_in_container() {
+        let (legacy, new) = render_both("<style>body{margin:0} main{width:280px;padding:10px;border:2px solid} div{width:100px;padding:5px;border:1px solid;margin:0 auto;font-size:16px;line-height:20px}</style><main><div>search</div></main>");
+        let legacy_text = text_objects(&legacy);
+        let new_text = text_objects(&new);
+        assert_eq!(legacy_text, new_text);
+        assert_eq!(new_text[0].1.x, 102);
+        let owner = new.dom.find_first_element("div").unwrap();
+        let border = new
+            .current_scene
+            .objects
+            .iter()
+            .find(|object| {
+                object.owner_node_id == DocumentNodeId(owner as u64)
+                    && matches!(object.kind, RenderObjectKind::Box)
+            })
+            .unwrap();
+        assert_eq!(border.bounds.x, 96);
+        assert_eq!(border.bounds.w, 112);
+    }
+
+    #[test]
+    fn inline_links_preserve_horizontal_flow_and_hitbox() {
+        for content in [
+            "plain <a href='/one'>link</a> tail",
+            "<a href='/one'>one</a><a href='/two'>two</a>",
+            "<a href='/one'>one</a> <a href='/two'>two</a>",
+            "<a href='/one'>one <strong>two</strong> three four</a>",
+            "<a href='/one'>Kernel&nbsp;Archives</a>",
+        ] {
+            let html = alloc::format!("<style>body{{margin:0;font-size:16px;line-height:20px}} p{{width:104px}}</style><body><p>{content}</p></body>");
+            let (legacy, new) = render_both(&html);
+            assert_eq!(text_objects(&legacy), text_objects(&new), "{content}");
+            assert_eq!(link_objects(&legacy), link_objects(&new), "{content}");
+            for link in new
+                .current_scene
+                .objects
+                .iter()
+                .filter(|object| matches!(object.kind, RenderObjectKind::Link { .. }))
+            {
+                let RenderObjectKind::Link {
+                    text_object_ids, ..
+                } = &link.kind
+                else {
+                    unreachable!()
+                };
+                let visual = text_object_ids
+                    .iter()
+                    .map(|id| {
+                        new.current_scene
+                            .objects
+                            .iter()
+                            .find(|object| object.id == *id)
+                            .unwrap()
+                            .bounds
+                    })
+                    .reduce(|a, b| {
+                        let x = a.x.min(b.x);
+                        let y = a.y.min(b.y);
+                        Rect::new(
+                            x,
+                            y,
+                            (a.right().max(b.right()) - x) as u32,
+                            (a.bottom().max(b.bottom()) - y) as u32,
+                        )
+                    })
+                    .unwrap();
+                assert_eq!(link.bounds, visual);
+            }
+        }
+    }
+
+    #[test]
+    fn text_align_right_aligns_navigation_items() {
+        let (legacy, new) = render_both("<style>body{margin:0;text-align:right;font-size:16px;line-height:20px} nav{width:120px}</style><body><nav><a href='/mail'>Gmail</a> <a href='/images'>Images</a></nav></body>");
+        let texts = text_objects(&new);
+        assert_eq!(texts, text_objects(&legacy));
+        assert_eq!(link_objects(&legacy), link_objects(&new));
+        assert_eq!(texts.len(), 2);
+        assert_eq!(texts[0].1.x, 24);
+        assert_eq!(texts[0].1.y, texts[1].1.y);
+        assert_eq!(texts[1].1.right(), 120);
+    }
+
+    #[test]
+    fn new_canvas_background_covers_viewport_and_preserves_local_backgrounds() {
+        for (html_background, expected) in [
+            ("transparent", Color::rgb(255, 255, 255)),
+            ("#123456", Color::rgb(0x12, 0x34, 0x56)),
+        ] {
+            let html = alloc::format!("<html><head><style>html{{background:{html_background}}} body{{margin:8px}} div{{background:red;height:10px}}</style></head><body><div></div></body></html>");
+            let (_legacy, new) = render_both(&html);
+            let canvas = new
+                .current_scene
+                .objects
+                .iter()
+                .find(|object| object.id == RenderObjectId(u64::MAX))
+                .unwrap();
+            assert!(
+                matches!(canvas.kind, RenderObjectKind::Rectangle { fill } if fill == expected)
+            );
+            assert_eq!(canvas.bounds, Rect::new(0, 0, 320, 240));
+            assert!(new.current_scene.objects.iter().any(|object| matches!(object.kind, RenderObjectKind::Rectangle { fill } if fill == Color::rgb(255, 0, 0)) && object.bounds.x == 8 && object.bounds.h == 10));
+        }
+    }
+
+    #[test]
+    fn new_backend_produces_a_scene_and_reports_itself() {
+        let (legacy, new) = render_both("<p>hello world</p>");
+        assert_eq!(legacy.diagnostics.backend, LayoutBackend::Legacy);
+        assert_eq!(new.diagnostics.backend, LayoutBackend::New);
+        assert!(new.diagnostics.object_count > 0);
+        assert!(new.diagnostics.summary().contains("backend=new"));
+        assert_eq!(legacy.scene_generation, new.scene_generation + 1);
+    }
+
+    #[test]
+    fn simple_block_text_wraps_to_the_same_words() {
+        let (legacy, new) = render_both(
+            "<style>body{margin:0} p{margin:0;width:96px;font-size:16px;line-height:16px}</style><p>alpha beta gamma delta epsilon zeta eta theta</p>",
+        );
+        let legacy_text: Vec<String> = text_objects(&legacy).into_iter().map(|(t, _)| t).collect();
+        let new_text: Vec<String> = text_objects(&new).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(legacy_text, new_text);
+    }
+
+    #[test]
+    fn simple_anchor_emits_one_link_hit_region_per_engine() {
+        let (legacy, new) = render_both("<p><a href='/go'>single word</a></p>");
+        let legacy_links = link_objects(&legacy);
+        let new_links = link_objects(&new);
+        assert_eq!(legacy_links.len(), 1);
+        assert_eq!(new_links.len(), 1);
+        assert_eq!(legacy_links[0].0, "/go");
+        assert_eq!(new_links[0].0, "/go");
+        // The link's interactive text must still resolve back to the anchor.
+        let anchor = new.dom.find_first_element("a").unwrap();
+        let owned = new
+            .current_scene
+            .objects_for_node(DocumentNodeId(anchor as u64));
+        assert!(!owned.is_empty());
+    }
+
+    #[test]
+    fn wrapped_anchor_keeps_one_hit_region_per_visual_line_in_new_engine() {
+        let (_legacy, new) = render_both(
+            "<style>p{display:block;width:104px}</style><p><a href='/lists'>Linux mailing list service</a></p>",
+        );
+        let links = link_objects(&new);
+        assert!(links.len() >= 2, "expected a wrapped anchor, got {links:?}");
+        let line_ys: Vec<i32> = links.iter().map(|(_, bounds)| bounds.y).collect();
+        let unique: alloc::collections::BTreeSet<i32> = line_ys.iter().copied().collect();
+        assert_eq!(unique.len(), links.len());
+    }
+
+    #[test]
+    fn new_engine_preserves_decoded_images_and_uses_viewport_dimensions() {
+        use crate::images::ImageCache;
+        let dom = parse_html("<p><img src='/a.png'></p>").unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let mut images = ImageCache::default();
+        images.insert_decoded(
+            String::from("http://example.test/a.png"),
+            decoded_solid_image(0xFFFF_0000),
+        );
+        let mut state = DocumentRenderState::new_with_images(
+            1,
+            String::from("http://example.test/"),
+            dom,
+            styles,
+            Size::new(320, 240),
+            &TestMeasure,
+            images,
+        );
+        assert_eq!(state.backend, LayoutBackend::New);
+        assert!(state.current_scene.objects.iter().any(
+            |object| matches!(&object.kind, RenderObjectKind::Image { source_url, .. }
+                if source_url == "http://example.test/a.png")
+        ));
+        assert_eq!(state.diagnostics.image_count, 1);
+        assert_eq!(state.diagnostics.placeholder_count, 0);
+        // A viewport change must relayout and reuse the decoded pixels.
+        assert!(state.rebuild_for_viewport(Size::new(200, 240), &TestMeasure));
+        assert_eq!(state.viewport, Size::new(200, 240));
+        assert!(state.diagnostics.image_count >= 1);
+    }
+
+    #[test]
+    fn new_engine_reports_unsupported_floats_tables_and_forms() {
+        let (_legacy, new) = render_both(
+            "<style>.f{float:left}</style><div class=f>float</div><table><tr><td>cell</td></tr></table><form><textarea>notes</textarea></form>",
+        );
+        let unsupported = &new.diagnostics.unsupported;
+        assert!(unsupported.contains(&"float"));
+        assert!(unsupported.contains(&"table"));
+        assert!(unsupported.contains(&"form-control"));
+    }
+
+    #[test]
+    fn new_engine_lays_out_single_line_controls_instead_of_flagging_them() {
+        let (_legacy, new) = render_both(
+            "<form><input type=text value=x><input type=submit value=go><select><option>alpha</option></select></form>",
+        );
+        assert!(!new.diagnostics.unsupported.contains(&"form-control"));
+        let controls = new
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Control { .. }))
+            .count();
+        assert_eq!(controls, 3);
+    }
+
+    #[test]
+    fn new_engine_hidden_inputs_never_reach_the_scene() {
+        let (_legacy, new) = render_both(
+            "<form><input type=hidden name=csrf value=abc><input type=text value=visible></form>",
+        );
+        let controls: Vec<_> = new
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Control { .. }))
+            .collect();
+        // Only the visible text field is retained; the hidden input is pruned
+        // before layout, so it leaves no control object and no geometry.
+        assert_eq!(controls.len(), 1);
+        assert!(controls
+            .iter()
+            .all(|object| object.bounds.w > 0 && object.bounds.h > 0));
+        assert_eq!(new.diagnostics.control_count, 1);
+    }
+
+    #[test]
+    fn new_engine_sizes_text_like_inputs_without_flagging_them() {
+        let (_legacy, new) = render_both(
+            "<form><input type=email value=a@b.c><input type=search placeholder=q></form>",
+        );
+        assert!(!new.diagnostics.unsupported.contains(&"form-control"));
+        let controls: Vec<_> = new
+            .current_scene
+            .objects
+            .iter()
+            .filter(|object| matches!(object.kind, RenderObjectKind::Control { .. }))
+            .collect();
+        assert_eq!(controls.len(), 2);
+        assert!(controls
+            .iter()
+            .all(|object| object.bounds.w > 0 && object.bounds.h > 0));
+    }
+
+    #[test]
+    fn legacy_backend_has_no_unsupported_report() {
+        let (legacy, _new) = render_both("<div style='float:left'>x</div>");
+        assert!(legacy.diagnostics.unsupported.is_empty());
+    }
+
+    #[test]
+    fn default_line_height_honours_measured_face_in_both_engines() {
+        // Both engines grow the default line box to fit the measured face.
+        struct TallFace;
+        impl TextMeasurer for TallFace {
+            fn measure_width(&self, text: &str) -> u32 {
+                text.chars().count() as u32 * 8
+            }
+            fn line_height(&self) -> u32 {
+                24
+            }
+        }
+
+        let dom = parse_html("<p>one</p>").unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        let mut legacy = DocumentRenderState::new(
+            1,
+            String::from("http://example.test/"),
+            dom.clone(),
+            styles.clone(),
+            Size::new(320, 240),
+            &TallFace,
+        );
+        assert!(legacy.set_backend(LayoutBackend::Legacy, &TallFace));
+        let new = DocumentRenderState::new(
+            1,
+            String::from("http://example.test/"),
+            dom,
+            styles,
+            Size::new(320, 240),
+            &TallFace,
+        );
+        assert_eq!(new.backend, LayoutBackend::New);
+
+        let legacy_height = legacy
+            .layout_tree
+            .nodes
+            .iter()
+            .flat_map(|node| node.text_fragments.iter())
+            .map(|fragment| fragment.bounds.h)
+            .next()
+            .unwrap();
+        let new_height = new
+            .current_scene
+            .objects
+            .iter()
+            .find_map(|object| match object.kind {
+                RenderObjectKind::Text { .. } => Some(object.bounds.h),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(legacy_height, 24, "legacy floors at the measured face");
+        assert_eq!(
+            new_height, legacy_height,
+            "both engines use the measured face"
+        );
     }
 }

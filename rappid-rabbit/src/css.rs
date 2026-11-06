@@ -359,6 +359,7 @@ impl Property {
                 | Self::ListStyleType
                 | Self::ListStylePosition
                 | Self::LetterSpacing
+                | Self::LineHeight
         )
     }
 
@@ -375,6 +376,13 @@ pub enum PropertyValue {
     LengthPx(i32),
     /// Fixed-point em value in thousandths, retained until the element font is known.
     LengthEm(i32),
+    /// Fixed-point root-em value in thousandths. Resolved after the document
+    /// root font is known, so changing `html { font-size }` affects descendants.
+    LengthRem(i32),
+    /// Fixed-point viewport-width value in thousandths (`1vw == 10`).
+    LengthVw(i32),
+    /// Fixed-point viewport-height value in thousandths (`1vh == 10`).
+    LengthVh(i32),
     /// Fixed-point percentage in hundredths of one percent.
     Percentage(i32),
     Auto,
@@ -390,6 +398,9 @@ impl PropertyValue {
             Self::CurrentColor => String::from("currentColor"),
             Self::LengthPx(value) => format!("{value}px"),
             Self::LengthEm(value) => format!("{}em", *value as f32 / 1000.0),
+            Self::LengthRem(value) => format!("{}rem", *value as f32 / 1000.0),
+            Self::LengthVw(value) => format!("{}vw", *value as f32 / 1000.0),
+            Self::LengthVh(value) => format!("{}vh", *value as f32 / 1000.0),
             Self::Percentage(value) => format!("{}%", *value as f32 / 100.0),
             Self::Auto => String::from("auto"),
             Self::Normal => String::from("normal"),
@@ -1715,16 +1726,21 @@ fn parse_length(value: &str) -> Option<PropertyValue> {
     let normalized = value.to_ascii_lowercase();
     for (suffix, scale, ctor) in [
         ("px", 1, 0u8),
-        ("rem", 16, 0u8),
+        ("rem", 1000, 5u8),
         ("em", 1000, 1u8),
         ("%", 100, 2u8),
+        ("vw", 1000, 3u8),
+        ("vh", 1000, 4u8),
     ] {
         if let Some(number) = normalized.strip_suffix(suffix).map(str::trim) {
             let scaled = parse_fixed(number, scale)?;
             return Some(match ctor {
                 0 => PropertyValue::LengthPx(scaled),
                 1 => PropertyValue::LengthEm(scaled),
-                _ => PropertyValue::Percentage(scaled),
+                2 => PropertyValue::Percentage(scaled),
+                3 => PropertyValue::LengthVw(scaled),
+                4 => PropertyValue::LengthVh(scaled),
+                _ => PropertyValue::LengthRem(scaled),
             });
         }
     }
@@ -2161,6 +2177,8 @@ pub fn user_agent_stylesheet() -> Stylesheet {
     parse_stylesheet(
         r#"
         html, body, div, header, main, section, article, aside, nav, footer, address, p, pre, dl, dt, dd, blockquote, hr { display: block; }
+        form, center, fieldset, legend, figure, figcaption, hgroup, menu, details, summary, dialog { display: block; }
+        center { text-align: center; }
         span, a, strong, b, em, i, code, small, mark, del, ins, sub, sup, br { display: inline; }
         img { display: inline-block; }
         table { display: table; border-collapse: separate; border-spacing: 2px; }
@@ -2170,8 +2188,9 @@ pub fn user_agent_stylesheet() -> Stylesheet {
         tr { display: table-row; }
         th, td { display: table-cell; padding: 1px; }
         th { font-weight: bold; text-align: center; }
-        input, button { display: inline-block; font-family: sans-serif; font-size: 14px; color: #111111; background-color: white; border: 1px solid #888888; padding: 5px 7px; }
+        input, button, select { display: inline-block; margin: 0; font-family: sans-serif; font-size: 14px; color: #111111; background-color: white; border: 1px solid #888888; padding: 5px 7px; }
         button { background-color: #e9e9e9; color: #111111; }
+        select { background-color: white; }
         ul, ol { display: block; margin: 16px 0; padding-left: 40px; }
         ul { list-style-type: disc; }
         ol { list-style-type: decimal; }
@@ -2211,6 +2230,7 @@ use golden_fish::{Document, Node, NodeId};
 #[derive(Debug, Clone, Default)]
 pub struct StyleContext {
     styles: Vec<Option<ComputedStyle>>,
+    root_font_size: i32,
 }
 
 #[cfg(feature = "dom")]
@@ -2228,6 +2248,7 @@ impl StyleContext {
         stylesheets.extend_from_slice(document_stylesheets);
         let mut context = Self {
             styles: vec![None; document.node_count()],
+            root_font_size: 16,
         };
         let mut stack = vec![document.root()];
         while let Some(node_id) = stack.pop() {
@@ -2243,6 +2264,13 @@ impl StyleContext {
                     &stylesheets,
                     viewport_width,
                 );
+                if let Some(parent) = document.parent(node_id) {
+                    if matches!(document.get(parent), Some(Node::Document { .. })) {
+                        context.root_font_size = pixel_value(&computed, &Property::FontSize)
+                            .unwrap_or(16)
+                            .max(1);
+                    }
+                }
                 context.styles[node_id] = Some(computed);
                 for &child in children.iter().rev() {
                     stack.push(child);
@@ -2252,6 +2280,9 @@ impl StyleContext {
                     stack.push(child);
                 }
             }
+        }
+        for style in context.styles.iter_mut().flatten() {
+            resolve_root_relative_values(style, context.root_font_size);
         }
         context
     }
@@ -2270,6 +2301,23 @@ impl StyleContext {
                 return Some(style);
             }
             node_id = document.parent(node_id)?;
+        }
+    }
+}
+
+#[cfg(feature = "dom")]
+fn pixel_value(style: &ComputedStyle, property: &Property) -> Option<i32> {
+    match style.value(property) {
+        Some(PropertyValue::LengthPx(value)) => Some(*value),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "dom")]
+fn resolve_root_relative_values(style: &mut ComputedStyle, root_font_size: i32) {
+    for entry in &mut style.properties {
+        if let PropertyValue::LengthRem(value) = entry.value {
+            entry.value = PropertyValue::LengthPx(value.saturating_mul(root_font_size) / 1000);
         }
     }
 }
@@ -2852,7 +2900,11 @@ struct CascadeKey {
 }
 
 #[cfg(feature = "dom")]
-fn selector_specificity(selector: &Selector) -> Specificity {
+/// Computes the CSS specificity tuple used by the cascade.
+///
+/// The tuple layout is `(ids, classes, tags)`.  Pseudo-classes are counted in
+/// the class column, matching the subset of selectors supported by this parser.
+pub fn selector_specificity(selector: &Selector) -> Specificity {
     let mut specificity = Specificity::default();
     for part in &selector.parts {
         specificity.ids = specificity.ids.saturating_add(part.id.is_some() as u16);
@@ -3036,13 +3088,31 @@ mod tests {
         );
         assert_eq!(parse_color("#1234"), Some(Color::Rgba(17, 34, 51, 68)));
         assert_eq!(parse_length("12px"), Some(PropertyValue::LengthPx(12)));
-        assert_eq!(parse_length("2rem"), Some(PropertyValue::LengthPx(32)));
+        assert_eq!(parse_length("2rem"), Some(PropertyValue::LengthRem(2000)));
         let gradient = parse_gradient("linear-gradient(to right, #333, #eee 75%)").unwrap();
         assert_eq!(gradient.kind, GradientKind::Linear);
         assert_eq!(gradient.angle_deg, 90);
         assert_eq!(gradient.stops.len(), 2);
         assert_eq!(gradient.stops[0].color, Color::Rgb(0x33, 0x33, 0x33));
         assert_eq!(gradient.stops[1].position, 7500);
+    }
+
+    #[cfg(feature = "dom")]
+    #[test]
+    fn rem_resolves_against_the_document_root_font() {
+        let document = parse_html(
+            "<html style='font-size:20px'><body><p style='width:2rem'>x</p></body></html>",
+        )
+        .expect("DOM");
+        let context = StyleContext::build(&document, &[]);
+        let paragraph = document.find_first_element("p").expect("p");
+        assert_eq!(
+            context
+                .style_for(paragraph)
+                .expect("computed")
+                .value(&Property::Width),
+            Some(&PropertyValue::LengthPx(40))
+        );
     }
 
     #[test]

@@ -13,6 +13,8 @@ pub mod form;
 pub mod images;
 pub mod launch_url;
 #[cfg(feature = "dom")]
+pub mod layout;
+#[cfg(feature = "dom")]
 pub mod render;
 pub mod resources;
 #[cfg(feature = "svg")]

@@ -147,6 +147,7 @@ const URL_SITE_W: u32 = 26;
 const URL_ACTION_W: u32 = 26;
 
 const KEY_Q: u8 = 0x10;
+const KEY_E: u8 = 0x12;
 const KEY_L: u8 = 0x26;
 const KEY_F6: u8 = 0x40;
 const KEY_UP: u8 = 0x48;
@@ -316,6 +317,13 @@ impl RabbitApp {
             ConsoleSeverity::Quiet,
             ConsoleSource::Browser,
             "DocumentCanvas configured for read-only Render mode.",
+        );
+
+        #[cfg(feature = "dom")]
+        developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            "Layout engine: Modern (Two-Pass Arena) [Ctrl+E to toggle Legacy]",
         );
 
         let mut app = Self {
@@ -1576,6 +1584,43 @@ impl RabbitApp {
                 transition,
             );
         }
+    }
+
+    /// Switch the live layout engine for fallback or diagnostics and relayout in place.
+    ///
+    /// The DOM, styles, and image cache are retained, so this is a pure relayout
+    /// that leaves the current page and its interactions available.  The active
+    /// backend and its unsupported-feature report are written to the console.
+    #[cfg(feature = "dom")]
+    fn toggle_layout_backend(&mut self) -> bool {
+        if self.render_state.is_none() {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Warn,
+                ConsoleSource::Browser,
+                "Layout engine switch ignored: no rendered document.",
+            );
+            return true;
+        }
+        let switched = {
+            let render_state = self.render_state.as_mut().expect("checked above");
+            let next = render_state.backend.toggled();
+            if !render_state.set_backend(next, &RABBIT_FONTS) {
+                return true;
+            }
+            let max_scroll = render_state
+                .current_scene
+                .max_scroll_y(render_state.viewport.h);
+            self.render_scroll = self.render_scroll.min(max_scroll);
+            (next.display_name(), render_state.diagnostics.summary())
+        };
+        self.patch_all_controls();
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            format!("Switched layout engine to {}: {}", switched.0, switched.1),
+        );
+        self.log_render_scene("layout engine switch");
+        true
     }
 
     fn document_canvas(&mut self) -> DocumentCanvas<'_> {
@@ -2959,6 +3004,12 @@ impl App for RabbitApp {
                     self.url_input.set_text("");
                     self.url_input.active = true;
                     return true;
+                }
+                // Ctrl+E switches to the fallback or primary engine and
+                // relayouts the current document from retained DOM/styles.
+                #[cfg(feature = "dom")]
+                if ctrl && keycode == KEY_E {
+                    return self.toggle_layout_backend();
                 }
                 if keycode == KEY_F6 {
                     self.url_input.set_text("");
