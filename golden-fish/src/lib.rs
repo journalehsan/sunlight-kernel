@@ -37,6 +37,7 @@ pub mod attributes;
 pub mod document;
 pub mod entities;
 pub mod error;
+mod mutation;
 mod named_entities;
 pub mod node;
 pub mod parser;

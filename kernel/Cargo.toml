@@ -694,6 +694,8 @@ recovery_test = ["dependency_test"]
 # The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
 default = []
 native_std_probe = []
+# Optional isolated JavaScript CLI smoke fixture.
+sunjs_probe = []
 document_service = []
 native_document_service = ["document_service"]
 native_document_viewer = ["native_document_service", "document_viewer"]

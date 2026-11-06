@@ -64,6 +64,11 @@ impl Document {
         }
     }
 
+    /// Detach the root of a removed subtree without invalidating its node IDs.
+    pub(crate) fn detach_root(&mut self, child: NodeId) {
+        self.parents[child] = None;
+    }
+
     /// Append a child id to a parent's children list.
     pub(crate) fn append_child(&mut self, parent: NodeId, child: NodeId) {
         match &mut self.nodes[parent] {

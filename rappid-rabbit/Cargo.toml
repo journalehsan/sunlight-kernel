@@ -391,6 +391,10 @@ path = "src/main.rs"
 name = "rappid_rabbit"
 path = "src/lib.rs"
 
+[[example]]
+name = "js_dom_smoke"
+required-features = ["js-dom-fixture"]
+
 [dependencies]
 sun-font = { path = "../sun-font" }
 sunlight-fetch = { path = "../sunlight-fetch", default-features = false, features = ["sunlightos"] }
@@ -399,6 +403,7 @@ sunlight-ipc = { path = "../ipc" }
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ui = { path = "../sunlight-ui", features = ["app"] }
 golden-fish = { path = "../golden-fish", optional = true }
+sunlight-js = { path = "../sunlight-js", optional = true }
 tokio = { version = "1.48", default-features = false, features = ["rt", "sync", "time"] }
 
 [features]
@@ -409,6 +414,8 @@ svg = ["sunlight-ui/svg"]
 # "dom" enables Golden Fish HTML parsing and the interactive DOM tree inspector.
 # Native std uses Golden Fish's `tl` parser.
 dom = ["dep:golden-fish"]
+# Explicit host test harness only; navigation never invokes SunJS.
+js-dom-fixture = ["dom", "dep:sunlight-js"]
 
 [target.'cfg(target_os = "sunlightos")'.dependencies]
 sunlight-libc = { path = "../sunlight-libc", features = ["native-std", "dynamic-heap-128m"] }

@@ -1996,6 +1996,7 @@ dependencies = [
  "sunlight-fetch",
  "sunlight-http",
  "sunlight-ipc",
+ "sunlight-js",
  "sunlight-libc",
  "sunlight-ui",
  "tokio",
@@ -2961,6 +2962,18 @@ dependencies = [
 [[package]]
 name = "sunlight-ipc"
 version = "0.2.6526-alpha.2"
+
+[[package]]
+name = "sunlight-js"
+version = "0.1.0"
+
+[[package]]
+name = "sunlight-js-cli"
+version = "0.1.0"
+dependencies = [
+ "sunlight-js",
+ "sunlight-libc",
+]
 
 [[package]]
 name = "sunlight-kbd"

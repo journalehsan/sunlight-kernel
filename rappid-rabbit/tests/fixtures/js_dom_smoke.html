@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <title>SunJS DOM smoke fixture</title>
+  <style>
+    body { margin: 16px; background: #ffffff; color: #142638; }
+    h1 { font-size: 16px; }
+    #counter { padding: 12px; background: #dcfce7; color: #14532d; }
+  </style>
+</head>
+<body>
+  <h1>SunJS DOM fixture</h1>
+  <div id="counter">Old</div>
+  <p>Controlled local harness</p>
+  <script id="fixture-script">
+    if (window !== globalThis || window.document !== document) {
+      throw "incorrect globals";
+    }
+    const counter = document.getElementById("counter");
+    if (counter !== document.getElementById("counter") || counter.textContent !== "Old") {
+      throw "incorrect wrapper identity or getter";
+    }
+    counter.textContent = "New Text";
+    if (document.getElementById("counter").textContent !== "New Text") {
+      throw "write was not synchronous";
+    }
+  </script>
+</body>
+</html>

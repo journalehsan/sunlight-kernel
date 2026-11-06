@@ -270,6 +270,10 @@ static CPUFEAT_ELF_BYTES: &[u8] =
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
 static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
 static HELIOS_PROBE_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/linux-probe-all");
+#[cfg(feature = "sunjs_probe")]
+pub(crate) static SUNJS_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-sunlightos/release/sunjs");
+
 #[cfg(feature = "native_std_probe")]
 static NATIVE_FP_PROBE_ELF_BYTES: &[u8] =
     include_bytes!("../../tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe");

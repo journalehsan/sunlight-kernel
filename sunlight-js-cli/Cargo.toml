@@ -1,0 +1,17 @@
+[package]
+name = "sunlight-js-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunjs"
+path = "src/main.rs"
+
+[dependencies]
+sunlight-js = { path = "../sunlight-js" }
+
+[target.'cfg(target_os = "sunlightos")'.dependencies]
+sunlight-libc = { path = "../sunlight-libc", features = ["native-std"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("sunlightos"))'] }

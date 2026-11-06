@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+    "sunlight-js",
+    "sunlight-js-cli",
     "fastlane-ring",
     "fastlane-doorbell",
     "kernel",

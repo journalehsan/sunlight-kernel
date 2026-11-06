@@ -1549,6 +1549,7 @@ impl RabbitApp {
                         && output.state.document_id == self.document_lifecycle.generation()
                         && current.is_some_and(|state| {
                             state.image_revision == output.state.image_revision
+                                && state.dom_revision == output.state.dom_revision
                         })
                     {
                         self.developer_tools
@@ -3627,6 +3628,51 @@ mod view_and_reflow_tests {
             state.viewport.w as f32
         );
     }
+    #[test]
+    #[cfg(feature = "js-dom-fixture")]
+    fn dom_mutation_rejects_a_resize_completion_from_the_previous_revision() {
+        let mut app = app();
+        let viewport = app.latest_viewport;
+        let dom = golden_fish::parse_html("<p id='counter'>Old</p>").unwrap();
+        let styles = StyleContext::build(&dom, &[]);
+        app.render_state = Some(DocumentRenderState::new(
+            1,
+            "fixture:stale-worker".into(),
+            dom,
+            styles,
+            viewport,
+            &RABBIT_FONTS,
+        ));
+        let mut old = app.render_state.as_ref().unwrap().reflow_snapshot();
+        old.rebuild(viewport, &RABBIT_FONTS);
+        let result = rappid_rabbit::dom_fixture::run_fixture_script(
+            app.render_state.as_mut().unwrap(),
+            "document.getElementById('counter').textContent='New Text';",
+            "stale-worker.js",
+            &RABBIT_FONTS,
+        );
+        result.evaluation.unwrap();
+        assert!(result.repaint_requested);
+        let scene = app.render_state.as_ref().unwrap().current_scene.clone();
+        let (sender, receiver) = oneshot::channel();
+        app.reflow_completion = Some(receiver);
+        assert!(sender
+            .send(ReflowOutput {
+                version: app.viewport_version,
+                state: old
+            })
+            .is_ok());
+        assert!(!app.poll_reflow());
+        let state = app.render_state.as_ref().unwrap();
+        assert_eq!(state.dom_revision, 1);
+        assert!(std::sync::Arc::ptr_eq(&scene, &state.current_scene));
+        let counter = state.dom.get_element_by_id("counter").unwrap();
+        assert_eq!(
+            state.dom.element_text_content(counter).as_deref(),
+            Some("New Text")
+        );
+    }
+
     #[test]
     fn navigation_and_late_images_invalidate_inflight_results() {
         let runtime = runtime();

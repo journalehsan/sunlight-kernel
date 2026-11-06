@@ -139,6 +139,8 @@ pub struct DocumentRenderState {
     pub diagnostics: LayoutDiagnostics,
     images: ImageCache,
     pub image_revision: u64,
+    /// Reject worker snapshots created before a controlled DOM mutation.
+    pub dom_revision: u64,
 }
 
 impl DocumentRenderState {
@@ -195,6 +197,7 @@ impl DocumentRenderState {
             diagnostics,
             images,
             image_revision: 0,
+            dom_revision: 0,
         }
     }
 
@@ -225,7 +228,27 @@ impl DocumentRenderState {
             diagnostics: LayoutDiagnostics::default(),
             images: self.images.clone(),
             image_revision: self.image_revision,
+            dom_revision: self.dom_revision,
         }
+    }
+
+    /// Fixture host invalidation: refresh styles and run the canonical two-pass
+    /// layout/scene paint pipeline, producing dirty regions for DocumentCanvas.
+    #[cfg(feature = "js-dom-fixture")]
+    pub(crate) fn rebuild_for_fixture_dom(
+        &mut self,
+        dom: Arc<Document>,
+        measurer: &dyn TextMeasurer,
+    ) {
+        self.dom = dom;
+        self.dom_revision = self.dom_revision.wrapping_add(1);
+        let sheets = crate::css::collect_embedded_stylesheets(&self.dom);
+        self.styles = Arc::new(StyleContext::build_with_viewport(
+            &self.dom,
+            &sheets,
+            self.viewport.w,
+        ));
+        self.rebuild(self.viewport, measurer);
     }
 
     pub fn rebuild(&mut self, viewport: Size, measurer: &dyn TextMeasurer) {

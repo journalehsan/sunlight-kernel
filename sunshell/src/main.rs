@@ -1773,6 +1773,7 @@ mod sunlight {
                 } else if matches!(
                     cmd,
                     "/bin/native-fp-probe"
+                        | "/bin/sunjs"
                         | "/bin/helios-probe"
                         | "/usr/bin/helios-probe"
                         | "/bin/linux-thread-probe"
@@ -1816,7 +1817,7 @@ mod sunlight {
                         | "/bin/hello-linux"
                         | "/usr/bin/hello-linux"
                 ) {
-                    // These static Linux compatibility workloads are embedded
+                    // These native probes and static Linux workloads are embedded
                     // by the kernel rather than exposed through the native VFS.
                     Some(alloc::string::String::from(cmd))
                 } else {
@@ -1826,6 +1827,7 @@ mod sunlight {
             let embedded_linux = matches!(
                 cmd,
                 "helios-probe"
+                    | "sunjs"
                     | "linux-thread-probe"
                     | "linux-fionbio-pipe-probe"
                     | "linux-recvfrom-probe"
