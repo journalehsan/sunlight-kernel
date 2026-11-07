@@ -188,6 +188,7 @@ pub enum SunlightSyscall {
     Es1371Info = 161,
     IoPortRead = 162,
     IoPortWrite = 163,
+    StorageCtl = 168,
     ReadDirFrom = 148,
     RenameNoReplace = 149,
     FileReserve = 150,
@@ -1052,6 +1053,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         86 => sys_monotonic_ms(),
         #[cfg(all(debug_assertions, feature = "fastlane_measurement_test"))]
         167 => sys_measurement_stamp(frame),
+        168 => sys_storage_ctl(frame),
         87 => sys_get_entropy(),
         88 => sys_clock_gettime(frame),
         89 => crate::entropy::is_ready() as u64,
@@ -4083,6 +4085,7 @@ fn spawn_service_capability(path: &str, uid: u32) -> u64 {
         return 0;
     }
     match path {
+        "/bin/storagectl" | "/usr/bin/storagectl" => crate::ipc::ServiceCapability::StorageAdmin.bit(),
         "/bin/sunlightctl" | "/usr/bin/sunlightctl" => {
             crate::ipc::ServiceCapability::ServiceLifecycle.bit()
         }
@@ -4949,6 +4952,102 @@ fn has_host_key_admin() -> bool {
     })
 }
 
+fn has_storage_admin() -> bool {
+    crate::sched::with_scheduler(|sched| {
+        let caller = sched.current_process();
+        ::sunlight_ipc::storage::authorized(caller.uid, caller.service_lookup_restrictions)
+    })
+}
+
+/// Native StorageCtl (168). Credentials always come from the running process;
+/// no caller identity or trust assertion is accepted in the request.
+fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
+    use ::sunlight_ipc::storage as api;
+    if !has_storage_admin() {
+        return (-1i64) as u64;
+    }
+    let target = if frame.rdi == api::MOUNT_FAT32 {
+        match read_user_cstr(frame.rdx, api::TARGET_MAX) {
+            Ok(bytes) => match alloc::string::String::from_utf8(bytes) {
+                Ok(path) => Some(path),
+                Err(_) => return (-22i64) as u64,
+            },
+            Err(_) => return (-14i64) as u64,
+        }
+    } else {
+        None
+    };
+    let mut record = [0u8; api::MOUNT_RECORD_SIZE];
+    let record_size;
+    {
+        // The file-syscall lock covers validation, probing, publication,
+        // busy checks, flush and detach. Never take SCHEDULER here.
+        let mut guard = crate::KERNEL_VFS.lock();
+        let Some(vfs) = guard.as_mut() else {
+            return (-5i64) as u64;
+        };
+        match frame.rdi {
+            api::ENUMERATE => {
+                let Some(info) = crate::storage::DEVICES.lock().enumerate(frame.rsi as usize)
+                else {
+                    return 0;
+                };
+                let words = [
+                    info.id,
+                    info.parent,
+                    info.start,
+                    info.blocks,
+                    info.operations,
+                    info.partition,
+                    info.layout,
+                    512,
+                ];
+                for (slot, word) in record.chunks_exact_mut(8).zip(words) {
+                    slot.copy_from_slice(&word.to_le_bytes());
+                }
+                record_size = api::DEVICE_RECORD_SIZE;
+            }
+            api::LIST_MOUNTS => {
+                let Some(info) = vfs.mount_info(frame.rsi as usize) else {
+                    return 0;
+                };
+                if info.path.len() >= api::TARGET_MAX {
+                    return (-22i64) as u64;
+                }
+                let words = [
+                    info.id,
+                    info.source,
+                    u64::from(info.protected),
+                    info.path.len() as u64,
+                ];
+                for (slot, word) in record.chunks_exact_mut(8).zip(words) {
+                    slot.copy_from_slice(&word.to_le_bytes());
+                }
+                record[32..32 + info.path.len()].copy_from_slice(info.path.as_bytes());
+                record_size = api::MOUNT_RECORD_SIZE;
+            }
+            api::MOUNT_FAT32 => {
+                return match crate::storage::mount(vfs, frame.rsi, target.as_deref().unwrap_or(""))
+                {
+                    Ok(()) => 0,
+                    Err(error) => crate::storage::error(error),
+                }
+            }
+            api::UNMOUNT => {
+                return match vfs.unmount(frame.rsi) {
+                    Ok(()) => 0,
+                    Err(error) => crate::storage::error(error),
+                }
+            }
+            _ => return (-22i64) as u64,
+        }
+    }
+    if copy_to_user(frame.rdx, &record[..record_size]).is_err() {
+        return (-14i64) as u64;
+    }
+    1
+}
+
 fn validate_secret_parent<D: sunlight_block::BlockDevice>(vfs: &mut sunlight_fs::Vfs<D>) -> bool {
     matches!(
         vfs.stat(PRIVATE_SECRET_DIR),
@@ -5058,6 +5157,8 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
     // before SCHEDULER is taken (lock-order invariant).
     let vfs_handle = {
         let (uid, gid, actor) = current_fs_actor();
+        let storage_admin = has_storage_admin();
+        let mut policy_denied = false;
         if private_secret_child(path) {
             // Path-level root identity is deliberately insufficient for
             // service-private material. Only an explicitly spawned
@@ -5092,23 +5193,17 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
                 decision.reason,
                 decision.error
             );
-            if !decision.allowed {
-                if is_linux
-                    && option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1")
-                    && trace_yazi_path
-                {
-                    crate::serial_println!(
-                        "[HELIOS-ABI-TRACE] open policy denied path={:?} ret=-EACCES",
-                        path
-                    );
-                }
-                return ERR_EACCES;
-            }
+            policy_denied = !decision.allowed;
         }
         let mut guard = crate::KERNEL_VFS.lock();
         let Some(vfs) = guard.as_mut() else {
             return ERR_EIO;
         };
+        // StorageAdmin conveys writes only on a currently installed runtime
+        // mount. Resolve policy and open under the lifecycle lock together.
+        if policy_denied && !(storage_admin && vfs.is_runtime_path(path)) {
+            return ERR_EACCES;
+        }
         let existing = vfs.stat(path).ok();
         if let Some(stat) = existing {
             if stat.file_type == sunlight_fs::vfs::FileType::Directory {
@@ -8743,13 +8838,13 @@ fn sys_dir_sync(frame: &mut SyscallFrame) -> u64 {
     let path_buf = resolve_current_path(raw_path);
     let path = path_buf.as_str();
     let (_, _, actor) = current_fs_actor();
-    if !sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false).allowed {
-        return ERR_EACCES;
-    }
+    let storage_admin = has_storage_admin();
+    let allowed = sunlight_fs::can_write(actor, path, sunlight_fs::FsOperation::Write, None, false).allowed;
     let mut guard = crate::KERNEL_VFS.lock();
     let Some(vfs) = guard.as_mut() else {
         return ERR_EIO;
     };
+    if !allowed && !(storage_admin && vfs.is_runtime_path(path)) { return ERR_EACCES; }
     match vfs.sync_dir(path) {
         Ok(()) => 0,
         Err(error) => fs_error_raw(error),

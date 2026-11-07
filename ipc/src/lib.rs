@@ -14,6 +14,7 @@ pub mod resource_ledger;
 pub mod session_completion;
 pub mod spawn_env;
 pub mod supervision;
+pub mod storage;
 pub mod swap_policy;
 pub mod vfs_grants;
 pub use display_metrics::{
@@ -197,6 +198,8 @@ pub enum SunlightSyscall {
     VfsGrant = 164,
     /// Broker-owned Account session registration and lifecycle.
     AccountSession = 165,
+    /// rdi=storage operation, rsi=index/device ID/mount ID, rdx=record/path.
+    StorageCtl = 168,
     /// Paged ReadDir: r10 is the entry offset.
     ReadDirFrom = 148,
     /// Atomic rename that fails if the destination already exists.

@@ -26,6 +26,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_sector_and_volume_geometry_outside_device() {
+        for (offset, bytes) in [
+            (11, [0, 16, 1, 0]),          // unsupported sector size
+            (32, u32::MAX.to_le_bytes()), // exceeds device
+            (36, u32::MAX.to_le_bytes()), // FAT arithmetic overflow
+            (44, u32::MAX.to_le_bytes()), // root outside data area
+        ] {
+            let mut image = FatImageBuilder::new(1).build();
+            image[offset..offset + 4].copy_from_slice(&bytes);
+            assert!(Fat32::mount(MemDisk::new(&mut image)).is_none());
+        }
+    }
+
+    #[test]
     fn mounts_and_reads_root_file() {
         let mut builder = FatImageBuilder::new(1);
         builder.add_file(builder.root(), "HELLO.TXT", b"boot volume\n");

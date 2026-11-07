@@ -85,7 +85,13 @@ impl<D: BlockDevice> Fat32<D> {
         if bps != 512 || root_ent_cnt != 0 || fat16_size != 0 || fat32_size == 0 {
             return None;
         }
-        if spc == 0 || root_cluster < 2 || num_fats == 0 || total_sectors == 0 {
+        if !spc.is_power_of_two()
+            || spc > 128
+            || root_cluster < 2
+            || num_fats == 0
+            || reserved == 0
+            || total_sectors as u64 > dev.block_count()
+        {
             return None;
         }
         // Check file-system type string at offset 82
@@ -93,11 +99,17 @@ impl<D: BlockDevice> Fat32<D> {
             return None;
         }
 
-        let fds = reserved + num_fats * fat32_size;
+        let fds = reserved.checked_add(num_fats.checked_mul(fat32_size)?)?;
         if total_sectors <= fds {
             return None;
         }
         let cluster_count = (total_sectors - fds) / spc as u32;
+        if cluster_count == 0
+            || root_cluster - 2 >= cluster_count
+            || cluster_count.checked_add(2)? > fat32_size.checked_mul(128)?
+        {
+            return None;
+        }
         Some(Fat32 {
             dev,
             spc,
@@ -386,7 +398,12 @@ impl<D: BlockDevice> Fat32<D> {
     /// Complete all pending block writes and issue the device's stable-media
     /// barrier. This fails when the backing device cannot make that promise.
     pub fn flush(&mut self) -> bool {
-        self.dev.flush().is_ok()
+        self.sync().is_ok()
+    }
+
+    /// Preserve the device's barrier error for lifecycle operations.
+    pub fn sync(&mut self) -> Result<(), sunlight_block::BlockError> {
+        self.dev.flush()
     }
 }
 

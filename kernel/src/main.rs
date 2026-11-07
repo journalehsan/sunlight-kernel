@@ -102,6 +102,8 @@ static SUNSHELL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-n
 // applet is selected by argv[0].
 static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
+static STORAGECTL_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/storagectl");
 static SUNLIGHT_ECHO_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/echo");
 static SUNLIGHT_CAT_ELF_BYTES: &[u8] =
@@ -1816,6 +1818,9 @@ static VIRTIO_BLK: spin::Mutex<BlkCell> = spin::Mutex::new(BlkCell(None));
 const BLOCK_VOLUME_NONE: u8 = 0;
 const BLOCK_VOLUME_BOOT: u8 = 1;
 const BLOCK_VOLUME_STATE: u8 = 2;
+const BLOCK_VOLUME_PARTITION: u8 = 3;
+static BLOCK_PARTITION: spin::Mutex<Option<sunlight_block::partition::Partition>> =
+    spin::Mutex::new(None);
 static BLOCK_VOLUME_KIND: core::sync::atomic::AtomicU8 =
     core::sync::atomic::AtomicU8::new(BLOCK_VOLUME_NONE);
 
@@ -1856,11 +1861,8 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
         let mut cell = VIRTIO_BLK.lock();
         let blk = cell.0.as_mut().ok_or(sunlight_block::BlockError::Io)?;
-        if unsafe { blk.flush() } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Unsupported)
-        }
+        if !blk.supports_flush() { return Err(sunlight_block::BlockError::Unsupported); }
+        if unsafe { blk.flush() } { Ok(()) } else { Err(sunlight_block::BlockError::Io) }
     }
 
     fn block_count(&self) -> u64 {
@@ -1873,7 +1875,8 @@ impl sunlight_block::BlockDevice for KernelBlkDev {
 }
 
 /// Disk type behind the kernel VFS: a small block cache over the virtio device.
-pub type KernelDisk = sunlight_block::CachedBlockDevice<KernelBlkDev, 16>;
+pub type KernelDisk =
+    sunlight_block::CachedBlockDevice<sunlight_block::PartitionBlockDevice<KernelBlkDev>, 16>;
 
 /// Kernel-global VFS (Phase 6.5 Step 3): ramfs `/` plus the FAT boot volume at
 /// `/boot` when a disk is present. Backs exec-from-VFS and the file syscalls.
@@ -1938,11 +1941,8 @@ impl sunlight_block::BlockDevice for VirtioBootDisk<'_> {
     }
 
     fn flush(&mut self) -> Result<(), sunlight_block::BlockError> {
-        if unsafe { self.blk.flush() } {
-            Ok(())
-        } else {
-            Err(sunlight_block::BlockError::Unsupported)
-        }
+        if !self.blk.supports_flush() { return Err(sunlight_block::BlockError::Unsupported); }
+        if unsafe { self.blk.flush() } { Ok(()) } else { Err(sunlight_block::BlockError::Io) }
     }
 
     fn block_count(&self) -> u64 {
@@ -2007,7 +2007,7 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
 
     // SAFETY: All physical/virtual addresses are valid kernel-allocated frames;
     // we hold ring-0 privilege for port I/O.
-    let mut blk = match unsafe {
+    let blk = match unsafe {
         sunlight_virtio::VirtioBlk::init(
             io_base,
             queue_phys.as_u64(),
@@ -2033,6 +2033,22 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         }
     };
 
+    // Retain even an unformatted disk or rejected table for runtime enumeration.
+    let operations = sunlight_block::registry::READ
+        | if blk.supports_write() { sunlight_block::registry::WRITE } else { 0 }
+        | if blk.supports_flush() { sunlight_block::registry::FLUSH } else { 0 };
+    let device_id = match storage::DEVICES.lock().register_disk(blk.block_count(), operations) {
+        Some(id) => id,
+        None => {
+            serial_println!("[BLK] zero-capacity disk or exhausted registry; no mount");
+            VIRTIO_BLK.lock().0 = Some(blk);
+            return share_phys;
+        }
+    };
+    let mut registered_disk = VIRTIO_BLK.lock();
+    registered_disk.0 = Some(blk);
+    let mut blk = registered_disk.0.as_mut().expect("registered disk");
+
     serial_println!("[BLK]  Negotiated features");
     serial_println!("[BLK]  Queue initialized");
 
@@ -2054,7 +2070,59 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
         return share_phys;
     }
     serial_println!("[BLK]  Read LBA 0 OK");
-    let volume_kind = if &sector0[71..79] == b"SUNSTATE" {
+    let table = match sunlight_block::partition::discover(&mut VirtioBootDisk { blk: &mut blk }) {
+        Ok(table) => table,
+        Err(error) => {
+            serial_println!("[PART] rejected disk: {:?}", error);
+            return share_phys;
+        }
+    };
+    storage::DEVICES.lock().register_partitions(device_id, &table)
+        .expect("boot partition registry capacity");
+    let superfloppy = table.layout == sunlight_block::partition::Layout::Superfloppy;
+    let selected = if superfloppy {
+        sunlight_block::partition::Partition {
+            start: 0,
+            blocks: blk.block_count(),
+            fat_candidate: true,
+        }
+    } else {
+        let mut selected = None;
+        for p in table.partitions().iter().filter(|p| p.fat_candidate) {
+            let view = sunlight_block::PartitionBlockDevice::new(
+                VirtioBootDisk { blk: &mut blk },
+                p.start,
+                p.blocks,
+            )
+            .expect("validated partition");
+            if sunlight_fat::Fat32::mount(view).is_some() {
+                if selected.is_some() {
+                    serial_println!("[PART] ambiguous FAT32 volumes; refusing mount");
+                    return share_phys;
+                }
+                selected = Some(*p);
+            }
+        }
+        match selected {
+            Some(p) => p,
+            None => {
+                serial_println!("[PART] no eligible FAT32 volume");
+                return share_phys;
+            }
+        }
+    };
+    serial_println!(
+        "[PART] {:?} start={} blocks={}",
+        table.layout,
+        selected.start,
+        selected.blocks
+    );
+    *BLOCK_PARTITION.lock() = Some(selected);
+    let volume_kind = if !superfloppy {
+        BLOCK_VOLUME_PARTITION
+    } else if option_env!("SUNLIGHT_TRUST_LEGACY_STATE") == Some("1")
+        && &sector0[71..79] == b"SUNSTATE"
+    {
         BLOCK_VOLUME_STATE
     } else {
         BLOCK_VOLUME_BOOT
@@ -2072,7 +2140,14 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     );
 
     // Mount FAT32 over the virtio-blk device through the BlockDevice trait.
-    let mut fat = match sunlight_fat::Fat32::mount(VirtioBootDisk { blk: &mut blk }) {
+    let mut fat = match sunlight_fat::Fat32::mount(
+        sunlight_block::PartitionBlockDevice::new(
+            VirtioBootDisk { blk: &mut blk },
+            selected.start,
+            selected.blocks,
+        )
+        .expect("validated partition"),
+    ) {
         Some(f) => f,
         None => {
             serial_println!("[FAT]  FAT32 detection failed");
@@ -2118,19 +2193,26 @@ fn init_block_and_fat(hhdm_offset: VirtAddr) -> PhysAddr {
     }
 
     share.count = count;
-    share.magic = sunlight_fat::SHARE_MAGIC;
+    // Partitioned volumes belong only to the authoritative kernel VFS.
+    if superfloppy {
+        share.magic = sunlight_fat::SHARE_MAGIC;
+    }
 
     // Release the borrow on `blk`, then keep the device alive for post-boot
     // reads through the kernel VFS.
     drop(fat);
-    VIRTIO_BLK.lock().0 = Some(blk);
+    drop(registered_disk);
 
     share_phys
 }
 
-/// Build the kernel-global VFS: INITRAMFS at `/`, plus the detected FAT32
-/// volume. `SUNSTATE` is mounted read/write at `/state`; other volumes retain
-/// the historical `/boot` mount.
+#[path = "storage_partition_test.rs"]
+mod storage_partition_test;
+mod storage;
+
+/// Build the authoritative VFS: legacy superfloppies retain `/boot` or
+/// `/state`; an unambiguous eligible partition mounts at `/mnt`.
+/// See docs/partitioned-storage.md for selection and trust policy.
 fn init_kernel_vfs() {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 
@@ -2142,18 +2224,30 @@ fn init_kernel_vfs() {
         return;
     }
 
-    let have_disk = VIRTIO_BLK.lock().0.is_some();
-    if have_disk {
-        let disk = sunlight_block::CachedBlockDevice::new(KernelBlkDev);
+    let partition = *BLOCK_PARTITION.lock();
+    if let Some(partition) = partition.filter(|_| VIRTIO_BLK.lock().0.is_some()
+        && option_env!("SUNLIGHT_RUNTIME_STORAGE_TEST") != Some("1")) {
+        let view = sunlight_block::PartitionBlockDevice::new(
+            KernelBlkDev,
+            partition.start,
+            partition.blocks,
+        )
+        .expect("validated partition");
+        let disk = sunlight_block::CachedBlockDevice::new(view);
         match sunlight_fat::Fat32::mount(disk) {
             Some(fat) => {
                 let kind = BLOCK_VOLUME_KIND.load(core::sync::atomic::Ordering::Acquire);
                 let mountpoint = if kind == BLOCK_VOLUME_STATE {
                     "/state"
+                } else if kind == BLOCK_VOLUME_PARTITION {
+                    "/mnt"
                 } else {
                     "/boot"
                 };
                 if vfs.mount_fat(mountpoint, fat).is_ok() {
+                    if let Some(info) = storage::DEVICES.lock().find_extent(partition.start, partition.blocks) {
+                        let _ = vfs.set_mount_source(mountpoint, info.id);
+                    }
                     serial_println!("[VFS] FAT volume mounted at {}", mountpoint);
                     if mountpoint == "/state" {
                         // This marker directory exists only on the disk mount.
@@ -2172,6 +2266,9 @@ fn init_kernel_vfs() {
 
     *KERNEL_VFS.lock() = Some(vfs);
     serial_println!("[VFS] kernel mount OK");
+    if option_env!("SUNLIGHT_STORAGE_TEST") == Some("1") {
+        storage_partition_test::run();
+    }
 }
 
 /// Serial boot boundary diagnostics shared by Legacy BIOS and UEFI.
@@ -4293,6 +4390,7 @@ fn setup_key_injection() {
         "shell-phase2" => build_shell_phase_sequence(b"sshl --script-tests"),
         "shell-pty-liveness" => build_shell_phase_sequence(b"sshl --pty-liveness-tests"),
         "phase3.9" => build_phase3_9_sequence(),
+        "storage-runtime" => build_storage_runtime_sequence(),
         "wiseowl3.75" => build_wiseowl_phase375_sequence(),
         "wiseowl3.875" => build_wiseowl_phase3875_sequence(),
         "wiseowl_graphical_console_v1" => build_wiseowl_graphical_console_v1_sequence(),
@@ -4544,6 +4642,23 @@ fn build_yazi_sequence(command: &[u8]) -> [u8; 12288] {
         }
     }
     s
+}
+
+#[cfg(feature = "key_inject")]
+fn build_storage_runtime_sequence() -> [u8; 12288] {
+    let mut sequence = [0u8; 12288];
+    let mut len = 0;
+    append_injected_delay(&mut sequence, &mut len, 1536);
+    append_injected_scancode(&mut sequence, &mut len, 0x1c);
+    append_injected_delay(&mut sequence, &mut len, 128);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut sequence, &mut len, scancode);
+    }
+    append_injected_delay(&mut sequence, &mut len, 512);
+    append_injected_command(&mut sequence, &mut len, b"/bin/storage-unprivileged denied");
+    append_injected_delay(&mut sequence, &mut len, 256);
+    append_injected_command(&mut sequence, &mut len, b"storagectl probe");
+    sequence
 }
 
 /// Wise Owl Phase 3.75 native integration sequence. Test-only keyboard
@@ -4821,14 +4936,24 @@ fn build_phase2b1_sequence() -> [u8; 12288] {
 #[cfg(feature = "key_inject")]
 fn build_phase6_5_3_sequence() -> [u8; 12288] {
     let mut s = [0u8; 12288];
-    let codes: [u8; 31] = [
-        0x13, 0x18, 0x18, 0x14, 0x1C, // password: r,o,o,t,Enter
-        0x26, 0x1F, 0x39, 0x35, 0x1C, // ls /
-        0x32, 0x25, 0x20, 0x17, 0x13, 0x39, // mkdir<space>
-        0x35, 0x14, 0x32, 0x19, 0x35, 0x2D, 0x1C, // /tmp/x + Enter
-        0x26, 0x1F, 0x39, 0x35, 0x14, 0x32, 0x19, 0x1C, // ls /tmp + Enter
-    ];
-    s[..codes.len()].copy_from_slice(&codes);
+    let mut len = 0usize;
+    // Match the current login presenter: select the preselected user before
+    // typing its password, as in the other native shell gate sequences.
+    append_injected_delay(&mut s, &mut len, 512);
+    append_injected_scancode(&mut s, &mut len, 0x1c);
+    append_injected_delay(&mut s, &mut len, 96);
+    for scancode in [0x13, 0x18, 0x18, 0x14, 0x1c] {
+        append_injected_scancode(&mut s, &mut len, scancode);
+    }
+    append_injected_delay(&mut s, &mut len, 256);
+    for command in [
+        b"ls /".as_slice(),
+        b"mkdir /tmp/x".as_slice(),
+        b"ls /tmp".as_slice(),
+    ] {
+        append_injected_command(&mut s, &mut len, command);
+        append_injected_delay(&mut s, &mut len, 96);
+    }
     s
 }
 

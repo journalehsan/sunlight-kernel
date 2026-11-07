@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-utils"
-version = "0.2.6572-alpha.2"
+version = "0.2.6678-alpha.2"
+
 
 
 
@@ -746,3 +747,11 @@ path = "src/bin/xargs.rs"
 sunlight-libc = { path = "../sunlight-libc" }
 sunlight-ipc = { path = "../ipc" }
 memchr = { version = "2", default-features = false }
+
+[[bin]]
+name = "storagectl"
+path = "src/bin/storagectl.rs"
+test = false
+
+[features]
+storage-test = []

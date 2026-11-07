@@ -1169,6 +1169,8 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/bin/cpufeat" | "/usr/bin/cpufeat" => Ok(crate::CPUFEAT_ELF_BYTES),
         // hello-linux: musl Rust binary for Helios Linux-compat smoke test.
         "/bin/hello-linux" | "/usr/bin/hello-linux" => Ok(crate::HELLO_LINUX_ELF_BYTES),
+        "/bin/storagectl" | "/usr/bin/storagectl" => Ok(crate::STORAGECTL_ELF_BYTES),
+        "/bin/storage-unprivileged" if option_env!("SUNLIGHT_RUNTIME_STORAGE_TEST") == Some("1") => Ok(crate::STORAGECTL_ELF_BYTES),
         "/bin/yazi" | "/usr/bin/yazi" => Ok(crate::YAZI_ELF_BYTES),
         #[cfg(feature = "key_inject")]
         "/bin/yazi-baseline" | "/usr/bin/yazi-baseline" => Ok(crate::YAZI_BASELINE_ELF_BYTES),

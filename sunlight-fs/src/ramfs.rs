@@ -985,6 +985,10 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Manifest.toml", 0, 0, mode::FILE_644, include_bytes!("../../VoiceRecorder.sunapp/Manifest.toml")),
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg")),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
+    RamEntry::dir("/mnt", 0, 0, mode::DIR_755),
+    RamEntry::file("/bin/storagectl", 0, 0, mode::FILE_755, b"#!/kernel/storagectl\n"),
+    // The kernel only supplies this fixture alias in an explicit runtime test image.
+    RamEntry::file("/bin/storage-unprivileged", 0, 0, mode::FILE_755, b"#!/kernel/storage-unprivileged\n"),
     RamEntry::dir("/run", 0, 0, mode::DIR_755),
     RamEntry::dir("/state", 0, 0, mode::DIR_755),
     RamEntry::dir("/state/sunlightd", 0, 0, mode::DIR_700),

@@ -11,6 +11,10 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod partition;
+pub mod registry;
+pub use partition::PartitionBlockDevice;
+
 /// All SunlightOS block devices use 512-byte sectors.
 pub const BLOCK_SIZE: usize = 512;
 
@@ -138,6 +142,9 @@ impl<D: BlockDevice, const N: usize> CachedBlockDevice<D, N> {
 
 impl<D: BlockDevice, const N: usize> BlockDevice for CachedBlockDevice<D, N> {
     fn read_block(&mut self, lba: u64, buf: &mut [u8; BLOCK_SIZE]) -> Result<(), BlockError> {
+        if lba >= self.inner.block_count() {
+            return Err(BlockError::OutOfRange);
+        }
         let tag = lba / N as u64;
         let index = (lba % N as u64) as usize;
 
@@ -158,6 +165,9 @@ impl<D: BlockDevice, const N: usize> BlockDevice for CachedBlockDevice<D, N> {
     }
 
     fn write_block(&mut self, lba: u64, buf: &[u8; BLOCK_SIZE]) -> Result<(), BlockError> {
+        if lba >= self.inner.block_count() {
+            return Err(BlockError::OutOfRange);
+        }
         let tag = lba / N as u64;
         let index = (lba % N as u64) as usize;
 
@@ -193,7 +203,8 @@ impl<'a> MemDisk<'a> {
     }
 
     fn range(&self, lba: u64) -> Result<core::ops::Range<usize>, BlockError> {
-        let start = (lba as usize)
+        let start = usize::try_from(lba)
+            .map_err(|_| BlockError::OutOfRange)?
             .checked_mul(BLOCK_SIZE)
             .ok_or(BlockError::OutOfRange)?;
         let end = start

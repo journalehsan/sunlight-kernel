@@ -2,5 +2,6 @@
 # Boot brings up the kernel-global VFS, then injected keys run `ls /`,
 # `mkdir /tmp/x` and `ls /tmp` through spawn/waitpid.
 [VFS] kernel mount OK
-[EXEC] ls exit=0
-[EXEC] mkdir exit=0
+[TTY]  exit: ls / -> 0
+[TTY]  exit: mkdir /tmp/x -> 0
+[TTY]  exit: ls /tmp -> 0

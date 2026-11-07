@@ -2,6 +2,7 @@
 pub enum FsError {
     NotFound,
     AlreadyExists,
+    Busy,
     NotDir,
     IsDir,
     UnexpectedType,

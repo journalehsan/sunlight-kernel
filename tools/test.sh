@@ -302,7 +302,7 @@ case "$PHASE" in
         ;;
     phase6.5.3)
         EXPECTED_FILE="tools/tests/phase6_5_3.expected"
-        FINAL_MARKER="[EXEC] ls exit=0"
+        FINAL_MARKER="[TTY]  exit: ls /tmp -> 0"
         PASS_LABEL="Phase 6.5.3"
         NEED_DISK=true
         ;;
@@ -755,7 +755,12 @@ fi
 if [[ "${SUNLIGHT_TEST_KERNEL_FEATURES:-}" == *cpu_accounting_diag* ]]; then
     KERNEL_FEATURES="$KERNEL_FEATURES --features cpu_accounting_diag"
 fi
-EXTRA_ENV=()
+# Explicitly trust only the dedicated state fixture attached by this gate.
+# A FAT label alone never grants a disk the /state namespace.
+EXTRA_ENV=(SUNLIGHT_TRUST_LEGACY_STATE=0)
+if [[ "$NEED_DISK" == "true" && ( "$PHASE" == wiseowl-* || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" ) ]]; then
+    EXTRA_ENV=(SUNLIGHT_TRUST_LEGACY_STATE=1)
+fi
 if [[ "$PHASE" == shell-* ]]; then
     EXTRA_ENV+=("SUNLIGHT_INJECT_PHASE=$PHASE")
 elif [[ "$PHASE" == "phase2b1" ]]; then

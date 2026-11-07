@@ -632,6 +632,12 @@ fn main() {
         },
         EmbeddedBinary {
             package: "sunlight-utils",
+            output: "storagectl",
+            rustflags: service_rustflags,
+            args: &["--bin", "storagectl", "--release"],
+        },
+        EmbeddedBinary {
+            package: "sunlight-utils",
             output: "pwd",
             rustflags: service_rustflags,
             args: &["--release", "--bin", "pwd"],

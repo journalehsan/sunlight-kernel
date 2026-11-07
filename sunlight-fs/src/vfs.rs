@@ -1,6 +1,10 @@
 use crate::{path, FsError, RamFs};
+use alloc::string::String;
 use sunlight_block::{BlockDevice, NullDevice};
 use sunlight_fat::{Fat32, FatError, MAX_NAME_83};
+
+#[cfg(test)]
+mod storage_tests;
 
 pub const MAX_MOUNTS: usize = 8;
 /// Maximum file-name length reported by `read_dir`.
@@ -10,12 +14,12 @@ pub const FAT_MAX_HANDLES: usize = 16;
 
 // Open handles are private backend capabilities, not indexes that callers may
 // safely retain after close.  Keep the slot in the low bits and tag each new
-// incarnation with a generation.  The VFS mount packing reserves 24 bits for
-// the local handle, leaving 18 generation bits with the six bits required for
-// the current (at most 32) backend slots.
+// incarnation with a generation. The kernel fd table reserves two high bits
+// for handle kind. VFS uses 22 local bits plus 8 mount-incarnation bits,
+// leaving 16 local generation bits with six bits for backend slots.
 pub const HANDLE_SLOT_BITS: u32 = 6;
 const HANDLE_SLOT_MASK: u32 = (1 << HANDLE_SLOT_BITS) - 1;
-const HANDLE_GENERATION_MAX: u32 = (1 << (24 - HANDLE_SLOT_BITS)) - 1;
+const HANDLE_GENERATION_MAX: u32 = (1 << (22 - HANDLE_SLOT_BITS)) - 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FileHandle(pub u32);
@@ -392,11 +396,10 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
 
     fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
         self.handle_slot(handle)?;
-        if self.fat.flush() {
-            Ok(())
-        } else {
-            Err(FsError::Unsupported)
-        }
+        self.fat.sync().map_err(|error| match error {
+            sunlight_block::BlockError::Unsupported => FsError::Unsupported,
+            _ => FsError::Io,
+        })
     }
 
     fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
@@ -407,11 +410,10 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         if !stat.is_dir {
             return Err(FsError::NotDir);
         }
-        if self.fat.flush() {
-            Ok(())
-        } else {
-            Err(FsError::Unsupported)
-        }
+        self.fat.sync().map_err(|error| match error {
+            sunlight_block::BlockError::Unsupported => FsError::Unsupported,
+            _ => FsError::Io,
+        })
     }
 
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
@@ -718,13 +720,27 @@ impl<D: BlockDevice> FileSystem for FsNode<D> {
 }
 
 pub struct Mount<D: BlockDevice = NullDevice> {
-    path: &'static str,
+    path: String,
     fs: FsNode<D>,
+    tag: u8,
+    source: u64,
+    protected: bool,
+    open_handles: usize,
+}
+
+pub struct MountInfo<'a> {
+    pub id: u64,
+    pub source: u64,
+    pub protected: bool,
+    pub path: &'a str,
 }
 
 pub struct Vfs<D: BlockDevice = NullDevice> {
     mounts: [Option<Mount<D>>; MAX_MOUNTS],
     count: usize,
+    // Upper handle byte: 3 slot bits and 5 incarnation bits. Retire a slot
+    // instead of wrapping; closed handles must never alias a remounted volume.
+    next_tags: [u16; MAX_MOUNTS],
 }
 
 impl<D: BlockDevice> Vfs<D> {
@@ -732,12 +748,13 @@ impl<D: BlockDevice> Vfs<D> {
         Self {
             mounts: [const { None }; MAX_MOUNTS],
             count: 0,
+            next_tags: [0, 1, 2, 3, 4, 5, 6, 7],
         }
     }
 
     /// Mount a filesystem at `path`. Path resolution picks the
     /// longest-prefix mount, so nested mounts shadow their parents.
-    pub fn mount(&mut self, path: &'static str, fs: FsNode<D>) -> Result<(), FsError> {
+    pub fn mount(&mut self, path: &str, fs: FsNode<D>) -> Result<(), FsError> {
         path::validate_absolute(path)?;
         if self.count >= MAX_MOUNTS {
             return Err(FsError::TooManyOpenFiles);
@@ -746,19 +763,151 @@ impl<D: BlockDevice> Vfs<D> {
             return Err(FsError::InvalidPath);
         }
 
-        self.mounts[self.count] = Some(Mount { path, fs });
+        let slot = self
+            .mounts
+            .iter()
+            .enumerate()
+            .position(|(i, m)| m.is_none() && self.next_tags[i] <= u8::MAX as u16)
+            .ok_or(FsError::TooManyOpenFiles)?;
+        let tag = self.next_tags[slot] as u8;
+        self.next_tags[slot] += MAX_MOUNTS as u16;
+        self.mounts[slot] = Some(Mount {
+            path: String::from(path),
+            fs,
+            tag,
+            source: 0,
+            protected: true,
+            open_handles: 0,
+        });
         self.count += 1;
         Ok(())
     }
 
-    pub fn mount_ramfs(&mut self, path: &'static str, fs: RamFs) -> Result<(), FsError> {
+    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
         self.mount(path, FsNode::Ram(fs))
     }
 
-    pub fn mount_fat(&mut self, path: &'static str, fat: Fat32<D>) -> Result<(), FsError> {
+    pub fn mount_fat(&mut self, path: &str, fat: Fat32<D>) -> Result<(), FsError> {
         let mut fs = FatFs::new(fat);
         fs.user_storage = path == "/state";
         self.mount(path, FsNode::Fat(fs))
+    }
+
+    /// Record the registry identity on a protected boot mount.
+    pub fn set_mount_source(&mut self, path: &str, source: u64) -> Result<(), FsError> {
+        let mount = self
+            .mounts
+            .iter_mut()
+            .flatten()
+            .find(|m| m.path == path)
+            .ok_or(FsError::NotFound)?;
+        mount.source = source;
+        Ok(())
+    }
+
+    pub fn mount_info(&self, index: usize) -> Option<MountInfo<'_>> {
+        let mount = self.mounts.iter().flatten().nth(index)?;
+        Some(MountInfo {
+            id: u64::from(mount.tag) + 1,
+            source: mount.source,
+            protected: mount.protected,
+            path: &mount.path,
+        })
+    }
+
+    /// A narrow runtime namespace keeps root, boot, state and service state
+    /// policy outside the authority conveyed by an ordinary mount request.
+    pub fn validate_runtime_target(&mut self, path: &str, source: u64) -> Result<(), FsError> {
+        path::validate_absolute(path)?;
+        if path.len() >= 128 || path.contains("//") {
+            return Err(FsError::InvalidPath);
+        }
+        if path != "/mnt" && !path.starts_with("/mnt/") {
+            return Err(FsError::OperationNotPermitted);
+        }
+        if source == 0 {
+            return Err(FsError::NotFound);
+        }
+        if self
+            .mounts
+            .iter()
+            .flatten()
+            .any(|m| m.path == path || m.source == source)
+        {
+            return Err(FsError::AlreadyExists);
+        }
+        // Do not stack mounts or shadow a child mount.
+        if self.mounts.iter().flatten().any(|m| {
+            m.path != "/"
+                && (path::strip_mount(path, &m.path).is_some()
+                    || path::strip_mount(&m.path, path).is_some())
+        }) {
+            return Err(FsError::Busy);
+        }
+        let stat = self.stat(path)?;
+        if stat.file_type != FileType::Directory {
+            return Err(FsError::NotDir);
+        }
+        if stat.uid != 0 || stat.gid != 0 || stat.mode & 0o022 != 0 {
+            return Err(FsError::InsecureMetadata);
+        }
+        let mut occupied = false;
+        self.read_dir(path, &mut |_| {
+            occupied = true;
+            false
+        })?;
+        if occupied {
+            return Err(FsError::Busy);
+        }
+        Ok(())
+    }
+
+    /// Call under the same lock as all other VFS access. No filesystem may
+    /// escape this lock; open handles pin the mount until their final close.
+    pub fn mount_runtime_fat(
+        &mut self,
+        path: &str,
+        source: u64,
+        fat: Fat32<D>,
+    ) -> Result<(), FsError> {
+        self.validate_runtime_target(path, source)?;
+        self.mount_fat(path, fat)?;
+        let mount = self
+            .mounts
+            .iter_mut()
+            .flatten()
+            .find(|m| m.path == path)
+            .ok_or(FsError::NotFound)?;
+        mount.source = source;
+        mount.protected = false;
+        Ok(())
+    }
+
+    pub fn is_runtime_path(&self, path: &str) -> bool {
+        self.resolve_mount(path)
+            .ok()
+            .and_then(|(i, _)| self.mounts[i].as_ref())
+            .is_some_and(|m| !m.protected)
+    }
+
+    pub fn unmount(&mut self, id: u64) -> Result<(), FsError> {
+        let index = self
+            .mounts
+            .iter()
+            .position(|m| m.as_ref().is_some_and(|m| u64::from(m.tag) + 1 == id))
+            .ok_or(FsError::NotFound)?;
+        let mount = self.mounts[index].as_mut().ok_or(FsError::NotFound)?;
+        if mount.protected {
+            return Err(FsError::OperationNotPermitted);
+        }
+        if mount.open_handles != 0 {
+            return Err(FsError::Busy);
+        }
+        // Keep the complete mount/cache installed on any barrier failure.
+        mount.fs.sync_dir("/")?;
+        self.mounts[index] = None;
+        self.count -= 1;
+        Ok(())
     }
 
     pub fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
@@ -768,7 +917,9 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .open(local_path)?;
-        Ok(pack_handle(mount_idx, handle))
+        let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
+        mount.open_handles += 1;
+        Ok(pack_handle(mount.tag as usize, handle))
     }
 
     pub fn create_file(
@@ -784,7 +935,9 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .create_file(local_path, uid, gid, mode)?;
-        Ok(pack_handle(mount_idx, handle))
+        let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
+        mount.open_handles += 1;
+        Ok(pack_handle(mount.tag as usize, handle))
     }
 
     /// Exclusively create a file on the destination mount.
@@ -801,7 +954,9 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::NotFound)?
             .fs
             .create_file_exclusive(local_path, uid, gid, mode)?;
-        Ok(pack_handle(mount_idx, handle))
+        let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
+        mount.open_handles += 1;
+        Ok(pack_handle(mount.tag as usize, handle))
     }
 
     /// Exclusively create a private regular file after validating the parent
@@ -823,7 +978,7 @@ impl<D: BlockDevice> Vfs<D> {
         offset: usize,
         buf: &mut [u8],
     ) -> Result<usize, FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -838,7 +993,7 @@ impl<D: BlockDevice> Vfs<D> {
         offset: usize,
         buf: &[u8],
     ) -> Result<usize, FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -848,7 +1003,7 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -858,7 +1013,7 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -868,17 +1023,15 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     pub fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
-        self.mounts
-            .get_mut(mount_idx)
-            .and_then(Option::as_mut)
-            .ok_or(FsError::BadHandle)?
-            .fs
-            .close(local_handle)
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
+        let mount = self.mounts[mount_idx].as_mut().ok_or(FsError::BadHandle)?;
+        mount.fs.close(local_handle)?;
+        mount.open_handles -= 1;
+        Ok(())
     }
 
     pub fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -899,7 +1052,7 @@ impl<D: BlockDevice> Vfs<D> {
     /// Return metadata for an open handle.  Used by `sys_fstat` and
     /// `sys_lseek(SEEK_END)` so they can avoid a path round-trip.
     pub fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         self.mounts
             .get_mut(mount_idx)
             .and_then(Option::as_mut)
@@ -1032,7 +1185,7 @@ impl<D: BlockDevice> Vfs<D> {
     /// Absolute VFS path of an open handle. Used by directory-fd resolution
     /// and getdents64. The result is the path captured at open time.
     pub fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
-        let (mount_idx, local_handle) = unpack_handle(handle)?;
+        let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         let mount = self
             .mounts
             .get(mount_idx)
@@ -1045,7 +1198,7 @@ impl<D: BlockDevice> Vfs<D> {
         let absolute = if mount.path == "/" || local_path.starts_with('/') {
             alloc::string::String::from(local_path)
         } else if local_path == "/" {
-            alloc::string::String::from(mount.path)
+            alloc::string::String::from(mount.path.as_str())
         } else {
             alloc::format!("{}{}", mount.path, local_path)
         };
@@ -1056,6 +1209,17 @@ impl<D: BlockDevice> Vfs<D> {
         Ok(absolute.len())
     }
 
+    fn unpack_handle(&self, handle: FileHandle) -> Result<(usize, FileHandle), FsError> {
+        let tag = (handle.0 >> 22) as u8;
+        let index = (tag as usize) % MAX_MOUNTS;
+        let local = handle.0 & 0x003f_ffff;
+        let mount = self.mounts[index].as_ref().ok_or(FsError::BadHandle)?;
+        if local == 0 || mount.tag != tag {
+            return Err(FsError::BadHandle);
+        }
+        Ok((index, FileHandle(local)))
+    }
+
     fn resolve_mount<'a>(&self, path: &'a str) -> Result<(usize, &'a str), FsError> {
         path::validate_absolute(path)?;
         let mut best: Option<(usize, usize, &'a str)> = None;
@@ -1063,7 +1227,7 @@ impl<D: BlockDevice> Vfs<D> {
             let Some(mount) = mount else {
                 continue;
             };
-            let Some(local_path) = path::strip_mount(path, mount.path) else {
+            let Some(local_path) = path::strip_mount(path, &mount.path) else {
                 continue;
             };
             let len = mount.path.len();
@@ -1080,7 +1244,7 @@ impl<D: BlockDevice> Vfs<D> {
         let parent = parent_path(path)?;
         let (mount_idx, _) = self.resolve_mount(parent)?;
         let mount = self.mounts[mount_idx].as_ref().ok_or(FsError::NotFound)?;
-        path::strip_mount(path, mount.path)
+        path::strip_mount(path, &mount.path)
             .map(|local| (mount_idx, local))
             .ok_or(FsError::NotFound)
     }
@@ -1127,16 +1291,7 @@ impl<D: BlockDevice> Default for Vfs<D> {
 }
 
 fn pack_handle(mount_idx: usize, local: FileHandle) -> FileHandle {
-    FileHandle(((mount_idx as u32) << 24) | (local.0 & 0x00ff_ffff))
-}
-
-fn unpack_handle(handle: FileHandle) -> Result<(usize, FileHandle), FsError> {
-    let mount_idx = (handle.0 >> 24) as usize;
-    let local = handle.0 & 0x00ff_ffff;
-    if local == 0 {
-        return Err(FsError::BadHandle);
-    }
-    Ok((mount_idx, FileHandle(local)))
+    FileHandle(((mount_idx as u32) << 22) | (local.0 & 0x003f_ffff))
 }
 
 #[cfg(test)]
