@@ -7,6 +7,9 @@ pub struct Partition {
     pub blocks: u64,
     /// Eligible FAT container (MBR FAT32, GPT EFI System or Basic Data).
     pub fat_candidate: bool,
+    /// GPT unique/type GUIDs in on-disk byte order; zero means unavailable.
+    pub uuid: [u8; 16],
+    pub type_uuid: [u8; 16],
 }
 
 pub struct PartitionBlockDevice<D> {
@@ -30,6 +33,8 @@ impl<D: BlockDevice> PartitionBlockDevice<D> {
                 start,
                 blocks,
                 fat_candidate: false,
+                uuid: [0; 16],
+                type_uuid: [0; 16],
             },
         })
     }
@@ -173,6 +178,8 @@ pub fn discover<D: BlockDevice>(disk: &mut D) -> Result<PartitionTable, TableErr
             start: u32le(e, 8) as u64,
             blocks: u32le(e, 12) as u64,
             fat_candidate: matches!(kind, 0x0b | 0x0c),
+            uuid: [0; 16],
+            type_uuid: [0; 16],
         };
         if kind == 0xee {
             if protective
@@ -303,6 +310,8 @@ fn read_gpt<D: BlockDevice>(disk: &mut D, t: &mut PartitionTable) -> Result<(), 
                     start,
                     blocks: finish - start + 1,
                     fat_candidate: (e[..16] == basic || e[..16] == esp) && u64le(e, 48) == 0,
+                    uuid: id,
+                    type_uuid: e[..16].try_into().unwrap(),
                 },
                 disk.block_count(),
             )?;
@@ -470,7 +479,19 @@ mod tests {
                 &[Partition {
                     start: 10,
                     blocks: 20,
-                    fat_candidate: true
+                    fat_candidate: true,
+                    uuid: if layout == Layout::Gpt {
+                        let mut id = [0; 16];
+                        id[0] = 1;
+                        id
+                    } else {
+                        [0; 16]
+                    },
+                    type_uuid: if layout == Layout::Gpt {
+                        v[2 * 512..2 * 512 + 16].try_into().unwrap()
+                    } else {
+                        [0; 16]
+                    }
                 }]
             );
         }

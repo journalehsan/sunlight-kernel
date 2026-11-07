@@ -10,10 +10,22 @@ pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Res
         return Err(FsError::Unsupported);
     }
     vfs.validate_runtime_target(target, device)?;
-    let view =
-        sunlight_block::PartitionBlockDevice::new(crate::KernelBlkDev, info.start, info.blocks)
-            .map_err(|_| FsError::Io)?;
-    let fat = sunlight_fat::Fat32::mount(sunlight_block::CachedBlockDevice::new(view))
+    let parent = if info.parent == 0 {
+        info.id
+    } else {
+        info.parent
+    };
+    let usb = parent == crate::usb_storage::DEVICE_ID.load(core::sync::atomic::Ordering::Acquire);
+    let transport = if usb {
+        crate::KernelBlkDev::Usb
+    } else if parent == crate::VIRTIO_DEVICE_ID.load(core::sync::atomic::Ordering::Acquire) {
+        crate::KernelBlkDev::Virtio
+    } else {
+        return Err(FsError::NotFound);
+    };
+    let view = sunlight_block::PartitionBlockDevice::new(transport, info.start, info.blocks)
+        .map_err(|_| FsError::Io)?;
+    let fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(view, usb))
         .ok_or(FsError::Unsupported)?;
     vfs.mount_runtime_fat(target, device, fat)
 }

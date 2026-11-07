@@ -46,17 +46,156 @@ fn mount(id: u64, path: &[u8]) -> Result<(), i64> {
     control(api::MOUNT_FAT32, id, target.as_ptr() as u64).map(|_| ())
 }
 
+fn diagnostic(args: fmt::Arguments<'_>) {
+    struct Line {
+        bytes: [u8; 512],
+        len: usize,
+    }
+    impl Write for Line {
+        fn write_str(&mut self, s: &str) -> fmt::Result {
+            if self.len + s.len() > self.bytes.len() {
+                return Err(fmt::Error);
+            }
+            self.bytes[self.len..self.len + s.len()].copy_from_slice(s.as_bytes());
+            self.len += s.len();
+            Ok(())
+        }
+    }
+    let mut line = Line {
+        bytes: [0; 512],
+        len: 0,
+    };
+    let _ = line.write_fmt(args);
+    if let Ok(text) = core::str::from_utf8(&line.bytes[..line.len]) {
+        sunlight_ipc::debug_log(text);
+        let _ = writeln!(Output, "{text}");
+    }
+}
+
+fn apply_fstab() -> Result<(), i64> {
+    use sunlight_utils::fstab;
+    // Native reads reach KERNEL_VFS; reject oversized input instead of parsing a prefix.
+    let fd = sunlight_libc::open(b"/etc/fstab").map_err(|_| {
+        diagnostic(format_args!("[FSTAB] cannot open /etc/fstab"));
+        -5
+    })?;
+    let mut bytes = [0; fstab::MAX_FSTAB_BYTES + 1];
+    let mut len = 0;
+    let read_result = loop {
+        match sunlight_libc::read(fd, &mut bytes[len..]) {
+            Ok(0) => break Ok(()),
+            Ok(n) => {
+                len += n;
+                if len == bytes.len() {
+                    break Err(-22);
+                }
+            }
+            Err(_) => break Err(-5),
+        }
+    };
+    sunlight_libc::close(fd).map_err(|_| -5)?;
+    read_result.map_err(|error| {
+        diagnostic(format_args!(
+            "[FSTAB] read failed or configuration exceeds 4096 bytes errno={error}"
+        ));
+        error
+    })?;
+    let text = core::str::from_utf8(&bytes[..len]).map_err(|_| {
+        diagnostic(format_args!("[FSTAB] invalid UTF-8"));
+        -22
+    })?;
+    let entries = fstab::parse_fstab(text).map_err(|error| {
+        diagnostic(format_args!(
+            "[FSTAB] line {}: {}",
+            error.line, error.reason
+        ));
+        -22
+    })?;
+    let mut devices = [(0, [0; 16]); api::MAX_DEVICES];
+    let mut count = 0;
+    let mut record = [0; api::INVENTORY_RECORD_SIZE];
+    for index in 0..api::MAX_DEVICES {
+        if !sunlight_utils::storage_inventory::query(api::INVENTORY, index as u64, &mut record)? {
+            break;
+        }
+        devices[count] = (word(&record, 0), record[64..80].try_into().unwrap());
+        count += 1;
+    }
+    let mut failed = false;
+    for entry in entries.iter().flatten().filter(|e| e.fs_type == "fat32") {
+        let device = match fstab::resolve_entry(entry, devices[..count].iter().copied()) {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                diagnostic(format_args!(
+                    "[FSTAB] optional missing {} {}",
+                    entry.device, entry.mountpoint
+                ));
+                continue;
+            }
+            Err(error) => {
+                diagnostic(format_args!(
+                    "[FSTAB] REQUIRED FAILURE {} {}: {:?}",
+                    entry.device, entry.mountpoint, error
+                ));
+                failed = true;
+                continue;
+            }
+        };
+        // Reapplying the same configuration is idempotent, but a different source/target fails.
+        let mut mounts = [0; api::MOUNT_RECORD_SIZE];
+        let mut already = false;
+        for index in 0..8 {
+            if control(api::LIST_MOUNTS, index, mounts.as_mut_ptr() as u64)? == 0 {
+                break;
+            }
+            let len = word(&mounts, 3) as usize;
+            if len >= api::TARGET_MAX {
+                return Err(-5);
+            }
+            if word(&mounts, 1) == device && &mounts[32..32 + len] == entry.mountpoint.as_bytes() {
+                already = true;
+            }
+        }
+        let result = if already {
+            Ok(())
+        } else {
+            mount(device, entry.mountpoint.as_bytes())
+        };
+        match result {
+            Ok(()) => diagnostic(format_args!(
+                "[FSTAB] mounted {} {} runtime={}",
+                entry.device, entry.mountpoint, device
+            )),
+            Err(error) => {
+                diagnostic(format_args!(
+                    "[FSTAB] REQUIRED FAILURE {} {} errno={}",
+                    entry.device, entry.mountpoint, error
+                ));
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        Err(-5)
+    } else {
+        diagnostic(format_args!("[FSTAB] apply PASS"));
+        Ok(())
+    }
+}
+
 fn run(args: &[&[u8]]) -> Result<(), i64> {
     match args {
+        [b"fstab"] => apply_fstab()?,
+        [b"devices", b"--json"] => sunlight_utils::storage_inventory::inventory(&mut Output, true)?,
         [b"devices"] => {
             let mut record = [0u8; api::DEVICE_RECORD_SIZE];
-            for index in 0..129 {
+            for index in 0..258 {
                 if control(api::ENUMERATE, index, record.as_mut_ptr() as u64)? == 0 {
                     break;
                 }
                 let _ = writeln!(
                     Output,
-                    "id={} parent={} start={} blocks={} ops={} partition={} layout={} sector={}",
+                    "id={} parent={} start={} blocks={} ops={} partition={} layout={} sector={} usb={}",
                     word(&record, 0),
                     word(&record, 1),
                     word(&record, 2),
@@ -64,7 +203,8 @@ fn run(args: &[&[u8]]) -> Result<(), i64> {
                     word(&record, 4),
                     word(&record, 5),
                     word(&record, 6),
-                    word(&record, 7)
+                    word(&record, 7),
+                    u8::from(word(&record, 4) & 16 != 0)
                 );
             }
         }
@@ -108,13 +248,20 @@ fn run(args: &[&[u8]]) -> Result<(), i64> {
                     return Err(-5);
                 }
             }
+            let mut snapshot = [0; api::MOUNT_RECORD_SIZE];
+            // These calls must succeed without the mount capability, even for no devices.
+            sunlight_utils::storage_inventory::query(api::INVENTORY, 0, &mut snapshot)?;
+            if !sunlight_utils::storage_inventory::query(api::INVENTORY_MOUNTS, 0, &mut snapshot)? {
+                return Err(-5);
+            }
+            sunlight_ipc::debug_log("[STORAGE-INVENTORY] public queries and mutation denial PASS");
             let _ = writeln!(Output, "[STORAGE-RUNTIME] unauthorized PASS");
             sunlight_ipc::debug_log("[STORAGE-RUNTIME] unauthorized PASS");
         }
         _ => {
             let _ = writeln!(
                 Output,
-                "storagectl devices | mounts | mount ID /mnt | unmount MOUNT_ID"
+                "storagectl devices [--json] | mounts | mount ID /mnt | unmount MOUNT_ID | fstab"
             );
             return Err(-22);
         }
@@ -144,13 +291,36 @@ fn probe() -> Result<(), i64> {
         "initially unmounted",
     )?;
     let mut device = 0;
-    for index in 0..129 {
+    let mut usb_disk = 0;
+    for index in 0..258 {
         if control(api::ENUMERATE, index, record.as_mut_ptr() as u64)? == 0 {
             break;
+        }
+        let _ = writeln!(
+            Output,
+            "[STORAGE-RUNTIME] device={} parent={} start={} blocks={} usb={}",
+            word(&record, 0),
+            word(&record, 1),
+            word(&record, 2),
+            word(&record, 3),
+            u8::from(word(&record, 4) & 16 != 0)
+        );
+        if word(&record, 4) & 16 != 0 && word(&record, 1) == 0 {
+            usb_disk = word(&record, 0);
+            sunlight_ipc::debug_log("[STORAGE-RUNTIME] USB-backed registry device observed");
         }
         if word(&record, 4) & 8 != 0 {
             device = word(&record, 0);
         }
+    }
+    if device == 0 && usb_disk != 0 {
+        check(mount(usb_disk, b"/mnt") == Err(-95), "malformed USB mount")?;
+        check(
+            control(api::LIST_MOUNTS, 1, record.as_mut_ptr() as u64)? == 0,
+            "malformed USB unmounted",
+        )?;
+        sunlight_ipc::debug_log("[STORAGE-RUNTIME] USB malformed media rejected PASS");
+        return Ok(());
     }
     check(device != 0, "device enumeration")?;
     check(mount(u64::MAX, b"/mnt") == Err(-2), "unknown device")?;

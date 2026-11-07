@@ -3860,9 +3860,21 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     // per-binary upgrade only as root. The read-only Devices GUI is available
     // to authenticated desktop users as well.
     let control_capability = spawn_service_capability(path_str, uid);
-    if control_capability != 0 {
+    if control_capability == crate::ipc::ServiceCapability::StorageAdmin.bit() {
+        // Init's unrestricted legacy lookup profile is not an explicit admin
+        // grant. Stamp the same root-only embedded storagectl authority used
+        // by interactive callers, including when its parent profile is None.
+        service_lookup_restrictions =
+            Some(service_lookup_restrictions.unwrap_or(0) | control_capability);
+    } else if control_capability != 0 {
         service_lookup_restrictions =
             service_lookup_restrictions.map(|mask| mask | control_capability);
+    }
+    if matches!(path_str, "/bin/lsblk" | "/usr/bin/lsblk") {
+        service_lookup_restrictions = Some(
+            service_lookup_restrictions.unwrap_or(0)
+                & !crate::ipc::ServiceCapability::StorageAdmin.bit(),
+        );
     }
     let parent_tty_tab = parent.tty_tab;
     let parent_tty_generation = parent.tty_generation;
@@ -4138,6 +4150,8 @@ mod spawn_service_capability_tests {
         );
         assert_eq!(spawn_service_capability("/bin/devicectl", 1_000), 0);
         assert_eq!(spawn_service_capability("/bin/rappid-rabbit", 0), 0);
+        assert_eq!(spawn_service_capability("/bin/lsblk", 0), 0);
+        assert_eq!(spawn_service_capability("/usr/bin/lsblk", 1000), 0);
     }
 
     #[test]
@@ -4963,7 +4977,7 @@ fn has_storage_admin() -> bool {
 /// no caller identity or trust assertion is accepted in the request.
 fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
     use ::sunlight_ipc::storage as api;
-    if !has_storage_admin() {
+    if !api::read_only(frame.rdi) && !has_storage_admin() {
         return (-1i64) as u64;
     }
     let target = if frame.rdi == api::MOUNT_FAT32 {
@@ -4987,7 +5001,7 @@ fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
             return (-5i64) as u64;
         };
         match frame.rdi {
-            api::ENUMERATE => {
+            api::ENUMERATE | api::INVENTORY => {
                 let Some(info) = crate::storage::DEVICES.lock().enumerate(frame.rsi as usize)
                 else {
                     return 0;
@@ -5005,9 +5019,15 @@ fn sys_storage_ctl(frame: &mut SyscallFrame) -> u64 {
                 for (slot, word) in record.chunks_exact_mut(8).zip(words) {
                     slot.copy_from_slice(&word.to_le_bytes());
                 }
-                record_size = api::DEVICE_RECORD_SIZE;
+                record_size = if frame.rdi == api::INVENTORY {
+                    record[64..80].copy_from_slice(&info.uuid);
+                    record[80..96].copy_from_slice(&info.type_uuid);
+                    api::INVENTORY_RECORD_SIZE
+                } else {
+                    api::DEVICE_RECORD_SIZE
+                };
             }
-            api::LIST_MOUNTS => {
+            api::LIST_MOUNTS | api::INVENTORY_MOUNTS => {
                 let Some(info) = vfs.mount_info(frame.rsi as usize) else {
                     return 0;
                 };
@@ -11791,6 +11811,11 @@ fn sys_xhci_info(frame: &mut SyscallFrame) -> u64 {
                 } else {
                     0
                 };
+
+                let physical_bar = ((bar_high as u64) << 32) | (bar_low as u64 & !0xf);
+                if crate::usb_storage::reserved(physical_bar) {
+                    continue;
+                }
 
                 // Disable memory decoding and bus mastering while probing BAR size.
                 unsafe { pci_write32(bus, slot, function, 0x04, (command & !0x6) as u32) };

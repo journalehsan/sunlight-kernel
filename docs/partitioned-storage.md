@@ -170,3 +170,11 @@ Final storage serial evidence (GPT, second boot):
 ```
 
 No commit or push was performed.
+
+## Explicit runtime configuration
+
+[Boot fstab and inventory](fstab-inventory.md) now retains already-validated GPT
+unique/type GUID metadata for stable PARTUUID resolution. Explicitly configured
+GPT volumes defer ordinary kernel boot mounting to init-launched storagectl.
+Unconfigured boot selection and the explicit legacy-state trust opt-in above
+remain intact. MBR and superfloppy persistent fstab sources are not supported.

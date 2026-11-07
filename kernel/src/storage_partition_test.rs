@@ -59,8 +59,8 @@ fn exercise() -> Result<(), FsError> {
     // Drop the mounted cache and remount the same bounded device in KERNEL_VFS.
     let p = crate::BLOCK_PARTITION.lock().unwrap();
     let disk =
-        sunlight_block::PartitionBlockDevice::new(crate::KernelBlkDev, p.start, p.blocks).unwrap();
-    let fat = sunlight_fat::Fat32::mount(sunlight_block::CachedBlockDevice::new(disk))
+        sunlight_block::PartitionBlockDevice::new(crate::KernelBlkDev::Virtio, p.start, p.blocks).unwrap();
+    let fat = sunlight_fat::Fat32::mount(crate::KernelDisk::new(disk, false))
         .ok_or(FsError::NotFound)?;
     let mut remounted: Vfs<KernelDisk> = Vfs::new();
     remounted.mount_ramfs("/", sunlight_fs::RamFs::new(sunlight_fs::INITRAMFS))?;

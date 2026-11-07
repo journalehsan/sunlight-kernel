@@ -986,6 +986,7 @@ pub static INITRAMFS: &[RamEntry] = &[
     RamEntry::file("/Applications/VoiceRecorder.sunapp/Resources/icon.svg", 0, 0, mode::FILE_644, include_bytes!("../../docs/icons/SunlightOS/devices/16/audio-input-microphone.svg")),
     RamEntry::dir("/tmp", 0, 0, mode::DIR_1777),
     RamEntry::dir("/mnt", 0, 0, mode::DIR_755),
+    RamEntry::file("/bin/lsblk", 0, 0, mode::FILE_755, b"#!/kernel/lsblk\n"),
     RamEntry::file("/bin/storagectl", 0, 0, mode::FILE_755, b"#!/kernel/storagectl\n"),
     // The kernel only supplies this fixture alias in an explicit runtime test image.
     RamEntry::file("/bin/storage-unprivileged", 0, 0, mode::FILE_755, b"#!/kernel/storage-unprivileged\n"),
@@ -1181,9 +1182,7 @@ pub static INITRAMFS: &[RamEntry] = &[
         0,
         0,
         mode::FILE_644,
-        b"# device    mountpoint   type         options\n\
-/dev/sda1   /boot        bootfs       defaults\n\
-/dev/ram0   /            ramfs        defaults\n",
+        include_bytes!("../etc/fstab"),
     ),
     // /etc/hosts for DNS resolver (hosts first, then hardcoded fallback)
     RamEntry::file(

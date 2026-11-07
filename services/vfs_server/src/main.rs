@@ -49,7 +49,7 @@ const ERR_INVALID: u64 = 22;
 const ERR_ROFS: u64 = 30;
 const MAX_PATH_BYTES: usize = 32;
 const READ_REPLY_BYTES: usize = 16;
-const FSTAB_MAX_BYTES: usize = 512;
+const FSTAB_MAX_BYTES: usize = sunlight_fs::fstab::MAX_FSTAB_BYTES + 1;
 const OPEN_META_SLOTS: usize = 64;
 
 // Handle encoding: high byte = mount (0=ram, 1=boot), lower bytes = local handle
@@ -265,8 +265,24 @@ fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>) -> Option<&'static
 
     let mut fstab_buf = [0u8; FSTAB_MAX_BYTES];
     let fstab_len = read_seed_file(&mut seed, "/etc/fstab", &mut fstab_buf);
-    let fstab_text = core::str::from_utf8(&fstab_buf[..fstab_len]).unwrap_or("");
-    let entries = parse_fstab(fstab_text);
+    if fstab_len > sunlight_fs::fstab::MAX_FSTAB_BYTES {
+        debug_log("[FSTAB] oversized configuration rejected");
+        return None;
+    }
+    let fstab_text = match core::str::from_utf8(&fstab_buf[..fstab_len]) {
+        Ok(text) => text,
+        Err(_) => {
+            debug_log("[FSTAB] invalid UTF-8 configuration rejected");
+            return None;
+        }
+    };
+    let entries = match parse_fstab(fstab_text) {
+        Ok(entries) => entries,
+        Err(_) => {
+            debug_log("[FSTAB] invalid configuration; legacy view unchanged");
+            return None;
+        }
+    };
     let mut boot_mountpoint = None;
 
     for entry in entries.iter().flatten() {

@@ -36,3 +36,9 @@ pub mod true_cmd;
 pub mod uniq;
 pub mod wc;
 pub mod xargs;
+
+pub mod storage_inventory;
+
+// Reuse the allocation-free parser without linking the VFS and embedded RAMFS.
+#[path = "../../sunlight-fs/src/fstab.rs"]
+pub mod fstab;

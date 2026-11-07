@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SunlightOS block inventory v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "devices"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "devices": {
+      "type": "array",
+      "maxItems": 258,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "runtime_id",
+          "parent_id",
+          "persistent_id",
+          "transport",
+          "removable",
+          "capacity_bytes",
+          "logical_sector_size",
+          "partition_scheme",
+          "partition_ordinal",
+          "start_lba",
+          "blocks",
+          "partition_type",
+          "partition_name",
+          "filesystem",
+          "fat32_candidate",
+          "mountpoint",
+          "write_supported",
+          "read_only",
+          "mount_read_only",
+          "trusted_state",
+          "mount_protected"
+        ],
+        "properties": {
+          "runtime_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18446744073709551615
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 18446744073709551615
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "persistent_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^PARTUUID=[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transport": {
+            "enum": [
+              "virtio",
+              "usb"
+            ]
+          },
+          "removable": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "capacity_bytes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 18446744073709551615
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "logical_sector_size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18446744073709551615
+          },
+          "partition_scheme": {
+            "enum": [
+              "superfloppy",
+              "mbr",
+              "gpt",
+              null
+            ]
+          },
+          "partition_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 18446744073709551615
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "start_lba": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 18446744073709551615
+          },
+          "blocks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18446744073709551615
+          },
+          "partition_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "partition_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filesystem": {
+            "enum": [
+              "fat32",
+              null
+            ]
+          },
+          "fat32_candidate": {
+            "type": "boolean"
+          },
+          "mountpoint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^/"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "write_supported": {
+            "type": "boolean"
+          },
+          "read_only": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "mount_read_only": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "trusted_state": {
+            "type": "boolean"
+          },
+          "mount_protected": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

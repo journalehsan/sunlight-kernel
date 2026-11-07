@@ -13,6 +13,7 @@ extern crate std;
 
 pub mod partition;
 pub mod registry;
+pub mod usb_msc;
 pub use partition::PartitionBlockDevice;
 
 /// All SunlightOS block devices use 512-byte sectors.

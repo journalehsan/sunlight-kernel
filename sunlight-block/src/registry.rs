@@ -5,7 +5,9 @@ pub const READ: u64 = 1;
 pub const WRITE: u64 = 2;
 pub const FLUSH: u64 = 4;
 pub const FAT32: u64 = 8;
-pub const MAX_DEVICES: usize = MAX_PARTITIONS + 1;
+/// Transport metadata only; conveys no authorization.
+pub const USB: u64 = 16;
+pub const MAX_DEVICES: usize = 2 * (MAX_PARTITIONS + 1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeviceInfo {
@@ -19,6 +21,8 @@ pub struct DeviceInfo {
     pub partition: u64,
     /// 0 = raw/unknown, 1 = superfloppy, 2 = MBR, 3 = GPT.
     pub layout: u64,
+    pub uuid: [u8; 16],
+    pub type_uuid: [u8; 16],
 }
 
 pub struct DeviceRegistry {
@@ -59,9 +63,11 @@ impl DeviceRegistry {
             parent: 0,
             start: 0,
             blocks,
-            operations: operations & (READ | WRITE | FLUSH),
+            operations: operations & (READ | WRITE | FLUSH | USB),
             partition: 0,
             layout: 0,
+            uuid: [0; 16],
+            type_uuid: [0; 16],
         })
     }
 
@@ -101,6 +107,8 @@ impl DeviceRegistry {
                 operations: physical.operations | if part.fat_candidate { FAT32 } else { 0 },
                 partition: index as u64 + 1,
                 layout,
+                uuid: part.uuid,
+                type_uuid: part.type_uuid,
             })?;
         }
         self.entries
@@ -119,11 +127,16 @@ impl DeviceRegistry {
         self.entries.iter().flatten().nth(index).copied()
     }
 
-    pub fn find_extent(&self, start: u64, blocks: u64) -> Option<DeviceInfo> {
+    pub fn find_extent(&self, disk: u64, start: u64, blocks: u64) -> Option<DeviceInfo> {
         self.entries
             .iter()
             .flatten()
-            .find(|e| e.start == start && e.blocks == blocks && e.operations & FAT32 != 0)
+            .find(|e| {
+                (e.id == disk || e.parent == disk)
+                    && e.start == start
+                    && e.blocks == blocks
+                    && e.operations & FAT32 != 0
+            })
             .copied()
     }
 }
@@ -147,6 +160,30 @@ mod tests {
         assert_eq!(registry.get(replacement).unwrap().blocks, 256);
         registry.next_id = u64::MAX;
         assert!(registry.register_disk(128, READ).is_none());
+    }
+
+    #[test]
+    fn identical_extents_on_usb_and_virtio_keep_distinct_parents() {
+        let mut bytes = [0u8; 512 * 100];
+        bytes[510..512].copy_from_slice(&[0x55, 0xaa]);
+        bytes[450] = 0x0c;
+        bytes[454..458].copy_from_slice(&10u32.to_le_bytes());
+        bytes[458..462].copy_from_slice(&20u32.to_le_bytes());
+        let table = crate::partition::discover(&mut crate::MemDisk::new(&mut bytes)).unwrap();
+        let mut registry = DeviceRegistry::new();
+        let virtio = registry.register_disk(100, READ | WRITE | FLUSH).unwrap();
+        registry.register_partitions(virtio, &table).unwrap();
+        let usb = registry
+            .register_disk(100, READ | WRITE | FLUSH | USB)
+            .unwrap();
+        registry.register_partitions(usb, &table).unwrap();
+        let first = registry.find_extent(virtio, 10, 20).unwrap();
+        let second = registry.find_extent(usb, 10, 20).unwrap();
+        assert_ne!(first.id, second.id);
+        assert_eq!(first.parent, virtio);
+        assert_eq!(second.parent, usb);
+        assert_eq!(first.operations & USB, 0);
+        assert_eq!(second.operations & USB, USB);
     }
 
     #[test]

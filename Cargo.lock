@@ -2975,6 +2975,7 @@ name = "sunlight-init"
 version = "0.2.6678-alpha.2"
 dependencies = [
  "sunlight-ipc",
+ "sunlight-libc",
 ]
 
 [[package]]

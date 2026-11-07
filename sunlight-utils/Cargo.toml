@@ -755,3 +755,8 @@ test = false
 
 [features]
 storage-test = []
+
+[[bin]]
+name = "lsblk"
+path = "src/bin/lsblk.rs"
+test = false

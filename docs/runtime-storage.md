@@ -43,14 +43,16 @@ replacement in a private registry slot; this milestone adds no unregister,
 hot removal or transport replacement API. IDs are boot-local, not persistent
 disk identity and never proof of provisioning or authenticity.
 
-Every StorageCtl operation requires **both uid 0 and an explicit
+The four legacy StorageCtl operations (0–3) require **both uid 0 and an explicit
 `ServiceCapability::StorageAdmin` bit**. The syscall reads these from the
 running kernel process, before reading request memory. It accepts no claimed
 UID, PID, capability mask or trust assertion. A legacy unrestricted lookup
 profile (`None`) is insufficient. Existing service capability profiles apply;
 the embedded `storagectl` tool receives the bit only when spawned as root,
 using the existing per-control-tool capability mechanism. Its children follow
-the existing capability inheritance rules.
+the existing capability inheritance rules, except that `lsblk` explicitly drops
+StorageAdmin. Public inventory operations 4–5 require no mount grant and cannot
+change storage; see [the JSON v1 interface](fstab-inventory.md).
 
 Root with StorageAdmin may create/open writable files and sync directories
 only on an installed runtime mount, checked under the VFS lock. This scoped
@@ -70,10 +72,14 @@ or `/dev` filesystem. All lifecycle operations use `KERNEL_VFS` directly.
 | 1: mount FAT32 | device ID | target, fewer than 128 bytes | 0 |
 | 2: list mounts | zero-based index | 160-byte output record | 1 record, 0 end |
 | 3: unmount | mount ID | unused | 0 |
+| 4: public device inventory | zero-based index | 96-byte output record | 1 record, 0 end |
+| 5: public mount inventory | zero-based index | 160-byte output record | 1 record, 0 end |
 
 Device records are eight little-endian u64 fields: ID, parent, starting LBA,
 sector count, operations, partition discovery ordinal, layout, sector size.
-Operations are read=1, write=2, flush=4, FAT32 eligibility=8. Layout is
+Operations are read=1, write=2, flush=4, FAT32 eligibility=8, USB transport=16.
+Public device inventory appends validated GPT unique/type GUIDs (16 bytes each);
+zero GUIDs mean unavailable. The legacy 64-byte record is unchanged. Layout is
 unknown/raw=0, superfloppy=1, MBR=2, GPT=3. Ordinals count discovered nonempty
 partitions, rather than physical table slots. The physical disk has ordinal 0.
 
@@ -319,3 +325,17 @@ were retained. This milestone does not add USB storage, additional transports,
 hot removal, an installer, automatic KV migration, a replacement userspace VFS,
 a new filesystem, a read-only FAT mount mode, power-loss recovery guarantees
 or real-hardware validation.
+
+## USB transport extension
+
+The first genuine USB MSC/BOT path is documented in [USB storage](usb-storage.md),
+including the initial dedicated-controller profile, transport metadata bit 16,
+controller ownership, media retirement, exact QEMU command and verification.
+USB is never automatically trusted or mounted as `/state`.
+
+## fstab and read-only inventory integration
+
+See [Boot fstab and block inventory](fstab-inventory.md) for the audited existing
+configuration path, shared strict parser, init/storagectl lifecycle, GPT identity
+policy, optional/required behavior, unchanged explicit state trust, public
+`lsblk` interface, JSON v1 schema and current verification evidence.

@@ -645,6 +645,7 @@ name = "sunlight-init"
 path = "src/main.rs"
 
 [dependencies]
+sunlight-libc = { path = "../../sunlight-libc" }
 sunlight-ipc = { path = "../../ipc" }
 
 [features]

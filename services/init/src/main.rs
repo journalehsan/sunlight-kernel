@@ -139,6 +139,17 @@ pub extern "C" fn _start(spawn_token: u64) -> ! {
         // so early clients (especially tty_server → "tty") are not stuck until
         // the entire list is created.
         let spawn_cap = CapabilityToken(spawn_token);
+        // Native spawn stamps storagectl with its existing root-only StorageAdmin grant.
+        // Complete the bounded pass before launching ordinary boot services.
+        match sunlight_libc::spawn(b"/bin/storagectl", &[b"storagectl", b"fstab"], None)
+            .and_then(sunlight_libc::waitpid)
+        {
+            Ok(0) => debug_log("[FSTAB] boot apply complete"),
+            _ => {
+                debug_log("[FSTAB] REQUIRED FAILURE: boot degraded; inspect storagectl diagnostics")
+            }
+        }
+
         for path in INIT_SERVICES.iter() {
             if spawn_service(spawn_cap, path) {
                 debug_log("[init] launched base service");

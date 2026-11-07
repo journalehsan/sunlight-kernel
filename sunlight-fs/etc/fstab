@@ -1,0 +1,5 @@
+# source    target    type    options (exactly four fields)
+/dev/sda1   /boot     bootfs  defaults
+/dev/ram0   /         ramfs   defaults
+# Runtime FAT32 example (GPT only; pre-existing root-owned empty target):
+# PARTUUID=12345678-1234-5678-9abc-123456789abc /mnt fat32 rw,nofail
