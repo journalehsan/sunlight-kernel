@@ -913,6 +913,12 @@ fn main() {
             ],
         },
         EmbeddedBinary {
+            package: "sunlight-account-broker",
+            output: "sunlight-account-broker",
+            rustflags: service_rustflags,
+            args: &["--features", "native-service", "--release"],
+        },
+        EmbeddedBinary {
             package: "sunlight-tls",
             output: "sunlight-tls",
             rustflags: tls_rustflags,

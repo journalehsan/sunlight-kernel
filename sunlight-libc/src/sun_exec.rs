@@ -56,6 +56,7 @@ pub enum ControlPanelPage {
     DateTime,
     LoginSession,
     UsersGroups,
+    OnlineAccounts,
     Sound,
 }
 
@@ -376,6 +377,7 @@ impl ControlPanelPage {
             b"login-session" => Some(Self::LoginSession),
             b"users-groups" => Some(Self::UsersGroups),
             b"sound" => Some(Self::Sound),
+            b"online-accounts" => Some(Self::OnlineAccounts),
             _ => None,
         }
     }
@@ -392,6 +394,7 @@ impl ControlPanelPage {
             Self::LoginSession => b"login-session",
             Self::UsersGroups => b"users-groups",
             Self::Sound => b"sound",
+            Self::OnlineAccounts => b"online-accounts",
         }
     }
 

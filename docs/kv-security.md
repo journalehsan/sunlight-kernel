@@ -217,3 +217,29 @@ generic errors.
 - **TLS handshake**: requires a QEMU run in which `sunlight-tls` seeds and loads
   its anchors and completes a handshake. Compilation and host tests are *not*
   evidence of a working handshake; record the serial log explicitly.
+
+
+## Online Accounts in a Live ISO
+
+The account broker's `account-broker:*` namespace remains exclusive to its
+kernel-stamped service identity; root, users, applications, TLS, UAC and KV's
+own service identity cannot read or enumerate those keys through KV. Online
+Accounts metadata is mediated by the broker using the authenticated panel UID.
+
+Native broker records are appended synchronously to the KV-owned private ramfs
+log `/var/lib/sunlight-kv/broker.store` before acknowledgement. Opening that
+file requires the trusted KV image, and filesystem mutation policy excludes
+other actors. The shared TLS log cannot introduce broker-prefixed records on
+recovery. Storage manager creates and hardens that general log to `0600` before
+append, so non-root users cannot bypass other namespaces' ACLs through a raw
+backing-file read; public TLS certificate access through KV is unchanged.
+The Control Panel receives a fixed metadata snapshot and high-level operation
+results only. Third-party token access remains denied.
+
+This is in-session persistence across daemon restarts. It makes no reboot,
+physical-disk, fsync or power-loss guarantee. Deletion uses replayed tombstones;
+old secret bytes remain confined to the inaccessible private backing log.
+Storage-manager reads now support caller-owned page chunks with offsets, and
+append no longer replaces a log after a failed or oversized read. SHM2 supports
+4096-byte values independently of key/header/ACL length. See
+[account-broker.md](account-broker.md) for native restart, TLS and UI gates.

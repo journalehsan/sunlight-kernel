@@ -203,6 +203,8 @@ static SUNLIGHT_KV_ELF_BYTES: &[u8] =
 static SUNLIGHT_KVCTL_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kvctl");
 // TLS service (certs via sunlight-kv) + its control CLI.
+static SUNLIGHT_ACCOUNT_BROKER_ELF_BYTES: &[u8] =
+    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-account-broker");
 static SUNLIGHT_TLS_ELF_BYTES: &[u8] =
     include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tls");
 static SECRET_STORE_TEST_ELF_BYTES: &[u8] =

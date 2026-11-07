@@ -3230,7 +3230,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().any(|arg| arg == "--account-fixture") {
         return rappid_rabbit::account_fixture::run();
     }
-    let mut initial_url = None;
+    let arguments: Vec<String> = std::env::args().collect();
+    let broker_url = if arguments.get(1).map(String::as_str) == Some("--account-broker") {
+        let id = arguments
+            .get(2)
+            .and_then(|s| s.parse::<u64>().ok())
+            .ok_or("invalid broker flow")?;
+        let cap = sunlight_ipc::nameserver_lookup("sunlight-account-broker")
+            .ok_or("broker unavailable")?;
+        let reply = sunlight_ipc::ipc_call_timeout(
+            cap,
+            sunlight_ipc::IpcMsg::with_label(0xAB05).word(0, id),
+            2000,
+        )
+        .map_err(|_| "broker claim timeout")?;
+        if reply.label != 0xABFF
+            || reply.words[0] != 0
+            || reply.words[1] == 0
+            || reply.words[1] > 2048
+        {
+            return Err("broker claim denied".into());
+        }
+        let token = reply.caps[0];
+        let ptr = sunlight_ipc::shm_map(token).map_err(|_| "broker URL transfer failed")?;
+        let bytes = unsafe { core::slice::from_raw_parts(ptr, reply.words[1] as usize) };
+        let url = core::str::from_utf8(bytes)
+            .map(String::from)
+            .map_err(|_| "invalid broker URL");
+        let _ = sunlight_ipc::shm_free(token);
+        let _ = sunlight_ipc::ipc_call_timeout(
+            cap,
+            sunlight_ipc::IpcMsg::with_label(0xAB08).word(0, id),
+            2000,
+        );
+        let url = url?;
+        if !url.starts_with("https://") {
+            return Err("broker URL must use HTTPS".into());
+        }
+        debug_log("[RABBIT] native broker authorization URL received");
+        Some(url)
+    } else {
+        None
+    };
+    let mut initial_url = broker_url;
     for argument in std::env::args().skip(1) {
         if let Some(trace) = launch_trace::parse_launch_arg(argument.as_bytes()) {
             launch_trace::set_current(trace);

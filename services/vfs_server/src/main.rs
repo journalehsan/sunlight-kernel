@@ -379,6 +379,9 @@ fn handle_request(state: &mut State, msg: IpcMsg) -> IpcMsg {
             _ => error_reply(FsError::PermissionDenied),
         },
         VfsMsg::OPEN => match decoded_path(&msg.words) {
+            Some(pb) if pb.as_str() == "/var/lib/sunlight-kv/broker.store" => {
+                error_reply(FsError::PermissionDenied)
+            }
             Some(pb) => open_path(state, pb.as_str()),
             None => error_reply(FsError::InvalidPath),
         },

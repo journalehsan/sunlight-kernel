@@ -1,0 +1,33 @@
+[package]
+name = "sunlight-account-broker"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sunlight-account-broker"
+path = "src/main.rs"
+required-features = ["native-service"]
+
+[features]
+default = []
+native-provider-test = ["native-service"]
+native-mock = ["native-service"]
+native-service = ["native-tls", "dep:sunlight-ipc", "dep:sunlight-libc", "dep:linked_list_allocator", "dep:sunlight-net"]
+# Host-only callback harness, not a native service or production IPC endpoint.
+host-runtime = ["dep:getrandom", "dep:sunlight-fetch", "sunlight-fetch/host-linux"]
+native-tls = ["dep:sunlight-fetch", "sunlight-fetch/sunlightos"]
+
+[dependencies]
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.10", default-features = false }
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+zeroize = { version = "1", default-features = false, features = ["alloc"] }
+getrandom = { version = "0.2", optional = true }
+sunlight-fetch = { path = "../sunlight-fetch", default-features = false, optional = true }
+
+sunlight-ipc = { path = "../ipc", optional = true }
+sunlight-libc = { path = "../sunlight-libc", optional = true }
+linked_list_allocator = { version = "0.10", optional = true }
+
+sunlight-net = { path = "../sunlight-net", optional = true }

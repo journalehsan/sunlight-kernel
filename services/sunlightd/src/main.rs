@@ -588,7 +588,7 @@ WantedBy=sunlight.target
     }
 
     // sunlight-kv.service - persistent key-value storage (append-only log backend)
-    // NOTE: sunlight-kv now delegates protected writes to sunlight-sm ("sm")
+    // The shared log uses sunlight-sm; broker-private records use KV-owned ramfs.
     let kv_service = r#"[Unit]
 Description=SunlightOS Key-Value Storage Daemon
 After=sunlight-sm.service
@@ -827,6 +827,34 @@ StandardError=journal
 WantedBy=sunlight.target
 "#;
     if let Ok(unit) = parse_service_unit(rand_service.as_bytes()) {
+        let _ = services.add(unit);
+    }
+
+    // Native account coordinator. No explicit VFS/KV bits; UserSession still
+    // permits KV IPC for the broker and VFS lookup for inherited Rabbit. The
+    // panel receives metadata only; the private backing log is KV-owned.
+    let account_broker_service = r#"[Unit]
+Description=SunlightOS Account Broker
+After=sunlight-tls.service rand_service.service
+Requires=sunlight-tls.service rand_service.service
+
+[Service]
+Type=simple
+ExecStart=/sbin/sunlight-account-broker
+Restart=on-failure
+RestartSec=3
+User=root
+Capability=network
+Capability=secure-random
+Capability=user-session
+Capability=logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sunlight.target
+"#;
+    if let Ok(unit) = parse_service_unit(account_broker_service.as_bytes()) {
         let _ = services.add(unit);
     }
 

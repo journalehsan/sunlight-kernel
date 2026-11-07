@@ -68,6 +68,7 @@ RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-sm --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-solar --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kv --features sunlightos --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-kvctl --features sunlightos --no-default-features --release
+RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package sunlight-account-broker --features "${SUNLIGHT_ACCOUNT_BROKER_FEATURES:-native-service}" --release
 RUSTFLAGS="$TLS_RUSTFLAGS" cargo build --package sunlight-tls --features sunlightos --no-default-features --release
 RUSTFLAGS="$SERVICE_RUSTFLAGS" cargo build --package certificatectl --features sunlightos --no-default-features --release
 # sunshell (includes localectl builtin + pulls in support libs e.g. sunlight-locale, sunlight-tz)

@@ -27,6 +27,7 @@ mod accounts;
 mod clipboard;
 mod date_time;
 mod network;
+mod online_accounts;
 mod power_thermal;
 mod session;
 mod sound;
@@ -145,6 +146,7 @@ enum Page {
     DateTime,
     LoginSession,
     UsersGroups,
+    OnlineAccounts,
     Sound,
 }
 
@@ -395,6 +397,7 @@ struct ControlPanelApp {
     date_time: DateTimePageState,
     login_session: SessionPageState,
     accounts: accounts::AccountsPage,
+    online_accounts: online_accounts::OnlineAccounts,
     sound: SoundPageState,
     client_bounds: Rect,
     layout_invalidation: LayoutInvalidation,
@@ -411,7 +414,7 @@ struct ControlPanelLayout {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct GridLayout {
     sections: [Rect; 3],
-    cards: [Rect; 12],
+    cards: [Rect; 13],
 }
 
 impl ControlPanelApp {
@@ -476,6 +479,7 @@ impl ControlPanelApp {
             date_time: DateTimePageState::new(),
             login_session: SessionPageState::new(),
             accounts: accounts::AccountsPage::new(),
+            online_accounts: online_accounts::OnlineAccounts::new(),
             sound: SoundPageState::new(),
             client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
             layout_invalidation: LayoutInvalidation::new(),
@@ -806,6 +810,12 @@ impl ControlPanelApp {
                     card_w,
                     GRID_CARD_H,
                 ),
+                Rect::new(
+                    right_x,
+                    system_y + (GRID_CARD_H as i32 + GRID_ROW_GAP) * 2,
+                    card_w,
+                    GRID_CARD_H,
+                ),
             ],
         }
     }
@@ -919,6 +929,15 @@ impl ControlPanelApp {
         Self::draw_section_heading(canvas, theme, grid.sections[2], "System");
 
         let cards = grid.cards;
+        Self::draw_card(
+            canvas,
+            theme,
+            cards[12],
+            theme.accent,
+            "Online Accounts",
+            "Microsoft & connected services",
+            self.icon_network,
+        );
         Self::draw_card(
             canvas,
             theme,
@@ -1043,6 +1062,10 @@ impl ControlPanelApp {
         if let Event::Click { x, y } = event {
             let pt = Point::new(x, y);
             let cards = self.grid_layout().cards;
+            if cards[12].contains(pt) {
+                self.page = Page::OnlineAccounts;
+                return self.online_accounts.refresh();
+            }
             if cards[0].contains(pt) {
                 self.page = Page::Wallpaper;
                 self.refresh_wallpaper_preview();
@@ -1881,6 +1904,7 @@ impl App for ControlPanelApp {
             Page::PowerThermal => self.power_thermal.draw(canvas, theme, win_w, win_h),
             Page::DateTime => self.date_time.draw(canvas, theme, win_w, win_h),
             Page::UsersGroups => self.accounts.draw(canvas, theme, win_w, win_h),
+            Page::OnlineAccounts => self.online_accounts.draw(canvas, theme, win_w, win_h),
             Page::LoginSession => self.login_session.draw(canvas, theme, win_w, win_h),
             Page::Sound => self.sound.draw(canvas, theme, win_w, win_h),
         }
@@ -1904,6 +1928,15 @@ impl App for ControlPanelApp {
             return true;
         }
         match self.page {
+            Page::OnlineAccounts => {
+                if self
+                    .online_accounts
+                    .update(event, self.win_w(), self.win_h())
+                {
+                    self.page = Page::Grid;
+                }
+                true
+            }
             Page::UsersGroups => {
                 if self.accounts.update(event, self.win_w(), self.win_h()) {
                     self.page = Page::Grid;
@@ -1935,6 +1968,9 @@ impl App for ControlPanelApp {
 
     fn on_ready(&mut self) -> bool {
         self.accounts.activate();
+        if self.page == Page::OnlineAccounts {
+            return self.online_accounts.refresh();
+        }
         if matches!(self.page, Page::UsersGroups | Page::Grid) {
             return true;
         }
@@ -2291,6 +2327,7 @@ fn parse_initial_page(argc: u64, argv: *const *const u8) -> Page {
                 Some(ControlPanelPage::LoginSession) => return Page::LoginSession,
                 Some(ControlPanelPage::UsersGroups) => return Page::UsersGroups,
                 Some(ControlPanelPage::Sound) => return Page::Sound,
+                Some(ControlPanelPage::OnlineAccounts) => return Page::OnlineAccounts,
                 None => {}
             }
             i += 2;

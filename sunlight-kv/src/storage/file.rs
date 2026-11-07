@@ -435,6 +435,85 @@ mod tests {
     }
 
     #[test]
+    fn variable_payloads_append_reopen_overwrite_delete_without_losing_tls() {
+        let (mut kv, path) = fresh_store();
+        let broker = Caller::Service(acl::ACCOUNT_BROKER_SERVICE);
+        let tls = Caller::Service(acl::TLS_SERVICE);
+        kv.put("tls.ca.fixture", &vec![7; 2048], &tls).unwrap();
+        for n in [49, 1024, 3584, 4096] {
+            let key = format!("account-broker:size-{n}");
+            let payload: Vec<_> = (0..n).map(|i| (i % 251) as u8).collect();
+            kv.put(&key, &payload, &broker).unwrap();
+            drop(kv);
+            kv = StorageEngine::open(&path).unwrap();
+            assert_eq!(kv.get(&key, &broker).unwrap(), payload);
+            assert_eq!(
+                kv.get("tls.ca.fixture", &Caller::Unknown).unwrap(),
+                vec![7; 2048]
+            );
+        }
+        kv.put("account-broker:size-4096", b"shorter", &broker)
+            .unwrap();
+        kv.delete("account-broker:size-1024", &broker).unwrap();
+        drop(kv);
+        let mut kv = StorageEngine::open(&path).unwrap();
+        assert_eq!(
+            kv.get("account-broker:size-4096", &broker).unwrap(),
+            b"shorter"
+        );
+        assert!(kv.get("account-broker:size-1024", &broker).is_err());
+        assert_eq!(
+            kv.get("account-broker:size-3584", &broker).unwrap().len(),
+            3584
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn broker_namespace_survives_reopen_and_denies_read_scan_and_mutation() {
+        let (mut kv, path) = fresh_store();
+        let broker = Caller::Service(acl::ACCOUNT_BROKER_SERVICE);
+        let key = "account-broker:secret";
+        kv.put(key, b"secret-with-expiry", &broker).unwrap();
+        kv.put(
+            "tls.ca.fixture",
+            b"public-root",
+            &Caller::Service(acl::TLS_SERVICE),
+        )
+        .unwrap();
+        drop(kv);
+        let mut kv = StorageEngine::open(&path).unwrap();
+        assert_eq!(kv.get(key, &broker).unwrap(), b"secret-with-expiry");
+        assert_eq!(
+            kv.scan_prefix("account-broker:", &broker),
+            vec![key.to_string()]
+        );
+        for denied in [
+            Caller::Root,
+            Caller::User(0),
+            Caller::User(1000),
+            Caller::Unknown,
+            Caller::Service(acl::TLS_SERVICE),
+            Caller::Service(acl::AUTH_BROKER_SERVICE),
+            Caller::Service(acl::KV_SERVICE),
+            Caller::Service(acl::name_to_u64("app")),
+        ] {
+            assert!(kv.get(key, &denied).is_err());
+            assert!(kv.scan_prefix("account-broker:", &denied).is_empty());
+            assert!(!kv.scan_prefix("", &denied).iter().any(|k| k == key));
+            assert!(kv.put(key, b"replacement", &denied).is_err());
+            assert!(kv.put("account-broker:new", b"injection", &denied).is_err());
+            assert!(kv.delete(key, &denied).is_err());
+            assert_eq!(kv.get("tls.ca.fixture", &denied).unwrap(), b"public-root");
+        }
+        kv.delete(key, &broker).unwrap();
+        drop(kv);
+        let mut kv = StorageEngine::open(&path).unwrap();
+        assert!(kv.get(key, &broker).is_err());
+        assert!(kv.scan_prefix("account-broker:", &broker).is_empty());
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn create_and_read_key() {
         let (mut kv, _p) = fresh_store();
         let owner = Caller::Service(acl::name_to_u64("svc-alpha"));

@@ -66,7 +66,20 @@ pub fn is_trusted_wiseowl_console_path(path: &str) -> bool {
 pub fn is_trusted_control_panel_path(path: &str) -> bool {
     matches!(
         path,
-        "/bin/sunlight-control-panel" | "/usr/bin/sunlight-control-panel"
+        "/bin/sunlight-control-panel"
+            | "/usr/bin/sunlight-control-panel"
+            | "/bin/control-panel"
+            | "/usr/bin/control-panel"
+    )
+}
+
+/// True only for the exact embedded online-accounts broker path. It is the sole
+/// process permitted to read/write the `account-broker:*` KV namespace and the
+/// only one allowed to resolve caller roles for the control-panel grant.
+pub fn is_trusted_account_broker_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/sbin/sunlight-account-broker" | "/usr/sbin/sunlight-account-broker"
     )
 }
 
@@ -99,6 +112,9 @@ pub fn trusted_service_identity_for_path(path: &str) -> u64 {
         }
         "/sbin/sunlight-sessiond" | "/usr/sbin/sunlight-sessiond" => {
             sunlight_ipc::service_identity::SESSION_MANAGER
+        }
+        "/sbin/sunlight-account-broker" | "/usr/sbin/sunlight-account-broker" => {
+            sunlight_ipc::service_identity::ACCOUNT_BROKER
         }
         _ => 0,
     }
@@ -151,6 +167,7 @@ pub fn exec_into_process(
     let old_trusted_wiseowl_braind = process.trusted_wiseowl_braind;
     let old_trusted_wiseowl_console = process.trusted_wiseowl_console;
     let old_trusted_control_panel = process.trusted_control_panel;
+    let old_trusted_account_broker = process.trusted_account_broker;
     let old_personality = process.personality;
     let old_linux_tgid = process.linux_tgid;
     let old_linux_sysv_semadj = process.linux_sysv_semadj.take();
@@ -165,6 +182,7 @@ pub fn exec_into_process(
     process.trusted_wiseowl_braind = false;
     process.trusted_wiseowl_console = false;
     process.trusted_control_panel = false;
+    process.trusted_account_broker = false;
 
     process.personality = personality;
     process.linux_tgid = process.is_linux_compat().then_some(process.pid);
@@ -193,6 +211,7 @@ pub fn exec_into_process(
             process.trusted_wiseowl_braind = old_trusted_wiseowl_braind;
             process.trusted_wiseowl_console = old_trusted_wiseowl_console;
             process.trusted_control_panel = old_trusted_control_panel;
+            process.trusted_account_broker = old_trusted_account_broker;
             process.personality = old_personality;
             process.linux_tgid = old_linux_tgid;
             process.linux_sysv_semadj = old_linux_sysv_semadj;
@@ -789,6 +808,8 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_wiseowl_braind = is_trusted_wiseowl_braind_path(path);
     process.trusted_wiseowl_console = is_trusted_wiseowl_console_path(path);
     process.trusted_control_panel = is_trusted_control_panel_path(path);
+    // The account broker may resolve caller roles and owns `account-broker:*`.
+    process.trusted_account_broker = uid == 0 && is_trusted_account_broker_path(path);
     process.set_initial_args(
         if matches!(
             path,
@@ -953,6 +974,9 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/sbin/sunlight-kv" | "/usr/sbin/sunlight-kv" => Ok(crate::SUNLIGHT_KV_ELF_BYTES),
         // Key-value control CLI.
         "/bin/sunlight-kvctl" | "/usr/bin/sunlight-kvctl" => Ok(crate::SUNLIGHT_KVCTL_ELF_BYTES),
+        "/sbin/sunlight-account-broker" | "/usr/sbin/sunlight-account-broker" => {
+            Ok(crate::SUNLIGHT_ACCOUNT_BROKER_ELF_BYTES)
+        }
         // TLS service (sunlightd-launched) + certificate control CLI.
         "/sbin/sunlight-tls" | "/usr/sbin/sunlight-tls" => Ok(crate::SUNLIGHT_TLS_ELF_BYTES),
         "/sbin/secret_store_test" | "/usr/sbin/secret_store_test" => {

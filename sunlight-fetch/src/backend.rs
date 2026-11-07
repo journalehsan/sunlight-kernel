@@ -100,7 +100,9 @@ pub(crate) fn begin_request_from_resolved(
     let mut request = request;
 
     for redirect in 0..=MAX_REDIRECTS {
-        emit_event(&mut on_event, RequestEvent::Connecting { url: url.clone() });
+        if !is_broker_callback(&url) {
+            emit_event(&mut on_event, RequestEvent::Connecting { url: url.clone() });
+        }
 
         let (response, mut handle, initial_body) = ipc::http_request_with_proxy(
             &url.host,
@@ -119,6 +121,27 @@ pub(crate) fn begin_request_from_resolved(
                     message: String::from("redirect without Location header"),
                 })?;
 
+            if is_broker_callback(&url) && response.status_code == 303 && location == "about:blank"
+            {
+                let _ = handle.close();
+                let body=b"<!doctype html><title>Account authorization</title><p>Return to the application.</p>".to_vec();
+                return Ok(PendingRequest {
+                    response: HttpResponse {
+                        status_code: 200,
+                        status_text: String::from("OK"),
+                        headers: Vec::from([(
+                            String::from("Content-Length"),
+                            format!("{}", body.len()),
+                        )]),
+                        header_len: 0,
+                    },
+                    final_url: ParsedUrl::parse("http://127.0.0.1/")?,
+                    request_method: "GET",
+                    handle,
+                    initial_body: body,
+                    started_at,
+                });
+            }
             if redirect == MAX_REDIRECTS {
                 return Err(FetchError::HttpError {
                     status: response.status_code,
@@ -127,13 +150,15 @@ pub(crate) fn begin_request_from_resolved(
             }
 
             let next_url = resolve_redirect_location(&url, location)?;
-            emit_event(
-                &mut on_event,
-                RequestEvent::Redirect {
-                    status: response.status_code,
-                    next_url: next_url.clone(),
-                },
-            );
+            if !is_broker_callback(&next_url) {
+                emit_event(
+                    &mut on_event,
+                    RequestEvent::Redirect {
+                        status: response.status_code,
+                        next_url: next_url.clone(),
+                    },
+                );
+            }
             addr = crate::cli::resolve_address(&next_url, proxy, overrides)?;
             request = redirected_request(&request, &next_url);
             url = next_url;
@@ -594,5 +619,85 @@ mod tests {
             Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => None,
             Err(err) => panic!("failed to bind test listener: {err}"),
         }
+    }
+}
+
+fn is_broker_callback(url: &ParsedUrl) -> bool {
+    !url.uses_tls() && url.host == "127.0.0.1" && url.path.starts_with("/oauth/callback?")
+}
+
+#[cfg(all(test, feature = "host-linux"))]
+mod broker_callback_tests {
+    use super::*;
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    #[test]
+    fn callback_is_consumed_before_events_and_page_state() {
+        let authorize = TcpListener::bind("127.0.0.1:0").unwrap();
+        let callback = TcpListener::bind("127.0.0.1:0").unwrap();
+        let initial = ParsedUrl::parse(&format!(
+            "http://{}/authorize",
+            authorize.local_addr().unwrap()
+        ))
+        .unwrap();
+        let location = format!(
+            "http://{}/oauth/callback?state=public-state&code=callback-secret-sentinel",
+            callback.local_addr().unwrap()
+        );
+        let server = thread::spawn(move || {
+            let (mut socket, _) = authorize.accept().unwrap();
+            let mut bytes = [0u8; 4096];
+            let _ = socket.read(&mut bytes).unwrap();
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\n\r\n"
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            let (mut socket, _) = callback.accept().unwrap();
+            let n = socket.read(&mut bytes).unwrap();
+            assert!(core::str::from_utf8(&bytes[..n])
+                .unwrap()
+                .contains("callback-secret-sentinel"));
+            socket
+                .write_all(
+                    b"HTTP/1.1 303 See Other\r\nLocation: about:blank\r\nContent-Length: 0\r\n\r\n",
+                )
+                .unwrap();
+        });
+        let request = HttpRequest {
+            method: "GET",
+            path: initial.path.clone(),
+            host: initial.host_header(),
+            headers: Vec::new(),
+            body: None,
+        };
+        let mut events = String::new();
+        let pending = begin_request_from_resolved(
+            initial,
+            ResolvedAddr {
+                octets: [127, 0, 0, 1],
+            },
+            request,
+            Some(&mut |event| events.push_str(&format!("{event:?}"))),
+            None,
+            &[],
+        )
+        .unwrap();
+        let result = pending.read_body(None).unwrap();
+        assert!(!events.contains("callback-secret-sentinel"));
+        assert!(!events.contains("/oauth/callback"));
+        assert!(!format!("{:?}", result.final_url).contains("callback-secret-sentinel"));
+        assert!(!core::str::from_utf8(&result.body)
+            .unwrap()
+            .contains("callback-secret-sentinel"));
+        assert!(result.response.header("location").is_none());
+        server.join().unwrap();
     }
 }

@@ -44,6 +44,9 @@ pub const fn name_to_u64(name: &str) -> u64 {
 /// The auth-broker service key (UAC): the only non-root identity permitted to
 /// read another user's `account:<uid>:*` namespace.
 pub const AUTH_BROKER_SERVICE: u64 = name_to_u64("sunlight-uac");
+/// The online-accounts broker service key. It is the *only* identity permitted
+/// to reach the `account-broker:*` namespace; no root or other service override.
+pub const ACCOUNT_BROKER_SERVICE: u64 = name_to_u64("sunlight-account-broker");
 /// TLS service key, recognised for public trust-anchor administration.
 pub const TLS_SERVICE: u64 = name_to_u64("sunlight-tls");
 /// KV service key.
@@ -258,6 +261,13 @@ pub enum KvError {
 pub enum Namespace {
     /// `account:<uid>:*` — one authenticated user's private namespace.
     Account(u32),
+    /// `account-broker:*` — the online-accounts broker's durable store.
+    ///
+    /// Broker-exclusive: readable and writable *only* by a process carrying the
+    /// kernel-stamped `sunlight-account-broker` service identity. Root and every
+    /// other service are denied; this deliberately has no administrative
+    /// override, because the stored material is provider refresh/access tokens.
+    AccountBroker,
     /// `vault:*` — cross-user secret material; Root/Service/broker only.
     Vault,
     /// Public read-only published material (`tls.*`, `pki.*`, `ca.*`, `pub.*`).
@@ -284,6 +294,11 @@ pub fn classify(key: &str) -> Namespace {
                 return Namespace::Account(uid);
             }
         }
+    }
+    // Must precede the `General` fallback. It cannot be confused with
+    // `account:<uid>:` because "broker" does not parse as a uid.
+    if key.starts_with("account-broker:") {
+        return Namespace::AccountBroker;
     }
     if key.starts_with("vault:") {
         return Namespace::Vault;
@@ -313,6 +328,9 @@ pub fn namespace_allows(caller: &Caller, key: &str) -> bool {
                 || caller.is_auth_broker()
                 || matches!(caller, Caller::User(call_uid) if *call_uid == uid)
         }
+        // No `is_privileged()` shortcut here on purpose: root and unrelated
+        // services must not read or enumerate broker token material.
+        Namespace::AccountBroker => is_account_broker(caller),
         Namespace::Vault => caller.is_root() || caller.is_auth_broker(),
         Namespace::Public | Namespace::General => true,
     }
@@ -324,10 +342,16 @@ pub fn namespace_allows(caller: &Caller, key: &str) -> bool {
 /// their user (or an authorised broker); the vault only by Root/Service/broker.
 pub fn namespace_allows_write(caller: &Caller, key: &str) -> bool {
     match classify(key) {
+        Namespace::AccountBroker => is_account_broker(caller),
         Namespace::Public => caller.is_privileged() || caller.is_tls_service(),
         Namespace::Account(_) | Namespace::Vault => namespace_allows(caller, key),
         Namespace::General => true,
     }
+}
+
+/// True only for the kernel-stamped account-broker service identity.
+fn is_account_broker(caller: &Caller) -> bool {
+    matches!(caller, Caller::Service(ACCOUNT_BROKER_SERVICE))
 }
 
 /// Decide whether `caller` may read `key`, given the record's stored ACL.
@@ -342,6 +366,11 @@ pub fn namespace_allows_write(caller: &Caller, key: &str) -> bool {
 pub fn read_allowed(caller: &Caller, key: &str, acl: &Acl) -> bool {
     if is_public_key(key) {
         return true;
+    }
+    // Broker namespace never falls back to the per-key ACL, whose privileged
+    // short-circuit would otherwise admit root.
+    if classify(key) == Namespace::AccountBroker {
+        return is_account_broker(caller);
     }
     acl.allows_read(caller)
 }
@@ -426,5 +455,101 @@ mod tests {
         assert!(read_allowed(&Caller::Unknown, "tls.ca.roots", &legacy));
         // The same root-only ACL on a private key denies a non-owner.
         assert!(!read_allowed(&Caller::User(1000), "secret", &legacy));
+    }
+
+    const BROKER_KEY: &str = "account-broker:index";
+
+    fn broker() -> Caller {
+        Caller::Service(ACCOUNT_BROKER_SERVICE)
+    }
+
+    #[test]
+    fn account_broker_namespace_classifies_before_general() {
+        assert_eq!(classify(BROKER_KEY), Namespace::AccountBroker);
+        assert_eq!(
+            classify("account-broker:acct-AAAA"),
+            Namespace::AccountBroker
+        );
+        // Not mistaken for `account:<uid>:` and not left as General.
+        assert_eq!(account_uid(BROKER_KEY), None);
+        assert_ne!(classify(BROKER_KEY), Namespace::General);
+        // Neighbouring semantics are untouched.
+        assert_eq!(classify("account:1000:token"), Namespace::Account(1000));
+        assert_eq!(classify("vault:secret"), Namespace::Vault);
+        assert_eq!(classify("tls.ca.roots"), Namespace::Public);
+        assert_eq!(classify("calc:1000:history"), Namespace::General);
+    }
+
+    #[test]
+    fn broker_owns_its_namespace_for_read_write_and_scan() {
+        let caller = broker();
+        assert!(namespace_allows(&caller, BROKER_KEY));
+        assert!(namespace_allows_write(&caller, BROKER_KEY));
+        let acl = Acl::for_caller(&caller);
+        assert!(read_allowed(&caller, BROKER_KEY, &acl));
+    }
+
+    #[test]
+    fn broker_namespace_denies_root_and_every_other_service() {
+        let acl = Acl::for_caller(&broker());
+        for caller in [
+            Caller::Root,
+            Caller::Service(TLS_SERVICE),
+            Caller::Service(KV_SERVICE),
+            Caller::Service(AUTH_BROKER_SERVICE),
+            Caller::User(0),
+            Caller::User(1000),
+            Caller::Unknown,
+        ] {
+            assert!(
+                !namespace_allows(&caller, BROKER_KEY),
+                "{caller:?} must not read the broker namespace"
+            );
+            assert!(
+                !namespace_allows_write(&caller, BROKER_KEY),
+                "{caller:?} must not write the broker namespace"
+            );
+            assert!(
+                !read_allowed(&caller, BROKER_KEY, &acl),
+                "{caller:?} must not read a broker record even via its ACL"
+            );
+        }
+    }
+
+    #[test]
+    fn broker_record_acl_cannot_leak_to_privileged_callers() {
+        // Even a record whose ACL lists "root" and "*" stays broker-only, so a
+        // later `is_privileged()` refactor cannot reopen token material.
+        let mut acl = Acl::public_read(&broker());
+        acl.write.push(String::from("root"));
+        assert!(!read_allowed(&Caller::Root, BROKER_KEY, &acl));
+        assert!(!read_allowed(&Caller::User(1000), BROKER_KEY, &acl));
+        assert!(read_allowed(&broker(), BROKER_KEY, &acl));
+        assert!(!namespace_allows(&Caller::Root, BROKER_KEY));
+    }
+
+    #[test]
+    fn user_and_tls_namespaces_unchanged_by_broker_gate() {
+        // account:<uid>: still root/broker/owner only, unchanged.
+        assert!(namespace_allows(&Caller::Root, "account:1000:token"));
+        assert!(namespace_allows(
+            &Caller::Service(AUTH_BROKER_SERVICE),
+            "account:1000:token"
+        ));
+        assert!(namespace_allows(&Caller::User(1000), "account:1000:token"));
+        assert!(!namespace_allows(
+            &Caller::Service(ACCOUNT_BROKER_SERVICE),
+            "account:1000:token"
+        ));
+        // vault:* unchanged: broker has no vault authority.
+        assert!(!namespace_allows(&broker(), "vault:secret"));
+        // TLS trust anchors still world-readable and writable by TLS service.
+        let legacy = Acl::new("root");
+        assert!(read_allowed(&Caller::User(1000), "tls.ca.roots", &legacy));
+        assert!(namespace_allows_write(
+            &Caller::Service(TLS_SERVICE),
+            "tls.ca.roots"
+        ));
+        assert!(namespace_allows(&Caller::Service(TLS_SERVICE), "tls.ca.roots"));
     }
 }

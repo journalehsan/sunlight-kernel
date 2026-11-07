@@ -227,6 +227,9 @@ pub struct Process {
     pub trusted_wiseowl_braind: bool,
     pub trusted_wiseowl_console: bool,
     pub trusted_control_panel: bool,
+    /// Set only for the kernel-loaded online-accounts broker. It is the sole
+    /// identity permitted to call the account-broker caller-role syscall.
+    pub trusted_account_broker: bool,
     /// Trust-chain markers used only for the authenticated-session broker.
     pub trusted_service_manager: bool,
     pub trusted_auth_broker: bool,
@@ -548,6 +551,7 @@ impl Process {
             trusted_wiseowl_braind: false,
             trusted_wiseowl_console: false,
             trusted_control_panel: false,
+            trusted_account_broker: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,
@@ -785,6 +789,7 @@ impl Process {
             trusted_wiseowl_braind: false,
             trusted_wiseowl_console: false,
             trusted_control_panel: false,
+            trusted_account_broker: false,
             trusted_service_manager: false,
             trusted_auth_broker: false,
             trusted_vfs_service: false,

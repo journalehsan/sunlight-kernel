@@ -76,7 +76,7 @@ pub extern "C" fn _start() -> ! {
 
 fn handle(msg: &IpcMsg) -> IpcMsg {
     match msg.label {
-        SmMsg::WRITE_FILE => op_write(msg),
+        SmMsg::WRITE_FILE | SmMsg::APPEND_FILE => op_write(msg),
         SmMsg::MKDIR_ALL => op_mkdir(msg),
         SmMsg::REMOVE => op_remove(msg),
         SmMsg::READ_FILE => op_read(msg),
@@ -193,7 +193,9 @@ fn with_payload<R>(msg: &IpcMsg, f: impl FnOnce(&[u8], &[u8]) -> R) -> Option<R>
 }
 
 fn op_write(msg: &IpcMsg) -> IpcMsg {
-    match with_payload(msg, |path, content| do_write(path, content)) {
+    match with_payload(msg, |path, content| {
+        do_write(path, content, msg.label == SmMsg::APPEND_FILE)
+    }) {
         Some(Ok(len)) => {
             // success logged inside
             reply_ok()
@@ -203,7 +205,7 @@ fn op_write(msg: &IpcMsg) -> IpcMsg {
     }
 }
 
-fn do_write(pathb: &[u8], content: &[u8]) -> Result<usize, u64> {
+fn do_write(pathb: &[u8], content: &[u8], append: bool) -> Result<usize, u64> {
     let path_str = match core::str::from_utf8(pathb) {
         Ok(s) => s,
         Err(_) => return Err(SmMsg::ERR_INVALID_PATH),
@@ -223,13 +225,30 @@ fn do_write(pathb: &[u8], content: &[u8]) -> Result<usize, u64> {
     // ensure parents
     mkdir_parents(pathb);
     // open/create write (replace)
-    let fd = match libc::open_with_flags(pathb, libc::O_WRONLY | libc::O_CREAT) {
+    let private_kv_log = norm_s == "/var/lib/sunlight/kv.store";
+    let fd = match libc::open_with_flags_mode(
+        pathb,
+        libc::O_WRONLY
+            | libc::O_CREAT
+            | if append {
+                libc::O_APPEND
+            } else {
+                libc::O_TRUNC
+            },
+        if private_kv_log { 0o600 } else { 0o644 },
+    ) {
         Ok(f) => f,
         Err(_) => {
             log_deny("write", norm_s, "open-failed");
             return Err(SmMsg::ERR_IO);
         }
     };
+    // Other KV namespaces also rely on per-key ACLs. Keep the raw shared
+    // log private, including a log created by an earlier daemon in this boot.
+    if private_kv_log && libc::chmod(pathb, 0o600).is_err() {
+        let _ = libc::close(fd);
+        return Err(SmMsg::ERR_IO);
+    }
     let mut off = 0usize;
     while off < content.len() {
         match libc::write(fd, &content[off..]) {
@@ -424,6 +443,30 @@ fn op_read(msg: &IpcMsg) -> IpcMsg {
     }
 
     // open and read whole (small file expectation; large would need reply shm)
+    if msg.words[1] == 1 {
+        // Reuse the caller-owned mapping. No response mapping outlives its owner.
+        let cap = msg.caps[0];
+        let Ok(ptr) = shm_map(cap) else {
+            return reply_err(SmMsg::ERR_IO);
+        };
+        let result = (|| {
+            let fd = libc::open(path_slice).map_err(|_| SmMsg::ERR_NOT_FOUND)?;
+            let result = (|| {
+                libc::lseek(fd, msg.words[2].try_into().map_err(|_| SmMsg::ERR_IO)?, 0)
+                    .map_err(|_| SmMsg::ERR_IO)?;
+                let out = unsafe { core::slice::from_raw_parts_mut(ptr, SmMsg::PAGE_CAPACITY) };
+                libc::read(fd, out).map_err(|_| SmMsg::ERR_IO)
+            })();
+            let _ = libc::close(fd);
+            result
+        })();
+        let _ = shm_free(cap);
+        return match result {
+            Ok(n) => reply_ok().word(0, n as u64),
+            Err(e) => reply_err(e),
+        };
+    }
+
     match libc::open(path_slice) {
         Ok(fd) => {
             let mut buf = [0u8; 1024]; // small read cap for inline reply

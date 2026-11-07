@@ -218,6 +218,10 @@ pub enum SunlightSyscall {
     /// kernel-authenticated UID/GID, process generation and, for authenticated
     /// system daemons, a stable service-identity key. Gated to sunlight-kv.
     KvGetCallerCredentials = 108,
+    /// Trusted account-broker caller-role lookup for an IPC caller PID. Returns
+    /// the kernel-authenticated UID/GID, process generation and the narrow role
+    /// bitmask the kernel stamped for that process. Gated to the account broker.
+    AccountBrokerCallerRole = 109,
 }
 
 /// Canonical, kernel-authoritative service identity keys.
@@ -239,6 +243,204 @@ pub mod service_identity {
     pub const SERVICE_MANAGER: u64 = super::name_to_u64("sunlightd");
     /// Key for the desktop session manager (`sunlight-sessiond`).
     pub const SESSION_MANAGER: u64 = super::name_to_u64("sunlight-sessiond");
+    /// Key for the online-accounts broker (`sunlight-account-broker`).
+    ///
+    /// This key is the sole authority for the `account-broker:*` KV namespace.
+    pub const ACCOUNT_BROKER: u64 = super::name_to_u64("sunlight-account-broker");
+}
+
+/// Narrow caller roles the account broker may observe.
+///
+/// The kernel stamps these roles from the exact embedded executable path, so a
+/// process cannot claim a role. Only the control panel is recognised: it may
+/// call `RequestAccess` and `ListAccounts`, and nothing else.
+pub mod account_broker_role {
+    /// No role: every operation stays denied.
+    pub const NONE: u64 = 0;
+    /// The system control panel may request access and list accounts.
+    pub const CONTROL_PANEL: u64 = 1 << 0;
+
+    /// Every role bit known to this ABI. A broker must reject unknown bits.
+    pub const KNOWN: u64 = CONTROL_PANEL;
+}
+
+/// Narrow online-account management protocol. RequestAccess grants management
+/// eligibility only; it never returns a bearer or refresh token.
+pub mod online_accounts {
+    pub const STATUS: u64 = 0xAB00;
+    pub const START: u64 = 0xAB01;
+    pub const DISCONNECT: u64 = 0xAB04;
+    pub const FLOW_STATUS: u64 = 0xAB06;
+    pub const CANCEL: u64 = 0xAB07;
+    pub const REQUEST_ACCESS: u64 = 0xAB03;
+    pub const LIST_ACCOUNTS: u64 = 0xAB09;
+    pub const REPLY: u64 = 0xABFF;
+    pub const OK: u64 = 0;
+    pub const DENIED: u64 = 1;
+    /// The request is authorised, but live-session storage is unavailable.
+    pub const STORAGE_UNAVAILABLE: u64 = 7;
+
+    pub const MAX_ACCOUNTS: usize = 16;
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct Account {
+        pub id: [u8; 48],
+        pub identifier: [u8; 64],
+        pub provider: [u8; 32],
+        pub active: u64,
+    }
+    impl Account {
+        pub const EMPTY: Self = Self {
+            id: [0; 48],
+            identifier: [0; 64],
+            provider: [0; 32],
+            active: 0,
+        };
+    }
+    #[repr(C)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct Snapshot {
+        pub count: u64,
+        pub accounts: [Account; MAX_ACCOUNTS],
+    }
+    impl Snapshot {
+        pub const EMPTY: Self = Self {
+            count: 0,
+            accounts: [Account::EMPTY; MAX_ACCOUNTS],
+        };
+    }
+    const _: () = assert!(core::mem::size_of::<Snapshot>() <= 4096);
+
+    pub fn allows(caller: Option<super::AccountBrokerCaller>, badge: u64, op: u64) -> bool {
+        caller.is_some_and(|c| {
+            c.pid == badge
+                && c.generation != 0
+                && c.is_control_panel()
+                && c.has_only_known_roles()
+                && matches!(
+                    op,
+                    STATUS
+                        | START
+                        | DISCONNECT
+                        | FLOW_STATUS
+                        | CANCEL
+                        | REQUEST_ACCESS
+                        | LIST_ACCOUNTS
+                )
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use crate::{account_broker_role as role, AccountBrokerCaller};
+        #[test]
+        fn only_panel_metadata_and_flow_management_operations_are_granted() {
+            let panel = AccountBrokerCaller {
+                pid: 42,
+                generation: 9,
+                uid: 1000,
+                gid: 1000,
+                roles: role::CONTROL_PANEL,
+            };
+            for op in 0xAB00..=0xAB11 {
+                assert_eq!(
+                    allows(Some(panel), 42, op),
+                    matches!(
+                        op,
+                        STATUS
+                            | START
+                            | DISCONNECT
+                            | FLOW_STATUS
+                            | CANCEL
+                            | REQUEST_ACCESS
+                            | LIST_ACCOUNTS
+                    )
+                );
+                assert!(!allows(None, 42, op));
+                assert!(!allows(
+                    Some(AccountBrokerCaller { roles: 0, ..panel }),
+                    42,
+                    op
+                ));
+                assert!(!allows(
+                    Some(AccountBrokerCaller {
+                        roles: panel.roles | (1 << 63),
+                        ..panel
+                    }),
+                    42,
+                    op
+                ));
+                assert!(!allows(Some(panel), 43, op));
+                assert!(!allows(
+                    Some(AccountBrokerCaller {
+                        generation: 0,
+                        ..panel
+                    }),
+                    42,
+                    op
+                ));
+            }
+        }
+    }
+}
+
+/// Kernel-authenticated caller role for an account-broker request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccountBrokerCaller {
+    /// Live caller PID (echoes the IPC badge).
+    pub pid: u64,
+    /// Address-space identity generation, for PID-reuse discrimination.
+    pub generation: u64,
+    /// Real UID from the kernel's process table.
+    pub uid: u32,
+    /// Real GID from the kernel's process table.
+    pub gid: u32,
+    /// Kernel-stamped role bits ([`account_broker_role`]).
+    pub roles: u64,
+}
+
+impl AccountBrokerCaller {
+    /// True when the caller carries the control-panel role.
+    pub fn is_control_panel(&self) -> bool {
+        self.roles & account_broker_role::CONTROL_PANEL != 0
+    }
+
+    /// True when the caller carries only roles this ABI understands.
+    pub fn has_only_known_roles(&self) -> bool {
+        self.roles & !account_broker_role::KNOWN == 0
+    }
+}
+
+/// Resolve the kernel-authenticated role of `caller_pid` for the account broker.
+///
+/// Restricted to the trusted `sunlight-account-broker` daemon. Returns `None`
+/// when the syscall is denied or the target is not live, so a compromised or
+/// unrelated process cannot manufacture a control-panel identity.
+pub fn account_broker_caller_role(caller_pid: u64) -> Option<AccountBrokerCaller> {
+    // SAFETY: the kernel validates both the service identity and target PID.
+    let (packed, reply) = unsafe {
+        raw_syscall(
+            SunlightSyscall::AccountBrokerCallerRole,
+            caller_pid,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+    };
+    if packed == u64::MAX {
+        return None;
+    }
+    Some(AccountBrokerCaller {
+        pid: reply.words[0],
+        generation: reply.words[1],
+        uid: packed as u32,
+        gid: (packed >> 32) as u32,
+        roles: reply.words[2],
+    })
 }
 
 /// Kernel-authenticated credentials for an IPC caller, as returned by the
@@ -787,6 +989,9 @@ fn matches_user_session_service(name_key: u64) -> bool {
         || name_key == name_to_u64("docserv")
         || name_key == name_to_u64("sunlight-kv")
         || name_key == name_to_u64("sunlight-tls")
+        // Resolving the broker grants no token access; its core denies access
+        // until verified app grants exist.
+        || name_key == name_to_u64("sunlight-account-broker")
         || name_key == name_to_u64("audiod")
         || name_key == name_to_u64("mezzo")
         || name_key == name_to_u64(SESSION_ENDPOINT)
@@ -801,10 +1006,66 @@ fn matches_user_session_service(name_key: u64) -> bool {
 }
 
 #[cfg(test)]
+mod account_broker_role_tests {
+    use super::{
+        account_broker_role, name_to_u64, service_identity, AccountBrokerCaller, SunlightSyscall,
+    };
+
+    fn caller(roles: u64) -> AccountBrokerCaller {
+        AccountBrokerCaller {
+            pid: 42,
+            generation: 7,
+            uid: 1000,
+            gid: 1000,
+            roles,
+        }
+    }
+
+    #[test]
+    fn broker_identity_key_matches_the_kv_acl_string() {
+        assert_eq!(
+            service_identity::ACCOUNT_BROKER,
+            name_to_u64("sunlight-account-broker")
+        );
+    }
+
+    #[test]
+    fn only_the_control_panel_role_is_recognised() {
+        assert!(!caller(account_broker_role::NONE).is_control_panel());
+        assert!(caller(account_broker_role::CONTROL_PANEL).is_control_panel());
+        assert!(caller(account_broker_role::KNOWN).has_only_known_roles());
+
+        // An unknown bit must never be treated as a superset of the one grant.
+        let unknown = caller(account_broker_role::CONTROL_PANEL | (1 << 63));
+        assert!(!unknown.has_only_known_roles());
+        assert!(unknown.is_control_panel());
+    }
+
+    #[test]
+    fn caller_role_lookup_has_its_own_syscall_number() {
+        assert_eq!(SunlightSyscall::AccountBrokerCallerRole as u64, 109);
+    }
+}
+
+#[cfg(test)]
 mod service_capability_tests {
     use super::{
         name_to_u64, service_capability_allows_hashed_name, ServiceCapability, SESSION_ENDPOINT,
     };
+
+    #[test]
+    fn account_broker_lookup_is_a_user_session_operation() {
+        let endpoint = name_to_u64("sunlight-account-broker");
+        assert!(service_capability_allows_hashed_name(
+            ServiceCapability::UserSession.bit(),
+            endpoint
+        ));
+        assert!(!service_capability_allows_hashed_name(0, endpoint));
+        assert!(!service_capability_allows_hashed_name(
+            ServiceCapability::Network.bit(),
+            endpoint
+        ));
+    }
 
     #[test]
     fn microphone_requires_its_own_service_capability() {
@@ -1015,6 +1276,10 @@ pub mod NetOp {
     /// - words[0] = response length (0 on failure)
     /// - words[1] = NetStatus
     pub const UDP_EXCHANGE: u64 = 20;
+    /// Owner/generation-checked local endpoint: w0=IPv4 LE, w1=port, w2=status.
+    pub const GET_SOCKNAME: u64 = 21;
+    /// Owner/generation-checked peer endpoint, using the same reply layout.
+    pub const GET_PEERNAME: u64 = 22;
 }
 
 /// Random service opcodes (registered as "rand").
@@ -2552,7 +2817,8 @@ pub mod SmMsg {
     pub const MKDIR_ALL: u64 = 2;
     pub const REMOVE: u64 = 3;
     pub const READ_FILE: u64 = 4;
-    // OP 5 batch left for future; current bite keeps simple per-op IPC.
+    pub const APPEND_FILE: u64 = 5;
+    // READ_FILE with words[1]=1 reads into the caller page; words[2]=offset.
 
     pub const REPLY_OK: u64 = 1;
     pub const REPLY_ERR: u64 = 0xff;

@@ -7,6 +7,10 @@ Requires QEMU and OpenSSL. Uses a fresh, diskless guest and an ephemeral test CA
 Serial output and packet capture remain under target/network-tls/.
 """
 
+import base64
+import html
+import hashlib
+import urllib.parse
 import argparse
 import http.server
 import json
@@ -24,6 +28,10 @@ import time
 
 class Fixture(http.server.BaseHTTPRequestHandler):
     ca_der = b""
+    codes = {}
+    authorizations = 0
+    exchanges = 0
+    issued_secrets = set()
 
     def log_message(self, *_args):
         pass
@@ -43,7 +51,88 @@ class Fixture(http.server.BaseHTTPRequestHandler):
         self.respond(False)
 
     def do_GET(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path.startswith("/authorize/"):
+            fields = urllib.parse.parse_qs(url.query, strict_parsing=True)
+            case = url.path.rsplit("/", 1)[1]
+            assert fields["client_id"] == ["sunlight-native-mock"]
+            assert fields["code_challenge_method"] == ["S256"]
+            assert fields["scope"] == ["mail.read"]
+            redirect = fields["redirect_uri"][0]
+            parsed = urllib.parse.urlsplit(redirect)
+            assert parsed.hostname == "127.0.0.1" and parsed.port and parsed.path == "/oauth/callback"
+            type(self).authorizations += 1
+            if case == "interactive":
+                href = html.escape("/authorize/success?" + url.query, quote=True)
+                body = ("<html><head><title>Microsoft - Mock test mode</title></head><body>"
+                        "<h1>Microsoft mock sign-in</h1><p>Local test provider. No real Microsoft credentials required.</p>"
+                        "<p>Connect mock@sunlight.test to SunlightOS for this live session.</p>"
+                        f'<p><a href="{href}">Authorize Microsoft mock account</a></p>'
+                        "<p>You can cancel sign-in from Online Accounts.</p></body></html>").encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if case in ("timeout", "cancel"):
+                body = b"<title>Mock authorization pending</title>"
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            state = fields["state"][0]
+            code = hashlib.sha256(state.encode()).hexdigest()
+            type(self).issued_secrets.add(code)
+            type(self).codes[code] = (fields, case)
+            query = {"state": "wrong" if case == "wrong-state" else state}
+            query.update({"error": "access_denied"} if case == "denied" else {"code": code})
+            self.send_response(302)
+            self.send_header("Location", redirect + "?" + urllib.parse.urlencode(query))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self.respond(True)
+
+    def do_POST(self):
+        assert self.path == "/token"
+        length = int(self.headers.get("Content-Length", "0"))
+        assert 0 < length < 8192
+        posted = urllib.parse.parse_qs(self.rfile.read(length).decode(), strict_parsing=True)
+        fields, case = type(self).codes.pop(posted["code"][0])
+        type(self).issued_secrets.add(posted["code_verifier"][0])
+        assert posted["client_id"] == fields["client_id"]
+        assert posted["redirect_uri"] == fields["redirect_uri"]
+        assert posted["grant_type"] == ["authorization_code"]
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(posted["code_verifier"][0].encode()).digest()).rstrip(b"=").decode()
+        assert [challenge] == fields["code_challenge"]
+        type(self).exchanges += 1
+        body = (b'{"error":"mock_error"}' if case == "token-error" else
+                b'{"access_token":"native-mock-access","refresh_token":"native-mock-refresh","token_type":"Bearer","expires_in":3600,"scope":"mail.read"}')
+        if case == "exchange-timeout":
+            self.send_response(200)
+            self.send_header("Content-Length", "12000")
+            self.end_headers()
+            try:
+                for _ in range(120):
+                    self.wfile.write(b" " * 100)
+                    self.wfile.flush()
+                    time.sleep(1)
+            except (BrokenPipeError, ConnectionResetError, ssl.SSLError):
+                pass
+            return
+        if case == "token-timeout":
+            time.sleep(10)
+            return
+        self.send_response(500 if case == "token-error" else 200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError, ssl.SSLError):
+            pass
 
 
 LONG_HOST = "long-hostname-for-tls.sunlight.test"
@@ -117,7 +206,7 @@ def gate(args, root):
     process = None
     try:
         for secure in (False, True):
-            server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Fixture)
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", 8443 if secure and args.account_broker_flow else 0), Fixture)
             servers.append(server)
             if secure:
                 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -159,13 +248,13 @@ def gate(args, root):
         with (output / "qemu.log").open("w") as qemu_log:
             process = subprocess.Popen(command, stdout=qemu_log, stderr=qemu_log)
 
-        def wait_for(marker):
+        def wait_for(marker, start=0):
             deadline = time.monotonic() + args.timeout
             while time.monotonic() < deadline:
                 text = serial.read_text(errors="replace")
                 if any(s in text for s in ("KERNEL PANIC", "[EXCEPTION]", "[FAULT]")):
                     raise RuntimeError(f"Guest fault; see {serial}")
-                if marker in text:
+                if marker in text[start:]:
                     return text
                 if process.poll() is not None:
                     raise RuntimeError(f"QEMU exited; see {output / 'qemu.log'}")
@@ -197,8 +286,8 @@ def gate(args, root):
                         ".": "dot", "-": "minus", "\n": "ret"}
                 for character in text:
                     request("human-monitor-command", {
-                        "command-line": "sendkey " + keys.get(character, character) + " 35"})
-                    time.sleep(0.085)
+                        "command-line": "sendkey " + keys.get(character, character) + " 50"})
+                    time.sleep(0.13)
 
             request("qmp_capabilities")
             type_text("\nroot\n")
@@ -207,6 +296,8 @@ def gate(args, root):
             http_url = f"http://10.0.2.2:{servers[0].server_port}"
             https_url = f"https://10.0.2.2:{servers[1].server_port}"
             proxy = f"--socks5-hostname 10.0.2.2:{socks.server_address[1]}"
+            if args.account_broker_probe:
+                wait_for("[ACCOUNT-BROKER] native service ready")
             cases = [
                 (f"fetch -o /tmp/untrusted {https_url}/payload", 1),
                 (f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
@@ -216,30 +307,76 @@ def gate(args, root):
                 (f"fetch {proxy} -o /tmp/proxy-https https://{LONG_HOST}:{servers[1].server_port}/payload", 0),
                 (f"fetch {proxy} -o /tmp/proxy-http http://{LONG_HOST}:{servers[0].server_port}/payload", 0),
             ]
+            if args.account_broker_probe:
+                cases.insert(0, ("/sbin/sunlight-account-broker --probe", 0))
+                cases.insert(1, ("/sbin/sunlight-account-broker --loopback-probe", 0))
             cases.append((f"fetch --resolve {LONG_HOST}:{servers[1].server_port}:10.0.2.2 -o /tmp/direct-https https://{LONG_HOST}:{servers[1].server_port}/payload", 0))
             cases.append((f"fetch --resolve wrong.sunlight.test:{servers[1].server_port}:10.0.2.2 -o /tmp/wrong-host https://wrong.sunlight.test:{servers[1].server_port}/payload", 1))
+            if args.account_broker_flow:
+                index=next(i for i,(command,_) in enumerate(cases) if command.startswith("certificatectl install"))+1
+                cases[index:index]=[(f"/sbin/sunlight-account-broker --mock 8443 {mode}",0) for mode in range(10)]
+            if args.account_broker_storage:
+                cases += [
+                    ("/sbin/sunlight-account-broker --storage-seed", 0),
+                    ("sunlightctl restart sunlight-kv", 0),
+                    ("/sbin/sunlight-account-broker --storage-check", 0),
+                    (f"fetch -o /tmp/restart-tls {https_url}/payload", 0),
+                    ("/sbin/sunlight-account-broker --storage-delete", 0),
+                    ("sunlightctl restart sunlight-kv", 0),
+                    ("/sbin/sunlight-account-broker --storage-absent", 0),
+                    ("cat /var/lib/sunlight-kv/broker.store", 1),
+                ]
+            if args.account_provider_preflight:
+                cases.append(("/sbin/sunlight-account-broker --real-provider", 3))
             if args.arch_resolve:
                 cases.append((f"fetch --resolve archlinux.org:443:{args.arch_resolve} -o /tmp/arch-direct.html https://archlinux.org", 0))
             if args.arch_proxy:
                 cases.append((f"fetch --socks5-hostname {args.arch_proxy} -o /tmp/archlinux.html https://archlinux.org", 0))
+            if args.ui_only:
+                cases = [(f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
+                         ("certificatectl install ca testca /tmp/ca.der", 0)]
             for command, expected in cases:
+                start = len(serial.read_text(errors="replace"))
                 type_text(command + "\n")
-                text = wait_for(f"[TTY]  exit: {command} ->")
+                text = wait_for(f"[TTY]  exit: {command} ->", start)
                 if f"[TTY]  exit: {command} -> {expected}\n" not in text:
                     raise RuntimeError(f"Unexpected exit status: {command}; see {serial}")
                 print(f"PASS (exit {expected}): {command}", flush=True)
-            if "InvalidCertificate(UnknownIssuer)" not in text:
-                raise RuntimeError("Untrusted certificate was not rejected as UnknownIssuer")
-            if "[SUNLIGHT-TLS] hs_OK host=10.0.2.2" not in text:
-                raise RuntimeError("Missing successful verified TLS handshake")
-            if f"[SUNLIGHT-TLS] hs_OK host={LONG_HOST}" not in text:
-                raise RuntimeError("Full TLS hostname did not survive IPC")
-            if LONG_HOST not in SocksFixture.seen_hosts:
-                raise RuntimeError("SOCKS proxy did not receive the destination hostname")
-            if f"[DNSDBG] resolve request host='{LONG_HOST}'" in text:
-                raise RuntimeError("SOCKS request leaked into local DNS")
-            if (args.arch_proxy or args.arch_resolve) and "[SUNLIGHT-TLS] hs_OK host=archlinux.org" not in text:
-                raise RuntimeError("Arch HTTPS verification did not succeed")
+            if not args.ui_only:
+                if args.account_broker_probe and "[ACCOUNT-BROKER] native IPC probe PASS" not in text:
+                    raise RuntimeError("Missing native account broker IPC probe")
+                if "InvalidCertificate(UnknownIssuer)" not in text:
+                    raise RuntimeError("Untrusted certificate was not rejected as UnknownIssuer")
+                if "[SUNLIGHT-TLS] hs_OK host=10.0.2.2" not in text:
+                    raise RuntimeError("Missing successful verified TLS handshake")
+                if f"[SUNLIGHT-TLS] hs_OK host={LONG_HOST}" not in text:
+                    raise RuntimeError("Full TLS hostname did not survive IPC")
+                if LONG_HOST not in SocksFixture.seen_hosts:
+                    raise RuntimeError("SOCKS proxy did not receive the destination hostname")
+                if f"[DNSDBG] resolve request host='{LONG_HOST}'" in text:
+                    raise RuntimeError("SOCKS request leaked into local DNS")
+                if (args.arch_proxy or args.arch_resolve) and "[SUNLIGHT-TLS] hs_OK host=archlinux.org" not in text:
+                    raise RuntimeError("Arch HTTPS verification did not succeed")
+                if args.account_broker_flow:
+                    assert Fixture.authorizations >= 6, "Rabbit did not open mock authorizations"
+                    assert Fixture.exchanges == 5, "Unexpected number of one-use token exchanges"
+                    required = ["native mock code exchanged; completion", "callback rejected: state",
+                                "native HTTP callback replay rejected; volatile writes=1", "callback timeout",
+                                "cancelled; listener and session released", "provider failure",
+                                "[RABBIT] native broker authorization URL received"]
+                    assert all(marker in text for marker in required), "Missing native broker outcome evidence"
+                    assert "native-mock-access" not in text and "native-mock-refresh" not in text
+                    assert all(secret not in text for secret in Fixture.issued_secrets), "Code/verifier appeared in guest serial output"
+                    print("Native Rabbit/local mock authorization gate passed (not real-provider sign-in)", flush=True)
+                if args.account_provider_preflight:
+                    assert "real provider blocked: local Microsoft client ID missing or invalid" in text
+                    print("Real-provider preflight BLOCKED: no local Microsoft registration; no live authorization attempted", flush=True)
+            if args.online_accounts_ui:
+                from online_accounts_ui_gate import verify_ui
+                verify_ui(request, type_text, wait_for, serial, output)
+                text = serial.read_text(errors="replace")
+                assert "native-mock-access" not in text and "native-mock-refresh" not in text
+                assert all(secret not in text for secret in Fixture.issued_secrets)
             print(f"TCP/TLS gate passed on {args.cpus} CPUs; evidence: {output}", flush=True)
     finally:
         if process is not None:
@@ -261,8 +398,21 @@ if __name__ == "__main__":
     parser.add_argument("--uefi", action="store_true")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--evidence", default="target/network-tls")
+    parser.add_argument("--account-provider-preflight", action="store_true",
+                        help="Assert missing-registration failure in native-provider-test image (not live success)")
+    parser.add_argument("--account-broker-flow", action="store_true",
+                        help="Exercise native-mock image against local OAuth/TLS provider on port 8443")
+    parser.add_argument("--account-broker-probe", action="store_true",
+                        help="Also verify native broker launch and fail-closed IPC (not browser authorization)")
+    parser.add_argument("--account-broker-storage", action="store_true", help="Verify 1K/4K KV records and deletion across live daemon restarts")
+    parser.add_argument("--online-accounts-ui", action="store_true", help="Click through Control Panel, Microsoft mock sign-in and Disconnect; capture native screenshots")
+    parser.add_argument("--ui-only", action="store_true", help="Run only CA setup and interactive UI (use after the full network/storage regression gate)")
     parser.add_argument("--arch-resolve", help="Also fetch Arch directly using this IPv4 DNS override")
     parser.add_argument("--arch-proxy", help="Also fetch archlinux.org through this guest-visible SOCKS IPv4:port")
     arguments = parser.parse_args()
+    if arguments.ui_only and not arguments.online_accounts_ui:
+        parser.error("--ui-only requires --online-accounts-ui")
+    if arguments.online_accounts_ui and not arguments.account_broker_flow:
+        parser.error("--online-accounts-ui requires --account-broker-flow and a native-mock image")
     with tempfile.TemporaryDirectory(prefix="sunlight-tls-") as directory:
         gate(arguments, Path(directory))

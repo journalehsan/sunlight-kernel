@@ -184,7 +184,7 @@ fn sm_mkdir_all(path: &[u8]) {
 }
 
 #[cfg(feature = "sunlightos")]
-fn sm_write_file(path: &[u8], content: &[u8]) -> bool {
+fn sm_append_chunk(path: &[u8], content: &[u8]) -> bool {
     let cap = match sm_lookup() {
         Some(c) => c,
         None => {
@@ -203,7 +203,7 @@ fn sm_write_file(path: &[u8], content: &[u8]) -> bool {
             core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen);
             core::ptr::copy_nonoverlapping(content.as_ptr(), ptr.add(plen), clen);
         }
-        let mut msg = IpcMsg::with_label(SmMsg::WRITE_FILE)
+        let mut msg = IpcMsg::with_label(SmMsg::APPEND_FILE)
             .word(0, plen as u64)
             .word(1, clen as u64)
             .with_cap(0, tok);
@@ -222,45 +222,44 @@ fn sm_write_file(path: &[u8], content: &[u8]) -> bool {
 }
 
 #[cfg(feature = "sunlightos")]
-fn sm_read_file(path: &[u8]) -> Option<Vec<u8>> {
-    let cap = match sm_lookup() {
-        Some(c) => c,
-        None => return None,
-    };
-    let plen = path.len().min(255);
-    if let Ok((ptr, tok)) = shm_alloc() {
-        unsafe {
-            core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, plen);
-        }
-        let mut msg = IpcMsg::with_label(SmMsg::READ_FILE)
-            .word(0, plen as u64)
-            .with_cap(0, tok);
-        let reply = ipc_call(cap, msg);
-        let _ = shm_free(tok);
-        if reply.label == SmMsg::REPLY_OK {
-            // small inline data unpack (see sm impl)
-            let dlen = (reply.words[0] & 0xffff) as usize;
-            let mut out = Vec::with_capacity(dlen);
-            let mut bi = 0usize;
-            let mut wi = 1usize;
-            while bi < dlen && wi < 8 {
-                for j in 0..8 {
-                    if bi < dlen {
-                        out.push(((reply.words[wi] >> (j * 8)) & 0xff) as u8);
-                        bi += 1;
-                    }
-                }
-                wi += 1;
+fn sm_read_file(path: &[u8]) -> Result<Vec<u8>, u64> {
+    let cap = sm_lookup().ok_or(SmMsg::ERR_IO)?;
+    let (ptr, tok) = shm_alloc().map_err(|_| SmMsg::ERR_IO)?;
+    let result = (|| {
+        let mut out = Vec::new();
+        loop {
+            unsafe {
+                core::ptr::copy_nonoverlapping(path.as_ptr(), ptr, path.len());
             }
-            return Some(out);
+            let reply = ipc_call(
+                cap,
+                IpcMsg::with_label(SmMsg::READ_FILE)
+                    .word(0, path.len() as u64)
+                    .word(1, 1)
+                    .word(2, out.len() as u64)
+                    .with_cap(0, tok),
+            );
+            if reply.label != SmMsg::REPLY_OK {
+                return Err(reply.words[0]);
+            }
+            let n = reply.words[0] as usize;
+            if n > SmMsg::PAGE_CAPACITY {
+                return Err(SmMsg::ERR_IO);
+            }
+            if n == 0 {
+                return Ok(out);
+            }
+            out.extend_from_slice(unsafe { core::slice::from_raw_parts(ptr, n) });
+            if out.len() > 512 * 1024 {
+                return Err(SmMsg::ERR_PAYLOAD_TOO_LARGE);
+            }
         }
-    }
-    None
+    })();
+    let _ = shm_free(tok);
+    result
 }
 
-/// Maximum bytes for one appended record batch, bounded by the single shared
-/// page the storage manager accepts (`SmMsg::PAGE_CAPACITY` minus the store
-/// path length). Batches larger than this are split by the caller.
+/// Shared TLS/general log. Transport chunks include this path in their page.
 #[cfg(feature = "sunlightos")]
 const SM_STORE_PATH: &[u8] = b"/var/lib/sunlight/kv.store";
 
@@ -269,9 +268,8 @@ const SM_STORE_PATH: &[u8] = b"/var/lib/sunlight/kv.store";
 /// value or ACL would silently truncate; reject it explicitly instead.
 #[cfg(feature = "sunlightos")]
 fn validate_record_bounds(key: &str, value: &[u8], acl_bytes: &[u8]) -> bool {
-    // Bound the frame to one storage-manager page payload. A single record must
-    // itself be representable; otherwise the append can never succeed and must
-    // be reported, not attempted forever.
+    // SHM2 gives key and value their own pages. ACL/header framing belongs to
+    // the log, which is streamed independently of the IPC page budget.
     let payload = key.len() + value.len() + acl_bytes.len();
     if key.is_empty() {
         return false;
@@ -282,26 +280,21 @@ fn validate_record_bounds(key: &str, value: &[u8], acl_bytes: &[u8]) -> bool {
     {
         return false;
     }
-    if payload + RecordHeader::SIZE + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+    if key.len() > SHM_PAGE || value.len() > SHM_PAGE || payload > SHM_PAGE * 3 {
         return false;
     }
     true
 }
 
-/// Append one or more delta records to the log via sm in a single
-/// read-modify-write.
-///
-/// The store is a single append-only file and the storage manager overwrites it
-/// wholesale, so each flush pays O(log size). Flushing a whole batch at once
-/// amortises that cost across every queued record instead of rewriting the log
-/// once per mutation. Returns `Ok(())` only when the combined batch was written.
+/// Append bounded record batches in page-sized transport chunks. Never read or
+/// replace the existing log: append cost depends on the new bytes only.
 #[cfg(feature = "sunlightos")]
 fn sm_append_records(records: &[Vec<u8>]) -> bool {
     if records.is_empty() {
         return true;
     }
     let batch_len: usize = records.iter().map(|r| r.len()).sum();
-    if SM_STORE_PATH.len() + batch_len > SmMsg::PAGE_CAPACITY {
+    if batch_len > SHM_PAGE * 3 {
         // Caller must split; this is a programming error, not a silent drop.
         serial_println!(
             "[KV][SM] append batch too large path+recs={} cap={}",
@@ -310,32 +303,16 @@ fn sm_append_records(records: &[Vec<u8>]) -> bool {
         );
         return false;
     }
-    let existing = sm_read_file(SM_STORE_PATH).unwrap_or_default();
-    if existing.len() + batch_len > SmMsg::PAGE_CAPACITY {
-        // The store has reached the single-page ceiling. Report explicitly so
-        // the operator can compact; do not silently stop persisting.
-        serial_println!(
-            "[KV][SM] store full existing={} batch={} cap={}",
-            existing.len(),
-            batch_len,
-            SmMsg::PAGE_CAPACITY
-        );
-        return false;
-    }
-    let mut combined = existing;
-    combined.reserve(batch_len);
+    // Append chunks directly: the log is not bounded by one IPC page, and an
+    // unsuccessful read can never replace existing records with an empty log.
     for record in records {
-        combined.extend_from_slice(record);
+        for chunk in record.chunks(SmMsg::PAGE_CAPACITY - SM_STORE_PATH.len()) {
+            if !sm_append_chunk(SM_STORE_PATH, chunk) {
+                return false;
+            }
+        }
     }
-    let ok = sm_write_file(SM_STORE_PATH, &combined);
-    if ok {
-        serial_println!(
-            "[KV][SM] appended {} record(s) via sm total_len={}",
-            records.len(),
-            combined.len()
-        );
-    }
-    ok
+    true
 }
 
 // ---- sunlightos storage: append-only log at /var/lib/sunlight/kv.store ----
@@ -902,6 +879,12 @@ fn recover_store(fd: Fd) -> BTreeMap<String, (Vec<u8>, sunlight_kv::Acl)> {
             Some(h) => h,
             None => break,
         };
+        if header.key_len as usize > SHM_PAGE
+            || header.value_len as usize > SHM_PAGE
+            || header.acl_len as usize > SHM_PAGE
+        {
+            break;
+        }
         let mut key = vec![0u8; header.key_len as usize];
         let mut value = vec![0u8; header.value_len as usize];
         let mut aclb = vec![0u8; header.acl_len as usize];
@@ -969,7 +952,7 @@ fn queue_persist_record(key: &str, rec: Vec<u8>) {
     // Boundary validation before the frame is committed. A record that can
     // never fit the storage-manager page is dropped here with an explicit
     // counter + log line, rather than silently truncated or retried forever.
-    if rec.len() + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+    if rec.len() > SHM_PAGE * 3 {
         unsafe {
             sat_inc(&mut DIAG.persist_skipped_volatile);
         }
@@ -1006,7 +989,7 @@ fn queue_persist_record(key: &str, rec: Vec<u8>) {
 }
 
 /// Number of queued records coalesced into a single storage-manager flush.
-/// Batching amortises the O(log size) full-store rewrite across many mutations.
+/// Batching bounds the work done between IPC receives.
 #[cfg(feature = "sunlightos")]
 const PERSIST_BATCH: usize = 16;
 
@@ -1018,9 +1001,8 @@ fn flush_one_persist() {
     if unsafe { VOLATILE_ONLY } {
         return;
     }
-    // Drain up to PERSIST_BATCH frames, but never split a batch that cannot fit
-    // the page: stop accumulating as soon as the combined size would exceed the
-    // storage-manager payload budget.
+    // Bound each queued batch in memory. The storage-manager adapter splits
+    // individual records across transport chunks when necessary.
     let mut batch: Vec<Vec<u8>> = Vec::new();
     let mut batch_bytes = 0usize;
     let mut keys: Vec<String> = Vec::new();
@@ -1029,7 +1011,7 @@ fn flush_one_persist() {
             while batch.len() < PERSIST_BATCH {
                 let Some(front) = queue.front() else { break };
                 let next = batch_bytes + front.bytes.len();
-                if next + SM_STORE_PATH.len() > SmMsg::PAGE_CAPACITY {
+                if next > SHM_PAGE * 3 {
                     break;
                 }
                 let record = queue.pop_front().expect("front present");
@@ -1079,6 +1061,31 @@ fn flush_one_persist() {
 /// PUT with a concrete [`Caller`]: namespace + per-key ACL are enforced before
 /// the in-memory store is mutated.
 #[cfg(feature = "sunlightos")]
+const BROKER_STORE: &[u8] = b"/var/lib/sunlight-kv/broker.store";
+
+#[cfg(feature = "sunlightos")]
+fn append_broker_record(record: &[u8]) -> Result<(), sunlight_kv::KvError> {
+    let fd = libc::open_with_flags_mode(
+        BROKER_STORE,
+        libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND,
+        0o600,
+    )
+    .map_err(|_| sunlight_kv::KvError::InvalidRequest)?;
+    let result = (|| {
+        let mut rest = record;
+        while !rest.is_empty() {
+            match libc::write(fd, rest) {
+                Ok(n) if n > 0 => rest = &rest[n..],
+                _ => return Err(sunlight_kv::KvError::InvalidRequest),
+            }
+        }
+        Ok(())
+    })();
+    let _ = libc::close(fd);
+    result
+}
+
+#[cfg(feature = "sunlightos")]
 fn do_put_caller(key: &str, value: &[u8], caller: &Caller) -> Result<(), sunlight_kv::KvError> {
     if !sunlight_kv::namespace_allows_write(caller, key) {
         return Err(sunlight_kv::KvError::PermissionDenied);
@@ -1116,6 +1123,9 @@ fn do_put_caller(key: &str, value: &[u8], caller: &Caller) -> Result<(), sunligh
         return Err(sunlight_kv::KvError::InvalidRequest);
     }
     let rec = build_record_bytes(key, value, &acl_bytes, FLAG_PUT);
+    if key.starts_with("account-broker:") {
+        append_broker_record(&rec)?;
+    }
 
     unsafe {
         if LIVE.is_none() {
@@ -1131,7 +1141,9 @@ fn do_put_caller(key: &str, value: &[u8], caller: &Caller) -> Result<(), sunligh
         sat_add(&mut DIAG.payload_bytes, value.len() as u64);
         sat_inc(&mut DIAG.mutations);
     }
-    queue_persist_record(key, rec);
+    if !key.starts_with("account-broker:") {
+        queue_persist_record(key, rec);
+    }
     Ok(())
 }
 
@@ -1186,6 +1198,9 @@ fn do_delete_caller(key: &str, caller: &Caller) -> Result<(), sunlight_kv::KvErr
     };
 
     let rec = build_record_bytes(key, &[], &acl_bytes, FLAG_DELETE);
+    if key.starts_with("account-broker:") {
+        append_broker_record(&rec)?;
+    }
     unsafe {
         if let Some(map) = &mut LIVE {
             if let Some((old_val, _)) = map.remove(key) {
@@ -1194,7 +1209,9 @@ fn do_delete_caller(key: &str, caller: &Caller) -> Result<(), sunlight_kv::KvErr
         }
         sat_inc(&mut DIAG.mutations);
     }
-    queue_persist_record(key, rec);
+    if !key.starts_with("account-broker:") {
+        queue_persist_record(key, rec);
+    }
     Ok(())
 }
 
@@ -1382,37 +1399,44 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
     serial_println!("[SUNLIGHT-KV] Registered as 'sunlight-kv'");
 
     // Prefer sm for store content (writes always via sm; reads may use direct for recover compat)
-    let (live_map, volatile_only) = if let Some(bytes) = sm_read_file(b"/var/lib/sunlight/kv.store")
-    {
-        // We have bytes from sm; use a simple path: write to a mem fd? For minimal, fall to direct open if possible or parse inline later.
-        // For this bite use direct open for recover (read-only of sm-written file) and log the sm use.
-        serial_println!("[KV][SM] initial store read via sm len={}", bytes.len());
-        let fd_opt = open_or_create_store();
-        if let Some(fd) = fd_opt {
+    let (mut live_map, volatile_only) =
+        if let Ok(bytes) = sm_read_file(b"/var/lib/sunlight/kv.store") {
+            // We have bytes from sm; use a simple path: write to a mem fd? For minimal, fall to direct open if possible or parse inline later.
+            // For this bite use direct open for recover (read-only of sm-written file) and log the sm use.
+            serial_println!("[KV][SM] initial store read via sm len={}", bytes.len());
+            let fd_opt = open_or_create_store();
+            if let Some(fd) = fd_opt {
+                let m = recover_store(fd);
+                unsafe {
+                    LOG_FD = Some(fd);
+                }
+                serial_println!(
+                    "[SUNLIGHT-KV] store recovered via sm-written data, live keys={}",
+                    m.len()
+                );
+                (m, false)
+            } else {
+                serial_println!("[SUNLIGHT-KV] sm data present but open failed; volatile");
+                (BTreeMap::new(), true)
+            }
+        } else if let Some(fd) = open_or_create_store() {
             let m = recover_store(fd);
             unsafe {
                 LOG_FD = Some(fd);
             }
-            serial_println!(
-                "[SUNLIGHT-KV] store recovered via sm-written data, live keys={}",
-                m.len()
-            );
+            serial_println!("[SUNLIGHT-KV] store recovered, live keys={}", m.len());
             (m, false)
         } else {
-            serial_println!("[SUNLIGHT-KV] sm data present but open failed; volatile");
-            (BTreeMap::new(), true)
-        }
-    } else if let Some(fd) = open_or_create_store() {
-        let m = recover_store(fd);
-        unsafe {
-            LOG_FD = Some(fd);
-        }
-        serial_println!("[SUNLIGHT-KV] store recovered, live keys={}", m.len());
-        (m, false)
-    } else {
-        serial_println!("[SUNLIGHT-KV] WARNING: kv.store not available, using volatile store");
-        (BTreeMap::new(), true)
-    };
+            serial_println!("[SUNLIGHT-KV] new live-session log; append persistence enabled");
+            (BTreeMap::new(), false)
+        };
+    // The shared TLS/general log can never introduce broker-owned records.
+    live_map.retain(|key, _| !key.starts_with("account-broker:"));
+    let _ = libc::mkdir(b"/var/lib/sunlight-kv", 0o700);
+    if let Ok(fd) = libc::open(BROKER_STORE) {
+        live_map.extend(recover_store(fd));
+        let _ = libc::close(fd);
+    }
     let mut payload_sum: u64 = 0;
     for (_k, (v, _)) in live_map.iter() {
         payload_sum = payload_sum.saturating_add(v.len() as u64);
@@ -1650,9 +1674,13 @@ pub extern "C" fn _start(_argc: u64, _argv: *const *const u8, _envp: *const *con
                                 diag_note_error(diag_err::SHM_ALLOC);
                             }
                         }
-                        Err(_) => {
+                        Err(error) => {
                             reply.label = KV_ERROR;
-                            reply.words[0] = 2;
+                            reply.words[0] = match error {
+                                sunlight_kv::KvError::NotFound => 10,
+                                sunlight_kv::KvError::PermissionDenied => 11,
+                                _ => 12,
+                            };
                             diag_note_error(diag_err::ACL_OR_MISSING);
                         }
                     },

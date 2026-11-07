@@ -219,6 +219,48 @@ impl TcpManager {
         Ok(Self::identity(socket_id, generation))
     }
 
+    fn ephemeral_port(&mut self, sockets: &SocketSet<'static>) -> Result<u16, TcpError> {
+        for _ in 49_152..=u16::MAX {
+            let port = self.next_local_port;
+            self.next_local_port = self.next_local_port.wrapping_add(1).max(49_152);
+            let used = self.slots.values().any(|slot| {
+                matches!(slot.kind, SocketKind::Listener { endpoint, .. } if endpoint.port == port)
+                    || sockets
+                        .get::<tcp::Socket>(slot.handle)
+                        .local_endpoint()
+                        .is_some_and(|e| e.port == port)
+            });
+            if !used {
+                return Ok(port);
+            }
+        }
+        Err(TcpError::AddressInUse)
+    }
+
+    pub fn endpoint(
+        &self,
+        owner: u64,
+        identity: SocketIdentity,
+        peer: bool,
+        sockets: &SocketSet<'static>,
+    ) -> Result<([u8; 4], u16), TcpError> {
+        let slot = self.slot_for(identity, owner, sockets)?;
+        if !peer {
+            if let SocketKind::Listener { endpoint, .. } = slot.kind {
+                return Ok((endpoint.addr, endpoint.port));
+            }
+        }
+        let socket = sockets.get::<tcp::Socket>(slot.handle);
+        let endpoint = if peer {
+            socket.remote_endpoint()
+        } else {
+            socket.local_endpoint()
+        }
+        .ok_or(TcpError::NotConnected)?;
+        let IpAddress::Ipv4(addr) = endpoint.addr;
+        Ok((addr.0, endpoint.port))
+    }
+
     pub fn bind(
         &mut self,
         owner_pid: u64,
@@ -227,9 +269,11 @@ impl TcpManager {
         port: u16,
         sockets: &SocketSet<'static>,
     ) -> Result<(), TcpError> {
-        if port == 0 {
-            return Err(TcpError::SocketError);
-        }
+        let port = if port == 0 {
+            self.ephemeral_port(sockets)?
+        } else {
+            port
+        };
         self.slot_for(identity, owner_pid, sockets)?;
         if self.slots.iter().any(|(&id, slot)| {
             id != identity.id()
@@ -297,8 +341,21 @@ impl TcpManager {
         sockets: &mut SocketSet<'static>,
         _device: &mut D,
     ) -> Result<(), TcpError> {
-        let local_port = self.next_local_port;
-        self.next_local_port = self.next_local_port.wrapping_add(1).max(49_152);
+        let local_port = self.ephemeral_port(sockets)?;
+        if remote_ip[0] == 127 && remote_ip != [127, 0, 0, 1] {
+            return Err(TcpError::SocketError);
+        }
+        let local = if remote_ip == [127, 0, 0, 1] {
+            IpListenEndpoint {
+                addr: Some(IpAddress::Ipv4(Ipv4Address::new(127, 0, 0, 1))),
+                port: local_port,
+            }
+        } else {
+            IpListenEndpoint {
+                addr: None,
+                port: local_port,
+            }
+        };
         let slot = self.slot_mut(identity, owner_pid)?;
         if !matches!(slot.kind, SocketKind::Unbound) {
             return Err(TcpError::InvalidState);
@@ -316,7 +373,7 @@ impl TcpManager {
                     )),
                     remote_port,
                 ),
-                local_port,
+                local,
             )
             .map_err(|_| TcpError::SocketError)?;
         slot.kind = SocketKind::Connected;
@@ -881,6 +938,30 @@ fn ipv4_listen_addr(addr: [u8; 4]) -> Option<IpAddress> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ephemeral_binds_are_distinct_and_endpoints_are_owner_checked() {
+        let mut sockets = smoltcp::iface::SocketSet::new(alloc::vec::Vec::new());
+        let mut manager = super::TcpManager::new();
+        let first = manager.alloc_socket(11, &mut sockets).unwrap();
+        let second = manager.alloc_socket(12, &mut sockets).unwrap();
+        manager
+            .bind(11, first, [127, 0, 0, 1], 0, &sockets)
+            .unwrap();
+        manager
+            .bind(12, second, [127, 0, 0, 1], 0, &sockets)
+            .unwrap();
+        let a = manager.endpoint(11, first, false, &sockets).unwrap();
+        let b = manager.endpoint(12, second, false, &sockets).unwrap();
+        assert_eq!(a.0, [127, 0, 0, 1]);
+        assert_ne!(a.1, 0);
+        assert_ne!(a.1, b.1);
+        assert_eq!(
+            manager.endpoint(12, first, false, &sockets),
+            Err(super::TcpError::AccessDenied)
+        );
+        manager.close(11, first, &mut sockets).unwrap();
+        assert!(manager.endpoint(11, first, false, &sockets).is_err());
+    }
     use super::{TcpError, TcpManager};
     use alloc::vec;
     use smoltcp::iface::{SocketSet, SocketStorage};

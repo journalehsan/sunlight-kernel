@@ -120,6 +120,25 @@ pub fn can_write(
         return Decision::allow(PolicyReason::AllowedServiceState);
     }
 
+    if actor
+        == (Actor::Service {
+            name: "sunlight-sm",
+        })
+        && ((matches!(path, "/var/lib/sunlight" | "/var/lib/sunlight-kv")
+            && operation == FsOperation::Mkdir)
+            || path == "/var/lib/sunlight/kv.store")
+    {
+        return Decision::allow(PolicyReason::AllowedServiceState);
+    }
+    if path == "/var/lib/sunlight-kv/broker.store"
+        && actor
+            != (Actor::Service {
+                name: "sunlight-kv",
+            })
+    {
+        return Decision::deny(PolicyReason::DeniedProtectedPath, FsError::PermissionDenied);
+    }
+
     if is_protected_path(path) {
         return Decision::deny(
             PolicyReason::DeniedProtectedPath,
@@ -345,6 +364,51 @@ fn is_under(path: &str, prefix: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn broker_log_has_one_writer_and_sm_has_only_shared_log() {
+        let kv = Actor::Service {
+            name: "sunlight-kv",
+        };
+        let sm = Actor::Service {
+            name: "sunlight-sm",
+        };
+        let secret = "/var/lib/sunlight-kv/broker.store";
+        assert!(can_write(kv, secret, FsOperation::Create, None, false).allowed);
+        for other in [
+            sm,
+            Actor::Unknown,
+            Actor::User {
+                uid: 0,
+                name: "root",
+            },
+            Actor::Service {
+                name: "sunlight-tls",
+            },
+        ] {
+            assert!(!can_write(other, secret, FsOperation::Create, None, false).allowed);
+            assert!(!can_write(other, secret, FsOperation::Delete, None, false).allowed);
+        }
+        assert!(
+            can_write(
+                sm,
+                "/var/lib/sunlight/kv.store",
+                FsOperation::Write,
+                None,
+                false
+            )
+            .allowed
+        );
+        assert!(
+            !can_write(
+                sm,
+                "/var/lib/sunlight/arbitrary",
+                FsOperation::Write,
+                None,
+                false
+            )
+            .allowed
+        );
+    }
     #[test]
     fn disk_user_storage_is_uid_scoped() {
         let user = Actor::User {

@@ -1072,6 +1072,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         102 => sys_mint_auth_session_grant(frame),
         103 => sys_pty_get_credentials(frame),
         108 => sys_kv_get_caller_credentials(frame),
+        109 => sys_account_broker_caller_role(frame),
         104 => sys_tty_publish_winsize(frame),
         105 => sys_tty_attach_process(frame),
         106 => sys_tty_get_winsize(),
@@ -3555,6 +3556,12 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
             process.trusted_control_panel =
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            // The account broker owns `account-broker:*` and may resolve the
+            // control-panel caller role; only a root-owned embedded image.
+            process.trusted_account_broker =
+                process.uid == 0
+                    && crate::process::spawn::is_trusted_account_broker_path(path_str)
+                    && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             // Service provenance survives re-exec only for a root-owned
             // embedded daemon image; a user process never receives a key.
             let exec_uid = process.uid;
@@ -3958,6 +3965,9 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             child.trusted_control_panel =
                 crate::process::spawn::is_trusted_control_panel_path(path_str)
                     && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
+            child.trusted_account_broker = uid == 0
+                && crate::process::spawn::is_trusted_account_broker_path(path_str)
+                && crate::process::spawn::embedded_bytes_for_path(path_str).is_ok();
             // The KV credential syscall can observe every caller's UID, so the
             // trusted marker is granted only to a root-launched embedded
             // sunlight-kv image, never to a same-named user program.
@@ -4487,6 +4497,40 @@ fn sys_kv_get_caller_credentials(frame: &mut SyscallFrame) -> u64 {
     target.uid as u64 | ((target.gid as u64) << 32)
 }
 
+/// Return the kernel-stamped caller roles for an IPC caller of the account broker.
+///
+/// This is deliberately separate from the KV credential syscall: the broker is
+/// not the KV daemon, and widening `KvGetCallerCredentials` would let it observe
+/// arbitrary processes' service keys. Only the embedded account broker may call
+/// this, and the role bits come from the process table, never from user input.
+///
+/// rdi = caller pid from the kernel-populated IPC badge
+/// rax = uid | (gid << 32); r8 = pid; r9 = generation; r10 = role bitmask.
+/// Returns u64::MAX on failure.
+fn sys_account_broker_caller_role(frame: &mut SyscallFrame) -> u64 {
+    let target_pid = frame.rdi as usize;
+    let sched = crate::sched::SCHEDULER.lock();
+    if !sched.current_process().trusted_account_broker {
+        return u64::MAX;
+    }
+    let Some(target) = sched.processes.iter().find(|process| {
+        process.pid == target_pid
+            && !matches!(process.state, ProcessState::Finished | ProcessState::Reaped)
+    }) else {
+        return u64::MAX;
+    };
+    frame.r8 = target.pid as u64;
+    // Generation is unique even when a PID or address space is reused.
+    frame.r9 = target.address_space.identity().generation;
+    // Only an exact embedded control-panel image carries the role.
+    frame.r10 = if target.trusted_control_panel {
+        ::sunlight_ipc::account_broker_role::CONTROL_PANEL
+    } else {
+        ::sunlight_ipc::account_broker_role::NONE
+    };
+    target.uid as u64 | ((target.gid as u64) << 32)
+}
+
 /// Trusted terminal-frontend publication of authoritative per-instance
 /// geometry. For the PTY broker rdi=session id; for the legacy TTY service it
 /// is the low-range tab id. rsi=generation, rdx=packed size (zero clears).
@@ -4934,6 +4978,10 @@ fn sys_open(frame: &mut SyscallFrame) -> u64 {
 }
 
 fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
+    if path == "/var/lib/sunlight-kv/broker.store"
+        && !crate::sched::with_scheduler(|s| s.current_process().trusted_kv_service) {
+        return ERR_EACCES;
+    }
     let is_linux = crate::sched::with_scheduler(|s| s.current_process().is_linux_compat());
     // Linux flags are an ABI contract, not flags passed through to VFS.
     // Both Linux open and openat arrive here; native open keeps its own path.
@@ -5384,11 +5432,13 @@ fn current_fs_actor() -> (u32, u32, sunlight_fs::Actor<'static>) {
         sunlight_fs::Actor::Service {
             name: "sunlight-uac",
         }
+    } else if p.service_identity == ::sunlight_ipc::service_identity::STORAGE_MANAGER {
+        sunlight_fs::Actor::Service { name: "sunlight-sm" }
+    } else if p.trusted_kv_service {
+        sunlight_fs::Actor::Service { name: "sunlight-kv" }
     } else {
         match p.name_str() {
-            "sunlight-kv" => sunlight_fs::Actor::Service {
-                name: "sunlight-kv",
-            },
+            "sunlight-kv" => sunlight_fs::Actor::Unknown,
             "wiseowl-memoryd" => sunlight_fs::Actor::Service {
                 name: "wiseowl-memoryd",
             },

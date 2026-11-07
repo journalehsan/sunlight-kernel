@@ -2141,6 +2141,14 @@ login_timeout_seconds = 30
         mode::FILE_755,
         b"#!/sunlight/sunlight-kvctl\n",
     ),
+    // Embedded account service and its read-only native IPC probe entry point.
+    RamEntry::file(
+        "/sbin/sunlight-account-broker",
+        0,
+        0,
+        mode::FILE_755,
+        b"#!/sunlight/sunlight-account-broker\n",
+    ),
     RamEntry::file(
         "/bin/certificatectl",
         0,

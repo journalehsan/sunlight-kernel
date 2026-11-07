@@ -50,10 +50,41 @@ mod sunlightos_impl {
     use rustls::{ClientConfig, RootCertStore};
 
     use sunlight_ipc::{
-        debug_log, endpoint_create, get_time_utc, ipc_call, ipc_call_timeout, ipc_recv,
-        ipc_reply_and_wait, monotonic_millis, nameserver_lookup, nameserver_register, shm_alloc,
-        shm_free, shm_map, CapabilityToken, IpcMsg, IPC_REGISTER_WORDS,
+        debug_log, endpoint_create, get_time_utc, ipc_recv, ipc_reply_and_wait, monotonic_millis,
+        nameserver_lookup, nameserver_register, shm_alloc, shm_free, shm_map, CapabilityToken,
+        IpcMsg, IPC_REGISTER_WORDS,
     };
+
+    // Only bounded native requests opt into this per-operation budget. Legacy
+    // TLS operations retain their existing behavior and trust-store policy.
+    static mut REQUEST_DEADLINE: u64 = 0;
+    fn remaining(limit: u64) -> u64 {
+        let until = unsafe { REQUEST_DEADLINE };
+        if until == 0 {
+            limit
+        } else {
+            limit.min(until.saturating_sub(monotonic_millis()))
+        }
+    }
+    fn expired() -> bool {
+        unsafe { REQUEST_DEADLINE != 0 && monotonic_millis() >= REQUEST_DEADLINE }
+    }
+    fn ipc_call_timeout(
+        cap: CapabilityToken,
+        msg: IpcMsg,
+        limit: u64,
+    ) -> core::result::Result<IpcMsg, sunlight_ipc::IpcCallError> {
+        sunlight_ipc::ipc_call_timeout(cap, msg, remaining(limit).max(1))
+    }
+    fn ipc_call(cap: CapabilityToken, msg: IpcMsg) -> IpcMsg {
+        if unsafe { REQUEST_DEADLINE } == 0 {
+            return sunlight_ipc::ipc_call(cap, msg);
+        }
+        if expired() {
+            return IpcMsg::with_label(0);
+        }
+        ipc_call_timeout(cap, msg, 1000).unwrap_or_else(|_| IpcMsg::with_label(0))
+    }
 
     // ── allocator ─────────────────────────────────────────────────────────────
     // rustls + RustCrypto allocate and free heavily during a handshake; the old
@@ -402,6 +433,9 @@ mod sunlightos_impl {
     }
 
     fn net_recv_limited(socket_id: u64, limit: usize, timeout_ms: u64) -> Vec<u8> {
+        if expired() {
+            return Vec::new();
+        }
         let cap = match net_cap() {
             Some(c) => c,
             None => return Vec::new(),
@@ -440,11 +474,19 @@ mod sunlightos_impl {
 
     fn net_close(socket_id: u64) {
         if let Some(cap) = net_cap() {
-            let _ = ipc_call(cap, IpcMsg::with_label(NET_CLOSE).word(0, socket_id));
+            let _ = sunlight_ipc::ipc_call_timeout(
+                cap,
+                IpcMsg::with_label(NET_CLOSE).word(0, socket_id),
+                1000,
+            );
         }
     }
 
     fn net_wait_ready(socket_id: u64, timeout_ms: u64, interest: u64) -> bool {
+        let timeout_ms = remaining(timeout_ms);
+        if timeout_ms == 0 {
+            return false;
+        }
         let Some(cap) = net_cap() else {
             return false;
         };
@@ -643,6 +685,9 @@ mod sunlightos_impl {
         let mut scratch = vec![0u8; OUT_SCRATCH];
         let mut outgoing: Vec<u8> = Vec::new();
         loop {
+            if expired() {
+                return Err(32);
+            }
             let mut need_read = false;
             let discard;
             {
@@ -709,6 +754,9 @@ mod sunlightos_impl {
         let mut scratch = vec![0u8; OUT_SCRATCH];
         let mut outgoing: Vec<u8> = Vec::new();
         loop {
+            if expired() {
+                return Err(32);
+            }
             let mut done = false;
             let mut need_read = false;
             let mut closed = false;
@@ -789,6 +837,9 @@ mod sunlightos_impl {
         let mut scratch = vec![0u8; OUT_SCRATCH];
         let mut outgoing: Vec<u8> = Vec::new();
         loop {
+            if expired() {
+                return (Vec::new(), true);
+            }
             let mut got = false;
             let mut need_read = false;
             let mut eof = false;
@@ -1029,6 +1080,31 @@ mod sunlightos_impl {
 
         let mut msg = ipc_recv(ep);
         loop {
+            unsafe {
+                REQUEST_DEADLINE = 0;
+            }
+            match msg.label {
+                0x5418 => {
+                    unsafe {
+                        REQUEST_DEADLINE =
+                            (msg.words[3] >> 1).min(monotonic_millis().saturating_add(25_000));
+                    }
+                    msg.words[3] &= 1;
+                    msg.label = TLS_CONNECT_EX;
+                }
+                0x5412 | 0x5413 => {
+                    unsafe {
+                        REQUEST_DEADLINE =
+                            msg.words[2].min(monotonic_millis().saturating_add(25_000));
+                    }
+                    msg.label = if msg.label == 0x5412 {
+                        TLS_SEND
+                    } else {
+                        TLS_RECV
+                    };
+                }
+                _ => {}
+            }
             let mut reply = IpcMsg::with_label(TLS_REPLY);
 
             match msg.label {
@@ -1185,6 +1261,21 @@ mod sunlightos_impl {
                 }
             }
 
+            if expired() && matches!(msg.label, TLS_CONNECT_EX | TLS_SEND | TLS_RECV) {
+                if msg.label == TLS_CONNECT_EX {
+                    if reply.label == TLS_REPLY {
+                        close_session(reply.words[0]);
+                    }
+                } else {
+                    close_session(msg.words[0]);
+                }
+                for token in reply.caps {
+                    if token != CapabilityToken::INVALID {
+                        let _ = shm_free(token);
+                    }
+                }
+                reply = IpcMsg::with_label(TLS_ERROR).word(0, 60);
+            }
             msg = ipc_reply_and_wait(ep, reply);
         }
     }

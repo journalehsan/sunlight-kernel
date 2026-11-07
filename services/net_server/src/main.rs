@@ -144,6 +144,12 @@ pub extern "C" fn _start() -> ! {
     let mut sockets = SocketSet::new(&mut sockets_storage[..]);
     let lease = sunlight_net::acquire_lease(&mut iface, &mut sockets, &mut device).ok();
 
+    iface.update_ip_addrs(|addrs| {
+        let _ = addrs.push(smoltcp::wire::IpCidr::Ipv4(smoltcp::wire::Ipv4Cidr::new(
+            smoltcp::wire::Ipv4Address::new(127, 0, 0, 1),
+            8,
+        )));
+    });
     let hosts_content = load_hosts_from_vfs();
     let mut chain = sunlight_net::ResolverChain::new(&hosts_content);
     if let Some(ref config) = lease {
@@ -594,6 +600,28 @@ fn handle_msg(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> IpcMsg {
                     .and_then(|tcp| tcp.close(msg.badge, identity, sockets))
             };
             socket_reply(NetOp::CLOSE, u64::from(result.is_ok()), result.err())
+        }
+        NetOp::GET_SOCKNAME | NetOp::GET_PEERNAME => {
+            let result = unsafe {
+                TCP_MANAGER
+                    .as_ref()
+                    .ok_or(TcpError::SocketError)
+                    .and_then(|tcp| {
+                        tcp.endpoint(
+                            msg.badge,
+                            SocketIdentity(msg.words[0]),
+                            msg.label == NetOp::GET_PEERNAME,
+                            sockets,
+                        )
+                    })
+            };
+            match result {
+                Ok((addr, port)) => IpcMsg::with_label(msg.label)
+                    .word(0, pack_ipv4(addr))
+                    .word(1, port as u64)
+                    .word(2, NetStatus::OK),
+                Err(error) => IpcMsg::with_label(msg.label).word(2, socket_status(Some(error))),
+            }
         }
         NetOp::BIND => {
             let identity = SocketIdentity(msg.words[0]);

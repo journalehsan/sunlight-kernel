@@ -16,6 +16,40 @@ use crate::prelude::{String, Vec};
 use crate::error::{FetchError, FetchResult};
 use crate::http::{HttpRequest, HttpResponse};
 
+#[cfg(not(feature = "host-linux"))]
+static NATIVE_TIMED_OUT: AtomicBool = AtomicBool::new(false);
+#[cfg(not(feature = "host-linux"))]
+static NATIVE_DEADLINE: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// A single native exchange owns its process-local deadline. Intended for a
+/// single-threaded service; concurrent guards are rejected rather than shared.
+#[cfg(not(feature = "host-linux"))]
+pub struct NativeDeadline;
+#[cfg(not(feature = "host-linux"))]
+impl NativeDeadline {
+    pub fn new(milliseconds: u64) -> FetchResult<Self> {
+        let until = sunlight_ipc::monotonic_millis().saturating_add(milliseconds);
+        NATIVE_DEADLINE
+            .compare_exchange(0, until, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| FetchError::Interrupted)?;
+        NATIVE_TIMED_OUT.store(false, Ordering::Release);
+        Ok(Self)
+    }
+}
+#[cfg(not(feature = "host-linux"))]
+impl Drop for NativeDeadline {
+    fn drop(&mut self) {
+        NATIVE_DEADLINE.store(0, Ordering::Release);
+        NATIVE_TIMED_OUT.store(false, Ordering::Release);
+    }
+}
+#[cfg(not(feature = "host-linux"))]
+pub fn native_deadline_expired() -> bool {
+    let deadline = NATIVE_DEADLINE.load(Ordering::Acquire);
+    NATIVE_TIMED_OUT.load(Ordering::Acquire)
+        || (deadline != 0 && sunlight_ipc::monotonic_millis() >= deadline)
+}
+
 /// IPC operation codes for net_server HTTP extension
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -340,6 +374,10 @@ mod body_limit_tests {
 }
 
 fn check_interrupted() -> FetchResult<()> {
+    #[cfg(not(feature = "host-linux"))]
+    if native_deadline_expired() {
+        return Err(FetchError::Interrupted);
+    }
     if is_interrupted() {
         Err(FetchError::Interrupted)
     } else {
@@ -812,11 +850,66 @@ use host::{
 #[cfg(not(feature = "host-linux"))]
 mod sunlight {
     use super::*;
-    use sunlight_ipc::{
-        debug_log, ipc_call, ipc_call_timeout, nameserver_lookup, shm_alloc, shm_free, shm_map,
-        CapabilityToken, IpcMsg,
-    };
+    use sunlight_ipc::{debug_log, shm_alloc, shm_free, shm_map, CapabilityToken, IpcMsg};
     use sunlight_net::netop::{NetOp, NetReady, NetStatus};
+
+    fn remaining(limit: u64) -> u64 {
+        let until = NATIVE_DEADLINE.load(Ordering::Acquire);
+        if until == 0 {
+            limit
+        } else {
+            limit.min(until.saturating_sub(sunlight_ipc::monotonic_millis()))
+        }
+    }
+    fn nameserver_lookup(name: &str) -> Option<CapabilityToken> {
+        sunlight_ipc::nameserver_lookup_timeout(name, remaining(1000).max(1))
+    }
+    fn ipc_call_timeout(
+        cap: CapabilityToken,
+        msg: IpcMsg,
+        timeout: u64,
+    ) -> core::result::Result<IpcMsg, sunlight_ipc::IpcCallError> {
+        sunlight_ipc::ipc_call_timeout(cap, msg, remaining(timeout).max(1))
+    }
+    fn ipc_call(cap: CapabilityToken, mut msg: IpcMsg) -> IpcMsg {
+        if NATIVE_DEADLINE.load(Ordering::Acquire) == 0 {
+            return sunlight_ipc::ipc_call(cap, msg);
+        }
+        let limit = match msg.label {
+            0x5408 => 5000,
+            0x5402 | 0x5403 => 8000,
+            _ => 1000,
+        };
+        let budget = remaining(limit);
+        if budget == 0 {
+            return IpcMsg::with_label(0).word(1, 5);
+        }
+        let deadline = sunlight_ipc::monotonic_millis().saturating_add(budget);
+        match msg.label {
+            0x5408 => {
+                msg.label = 0x5418;
+                msg.words[3] |= deadline << 1;
+            }
+            0x5402 => {
+                msg.label = 0x5412;
+                msg = msg.word(2, deadline);
+            }
+            0x5403 => {
+                msg.label = 0x5413;
+                msg = msg.word(2, deadline);
+            }
+            _ => {}
+        }
+        // Give the daemon time to send its bounded failure and release sockets.
+        let reply = sunlight_ipc::ipc_call_timeout(cap, msg, budget + 1000).unwrap_or_else(|_| {
+            NATIVE_TIMED_OUT.store(true, Ordering::Release);
+            IpcMsg::with_label(0).word(1, 5)
+        });
+        if reply.label == 0x54EE && reply.words[0] == 60 {
+            NATIVE_TIMED_OUT.store(true, Ordering::Release);
+        }
+        reply
+    }
 
     // Maximum bytes packed into one IPC call. Register IPC transports only
     // words[0..4] (r8/r9/r10/r12). words[0]=socket_id, words[1]=length, so
@@ -1015,7 +1108,11 @@ mod sunlight {
 
     fn net_close(socket_id: u64) -> FetchResult<()> {
         let cap = net_cap()?;
-        let _ = ipc_call(cap, IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id));
+        let _ = sunlight_ipc::ipc_call_timeout(
+            cap,
+            IpcMsg::with_label(NetOp::CLOSE).word(0, socket_id),
+            1000,
+        );
         Ok(())
     }
 
@@ -1225,7 +1322,11 @@ mod sunlight {
     /// Close a TLS session in the daemon (best-effort, ignores errors).
     fn tls_close(sid: u64) {
         if let Some(cap) = nameserver_lookup("sunlight-tls") {
-            let _ = ipc_call(cap, IpcMsg::with_label(TLS_CLOSE).word(0, sid));
+            let _ = sunlight_ipc::ipc_call_timeout(
+                cap,
+                IpcMsg::with_label(TLS_CLOSE).word(0, sid),
+                1000,
+            );
         }
     }
 
@@ -1359,7 +1460,13 @@ mod sunlight {
                 return Ok((response, handle, initial_body));
             }
 
-            if buf.len() > 1024 * 1024 {
+            if buf.len()
+                > if NATIVE_DEADLINE.load(Ordering::Acquire) != 0 {
+                    16384
+                } else {
+                    1024 * 1024
+                }
+            {
                 return Err(FetchError::HttpError {
                     status: 0,
                     message: String::from("response headers too large"),

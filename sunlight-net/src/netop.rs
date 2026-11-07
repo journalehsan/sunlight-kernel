@@ -27,6 +27,10 @@ pub mod NetOp {
     pub const GETIP_LIVE: u64 = 19;
     /// One-shot UDP request/response via SHM (see ipc::NetOp::UDP_EXCHANGE).
     pub const UDP_EXCHANGE: u64 = 20;
+    /// Owner/generation-checked local endpoint: w0=IPv4 LE, w1=port, w2=status.
+    pub const GET_SOCKNAME: u64 = 21;
+    /// Owner/generation-checked peer endpoint, using the same reply layout.
+    pub const GET_PEERNAME: u64 = 22;
 }
 
 /// Explicit network operation status values. Legacy replies retain their
