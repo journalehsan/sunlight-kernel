@@ -60,6 +60,7 @@ pub struct VirtioBlk {
     last_used_idx: u16,
     capacity_sectors: u64,
     flush_supported: bool,
+    read_only: bool,
 }
 
 impl VirtioBlk {
@@ -134,6 +135,7 @@ impl VirtioBlk {
             last_used_idx: 0,
             capacity_sectors,
             flush_supported: accepted_features & VIRTIO_BLK_F_FLUSH != 0,
+            read_only: features & (1 << 5) != 0,
         })
     }
 
@@ -219,7 +221,7 @@ impl VirtioBlk {
     /// Write one 512-byte sector. Completion means accepted by the device;
     /// call [`VirtioBlk::flush`] for stable-media durability.
     pub unsafe fn write_block(&mut self, lba: u64, buf: &[u8; 512]) -> bool {
-        if lba >= self.capacity_sectors {
+        if self.read_only || lba >= self.capacity_sectors {
             return false;
         }
         core::ptr::copy_nonoverlapping(buf.as_ptr(), (self.req_virt + 16) as *mut u8, 512);
@@ -237,6 +239,10 @@ impl VirtioBlk {
 
     pub const fn supports_flush(&self) -> bool {
         self.flush_supported
+    }
+
+    pub const fn supports_write(&self) -> bool {
+        !self.read_only
     }
 }
 
