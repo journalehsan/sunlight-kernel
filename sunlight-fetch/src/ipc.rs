@@ -1299,22 +1299,37 @@ mod sunlight {
     /// (bytes, eof); empty bytes with eof=true means the peer closed.
     fn tls_recv(sid: u64) -> FetchResult<(Vec<u8>, bool)> {
         let cap = tls_cap()?;
-        let reply = ipc_call(cap, IpcMsg::with_label(TLS_RECV).word(0, sid));
+        // Supply the reply page ourselves: the daemon maps, copies, and releases
+        // its own view, so it never retains a shared region per reply (that leak
+        // drained the daemon's region budget after enough successful pages).
+        let (ptr, tok) = shm_alloc()
+            .map_err(|_| FetchError::IpcError(String::from("shm_alloc failed (TLS recv)")))?;
+        let reply = ipc_call(
+            cap,
+            IpcMsg::with_label(TLS_RECV).word(0, sid).with_cap(0, tok),
+        );
         if reply.label == TLS_ERROR {
+            let _ = shm_free(tok);
             return Err(FetchError::IoError(String::from("TLS_RECV failed")));
         }
         let n = reply.words[0] as usize;
         let eof = reply.words[1] != 0;
-        if n == 0 {
-            return Ok((Vec::new(), eof));
-        }
-        let tok = reply.caps[0];
-        if tok == CapabilityToken::INVALID {
-            return Ok((Vec::new(), eof));
-        }
-        let ptr = shm_map(tok)
-            .map_err(|_| FetchError::IoError(String::from("shm_map failed (TLS recv)")))?;
-        let v = unsafe { core::slice::from_raw_parts(ptr, n.min(TLS_SHM_PAGE)) }.to_vec();
+        let gift = reply.caps[0];
+        let v = if gift != CapabilityToken::INVALID {
+            // Older daemon that still gifts its own page: map, copy, release.
+            let bytes = match shm_map(gift) {
+                Ok(gptr) => {
+                    unsafe { core::slice::from_raw_parts(gptr, n.min(TLS_SHM_PAGE)) }.to_vec()
+                }
+                Err(_) => Vec::new(),
+            };
+            let _ = shm_free(gift);
+            bytes
+        } else if n == 0 {
+            Vec::new()
+        } else {
+            unsafe { core::slice::from_raw_parts(ptr, n.min(TLS_SHM_PAGE)) }.to_vec()
+        };
         let _ = shm_free(tok);
         Ok((v, eof))
     }

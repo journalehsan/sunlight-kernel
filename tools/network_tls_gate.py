@@ -37,7 +37,12 @@ class Fixture(http.server.BaseHTTPRequestHandler):
         pass
 
     def respond(self, send_body):
-        data = self.ca_der if self.path == "/ca.der" else b"SUNLIGHT TLS FIXTURE OK\n"
+        if self.path == "/ca.der":
+            data = self.ca_der
+        elif self.path == "/large":
+            data = LARGE_BODY
+        else:
+            data = b"SUNLIGHT TLS FIXTURE OK\n"
         # Keep TCP alive while timed/resolved exercise their UDP poll paths.
         if self.path == "/slow":
             time.sleep(3)
@@ -136,6 +141,18 @@ class Fixture(http.server.BaseHTTPRequestHandler):
 
 
 LONG_HOST = "long-hostname-for-tls.sunlight.test"
+
+# 192 KiB = 48 TLS receives (4 KiB shared page each). Repeated
+# LARGE_FETCH_REPEATS times this drives 384 receives through the single
+# sunlight-tls daemon in one boot: a per-receive shared-region leak would
+# exhaust the daemon's 256-region address-space ledger partway through and fail
+# a later transfer, while a correct map/copy/free path streams every one of
+# them and leaves the daemon healthy. Each transfer stays well below fetch's
+# 2 MiB no-reclaim bump heap (which leaks per-chunk scratch), so the client
+# never becomes the limiting factor.
+LARGE_BODY_SIZE = 192 * 1024
+LARGE_BODY = (b"sunlight-https-large-body\n" * ((LARGE_BODY_SIZE // 26) + 1))[:LARGE_BODY_SIZE]
+LARGE_FETCH_REPEATS = 8
 
 
 class SocksFixture(socketserver.BaseRequestHandler):
@@ -302,6 +319,8 @@ def gate(args, root):
                 (f"fetch -o /tmp/untrusted {https_url}/payload", 1),
                 (f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
                 ("certificatectl install ca testca /tmp/ca.der", 0),
+                *[(f"fetch -o /tmp/large{i} {https_url}/large", 0) for i in range(LARGE_FETCH_REPEATS)],
+                (f"fetch -o /tmp/after-large {https_url}/payload", 0),
                 *[(f"fetch -o /tmp/verified{i} {https_url}/slow", 0) for i in range(3)],
                 (f"fetch {proxy} -o /tmp/proxy-denied https://blocked.sunlight.test:{servers[1].server_port}/payload", 1),
                 (f"fetch {proxy} -o /tmp/proxy-https https://{LONG_HOST}:{servers[1].server_port}/payload", 0),

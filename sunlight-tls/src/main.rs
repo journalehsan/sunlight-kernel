@@ -442,7 +442,10 @@ mod sunlightos_impl {
         };
         let (ptr, tok) = match shm_alloc() {
             Ok(page) => page,
-            Err(_) => return Vec::new(),
+            Err(_) => {
+                serial_println!("[SUNLIGHT-TLS] recv aborted: no shared region for receive page");
+                return Vec::new();
+            }
         };
         let reply = ipc_call(
             cap,
@@ -490,8 +493,12 @@ mod sunlightos_impl {
         let Some(cap) = net_cap() else {
             return false;
         };
-        let Ok((ptr, tok)) = shm_alloc() else {
-            return false;
+        let (ptr, tok) = match shm_alloc() {
+            Ok(pair) => pair,
+            Err(_) => {
+                serial_println!("[SUNLIGHT-TLS] wait aborted: no shared region for readiness page");
+                return false;
+            }
         };
         unsafe {
             *(ptr as *mut u64) = socket_id;
@@ -952,7 +959,15 @@ mod sunlightos_impl {
         if len == 0 || len > 253 || msg.words[3] > 1 || msg.caps[0] == CapabilityToken::INVALID {
             return Err(11);
         }
-        let ptr = shm_map(msg.caps[0]).map_err(|_| 11u64)?;
+        let ptr = match shm_map(msg.caps[0]) {
+            Ok(ptr) => ptr,
+            Err(_) => {
+                serial_println!(
+                    "[SUNLIGHT-TLS] hostname page map failed: daemon out of shared regions"
+                );
+                return Err(11);
+            }
+        };
         let bytes = unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec();
         let _ = shm_free(msg.caps[0]);
         let host = String::from_utf8(bytes).map_err(|_| 11u64)?;
@@ -1186,6 +1201,7 @@ mod sunlightos_impl {
                 }
                 TLS_RECV => {
                     let sid = msg.words[0];
+                    let tok = msg.caps[0];
                     match find_session_index(sid) {
                         Some(idx) => {
                             let (data, eof) = unsafe {
@@ -1193,16 +1209,39 @@ mod sunlightos_impl {
                                 let s = slots[idx].as_mut().unwrap();
                                 tls_recv(&mut s.conn, s.socket_id, &mut s.incoming, &mut s.backlog)
                             };
+                            let eof_word = if eof { 1 } else { 0 };
                             if data.is_empty() {
                                 reply.words[0] = 0;
-                                reply.words[1] = if eof { 1 } else { 0 };
+                                reply.words[1] = eof_word;
+                            } else if tok != CapabilityToken::INVALID {
+                                // Bulk plaintext reply into the caller-provided
+                                // page, mirroring net_server's RECV_SHM: the
+                                // daemon maps, copies, and releases its own view.
+                                // The previous gift path allocated a region per
+                                // reply and never released the daemon's view, so
+                                // its region budget drained after enough pages and
+                                // later ops failed with code 11/60/14.
+                                match shm_map(tok) {
+                                    Ok(ptr) => {
+                                        let n = data.len().min(SHM_PAGE);
+                                        unsafe {
+                                            core::ptr::copy_nonoverlapping(data.as_ptr(), ptr, n);
+                                        }
+                                        let _ = shm_free(tok);
+                                        reply.words[0] = n as u64;
+                                        reply.words[1] = eof_word;
+                                    }
+                                    Err(_) => {
+                                        serial_println!(
+                                            "[SUNLIGHT-TLS] recv page map failed: daemon out of shared regions"
+                                        );
+                                        reply.label = TLS_ERROR;
+                                        reply.words[0] = 60;
+                                    }
+                                }
                             } else {
-                                reply = reply_with_shm(
-                                    TLS_REPLY,
-                                    data.len() as u64,
-                                    if eof { 1 } else { 0 },
-                                    &data,
-                                );
+                                reply =
+                                    reply_with_shm(TLS_REPLY, data.len() as u64, eof_word, &data);
                             }
                         }
                         None => {

@@ -1131,6 +1131,12 @@ fn first_ready(
                     return Some((*identity, ready.bits()))
                 }
                 Ok(_) | Err(TcpError::WouldBlock) => {}
+                // A slot that no longer exists was reaped (its connect or
+                // half-close deadline elapsed, or its owner exited). That is a
+                // terminal status, not readiness: reporting it as a ready bit
+                // made callers observe a bogus OK+ERROR and a generic failure.
+                // Skip it and let the waiter report the real status below.
+                Err(TcpError::InvalidSocket) => {}
                 Err(error) => return Some((*identity, socket_ready_error(error))),
             }
         }
@@ -1143,6 +1149,19 @@ fn socket_ready_error(error: TcpError) -> u32 {
         TcpError::Reset => sunlight_net::SocketReady::RESET,
         TcpError::Closed => sunlight_net::SocketReady::CLOSED,
         _ => sunlight_net::SocketReady::ERROR,
+    }
+}
+
+/// Whether a requested identity still names a live slot owned by `owner_pid`.
+fn identity_resolves(
+    owner_pid: u64,
+    identity: SocketIdentity,
+    sockets: &SocketSet<'static>,
+) -> bool {
+    unsafe {
+        TCP_MANAGER
+            .as_ref()
+            .is_some_and(|tcp| tcp.ready(owner_pid, identity, sockets).is_ok())
     }
 }
 
@@ -1249,6 +1268,19 @@ fn complete_waiters(sockets: &mut SocketSet<'static>) {
             sockets,
         ) {
             Some(wait_reply(NetStatus::OK, identity, ready))
+        } else if !waiter
+            .identities
+            .iter()
+            .any(|identity| identity_resolves(waiter.owner_pid, *identity, sockets))
+        {
+            // Every requested socket is gone while this waiter slept: it was
+            // reaped at its deadline or on owner exit. Report the connection
+            // failure instead of leaving the caller to time out on silence.
+            Some(wait_reply(
+                NetStatus::NOT_CONNECTED,
+                waiter.identities[0],
+                0,
+            ))
         } else if now >= waiter.deadline_ms {
             Some(wait_reply(NetStatus::TIMEOUT, SocketIdentity::INVALID, 0))
         } else {
