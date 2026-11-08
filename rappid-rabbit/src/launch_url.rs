@@ -1,13 +1,18 @@
 //! Bounded launch-argument helpers for initial browser navigation.
 
-/// Return the first explicit HTTP(S) URL from an argv-like byte list.
+/// Return the first explicit browser URL from an argv-like byte list.
 ///
 /// Unknown flags, launch-trace metadata, file paths, and malformed UTF-8 are
-/// intentionally ignored so normal Rabbit startup remains unchanged.
+/// intentionally ignored. Internal URLs are passed to Rabbit's own resolver.
 pub fn initial_url_from_values<'a>(values: &[&'a [u8]]) -> Option<&'a str> {
     values.iter().find_map(|value| {
         let text = core::str::from_utf8(value).ok()?;
-        if text.starts_with("http://") || text.starts_with("https://") {
+        if text.starts_with("http://")
+            || text.starts_with("https://")
+            || text
+                .get(..7)
+                .is_some_and(|scheme| scheme.eq_ignore_ascii_case("rappid:"))
+        {
             Some(text)
         } else {
             None
@@ -35,6 +40,18 @@ mod tests {
         assert_eq!(
             initial_url_from_values(&[b"--safe-mode", b"file:///tmp/a"]),
             None
+        );
+    }
+
+    #[test]
+    fn accepts_rappid_internal_urls() {
+        assert_eq!(
+            initial_url_from_values(&[b"rappid:startpage"]),
+            Some("rappid:startpage")
+        );
+        assert_eq!(
+            initial_url_from_values(&[b"rappid://startpage"]),
+            Some("rappid://startpage")
         );
     }
 }

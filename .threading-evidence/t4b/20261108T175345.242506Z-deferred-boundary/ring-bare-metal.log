@@ -1,0 +1,7 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-fastlane-ring v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/fastlane-ring)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.13s

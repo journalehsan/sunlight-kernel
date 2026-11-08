@@ -382,8 +382,8 @@ impl RabbitApp {
         let mut url_input = TextInput::new(Rect::default())
             .with_font(&F_UI)
             .with_clipboard_source(b"rappid-rabbit")
-            .with_placeholder("Enter URL (http:// or https://)");
-        url_input.set_text("http://example.com/");
+            .with_placeholder("Search or enter address...");
+        url_input.set_text("rappid:startpage");
 
         let mut developer_tools = DeveloperToolsState::default();
         developer_tools.panel.close();
@@ -571,18 +571,30 @@ impl RabbitApp {
                 return true;
             }
         };
-        let parsed = match ParsedUrl::parse(&normalized) {
-            Ok(url) => url,
-            Err(error) => {
-                self.pending_fetch = false;
-                self.set_error(format!("{error}"));
-                return true;
+        let internal = rappid_rabbit::startpage::is_custom_url(&normalized);
+        let parsed = if internal {
+            None
+        } else {
+            match ParsedUrl::parse(&normalized) {
+                Ok(url) => Some(url),
+                Err(error) => {
+                    self.pending_fetch = false;
+                    self.set_error(format!("{error}"));
+                    return true;
+                }
             }
         };
+        let normalized = rappid_rabbit::startpage::resolve_custom_url(&normalized)
+            .map(String::from)
+            .unwrap_or(normalized);
         let lifecycle = self.document_lifecycle.clone();
         self.url_input.set_text(&normalized);
         self.navigation_url = normalized.clone();
-        self.begin_navigation_session(&normalized, &build_get_request(&parsed));
+        if let Some(parsed) = parsed.as_ref() {
+            self.begin_navigation_session(&normalized, &build_get_request(parsed));
+        } else {
+            self.begin_internal_navigation_session(&normalized);
+        }
         // Release the previous source before allocating the next response.
         self.source = SourceContent::Placeholder("Loading...");
         let bounds = self.client_bounds;
@@ -641,6 +653,42 @@ impl RabbitApp {
         };
         self.url_input.set_text(&normalized);
 
+        if rappid_rabbit::startpage::is_custom_url(&normalized) {
+            let Some(canonical) = rappid_rabbit::startpage::resolve_custom_url(&normalized) else {
+                self.status = String::from("Unknown internal page");
+                self.render_status = format!("No internal page is registered for {normalized}.");
+                self.source = SourceContent::Message(self.render_status.clone());
+                self.active_navigation_request_id = None;
+                #[cfg(feature = "dom")]
+                {
+                    self.render_state = None;
+                }
+                return;
+            };
+            self.url_input.set_text(canonical);
+            self.navigation_url = String::from(canonical);
+            let body = rappid_rabbit::startpage::source().as_bytes().to_vec();
+            self.apply_result(
+                canonical,
+                RequestResult {
+                    response: sunlight_http::HttpResponse {
+                        status_code: 200,
+                        status_text: String::from("OK"),
+                        headers: vec![(
+                            String::from("content-type"),
+                            String::from("text/html; charset=utf-8"),
+                        )],
+                        header_len: 0,
+                    },
+                    body,
+                    final_url: None,
+                    duration_ms: Some(0),
+                },
+            );
+            self.status = String::from("Internal page");
+            return;
+        }
+
         let parsed = match ParsedUrl::parse(&normalized) {
             Ok(url) => url,
             Err(err) => {
@@ -658,6 +706,37 @@ impl RabbitApp {
     }
 
     fn begin_navigation_session(&mut self, requested_url: &str, request: &HttpRequest) {
+        let generation = self.reset_navigation_state();
+
+        let request_id = self.developer_tools.network.begin_main_document_request(
+            request.method,
+            String::from(requested_url),
+            request.headers.clone(),
+        );
+        self.active_navigation_request_id = Some(request_id);
+        self.developer_tools
+            .network
+            .set_request_state(request_id, RequestState::Connecting);
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Fetch,
+            format!("Main document request started: {requested_url}"),
+        );
+        self.log_heap_stage("before fetch", generation, None);
+    }
+
+    fn begin_internal_navigation_session(&mut self, requested_url: &str) {
+        let generation = self.reset_navigation_state();
+        self.active_navigation_request_id = None;
+        self.developer_tools.console.push(
+            ConsoleSeverity::Quiet,
+            ConsoleSource::Browser,
+            format!("Opened internal page: {requested_url}"),
+        );
+        self.log_heap_stage("before internal page", generation, None);
+    }
+
+    fn reset_navigation_state(&mut self) -> u64 {
         self.shield_reflow_pending = false;
         let generation = self.document_lifecycle.begin_navigation();
         self.document_scroll = ScrollState::new();
@@ -685,22 +764,7 @@ impl RabbitApp {
         self.developer_tools
             .dom
             .clear_with_message("Waiting for parsed HTML document.");
-
-        let request_id = self.developer_tools.network.begin_main_document_request(
-            request.method,
-            String::from(requested_url),
-            request.headers.clone(),
-        );
-        self.active_navigation_request_id = Some(request_id);
-        self.developer_tools
-            .network
-            .set_request_state(request_id, RequestState::Connecting);
-        self.developer_tools.console.push(
-            ConsoleSeverity::Quiet,
-            ConsoleSource::Fetch,
-            format!("Main document request started: {requested_url}"),
-        );
-        self.log_heap_stage("before fetch", generation, None);
+        generation
     }
 
     fn apply_result(&mut self, requested_url: &str, result: RequestResult) {
@@ -729,7 +793,11 @@ impl RabbitApp {
         trace_resource("html", &final_url, &result.body);
         self.log_heap_stage("after response completion", generation, Some(body_size));
 
-        self.status = format!("HTTP {status_code} {status_text}");
+        self.status = if rappid_rabbit::startpage::resolve_custom_url(&final_url).is_some() {
+            String::from("Internal page")
+        } else {
+            format!("HTTP {status_code} {status_text}")
+        };
         self.source = self.build_source_content(content_type, result.body);
         if let Some(request_id) = self.active_navigation_request_id {
             self.developer_tools
@@ -750,7 +818,13 @@ impl RabbitApp {
             );
         }
 
-        if (400..500).contains(&status_code) {
+        if rappid_rabbit::startpage::resolve_custom_url(&final_url).is_some() {
+            self.developer_tools.console.push(
+                ConsoleSeverity::Quiet,
+                ConsoleSource::Browser,
+                "Compiled internal document rendered without a network request.",
+            );
+        } else if (400..500).contains(&status_code) {
             self.developer_tools.console.push(
                 ConsoleSeverity::Warn,
                 ConsoleSource::Fetch,
@@ -780,7 +854,14 @@ impl RabbitApp {
                     return;
                 }
                 self.log_heap_stage("before DOM parsing", generation, Some(source_text.len()));
-                match parse_html_with_limits(source_text, ParseLimits::default()) {
+                let document_result = if rappid_rabbit::startpage::resolve_custom_url(&final_url)
+                    .is_some()
+                {
+                    Ok(rappid_rabbit::startpage::document())
+                } else {
+                    parse_html_with_limits(source_text, ParseLimits::default())
+                };
+                match document_result {
                     Ok(document) => {
                         let stats = document.stats();
                         let embedded_stylesheets = collect_embedded_stylesheets(&document);
@@ -2294,14 +2375,26 @@ impl RabbitApp {
         };
         canvas.fill_rounded_rect(rect, URL_BAR_RADIUS, fill);
         canvas.stroke_rounded_rect(rect, URL_BAR_RADIUS, 1, border);
-        // Neutral connection information: URL scheme alone cannot establish
-        // that a TLS connection has been verified. Never draw a lock for it.
         let site = self.url_site_rect();
         let cx = site.x + site.w as i32 / 2;
         let cy = site.y + site.h as i32 / 2;
-        canvas.stroke_rounded_rect(Rect::new(cx - 5, cy - 5, 11, 11), 5, 1, theme.icon_muted);
-        canvas.vline(cx, cy, 3, theme.icon_muted);
-        canvas.fill_rect(Rect::new(cx, cy - 3, 1, 1), theme.icon_muted);
+        if rappid_rabbit::startpage::is_custom_url(self.url_input.value().trim()) {
+            let sun = theme.accent;
+            canvas.stroke_rounded_rect(Rect::new(cx - 3, cy - 3, 7, 7), 4, 1, sun);
+            canvas.hline(cx - 6, cy, 2, sun);
+            canvas.hline(cx + 5, cy, 2, sun);
+            canvas.vline(cx, cy - 6, 2, sun);
+            canvas.vline(cx, cy + 5, 2, sun);
+            canvas.fill_rect(Rect::new(cx - 4, cy - 4, 1, 1), sun);
+            canvas.fill_rect(Rect::new(cx + 4, cy - 4, 1, 1), sun);
+            canvas.fill_rect(Rect::new(cx - 4, cy + 4, 1, 1), sun);
+            canvas.fill_rect(Rect::new(cx + 4, cy + 4, 1, 1), sun);
+        } else {
+            // The URL scheme alone cannot establish that TLS was verified.
+            canvas.stroke_rounded_rect(Rect::new(cx - 5, cy - 5, 11, 11), 5, 1, theme.icon_muted);
+            canvas.vline(cx, cy, 3, theme.icon_muted);
+            canvas.fill_rect(Rect::new(cx, cy - 3, 1, 1), theme.icon_muted);
+        }
 
         let action = self.url_action_rect();
         if self.url_action_hovered {
@@ -3721,6 +3814,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         app.shield_persistence_status = "Preferences restored".into();
     }
     app.runtime = Some(runtime.handle().clone());
+    if initial_url.is_none() {
+        app.queue_fetch();
+    }
     #[cfg(feature = "dom")]
     {
         app.image_runtime = Some(image_runtime.handle().clone());
@@ -3830,6 +3926,41 @@ mod responsive_tests {
 #[cfg(all(test, feature = "dom"))]
 mod navigation_tests {
     use super::*;
+
+    #[test]
+    fn start_page_renders_from_compiled_dom_without_network_request() {
+        let mut worker = RabbitApp::new(None);
+        worker.url_input.set_text("rappid:startpage");
+        worker.navigation_url = String::from("rappid:startpage");
+        worker.begin_internal_navigation_session("rappid:startpage");
+
+        worker.perform_fetch_sync();
+
+        let render = worker.render_state.as_ref().expect("start page scene");
+        assert_eq!(worker.status, "Internal page");
+        assert_eq!(worker.navigation_url, "rappid:startpage");
+        assert_eq!(worker.active_navigation_request_id, None);
+        assert!(worker.developer_tools.network.entries().is_empty());
+        assert!(render.diagnostics.object_count > 0);
+        assert!(render.diagnostics.link_count >= 3);
+        assert!(render.dom.find_first_element("input").is_some());
+    }
+
+    #[test]
+    fn unknown_rappid_url_is_reported_without_network_request() {
+        let mut worker = RabbitApp::new(None);
+        worker.url_input.set_text("rappid:unknown");
+        worker.navigation_url = String::from("rappid:unknown");
+        worker.begin_internal_navigation_session("rappid:unknown");
+
+        worker.perform_fetch_sync();
+
+        assert_eq!(worker.status, "Unknown internal page");
+        assert_eq!(worker.active_navigation_request_id, None);
+        assert!(worker.developer_tools.network.entries().is_empty());
+        assert!(worker.render_state.is_none());
+        assert!(worker.render_status.contains("rappid:unknown"));
+    }
 
     fn document_output() -> NavigationOutput {
         let mut worker = RabbitApp::new(None);

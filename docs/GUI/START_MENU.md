@@ -43,7 +43,7 @@ button) — while the Start Menu owns discovery of everything else.
   - `Power(Sleep)` shows a notification (no kernel S3 support yet).
   - `Power(Restart)` / `Power(Shutdown)` call `sunlight_libc::power::reboot()`
     / `shutdown()`, which wrap the kernel's `PowerCtl` syscall (see
-    `docs/ACPI_IMPLEMENTATION.md`). These never return on success.
+    `docs/kernel/ACPI_IMPLEMENTATION.md`). These never return on success.
 - **Layout is a pure function** of `(screen_w, screen_h, search_query,
   recent_apps, page)` — `compute_layout()` is called fresh on every draw *and*
   every input event, so hit-testing is never stale (no cached rects from a
@@ -232,7 +232,7 @@ launch surface. It is:
 Footer has three buttons: **Sleep**, **Restart**, **Shut Down**.
 
 - **Sleep** is inert today (no kernel S3/suspend support — see
-  `docs/ACPI_IMPLEMENTATION.md`); clicking it shows a notification instead
+  `docs/kernel/ACPI_IMPLEMENTATION.md`); clicking it shows a notification instead
   of doing anything destructive, so it never needs confirmation.
 - **Restart** / **Shut Down** are destructive and never return once issued,
   so they require a *confirm click*: the first click arms a 3-second

@@ -1,35 +1,46 @@
 # SunlightOS Documentation
 
-- `WISEOWL_BOUNDED_ACTION_PLANNER_V1.md` — proposal-only English/Persian
-  conversation-to-intent planning, registry aliases, clarification, and the
-  Trusted Action Flow boundary.
-- `WISEOWL_CONVERSATIONAL_ACTION_COORDINATOR_V1.md` — bounded session-bound
-  multi-turn action lifecycle, cancellation, invalidation, replay protection,
-  localization, and trusted dispatch.
+This directory groups project documentation by subsystem and purpose. Historical
+phase plans and session reports are kept under `history/`; current work should
+be documented alongside its subsystem.
 
-This directory contains project documentation beyond the root quick-start guide.
+## Subsystems
 
-- `README_TUI.md` — Graphical boot TUI usage and troubleshooting.
-- `PHASE_2.5_SUMMARY.md` — TUI implementation summary and architecture notes.
-- `PHASE_3_ROADMAP.md` — Split roadmap, sub-prompts, and gates for Phase 3.0/3.5/3.6.
-- `TOOLS_SUMMARY.md` — Runner script reference.
-- `FINAL_SUMMARY.md` — Full Phase 2.5 overview.
+- `Arch/` — architecture notes.
+- `audio/` — audio capture, playback, and regression notes.
+- `GUI/` — display protocol, graphical interface, and desktop notes.
+- `ipc/` — IPC, capability, and performance documentation.
+- `kernel/` — kernel internals, scheduling, memory, and hardware notes.
+- `libc/` — libc and userspace compatibility work.
+- `networking/` — network services, DNS, TLS, and HTTP notes.
+- `security/` — authentication, authorization, secrets, and security audits.
+- `services/` — service design and implementation notes.
+- `storage/` — filesystems, block devices, mounting, and swap.
+- `terminal/` — terminal behavior, lifecycle, and responsiveness.
+- `wiseowl/` — Wise Owl contracts, design, and implementation notes.
+- `apps/` — application documentation.
+- `rappid-rabbit/` — browser project notes.
 
-The initial six foundation phases are complete. New work is tracked by subsystem
-and milestone rather than by numbered phase.
+Other existing folders cover SSH, Helios Linux compatibility, VMware, Solaris,
+session management, shell, Unix conformance, icons, fonts, images, and fixtures.
 
-## GUI / Display Stack
+## Guides and history
 
-- `GUI/` — Initialize display protocol and graphical interface documents.
-  - `GUI/INITIALIZE_PHASE_DISPLAY_PROTOCOL_AND_GRAPHICAL_INTERFACE_ROADMAP.md` — SGP design, blocking event model, Eyes Tracker plan, and compositor notes.
+- `guides/` — user and developer guides, including TUI usage and tooling.
+- `history/phases/` — numbered phase plans, summaries, and milestone records.
+- `history/session-notes/` — session summaries and dated working notes.
+
+The early foundation phases are complete. New work is tracked by subsystem and
+milestone rather than by numbered phase.
 
 ## Framebuffer Login Background
 
 The framebuffer login screen supports an optional static background image:
+
 - Asset path in VFS: `/usr/share/sunlightos/backgrounds/login-background.tga`
-- The image is embedded directly in the `tty_server` binary at compile time
-- Format: TGA type 2 (uncompressed true-color), 24 bpp
-- Rendered with aspect-fill behaviour + ~40% dark overlay for readability
-- If the image is missing or malformed at compile time the build fails; at
-  runtime the decoder validates the header and falls back to the plain dark
-  background on parse failure.
+- The image is embedded directly in the `tty_server` binary at compile time.
+- Format: TGA type 2 (uncompressed true-color), 24 bpp.
+- It is rendered with aspect-fill behavior and an approximately 40% dark overlay
+  for readability.
+- A missing or malformed image fails the build; at runtime the decoder validates
+  the header and falls back to a plain dark background on parse failure.

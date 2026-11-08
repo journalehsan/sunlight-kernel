@@ -1,0 +1,66 @@
+{
+  "ring-host-tests": {
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-fastlane-ring",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--offline"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 1.918
+  },
+  "ring-bare-metal": {
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-fastlane-ring",
+      "--offline"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.164
+  },
+  "ring-clippy": {
+    "command": [
+      "cargo",
+      "clippy",
+      "-p",
+      "sunlight-fastlane-ring",
+      "--all-targets",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--offline",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.515
+  },
+  "ring-fmt": {
+    "command": [
+      "cargo",
+      "fmt",
+      "-p",
+      "sunlight-fastlane-ring",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.114
+  },
+  "kernel-final-check": {
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-kernel",
+      "--offline"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.214
+  }
+}

@@ -25,6 +25,7 @@ pub mod presentation;
 #[cfg(feature = "dom")]
 pub mod render;
 pub mod resources;
+pub mod startpage;
 #[cfg(feature = "svg")]
 pub mod svg;
 
@@ -40,6 +41,15 @@ pub fn normalize_url_input(input: &str) -> Result<String, HttpError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err(HttpError::InvalidUrl(String::from("enter a URL")));
+    }
+
+    // Keep browser-owned schemes intact so the caller can route them before
+    // attempting HTTP URL parsing.
+    if trimmed
+        .get(..7)
+        .is_some_and(|scheme| scheme.eq_ignore_ascii_case("rappid:"))
+    {
+        return Ok(String::from(trimmed));
     }
 
     if let Some(idx) = trimmed.find("://") {
@@ -262,6 +272,18 @@ mod tests {
     fn normalize_url_adds_http_scheme() {
         let normalized = normalize_url_input("example.com/demo").unwrap();
         assert_eq!(normalized, "http://example.com/demo");
+    }
+
+    #[test]
+    fn normalize_url_preserves_rappid_schemes_for_internal_routing() {
+        assert_eq!(
+            normalize_url_input("rappid:startpage").unwrap(),
+            "rappid:startpage"
+        );
+        assert_eq!(
+            normalize_url_input("rappid://startpage").unwrap(),
+            "rappid://startpage"
+        );
     }
 
     #[test]

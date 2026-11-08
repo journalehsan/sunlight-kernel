@@ -32,6 +32,7 @@ pub const MAX_PAYLOAD: usize = 4096;
 
 mod leases;
 pub use leases::{ReadLease, WriteLease};
+pub mod data_plane;
 pub mod hostile;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

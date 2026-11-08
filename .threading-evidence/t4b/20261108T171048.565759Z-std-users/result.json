@@ -1,0 +1,19 @@
+{
+  "timeout": false,
+  "command": [
+    "bash",
+    "tools/build_native_std.sh",
+    "build",
+    "-p",
+    "sunlight-docserv",
+    "--no-default-features",
+    "--features",
+    "native-hayro-smoke",
+    "--release",
+    "--offline"
+  ],
+  "exit_code": 0,
+  "source_unchanged": true,
+  "pass": true,
+  "seconds": 45.232944310002495
+}

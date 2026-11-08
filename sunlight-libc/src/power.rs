@@ -1,6 +1,6 @@
 //! Power management: shutdown / reboot via the kernel's `PowerCtl` syscall.
 //!
-//! See `docs/ACPI_IMPLEMENTATION.md` for the full ACPI implementation this
+//! See `docs/kernel/ACPI_IMPLEMENTATION.md` for the full ACPI implementation this
 //! wraps. The kernel exposes syscall 80 (`PowerCtl`) with `rdi` = 0 for
 //! shutdown (S5 soft-off) or 1 for reboot; both are handled entirely in
 //! kernel/arch ACPI code and never return on success.

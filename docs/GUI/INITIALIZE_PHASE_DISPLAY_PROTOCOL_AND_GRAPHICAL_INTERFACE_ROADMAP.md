@@ -513,7 +513,7 @@ These come after the Eyes Tracker is solid.
 
 ## References & Related Documents
 
-- `docs/2026-06-22_RING3_MOUSE_DRIVER.md` — source of the packed mouse event format
+- `docs/kernel/2026-06-22_RING3_MOUSE_DRIVER.md` — source of the packed mouse event format
 - `kernel/src/process/mmap.rs` — current anonymous-only mmap implementation
 - `kernel/src/memory/shared.rs` — current single-page shared-memory implementation
 - `kernel/src/capability/mod.rs` — shared-page token minting and revocation
@@ -521,7 +521,7 @@ These come after the Eyes Tracker is solid.
 - `ipc/src/lib.rs` — IpcMsg, capability transport, and Shm syscalls
 - `services/sunlight-mouse/src/main.rs` — reference implementation of a clean input driver
 - `services/tty_server/src/main.rs` — current input routing example
-- `docs/README_TUI.md` and Phase 2.5 documents — current framebuffer usage
+- `docs/guides/README_TUI.md` and Phase 2.5 documents — current framebuffer usage
 - `tools/run-gui.sh` — convenient way to launch with graphical output
 
 ---

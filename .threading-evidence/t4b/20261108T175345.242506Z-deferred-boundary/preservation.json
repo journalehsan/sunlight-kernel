@@ -1,0 +1,8 @@
+{
+  "dirty_tracked_paths_before": 284,
+  "changed_preexisting_dirty_paths": [],
+  "unexpected_changes": [],
+  "unchanged_preexisting_dirty_paths": 284,
+  "missing_tracked_paths_preserved": 134,
+  "strategy": "Passing host baseline; no stash, branch checkout, restore, staging or commit"
+}

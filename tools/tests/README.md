@@ -22,9 +22,9 @@ strings short, deterministic, and tied to behavior that must not regress.
 Phase-specific implementation notes belong in:
 
 ```text
-docs/PHASE_3_0_SUMMARY.md
-docs/PHASE_3_5_SUMMARY.md
-docs/PHASE_3_6_SUMMARY.md
+docs/history/phases/PHASE_3_0_SUMMARY.md
+docs/history/phases/PHASE_3_5_SUMMARY.md
+docs/history/phases/PHASE_3_6_SUMMARY.md
 ```
 
 Fast host-side policy checks can live alongside the boot-gate data when they

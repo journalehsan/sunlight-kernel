@@ -1,0 +1,97 @@
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background: #121214;
+  color: #f0f0f0;
+  font-family: sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.start-page {
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 72px 28px 30px;
+  text-align: center;
+}
+.hero { margin-bottom: 34px; }
+.sun-mark {
+  color: #ffa500;
+  font-size: 54px;
+  line-height: 1.1;
+}
+h1 {
+  margin: 8px 0 0;
+  color: #f0f0f0;
+  font-size: 38px;
+  line-height: 1.2;
+}
+.subtitle { margin: 8px 0 0; color: #c8c8d2; font-size: 17px; }
+.browser-name { margin: 3px 0 0; color: #888899; font-size: 13px; }
+.search {
+  display: flex;
+  align-items: center;
+  max-width: 620px;
+  height: 52px;
+  margin: 0 auto 42px;
+  padding: 0 8px 0 18px;
+  background: #222226;
+  border: 1px solid #45454e;
+  border-radius: 26px;
+}
+.search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  color: #f0f0f0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+}
+.search input::placeholder { color: #a0a0af; }
+.search button {
+  width: 36px;
+  height: 36px;
+  color: #121214;
+  background: #ffa500;
+  border: 0;
+  border-radius: 18px;
+  font-size: 22px;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+}
+.link-card {
+  display: block;
+  width: 170px;
+  padding: 18px 12px 16px;
+  color: #f0f0f0;
+  background: #1c1c1f;
+  border: 1px solid #353540;
+  border-radius: 12px;
+  text-decoration: none;
+}
+.link-card:hover { border-color: #ffa500; background: #252529; }
+.link-icon { display: block; margin-bottom: 7px; color: #ffa500; font-size: 25px; }
+.welcome { margin: 36px 0 0; color: #888899; font-size: 14px; }
+footer {
+  margin: 22px auto 0;
+  padding: 16px 12px 24px;
+  color: #888899;
+  border-top: 1px solid #353540;
+  text-align: center;
+  font-size: 13px;
+}
+footer span { padding: 0 5px; color: #ffa500; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

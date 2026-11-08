@@ -1,0 +1,49 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-block v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling smoltcp v0.11.0
+   Compiling sunlight-net v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+   Compiling sunlight-kernel v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+   Compiling sunlight-virtio v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+   Compiling sunlight-ipc v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-sensors v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+   Compiling sunlight-smbios v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+warning: sunlight-net@0.2.6843-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+   Compiling x86_64 v0.15.4
+   Compiling uart_16550 v0.3.2
+   Compiling sunlight-compat-linux v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+   Compiling sunlight-elf v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-elf)
+   Compiling sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+   Compiling sunlight-fat v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+   Compiling sunlight-fs v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:38:9
+   |
+38 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:56:9
+   |
+56 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:67:9
+   |
+67 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+    Finished `release` profile [optimized] target(s) in 24.81s

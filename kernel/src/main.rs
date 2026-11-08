@@ -2311,7 +2311,7 @@ mod usb_storage;
 
 /// Build the authoritative VFS: legacy superfloppies retain `/boot` or
 /// `/state`; an unambiguous eligible partition mounts at `/mnt`.
-/// See docs/partitioned-storage.md for selection and trust policy.
+/// See docs/storage/partitioned-storage.md for selection and trust policy.
 fn init_kernel_vfs() {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 

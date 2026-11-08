@@ -1,0 +1,35 @@
+{
+  "pass": true,
+  "suite": "races",
+  "attempts": [
+    ".threading-evidence/t4b/20261108T170730.345956Z-races-host-kernel",
+    ".threading-evidence/t4b/20261108T170751.844817Z-races-host-linux",
+    ".threading-evidence/t4b/20261108T170753.097288Z-races-host-scheduler",
+    ".threading-evidence/t4b/20261108T170757.884267Z-races-lifecycle-host",
+    ".threading-evidence/t4b/20261108T170759.507789Z-races-receipts",
+    ".threading-evidence/t4b/20261108T170800.713703Z-races-build",
+    ".threading-evidence/t4b/20261108T170821.044313Z-races-freeze",
+    ".threading-evidence/t4b/20261108T170822.240234Z-races-abi",
+    ".threading-evidence/t4b/20261108T170823.348436Z-races-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261108T170826.906625Z-races-2cpu"
+    },
+    "1": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261108T170908.190176Z-races-1cpu"
+    },
+    "4": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261108T170908.191088Z-races-4cpu"
+    },
+    "12": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261108T170957.741122Z-races-12cpu"
+    }
+  },
+  "kernel_sha256": "5c6e32d8732853e320321c13b7017ec881dd942f64f31fbd1b07b4ac959f52ce",
+  "iso_sha256": "4198d01363234993322be5dc01421e98cf75d65501aa1a3d7e9ec911beac7951"
+}

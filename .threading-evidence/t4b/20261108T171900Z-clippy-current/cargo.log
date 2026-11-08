@@ -1,0 +1,945 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: failed to save last-use data
+This may prevent cargo from accurately tracking what is being used in its global cache. This information is used for automatically removing unused data in the cache.
+
+attempt to write a readonly database
+
+Caused by:
+  Error code 8: attempt to write a readonly database
+       Fresh version_check v0.9.5
+       Fresh zerocopy v0.8.54
+       Fresh once_cell v1.21.4
+       Fresh ahash v0.8.12
+       Fresh byteorder v1.5.0
+       Fresh bitflags v1.3.2
+       Fresh scopeguard v1.2.0
+       Fresh hash32 v0.3.1
+       Fresh hashbrown v0.13.2
+       Fresh bit_field v0.10.3
+       Fresh stable_deref_trait v1.2.1
+       Fresh ttf-parser v0.15.2
+       Fresh bitflags v2.13.0
+       Fresh managed v0.8.0
+       Fresh sunlight-block v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+       Fresh lock_api v0.4.14
+       Fresh fontdue v0.7.3
+       Fresh raw-cpuid v10.7.0
+       Fresh volatile v0.4.6
+       Fresh cfg-if v1.0.4
+       Fresh sunlight-fat v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+       Fresh log v0.4.33
+       Fresh sunlight-ipc v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-kernel v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+       Fresh sunlight-virtio v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+warning: sunlight-net@0.2.6843-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+       Fresh heapless v0.8.0
+       Fresh rustversion v1.0.23
+       Fresh const_fn v0.4.12
+       Fresh spin v0.9.8
+       Fresh spinning_top v0.2.5
+       Fresh x86 v0.52.0
+       Fresh sunlight-fs v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+       Fresh sunlight-smbios v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-smbios)
+       Fresh limine v0.6.3
+       Fresh sunlight-elf v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-elf)
+       Fresh lz4_flex v0.11.6
+       Fresh sunlight-sensors v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sensors)
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_CRATE_NAME=build_script_build CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/kernel CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-kernel CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6843-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6843 CARGO_PKG_VERSION_PRE=alpha.2 CARGO_PRIMARY_PACKAGE=1 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --crate-name build_script_build --edition=2021 kernel/build.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C embed-bitcode=no -C debuginfo=2 --cfg 'feature="atomic_futex_test"' --cfg 'feature="default"' --cfg 'feature="futex_lifecycle_diag"' --cfg 'feature="futex_lifecycle_test"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("atomic_futex_test", "authenticated_cancel_test", "authenticated_completion_exit_test", "authenticated_completion_race_test", "authenticated_exec_test", "authenticated_reply_test", "cap_issuance_test", "cpu_accounting_diag", "default", "demand_test", "dependency_test", "document_postscript", "document_service", "document_viewer", "fastlane_census_trace", "fastlane_channel_test", "fastlane_contract_test", "fastlane_coord_diag", "fastlane_coord_same_cpu", "fastlane_coord_spin", "fastlane_doorbell_if_control", "fastlane_doorbell_test", "fastlane_doorbell_trace", "fastlane_f11_audit", "fastlane_f1_audit", "fastlane_hybrid_lifecycle_test", "fastlane_m31_prerepair", "fastlane_m31_retention_test", "fastlane_mapping_test", "fastlane_measurement_test", "fastlane_mediated_accounting_test", "fastlane_repeated_test", "fastlane_shared_ring_test", "fastlane_transfer_test", "futex_lifecycle_diag", "futex_lifecycle_test", "grant_history_test", "grant_history_transport_test", "idle_test", "idle_wakeup_test", "ipc_deferred_test", "ipc_reply_race_test", "key_inject", "launch_trace", "memory_accounting_test", "mm2a_test_injection", "mm2b_smp_test", "mm2c_ledger_test", "mm2d_munmap_test", "mm2e_mprotect_test", "native_document_service", "native_document_viewer", "native_doorbell_test", "native_session_h4_test", "native_session_race_test", "native_std_probe", "pin_release_ordering_test", "pin_release_r2d_test", "pin_release_test", "production_grant_test", "recovery_test", "remote_wake_test", "scheduler_b_test", "scheduler_guest_bench", "scheduler_mixed_bench", "scheduler_perf_diag", "scheduler_timer_trace", "sunjs_probe", "swap1_test", "syscall_stack_auth_test", "syscall_stack_test", "thread_admission_test", "thread_lifecycle_race_test", "thread_migration_test", "verbose_diag"))' -C metadata=4778670c87556b7e -C extra-filename=-ec631bc2fd9d0e94 --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/debug/build/sunlight-kernel-ec631bc2fd9d0e94 -C incremental=/home/ehsantor/Projects/sunlightos-kernel/target/debug/incremental -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps --verbose`
+       Fresh smoltcp v0.11.0
+       Fresh x86_64 v0.15.4
+       Fresh linked_list_allocator v0.10.6
+       Fresh uart_16550 v0.3.2
+       Fresh sunlight-compat-linux v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/compat-linux)
+       Fresh sunlight-tui v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tui)
+       Fresh sunlight-net v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+warning: module `NetOp` should have a snake case name
+ --> sunlight-net/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetStatus` should have a snake case name
+  --> sunlight-net/src/netop.rs:38:9
+   |
+38 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> sunlight-net/src/netop.rs:56:9
+   |
+56 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> sunlight-net/src/netop.rs:67:9
+   |
+67 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-net` (lib) generated 4 warnings
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_CFG_DEBUG_ASSERTIONS='' CARGO_CFG_FEATURE=atomic_futex_test,default,futex_lifecycle_diag,futex_lifecycle_test CARGO_CFG_FMT_DEBUG=full CARGO_CFG_OVERFLOW_CHECKS='' CARGO_CFG_PANIC=abort CARGO_CFG_RELOCATION_MODEL=pic CARGO_CFG_TARGET_ABI='' CARGO_CFG_TARGET_ARCH=x86_64 CARGO_CFG_TARGET_ENDIAN=little CARGO_CFG_TARGET_ENV='' CARGO_CFG_TARGET_FEATURE=fxsr,x87 CARGO_CFG_TARGET_HAS_ATOMIC=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_ATOMIC_LOAD_STORE=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_ATOMIC_PRIMITIVE_ALIGNMENT=16,32,64,8,ptr CARGO_CFG_TARGET_HAS_RELIABLE_F128='' CARGO_CFG_TARGET_HAS_RELIABLE_F16='' CARGO_CFG_TARGET_HAS_RELIABLE_F16_MATH='' CARGO_CFG_TARGET_OBJECT_FORMAT=elf CARGO_CFG_TARGET_OS=none CARGO_CFG_TARGET_POINTER_WIDTH=64 CARGO_CFG_TARGET_VENDOR=unknown CARGO_CFG_UB_CHECKS='' CARGO_ENCODED_RUSTFLAGS='-Clink-arg=-Tkernel/src/arch/x86_64/linker.ld-Crelocation-model=static' CARGO_FEATURE_ATOMIC_FUTEX_TEST=1 CARGO_FEATURE_DEFAULT=1 CARGO_FEATURE_FUTEX_LIFECYCLE_DIAG=1 CARGO_FEATURE_FUTEX_LIFECYCLE_TEST=1 CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/kernel CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-kernel CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6843-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6843 CARGO_PKG_VERSION_PRE=alpha.2 DEBUG=true HOST=x86_64-unknown-linux-gnu LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/debug:/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/lib:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' NUM_JOBS=16 OPT_LEVEL=1 OUT_DIR=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/build/sunlight-kernel-003890ec4c435995/out PROFILE=debug RUSTC=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc RUSTDOC=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustdoc TARGET=x86_64-unknown-none /home/ehsantor/Projects/sunlightos-kernel/target/debug/build/sunlight-kernel-ec631bc2fd9d0e94/build-script-build`
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=../tools/helios-probes/futex-lifecycle-probe.rs
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-env-changed=SUNLIGHT_T2R_CASE
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-env-changed=SUNLIGHT_T2R_WINNER
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_svg_apps.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_native_std.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/native-std
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-files
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-dialogd
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/docs/icons/SunlightOS
+[sunlight-kernel 0.2.6843-alpha.2] warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS="-j --jobserver-fds=4,5 --jobserver-auth=4,5"`: cannot open file descriptor 4 from the jobserver environment variable value: Bad file descriptor (os error 9)
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: the build environment is likely misconfigured
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+[sunlight-kernel 0.2.6843-alpha.2] warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d2-fixture`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-leaf`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-parent`
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling compiler_builtins v0.1.160 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling core v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/core)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling std v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling crc32fast v1.5.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sun-font v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-font)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling heapless v0.8.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling generic-array v0.14.7
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-tz v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-tz)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling thiserror v2.0.19
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling serde_core v1.0.228
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling serde v1.0.228
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling libm v0.2.16
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling anyhow v1.0.103
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-calendar v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-calendar)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-vortex-shell v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-vortex-shell)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-control-panel v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-control-panel)
+[sunlight-kernel 0.2.6843-alpha.2] warning: sun-font@0.2.6843-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling alloc v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/alloc)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling libc v0.2.185
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling cfg-if v1.0.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling panic_abort v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_abort)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rustc-demangle v0.1.27
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rustc-literal-escaper v0.0.7
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/unwind)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling panic_unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_unwind)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling hashbrown v0.17.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling std_detect v0.1.5 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std_detect)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling proc_macro v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/proc_macro)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling simd-adler32 v0.3.9
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-ipc v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling adler2 v2.0.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling float-cmp v0.9.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling arrayvec v0.7.8
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling bytemuck v1.25.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling zune-core v0.4.12
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling arrayref v0.3.9
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling log v0.4.33
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling smallvec v1.15.2
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling bitflags v1.3.2
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling siphasher v1.0.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling data-url v0.3.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling lz4_flex v0.11.6
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling pico-args v0.5.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling strict-num v0.1.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling xmlwriter v0.1.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling miniz_oxide v0.8.9
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling zune-inflate v0.2.54
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling fdeflate v0.3.7
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling tiny-skia-path v0.11.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling zune-jpeg v0.4.21
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling simplecss v0.2.2
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling base64 v0.22.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling imagesize v0.13.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling roxmltree v0.20.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rgb v0.8.52
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling kurbo v0.11.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling zune-png v0.4.10
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling unicode-segmentation v1.13.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling byteorder v1.5.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling flate2 v1.1.9
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sun-img v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling hash32 v0.3.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling stable_deref_trait v1.2.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling typenum v1.20.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling subtle v2.6.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling scopeguard v1.2.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-block v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling lock_api v0.4.14
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rand_core v0.6.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling base64ct v1.8.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-libc v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-audio v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-audio)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling spinning_top v0.2.5
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-fat v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling png v0.17.16
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling svgtypes v0.15.3
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused variable: `pat`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-tz/src/localtime.rs:264:9
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 264 |     let pat = "\"";
+[sunlight-kernel 0.2.6843-alpha.2]     |         ^^^ help: if this is intentional, prefix it with an underscore: `_pat`
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling password-hash v0.5.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling cpufeatures v0.2.17
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling cobs v0.3.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling linked_list_allocator v0.10.6
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-fs v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling zeroize v1.9.0
+[sunlight-kernel 0.2.6843-alpha.2] warning: field `terminal` is never read
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/sun_exec.rs:767:5
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 762 | struct ChronosManifest<'a> {
+[sunlight-kernel 0.2.6843-alpha.2]     |        --------------- field in this struct
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 767 |     terminal: bool,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-locale v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-locale)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-telemetry v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-telemetry)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling usvg v0.45.1
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-tz` (lib) generated 1 warning (run `cargo fix --lib -p sunlight-tz` to apply 1 suggestion)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-shell-appstate v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-shell-appstate)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-audiod v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-audiod)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-dialogs v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-dialogs)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-wallpaper v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-wallpaper)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-networkd v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-networkd)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling tiny-skia v0.11.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling block-buffer v0.10.4
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling crypto-common v0.1.7
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling digest v0.10.7
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling blake2 v0.10.6
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling argon2 v0.5.3
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-libc` (lib) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling resvg v0.45.1
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling postcard v1.1.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-ui v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-docserv v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-reminders v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-reminders)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-dialogd v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-dialogd)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-uac v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-uac)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunshell v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunshell)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-files v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-files)
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused import: `ProcessExit`
+[sunlight-kernel 0.2.6843-alpha.2]   --> services/sunlight-dialogd/src/main.rs:23:39
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 23 |     shm_map, CapabilityToken, IpcMsg, ProcessExit, SHM_PAGE,
+[sunlight-kernel 0.2.6843-alpha.2]    |                                       ^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused import: `MezzoMsg`
+[sunlight-kernel 0.2.6843-alpha.2]   --> services/sunlight-vortex-shell/src/main.rs:77:46
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 77 |     CapabilityToken, DisplayMetrics, IpcMsg, MezzoMsg, NotificationKind, NotificationPriority,
+[sunlight-kernel 0.2.6843-alpha.2]    |                                              ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: fields `level`, `errors`, and `available` are never read
+[sunlight-kernel 0.2.6843-alpha.2]   --> services/sunlight-control-panel/src/power_thermal.rs:50:5
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 46 | struct ThermalSnap {
+[sunlight-kernel 0.2.6843-alpha.2]    |        ----------- fields in this struct
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 50 |     level: u8,
+[sunlight-kernel 0.2.6843-alpha.2]    |     ^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 51 |     rpm: u32,
+[sunlight-kernel 0.2.6843-alpha.2] 52 |     errors: u32,
+[sunlight-kernel 0.2.6843-alpha.2]    |     ^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 53 |     available: bool,
+[sunlight-kernel 0.2.6843-alpha.2]    |     ^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `ThermalSnap` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: value assigned to `launcher_rect` is never read
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:6828:29
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 6828 |     let mut launcher_rect = Rect::new(0, 0, 0, 0);
+[sunlight-kernel 0.2.6843-alpha.2]      |                             ^^^^^^^^^^^^^^^^^^^^^ this value is reassigned later and never used
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 6838 |         launcher_rect = cell;
+[sunlight-kernel 0.2.6843-alpha.2]      |         -------------------- `launcher_rect` is overwritten here before the previous value is read
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2]      = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: type `RankedHit` is more private than the item `rank_applications`
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/search_palette.rs:391:1
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 391 | pub(crate) fn rank_applications(query: &str, out: &mut [RankedHit]) -> usize {
+[sunlight-kernel 0.2.6843-alpha.2]     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `rank_applications` is reachable at visibility `pub(crate)`
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] note: but type `RankedHit` is only usable at visibility `pub(self)`
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/search_palette.rs:251:1
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 251 | struct RankedHit {
+[sunlight-kernel 0.2.6843-alpha.2]     | ^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(private_interfaces)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: fields `terminal`, `folder`, `calendar`, `edit`, and `calc` are never read
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/main.rs:506:5
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 503 | struct SymbolTheme {
+[sunlight-kernel 0.2.6843-alpha.2]     |        ----------- fields in this struct
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 506 |     terminal: Option<IconImage>,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 507 |     folder: Option<IconImage>,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 508 |     calendar: Option<IconImage>,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 514 |     edit: Option<IconImage>,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 515 |     calc: Option<IconImage>,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `SymbolTheme` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: method `get` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/main.rs:560:8
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 530 | impl SymbolTheme {
+[sunlight-kernel 0.2.6843-alpha.2]     | ---------------- method in this implementation
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 560 |     fn get(&self, name: &str) -> Option<IconImage> {
+[sunlight-kernel 0.2.6843-alpha.2]     |        ^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: method `volume` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/main.rs:862:8
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 838 | impl AudioShellState {
+[sunlight-kernel 0.2.6843-alpha.2]     | -------------------- method in this implementation
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 862 |     fn volume(self) -> u8 {
+[sunlight-kernel 0.2.6843-alpha.2]     |        ^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: constant `APP_LAUNCH_TIMEOUT_MS` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:1099:7
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1099 | const APP_LAUNCH_TIMEOUT_MS: u64 = 30_000;
+[sunlight-kernel 0.2.6843-alpha.2]      |       ^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: constant `POWER_ROWS` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:1291:7
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1291 | const POWER_ROWS: [u16; 16] = [
+[sunlight-kernel 0.2.6843-alpha.2]      |       ^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: constant `NET_OFF_ROWS` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:1331:7
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1331 | const NET_OFF_ROWS: [u16; 16] = [
+[sunlight-kernel 0.2.6843-alpha.2]      |       ^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: constant `BAT_ROWS` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:1351:7
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1351 | const BAT_ROWS: [u16; 16] = [
+[sunlight-kernel 0.2.6843-alpha.2]      |       ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `format_time_12h` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:4635:4
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 4635 | fn format_time_12h(h: u8, m: u8, out: &mut [u8; 8]) -> usize {
+[sunlight-kernel 0.2.6843-alpha.2]      |    ^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `draw_status_cluster` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> services/sunlight-vortex-shell/src/main.rs:4677:4
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 4677 | fn draw_status_cluster(
+[sunlight-kernel 0.2.6843-alpha.2]      |    ^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `weekday_iso` is never used
+[sunlight-kernel 0.2.6843-alpha.2]   --> services/sunlight-vortex-shell/src/calendar_math.rs:17:8
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 17 | pub fn weekday_iso(year: u16, month: u8, day: u8) -> u8 {
+[sunlight-kernel 0.2.6843-alpha.2]    |        ^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: method `query` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/search_palette.rs:599:19
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 558 | impl SearchPaletteState {
+[sunlight-kernel 0.2.6843-alpha.2]     | ----------------------- method in this implementation
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 599 |     pub(crate) fn query(&self) -> &str {
+[sunlight-kernel 0.2.6843-alpha.2]     |                   ^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: variant `Placeholder` is never constructed
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/start_menu.rs:132:5
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 130 | pub(crate) enum CatalogId {
+[sunlight-kernel 0.2.6843-alpha.2]     |                 --------- variant in this enum
+[sunlight-kernel 0.2.6843-alpha.2] 131 |     App(AppId),
+[sunlight-kernel 0.2.6843-alpha.2] 132 |     Placeholder(&'static str),
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `CatalogId` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: method `focus_index` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/workspace_switcher.rs:112:25
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]  91 | impl WorkspaceSwitcherState {
+[sunlight-kernel 0.2.6843-alpha.2]     | --------------------------- method in this implementation
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 112 |     pub(crate) const fn focus_index(&self) -> usize {
+[sunlight-kernel 0.2.6843-alpha.2]     |                         ^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `generation_matches` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> services/sunlight-vortex-shell/src/workspace_switcher.rs:479:15
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 479 | pub(crate) fn generation_matches(expected: u64, observed: u64) -> bool {
+[sunlight-kernel 0.2.6843-alpha.2]     |               ^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-dialogd` (bin "sunlight-dialogd") generated 1 warning (run `cargo fix --bin "sunlight-dialogd" -p sunlight-dialogd` to apply 1 suggestion)
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-control-panel` (bin "control-panel") generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-vortex-shell` (bin "sunlight-vortex-shell") generated 17 warnings (run `cargo fix --bin "sunlight-vortex-shell" -p sunlight-vortex-shell` to apply 1 suggestion)
+[sunlight-kernel 0.2.6843-alpha.2]     Finished `release` profile [optimized] target(s) in 1m 16s
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/rappid-rabbit
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/golden-fish
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/vendor/tl
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_rappid_rabbit.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-env-changed=SUNLIGHT_ACCOUNT_FIXTURE
+[sunlight-kernel 0.2.6843-alpha.2] warning: failed to connect to jobserver from environment variable `CARGO_MAKEFLAGS="-j --jobserver-fds=4,5 --jobserver-auth=4,5"`: cannot open file descriptor 4 from the jobserver environment variable value: Bad file descriptor (os error 9)
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: the build environment is likely misconfigured
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] /home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+[sunlight-kernel 0.2.6843-alpha.2] warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d2-fixture`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-leaf`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-parent`
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling smoltcp v0.11.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-net v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-net)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling managed v0.8.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling volatile v0.4.6
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling bitflags v2.13.0
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling bit_field v0.10.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-virtio v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-virtio)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-libc v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling tl v0.7.8 (/home/ehsantor/Projects/sunlightos-kernel/vendor/tl)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-http v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-http)
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling pin-project-lite v0.2.17
+[sunlight-kernel 0.2.6843-alpha.2] warning: sunlight-net@0.2.6843-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+[sunlight-kernel 0.2.6843-alpha.2] warning: sun-font@0.2.6843-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling tokio v1.53.3
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling x86_64 v0.15.4
+[sunlight-kernel 0.2.6843-alpha.2] warning: field `terminal` is never read
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/sun_exec.rs:767:5
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 762 | struct ChronosManifest<'a> {
+[sunlight-kernel 0.2.6843-alpha.2]     |        --------------- field in this struct
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 767 |     terminal: bool,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `find4` is never used
+[sunlight-kernel 0.2.6843-alpha.2]   --> vendor/tl/src/simd/mod.rs:42:8
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 42 | pub fn find4(haystack: &[u8], needle: [u8; 4]) -> Option<usize> {
+[sunlight-kernel 0.2.6843-alpha.2]    |        ^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `find_multi` is never used
+[sunlight-kernel 0.2.6843-alpha.2]   --> vendor/tl/src/simd/fallback.rs:13:8
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 13 | pub fn find_multi<const N: usize>(haystack: &[u8], needle: [u8; N]) -> Option<usize> {
+[sunlight-kernel 0.2.6843-alpha.2]    |        ^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `find_multi` is never used
+[sunlight-kernel 0.2.6843-alpha.2]   --> vendor/tl/src/simd/stable.rs:13:8
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 13 | pub fn find_multi<const N: usize>(haystack: &[u8], needle: [u8; N]) -> Option<usize> {
+[sunlight-kernel 0.2.6843-alpha.2]    |        ^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: hiding a lifetime that's elided elsewhere is confusing
+[sunlight-kernel 0.2.6843-alpha.2]   --> vendor/tl/src/parser/base.rs:56:30
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 56 |     pub(crate) fn new(input: &str, options: ParserOptions) -> Parser {
+[sunlight-kernel 0.2.6843-alpha.2]    |                              ^^^^ the lifetime is elided here ^^^^^^ the same lifetime is hidden here
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] help: use `'_` for type paths
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 56 |     pub(crate) fn new(input: &str, options: ParserOptions) -> Parser<'_> {
+[sunlight-kernel 0.2.6843-alpha.2]    |                                                                     ++++
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: hiding a lifetime that's elided elsewhere is confusing
+[sunlight-kernel 0.2.6843-alpha.2]    --> vendor/tl/src/parser/tag.rs:173:17
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 173 |     pub fn iter(&self) -> impl Iterator<Item = (Cow<str>, Option<Cow<str>>)> + '_ {
+[sunlight-kernel 0.2.6843-alpha.2]     |                 ^^^^^                           ^^^^^^^^         ^^^^^^^^      ^^ the same lifetime is elided here
+[sunlight-kernel 0.2.6843-alpha.2]     |                 |                               |                |
+[sunlight-kernel 0.2.6843-alpha.2]     |                 |                               |                the same lifetime is hidden here
+[sunlight-kernel 0.2.6843-alpha.2]     |                 |                               the same lifetime is hidden here
+[sunlight-kernel 0.2.6843-alpha.2]     |                 the lifetime is elided here
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+[sunlight-kernel 0.2.6843-alpha.2] help: use `'_` for type paths
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 173 |     pub fn iter(&self) -> impl Iterator<Item = (Cow<'_, str>, Option<Cow<'_, str>>)> + '_ {
+[sunlight-kernel 0.2.6843-alpha.2]     |                                                     +++                  +++
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: hiding a lifetime that's named elsewhere is confusing
+[sunlight-kernel 0.2.6843-alpha.2]   --> vendor/tl/src/stream.rs:55:34
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 55 |     pub fn new(data: &'a [T]) -> Stream<T> {
+[sunlight-kernel 0.2.6843-alpha.2]    |                       --         ^^^^^^^^^ the same lifetime is hidden here
+[sunlight-kernel 0.2.6843-alpha.2]    |                       |
+[sunlight-kernel 0.2.6843-alpha.2]    |                       the lifetime is named here
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+[sunlight-kernel 0.2.6843-alpha.2] help: consistently use `'a`
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 55 |     pub fn new(data: &'a [T]) -> Stream<'a, T> {
+[sunlight-kernel 0.2.6843-alpha.2]    |                                         +++
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling golden-fish v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/golden-fish)
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-libc` (lib) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2] warning: `tl` (lib) generated 6 warnings (run `cargo fix --lib -p tl` to apply 3 suggestions)
+[sunlight-kernel 0.2.6843-alpha.2] warning: module `NetOp` should have a snake case name
+[sunlight-kernel 0.2.6843-alpha.2]  --> sunlight-net/src/netop.rs:2:9
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2] 2 | pub mod NetOp {
+[sunlight-kernel 0.2.6843-alpha.2]   |         ^^^^^ help: convert the identifier to snake case: `net_op`
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: module `NetStatus` should have a snake case name
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-net/src/netop.rs:38:9
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 38 | pub mod NetStatus {
+[sunlight-kernel 0.2.6843-alpha.2]    |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: module `NetReady` should have a snake case name
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-net/src/netop.rs:56:9
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 56 | pub mod NetReady {
+[sunlight-kernel 0.2.6843-alpha.2]    |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: module `NetDiagnostic` should have a snake case name
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-net/src/netop.rs:67:9
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 67 | pub mod NetDiagnostic {
+[sunlight-kernel 0.2.6843-alpha.2]    |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling sunlight-fetch v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fetch)
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused import: `alloc::vec`
+[sunlight-kernel 0.2.6843-alpha.2]  --> sunlight-fetch/src/prelude.rs:9:9
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2] 9 | pub use alloc::vec;
+[sunlight-kernel 0.2.6843-alpha.2]   |         ^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: constant `IPC_CHUNK` is never used
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-fetch/src/ipc.rs:918:11
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 918 |     const IPC_CHUNK: usize = 16;
+[sunlight-kernel 0.2.6843-alpha.2]     |           ^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: function `unpack_chunk` is never used
+[sunlight-kernel 0.2.6843-alpha.2]     --> sunlight-fetch/src/ipc.rs:1182:8
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1182 |     fn unpack_chunk(words: &[u64; 8], len: usize) -> Vec<u8> {
+[sunlight-kernel 0.2.6843-alpha.2]      |        ^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2]    Compiling rappid-rabbit v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/rappid-rabbit)
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-fetch` (lib) generated 3 warnings (run `cargo fix --lib -p sunlight-fetch` to apply 1 suggestion)
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-net` (lib) generated 4 warnings
+[sunlight-kernel 0.2.6843-alpha.2] warning: variable does not need to be mutable
+[sunlight-kernel 0.2.6843-alpha.2]     --> rappid-rabbit/src/css.rs:1253:9
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1253 |     let mut flush = |token: &mut String,
+[sunlight-kernel 0.2.6843-alpha.2]      |         ----^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]      |         |
+[sunlight-kernel 0.2.6843-alpha.2]      |         help: remove this `mut`
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2]      = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused variable: `i`
+[sunlight-kernel 0.2.6843-alpha.2]     --> rappid-rabbit/src/css.rs:1338:10
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1338 |     for (i, b) in source.as_bytes().iter().enumerate().take(byte_offset) {
+[sunlight-kernel 0.2.6843-alpha.2]      |          ^ help: if this is intentional, prefix it with an underscore: `_i`
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2]      = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unused variable: `color`
+[sunlight-kernel 0.2.6843-alpha.2]     --> rappid-rabbit/src/css.rs:1939:29
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 1939 |                 if let Some(color) = parse_color(part) {
+[sunlight-kernel 0.2.6843-alpha.2]      |                             ^^^^^ help: if this is intentional, prefix it with an underscore: `_color`
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `rappid-rabbit` (lib) generated 3 warnings (run `cargo fix --lib -p rappid-rabbit` to apply 3 suggestions)
+[sunlight-kernel 0.2.6843-alpha.2]     Finished `release` profile [optimized] target(s) in 42.34s
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/wiseowl-brain
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_wiseowl_brain.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/wiseowl-braind
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-sunlightos/release/wiseowl-brainctl
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_yazi.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-musl/release/yazi
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_docview.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/stamp_helios_elf.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docview
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv/src/client.rs
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-docserv/src/ipc.rs
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/sunlight-dialogs
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/ipc
+[sunlight-kernel 0.2.6843-alpha.2] warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d2-fixture`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-leaf`
+[sunlight-kernel 0.2.6843-alpha.2]   * `bin` target `d3-parent`
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-libc/src/lib.rs:43:35
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 43 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/alloc.rs:680:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 680 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/alloc.rs:689:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 689 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/alloc.rs:698:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 698 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/alloc.rs:715:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 715 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/alloc.rs:787:29
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 787 |     any(target_os = "none", target_os = "sunlightos")
+[sunlight-kernel 0.2.6843-alpha.2]     |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-libc/src/errno.rs:38:44
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 38 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]    |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]  --> sunlight-libc/src/fd.rs:7:36
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2] 7 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+[sunlight-kernel 0.2.6843-alpha.2]   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-libc/src/fd.rs:33:36
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 33 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-libc/src/fd.rs:61:36
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 61 | #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mem.rs:141:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 141 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mem.rs:158:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 158 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mem.rs:174:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 174 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mem.rs:191:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mem.rs:207:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 207 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mman.rs:119:29
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 119 |     any(target_os = "none", target_os = "sunlightos"),
+[sunlight-kernel 0.2.6843-alpha.2]     |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/mman.rs:268:29
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 268 |     any(target_os = "none", target_os = "sunlightos"),
+[sunlight-kernel 0.2.6843-alpha.2]     |                             ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:155:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 155 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:167:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 167 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:179:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 179 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:191:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 191 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:206:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 206 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/string.rs:221:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 221 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/time.rs:132:44
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 132 |     all(not(test), any(target_os = "none", target_os = "sunlightos")),
+[sunlight-kernel 0.2.6843-alpha.2]     |                                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: field `terminal` is never read
+[sunlight-kernel 0.2.6843-alpha.2]    --> sunlight-libc/src/sun_exec.rs:767:5
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2] 762 | struct ChronosManifest<'a> {
+[sunlight-kernel 0.2.6843-alpha.2]     |        --------------- field in this struct
+[sunlight-kernel 0.2.6843-alpha.2] ...
+[sunlight-kernel 0.2.6843-alpha.2] 767 |     terminal: bool,
+[sunlight-kernel 0.2.6843-alpha.2]     |     ^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]     |
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+[sunlight-kernel 0.2.6843-alpha.2]     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-libc` (lib) generated 25 warnings
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]     --> sunlight-ui/widgets/document_canvas.rs:2512:28
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 2512 | #[cfg(all(feature = "app", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]      |                            ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2]      = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]      = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]     --> sunlight-ui/widgets/document_canvas.rs:2029:48
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2] 2029 |                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]      |                                                ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]      |
+[sunlight-kernel 0.2.6843-alpha.2]      = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]      = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-ui` (lib) generated 2 warnings
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-dialogs/src/lib.rs:26:35
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 26 |     #[cfg(any(target_os = "none", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-dialogs/src/lib.rs:85:39
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 85 |     #[cfg(not(any(target_os = "none", target_os = "sunlightos")))]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-dialogs` (lib) generated 2 warnings
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]  --> sunlight-docserv/src/lib.rs:7:41
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2] 7 | #[cfg(all(feature = "hayro-native", not(target_os = "sunlightos")))]
+[sunlight-kernel 0.2.6843-alpha.2]   |                                         ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]   = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: sun-font@0.2.6843-alpha.2: Sun Emoji: cmap=1400 sequences=2553 glyphs=3953 omitted_sequences=0 bytes=557381
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-docserv` (lib) generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-docview/src/ui.rs:86:39
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 86 |     #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]    = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]   --> sunlight-docview/src/ui.rs:90:43
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2] 90 |     #[cfg(not(all(feature = "native-std", target_os = "sunlightos")))]
+[sunlight-kernel 0.2.6843-alpha.2]    |                                           ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]    |
+[sunlight-kernel 0.2.6843-alpha.2]    = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-docview` (lib) generated 2 warnings
+[sunlight-kernel 0.2.6843-alpha.2] warning: unexpected `cfg` condition value: `sunlightos`
+[sunlight-kernel 0.2.6843-alpha.2]  --> sunlight-docview/src/main.rs:5:35
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2] 5 | #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+[sunlight-kernel 0.2.6843-alpha.2]   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
+[sunlight-kernel 0.2.6843-alpha.2]   |
+[sunlight-kernel 0.2.6843-alpha.2]   = note: expected values for `target_os` are: `aix`, `amdhsa`, `android`, `cuda`, `cygwin`, `dragonfly`, `emscripten`, `espidf`, `freebsd`, `fuchsia`, `haiku`, `helenos`, `hermit`, `horizon`, `hurd`, `illumos`, `ios`, `l4re`, `linux`, `lynxos178`, `macos`, `managarm`, `motor`, `netbsd`, `none`, `nto`, `nuttx`, `openbsd`, `psp`, `psx`, `qurt`, `redox`, `rtems`, `solaris`, and `solid_asp3` and 14 more
+[sunlight-kernel 0.2.6843-alpha.2]   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+[sunlight-kernel 0.2.6843-alpha.2]   = note: `#[warn(unexpected_cfgs)]` on by default
+[sunlight-kernel 0.2.6843-alpha.2] 
+[sunlight-kernel 0.2.6843-alpha.2] warning: `sunlight-docview` (bin "sunlight-docview") generated 1 warning
+[sunlight-kernel 0.2.6843-alpha.2]     Finished `release` profile [optimized] target(s) in 0.18s
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-musl/release/sunlight-docview
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rustc-env=SUNLIGHT_BUILD_TIMESTAMP=2026-11-08T17:22:20Z
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/build_helios_probes.sh
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/tools/helios-probes
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=/home/ehsantor/Projects/sunlightos-kernel/third_party/sbase
+[sunlight-kernel 0.2.6843-alpha.2] cargo:rerun-if-changed=build.rs
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_CRATE_NAME=sunlight_kernel_mm2a CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/kernel CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-kernel CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6843-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6843 CARGO_PKG_VERSION_PRE=alpha.2 CARGO_PRIMARY_PACKAGE=1 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' OUT_DIR=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/build/sunlight-kernel-003890ec4c435995/out SUNLIGHT_BUILD_TIMESTAMP='2026-11-08T17:22:20Z' /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --crate-name sunlight_kernel_mm2a --edition=2021 kernel/src/mm2a_host.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C opt-level=1 -C panic=abort -C embed-bitcode=no -C debuginfo=2 -C debug-assertions=on --cfg 'feature="atomic_futex_test"' --cfg 'feature="default"' --cfg 'feature="futex_lifecycle_diag"' --cfg 'feature="futex_lifecycle_test"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("atomic_futex_test", "authenticated_cancel_test", "authenticated_completion_exit_test", "authenticated_completion_race_test", "authenticated_exec_test", "authenticated_reply_test", "cap_issuance_test", "cpu_accounting_diag", "default", "demand_test", "dependency_test", "document_postscript", "document_service", "document_viewer", "fastlane_census_trace", "fastlane_channel_test", "fastlane_contract_test", "fastlane_coord_diag", "fastlane_coord_same_cpu", "fastlane_coord_spin", "fastlane_doorbell_if_control", "fastlane_doorbell_test", "fastlane_doorbell_trace", "fastlane_f11_audit", "fastlane_f1_audit", "fastlane_hybrid_lifecycle_test", "fastlane_m31_prerepair", "fastlane_m31_retention_test", "fastlane_mapping_test", "fastlane_measurement_test", "fastlane_mediated_accounting_test", "fastlane_repeated_test", "fastlane_shared_ring_test", "fastlane_transfer_test", "futex_lifecycle_diag", "futex_lifecycle_test", "grant_history_test", "grant_history_transport_test", "idle_test", "idle_wakeup_test", "ipc_deferred_test", "ipc_reply_race_test", "key_inject", "launch_trace", "memory_accounting_test", "mm2a_test_injection", "mm2b_smp_test", "mm2c_ledger_test", "mm2d_munmap_test", "mm2e_mprotect_test", "native_document_service", "native_document_viewer", "native_doorbell_test", "native_session_h4_test", "native_session_race_test", "native_std_probe", "pin_release_ordering_test", "pin_release_r2d_test", "pin_release_test", "production_grant_test", "recovery_test", "remote_wake_test", "scheduler_b_test", "scheduler_guest_bench", "scheduler_mixed_bench", "scheduler_perf_diag", "scheduler_timer_trace", "sunjs_probe", "swap1_test", "syscall_stack_auth_test", "syscall_stack_test", "thread_admission_test", "thread_lifecycle_race_test", "thread_migration_test", "verbose_diag"))' -C metadata=bc32129f52b90d25 -C extra-filename=-caa5e61bc2ad6997 --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps --target x86_64-unknown-none -C incremental=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/incremental -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps --extern heapless=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libheapless-2baa5c29a0d8e149.rmeta --extern limine=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblimine-0f1adebcb6c33589.rmeta --extern linked_list_allocator=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblinked_list_allocator-ba9dd2f01679c99f.rmeta --extern lz4_flex=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblz4_flex-d8b7f0439e43e25b.rmeta --extern spin=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libspin-f4d269a7fc05072a.rmeta --extern sunlight_block=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_block-13a5ed5849781c8d.rmeta --extern sunlight_compat_linux=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_compat_linux-0eed11ab4b01a123.rmeta --extern sunlight_elf=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_elf-5342289df9adbd56.rmeta --extern sunlight_fat=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_fat-d7d478dd539d9818.rmeta --extern sunlight_fs=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_fs-b3c09697a01c3017.rmeta --extern sunlight_ipc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_ipc-8840846805e2a92f.rmeta --extern sunlight_net=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_net-40b5e3c103c84f84.rmeta --extern sunlight_sensors=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_sensors-ec79b72906e55291.rmeta --extern sunlight_smbios=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_smbios-6ae289f5fcc4f9e3.rmeta --extern sunlight_tui=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_tui-2b5de9b4e87bc92e.rmeta --extern sunlight_virtio=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_virtio-a1b33cc2fc0ce48a.rmeta --extern uart_16550=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libuart_16550-5fadb64d3e1c37f1.rmeta --extern x86_64=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libx86_64-62d69e575bfc70f8.rmeta -C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static --verbose`
+     Running `CARGO=/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo CARGO_BIN_NAME=sunlight-kernel CARGO_CRATE_NAME=sunlight_kernel CARGO_MANIFEST_DIR=/home/ehsantor/Projects/sunlightos-kernel/kernel CARGO_MANIFEST_PATH=/home/ehsantor/Projects/sunlightos-kernel/kernel/Cargo.toml CARGO_PKG_AUTHORS='' CARGO_PKG_DESCRIPTION='' CARGO_PKG_HOMEPAGE='' CARGO_PKG_LICENSE='' CARGO_PKG_LICENSE_FILE='' CARGO_PKG_NAME=sunlight-kernel CARGO_PKG_README='' CARGO_PKG_REPOSITORY='' CARGO_PKG_RUST_VERSION='' CARGO_PKG_VERSION=0.2.6843-alpha.2 CARGO_PKG_VERSION_MAJOR=0 CARGO_PKG_VERSION_MINOR=2 CARGO_PKG_VERSION_PATCH=6843 CARGO_PKG_VERSION_PRE=alpha.2 CARGO_PRIMARY_PACKAGE=1 LD_LIBRARY_PATH='/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps:/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib' OUT_DIR=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/build/sunlight-kernel-003890ec4c435995/out SUNLIGHT_BUILD_TIMESTAMP='2026-11-08T17:22:20Z' /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc --crate-name sunlight_kernel --edition=2021 kernel/src/main.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type bin --emit=dep-info,link -C opt-level=1 -C panic=abort -C embed-bitcode=no -C debuginfo=2 -C debug-assertions=on --cfg 'feature="atomic_futex_test"' --cfg 'feature="default"' --cfg 'feature="futex_lifecycle_diag"' --cfg 'feature="futex_lifecycle_test"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("atomic_futex_test", "authenticated_cancel_test", "authenticated_completion_exit_test", "authenticated_completion_race_test", "authenticated_exec_test", "authenticated_reply_test", "cap_issuance_test", "cpu_accounting_diag", "default", "demand_test", "dependency_test", "document_postscript", "document_service", "document_viewer", "fastlane_census_trace", "fastlane_channel_test", "fastlane_contract_test", "fastlane_coord_diag", "fastlane_coord_same_cpu", "fastlane_coord_spin", "fastlane_doorbell_if_control", "fastlane_doorbell_test", "fastlane_doorbell_trace", "fastlane_f11_audit", "fastlane_f1_audit", "fastlane_hybrid_lifecycle_test", "fastlane_m31_prerepair", "fastlane_m31_retention_test", "fastlane_mapping_test", "fastlane_measurement_test", "fastlane_mediated_accounting_test", "fastlane_repeated_test", "fastlane_shared_ring_test", "fastlane_transfer_test", "futex_lifecycle_diag", "futex_lifecycle_test", "grant_history_test", "grant_history_transport_test", "idle_test", "idle_wakeup_test", "ipc_deferred_test", "ipc_reply_race_test", "key_inject", "launch_trace", "memory_accounting_test", "mm2a_test_injection", "mm2b_smp_test", "mm2c_ledger_test", "mm2d_munmap_test", "mm2e_mprotect_test", "native_document_service", "native_document_viewer", "native_doorbell_test", "native_session_h4_test", "native_session_race_test", "native_std_probe", "pin_release_ordering_test", "pin_release_r2d_test", "pin_release_test", "production_grant_test", "recovery_test", "remote_wake_test", "scheduler_b_test", "scheduler_guest_bench", "scheduler_mixed_bench", "scheduler_perf_diag", "scheduler_timer_trace", "sunjs_probe", "swap1_test", "syscall_stack_auth_test", "syscall_stack_test", "thread_admission_test", "thread_lifecycle_race_test", "thread_migration_test", "verbose_diag"))' -C metadata=8924ab321e398dfa -C extra-filename=-07e537c1ae1d2d87 --out-dir /home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps --target x86_64-unknown-none -C incremental=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/incremental -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps -L dependency=/home/ehsantor/Projects/sunlightos-kernel/target/debug/deps --extern heapless=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libheapless-2baa5c29a0d8e149.rlib --extern limine=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblimine-0f1adebcb6c33589.rlib --extern linked_list_allocator=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblinked_list_allocator-ba9dd2f01679c99f.rlib --extern lz4_flex=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/liblz4_flex-d8b7f0439e43e25b.rlib --extern spin=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libspin-f4d269a7fc05072a.rlib --extern sunlight_block=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_block-13a5ed5849781c8d.rlib --extern sunlight_compat_linux=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_compat_linux-0eed11ab4b01a123.rlib --extern sunlight_elf=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_elf-5342289df9adbd56.rlib --extern sunlight_fat=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_fat-d7d478dd539d9818.rlib --extern sunlight_fs=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_fs-b3c09697a01c3017.rlib --extern sunlight_ipc=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_ipc-8840846805e2a92f.rlib --extern sunlight_kernel_mm2a=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_kernel_mm2a-caa5e61bc2ad6997.rlib --extern sunlight_net=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_net-40b5e3c103c84f84.rlib --extern sunlight_sensors=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_sensors-ec79b72906e55291.rlib --extern sunlight_smbios=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_smbios-6ae289f5fcc4f9e3.rlib --extern sunlight_tui=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_tui-2b5de9b4e87bc92e.rlib --extern sunlight_virtio=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libsunlight_virtio-a1b33cc2fc0ce48a.rlib --extern uart_16550=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libuart_16550-5fadb64d3e1c37f1.rlib --extern x86_64=/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/deps/libx86_64-62d69e575bfc70f8.rlib --cfg threading_t3_clippy_capture -C link-arg=-Tkernel/src/arch/x86_64/linker.ld -C relocation-model=static --verbose`
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2m 28s

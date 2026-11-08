@@ -204,4 +204,4 @@ and the per-key ACL are evaluated for `Get`/`Set`/`Delete`/`Scan`.
 `msg.badge` plus kernel metadata. Never reintroduce a hardcoded `"root"` in a
 handler. `scan_prefix` must filter by namespace and read ACL, never return raw
 matching key names. Public TLS/PKI keys are world-readable by policy so legacy
-`root`-only records keep working after an upgrade. See `docs/kv-security.md`.
+`root`-only records keep working after an upgrade. See `docs/security/kv-security.md`.

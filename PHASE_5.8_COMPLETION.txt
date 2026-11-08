@@ -90,7 +90,7 @@
 
 ┌─ DOCUMENTATION ──────────────────────────────────────────────────────────────┐
 │                                                                               │
-│  Created: docs/PHASE_5.8_SUMMARY.md                                          │
+│  Created: docs/history/phases/PHASE_5.8_SUMMARY.md                                          │
 │  • Complete implementation details                                           │
 │  • Usage examples                                                            │
 │  • Testing results                                                           │

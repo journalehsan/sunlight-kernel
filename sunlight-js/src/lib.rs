@@ -1,4 +1,4 @@
-//! Strict, explicitly bounded JavaScript subset. See docs/javascript.md.
+//! Strict, explicitly bounded JavaScript subset. See docs/libc/javascript.md.
 #![forbid(unsafe_code)]
 mod ast;
 mod lexer;

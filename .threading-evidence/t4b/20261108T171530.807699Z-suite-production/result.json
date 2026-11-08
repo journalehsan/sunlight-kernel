@@ -1,0 +1,31 @@
+{
+  "pass": true,
+  "suite": "production",
+  "attempts": [
+    ".threading-evidence/t4b/20261108T171531.081897Z-production-restore-supervisor",
+    ".threading-evidence/t4b/20261108T171537.029101Z-production-debug",
+    ".threading-evidence/t4b/20261108T171606.050386Z-production-release",
+    ".threading-evidence/t4b/20261108T171631.971447Z-production-freeze",
+    ".threading-evidence/t4b/20261108T171633.148973Z-production-abi",
+    ".threading-evidence/t4b/20261108T171634.790823Z-production-iso"
+  ],
+  "guests": {
+    "2": {
+      "pass": true,
+      "attempt": ".threading-evidence/t4b/20261108T171640.408060Z-production-2cpu"
+    }
+  },
+  "kernel_sha256": "0467a7d0ffc56752562ce65f5c9fd8a55c7c5f2c8ff05bddecef114c2eea1514",
+  "iso_sha256": "d129733c7144d8df050cf4303680559edd47fc1eda70a4434431c329927a0512",
+  "production_exclusion": {
+    "T4A ": true,
+    "[T4A]": true,
+    "T4B ": true,
+    "[T4B]": true,
+    "[T4B-DIAG]": true,
+    "t4a_fixture": true,
+    "t4b_fixture": true,
+    "[T3R] begin": true,
+    "[T2] begin": true
+  }
+}

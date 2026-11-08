@@ -641,7 +641,7 @@ Regression checklist:
 Create or update:
 
 ```text
-docs/FILESYSTEM_SECURITY.md
+docs/security/FILESYSTEM_SECURITY.md
 ```
 
 Required sections:

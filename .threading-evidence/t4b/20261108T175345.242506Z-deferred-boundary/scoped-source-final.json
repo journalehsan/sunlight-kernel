@@ -1,0 +1,13 @@
+{
+  "fastlane-ring/src/data_plane.rs": "ca590be2face36061392808c14b60a60365feabf2393c17227fda61e349b9be8",
+  "fastlane-ring/src/lib.rs": "9ff5b2943eba559195b65c09196bd9fa41553f788a2f50451b911c75e23f9fc7",
+  "fastlane-ring/Cargo.toml": "ae14fbc737d5ec2990b05895d9a07b1ee448b2cb5899e6a2efd1f99fe3258700",
+  "docs/ipc/fastlane-data-plane-draft.md": "dce8e1f9c54caae6f7d148518ee2f4e7e249a7ac1aae9fd5dd7c48c5682eeac1",
+  "docs/kernel/threading-t4b-futex-lifecycle.md": "962681fc12fd9517bcdbf0c2f98846c946cfed58e0de1a1e9fa0feacd591a02e",
+  ".threading-evidence/t4b/20261108T170143Z-current-audit/review-final.json": "726ecffcde0d6d4a9a6aac3bead1456831cde97dc0859b44f34ac08fca6aa05f",
+  "kernel/src/arch/x86_64/syscall.rs": "d9882e8330d2d1c46a984ef1210b55449233def65a98a225da08a42d871f1939",
+  "kernel/src/process/mod.rs": "b4d2de569c41277da98939e50fd9e530c7aa9bc037a65307b7ca1bc14b632380",
+  "kernel/src/sched/mod.rs": "a302ddede6c6ddf26d6085f5f377247a3431cca3854869467c3fd9c90dd638c8",
+  "tools/threading_t4b_host.py": "ae0bc264cbd10fa86f2eae9a24b312cd2b7dceaa27ee8728d4a4eb0445b60a16",
+  "tools/test_threading_t4b.py": "53d3f96e8b6522e5eb99edf326afb4ac00fca9bbeea2322efb8c874721ba00cc"
+}

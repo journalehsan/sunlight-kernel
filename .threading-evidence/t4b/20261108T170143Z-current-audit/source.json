@@ -1,0 +1,29 @@
+{
+  "evidence": {
+    "clippy_comparison": ".threading-evidence/t4b/clippy-comparison.json",
+    "format": ".threading-evidence/t4b/format.log",
+    "linux_smoke": ".threading-evidence/t4b/20261105T190700.483193Z-suite-linux/result.json",
+    "native_std_suite": ".threading-evidence/t4b/20261105T191729.731959Z-suite-std/result.json",
+    "production": ".threading-evidence/t4b/20261105T190617.236632Z-suite-production/result.json",
+    "race_suite": ".threading-evidence/t4b/20261105T191507.980981Z-suite-races/result.json"
+  },
+  "head": "3002d96dd46eec90f2479062f9af471b17520f11",
+  "reason": [
+    "user interruption and pthread cancellation unsupported",
+    "native cancellation-timeout tie and wake-selection-during-migration not independently demonstrated"
+  ],
+  "relevant_source_sha256": {
+    "kernel/src/arch/x86_64/syscall.rs": "440bbd169e021242b41bd057e46e9e4eb1eea1b7079474f1ebbb20e9a5f9e0a0",
+    "kernel/src/process/mod.rs": "b4d2de569c41277da98939e50fd9e530c7aa9bc037a65307b7ca1bc14b632380",
+    "kernel/src/sched/mod.rs": "e16292de8dd57c5bc4ea6e2e99500f9a3bc2a3492c722f387117af2fde5a2952",
+    "kernel/src/sched/t4b_fixture.rs": "d510b45692ee314316b8ae0692159883b3d344228a77e78fe38ec6bdee4aa6b1",
+    "tools/helios-probes/futex-lifecycle-probe.rs": "31c84ab1353220563ce010f4cfb99b7dbc5d9c86fe5fba6fc7951e2394b404ba",
+    "tools/test_threading_t4b.py": "53d3f96e8b6522e5eb99edf326afb4ac00fca9bbeea2322efb8c874721ba00cc",
+    "tools/threading_t4b_host.py": "ae0bc264cbd10fa86f2eae9a24b312cd2b7dceaa27ee8728d4a4eb0445b60a16",
+    "tools/threading_t4b_run.py": "1ad34e4983c175c5fb186a0eaf4c816dbcc820d3d3fe73429838922c76165249",
+    "tools/threading_t4b_validate.py": "a35db63d89b169dc99499d206d53193af8389dfef4bb811c01ea41ce72285701"
+  },
+  "review_date": "2026-11-08",
+  "status": "PARTIAL",
+  "t4b_initial_head": "73cb0b81dff5bd7d6e10d36d82122686cfaf5fa3"
+}

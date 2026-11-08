@@ -1,0 +1,50 @@
+{
+  "kernel-check": {
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-kernel",
+      "--offline"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.265,
+    "scope": "host/build only; no native runtime claim"
+  },
+  "t4b-host": {
+    "command": [
+      "python3",
+      "tools/threading_t4b_host.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/.threading-evidence/t4b/20261108T175345.242506Z-deferred-boundary/host"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.365,
+    "scope": "host/build only; no native runtime claim"
+  },
+  "t4b-receipts": {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools",
+      "-p",
+      "test_threading_t4b.py",
+      "-v"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.114,
+    "scope": "host/build only; no native runtime claim"
+  },
+  "diff-check": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 0.033,
+    "scope": "host/build only; no native runtime claim"
+  }
+}

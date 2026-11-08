@@ -146,3 +146,57 @@ human-audible improvement, latency reduction, or hardware SMP speedup follows
 from these tests alone. The kernel's host library is a memory-management
 harness and does not run `kernel/src/ipc/mod.rs` tests; IPC state-machine
 validation here comes from the native boot checks.
+
+## Source re-audit — 2026-11-08
+
+This pass re-read the current syscall transport, kernel IPC state machine,
+shared-memory mapping path and userspace IPC wrappers. It was source inspection
+only: no tests, build, QEMU boot or benchmark were run. The September 30
+verification results above are historical evidence for that tree and do not
+validate the current tree.
+
+### Confirmed in current source
+
+- `kernel/src/arch/x86_64/syscall.rs::ipc_call` still consumes a completed
+  caller result before capability-broker and endpoint-shard access. It takes
+  the global scheduler lock first, so the optimization avoids later locks and
+  lookup work but does not make completion lock-free.
+- `kernel/src/ipc/mod.rs::finish_call` still skips the deferred-target scan
+  after successful reply delivery and retains cleanup for terminal failures.
+  The scheduler lock remains global; the 16 endpoint shards only partition
+  queue state. Calls, replies and receives still serialize through the
+  scheduler lock, so shard count alone is not evidence of SMP scaling.
+- `ipc/src/lib.rs::ipc_call` remains an unbounded retry API. It yields on
+  `WouldBlock` and `QueueFull`; interactive callers should use the deadline
+  variant and handle its explicit errors.
+- Shared-memory mappings still install RW views. `map_shared_page` admits a
+  token by resolving its broker entry and checking mapping lifetime/capacity;
+  this path does not bind the grant to a specific recipient. The old audit's
+  read-only and recipient-scoped grant follow-ups remain open.
+- `ipc_notify_send` still returns success without delivering a notification;
+  `ipc_notify_wait` blocks and requests rescheduling without a corresponding
+  send/wake protocol. These syscall names must not be treated as a functioning
+  notification transport.
+
+### Newly confirmed ABI validation gap
+
+`IpcMsg::from_registers` in `kernel/src/ipc/message.rs` clamps raw word and cap
+counts to the register transport maxima before `kernel/src/arch/x86_64/syscall.rs::validate_ipc_msg`
+checks them. Consequently, the validation function's oversize-count branches
+cannot observe attacker-supplied counts above four words or two caps. The
+transport remains memory-safe because only the fixed register fields are read,
+but malformed oversize counts are silently accepted as clamped values instead
+of being rejected as `InvalidWordCount` or `InvalidCapCount`. This is an ABI
+validation inconsistency, not a measured performance issue. Fixing it requires
+validating the raw packed count before decoding, with compatibility review for
+callers that may depend on truncation.
+
+### Current performance evidence boundary
+
+This source review supplies no new latency, throughput, CPU-time, contention
+or audio-under-load measurements. The earlier QEMU TCG functional runs and
+host policy tests remain the only results recorded above; they do not establish
+hardware performance or current-tree behavior. A current-tree benchmark should
+capture a real guest workload and distributions at 1/2/4 CPUs, with diagnostic
+overhead measured both enabled and disabled, before attributing a speedup to
+the lock-path changes.

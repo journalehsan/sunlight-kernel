@@ -1,0 +1,66 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-fastlane-ring v0.2.6843-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/fastlane-ring)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.50s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_fastlane_ring-ae549bb50dbe87a1)
+
+running 42 tests
+test data_plane::tests::each_role_writes_only_its_cursor_and_producer_payload ... ok
+test data_plane::tests::plans_match_existing_ring_storage ... ok
+test hostile::tests::capacity_exhaustion_and_abandoned_reader_apply_bounded_backpressure ... ok
+test data_plane::tests::rejects_invalid_geometry_and_over_budget_streams ... ok
+test hostile::tests::all_lengths_and_private_identity ... ok
+test hostile::tests::abandoned_reservations_and_private_read_leases ... ok
+test hostile::tests::corrupted_producer_cursor_never_chooses_an_address ... ok
+test hostile::tests::concurrent_copy_can_return_bytes_that_never_existed_together ... ok
+test hostile::tests::every_receive_reports_the_honest_private_copy_integrity ... ok
+test hostile::tests::corrupted_consumer_cursor_is_checked_against_private_publication ... ok
+test hostile::tests::explicit_retirement_fences_operations_and_preserves_first_error ... ok
+test hostile::tests::geometry_and_role_permissions ... ok
+test hostile::tests::false_valid_ack_can_trigger_reuse_but_private_read_is_stable ... ok
+test hostile::tests::malformed_lengths_offsets_and_overflow_are_terminal ... ok
+test hostile::tests::mixed_snapshot_is_stable_bounded_and_not_reported_as_coherent ... ok
+test hostile::tests::mutation_during_copy_can_mix_bytes_but_cannot_change_bounds ... ok
+test hostile::tests::own_writable_cursors_are_never_trusted ... ok
+test hostile::tests::concurrent_hostile_payload_writes_never_mutate_returned_copy ... ok
+test hostile::tests::post_commit_mutation_keeps_stability_but_never_claims_coherence ... ok
+test hostile::tests::partial_initialization_and_whole_slot_reuse_clearing ... ok
+test hostile::tests::producer_exit_and_cancellation_never_upgrade_the_integrity_claim ... ok
+test hostile::tests::producer_mutation_after_commit_is_visible_before_private_copy ... ok
+test hostile::tests::retirement_at_each_access_fails_closed_without_publication_or_output ... ok
+test hostile::tests::sequence_and_local_lease_serial_exhaustion_never_wrap ... ok
+test hostile::tests::short_output_never_consumes_or_exposes_suffix ... ok
+test hostile::tests::slot_generation_is_bounded_by_nonwrapping_sequence ... ok
+test hostile::tests::stale_local_leases_cannot_publish_or_reclaim ... ok
+test lease_tests::cancelled_and_reused_storage_never_exposes_old_bytes_through_leases ... ok
+test hostile::tests::wrong_channel_sequence_and_slot_generation ... ok
+test lease_tests::copying_and_leases_interoperate_without_consuming_on_drop_or_short_output ... ok
+test lease_tests::leases_borrow_the_same_slot_and_preserve_layout ... ok
+test lease_tests::leases_fail_closed_on_invalid_lengths_and_cursor_distances ... ok
+test lease_tests::panic_and_forget_do_not_publish_or_reclaim ... ok
+test lease_tests::held_read_lease_blocks_reuse_while_other_thread_makes_progress ... ok
+test tests::layout_and_initialization ... ok
+test tests::corrupt_frame_and_cursor_fail_closed ... ok
+test tests::rollover ... ok
+test tests::sizes_fifo_reuse_backpressure ... ok
+test hostile::tests::adversarial_descriptor_corpus_has_bounded_work_and_access ... ok
+test hostile::tests::concurrent_cancellation_and_transfer_use_no_shared_references ... ok
+test lease_tests::concurrent_zero_copy_stress_and_rollover ... ok
+test tests::concurrent_stress ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+   Doc-tests sunlight_fastlane_ring
+
+running 5 tests
+test fastlane-ring/src/leases.rs - leases::Consumer<'_,N,P>::try_read (line 117) - compile fail ... ok
+test fastlane-ring/src/hostile.rs - hostile::ReadLease (line 584) - compile fail ... ok
+test fastlane-ring/src/leases.rs - leases::Producer<'_,N,P>::try_reserve (line 45) - compile fail ... ok
+test fastlane-ring/src/hostile.rs - hostile::Integrity (line 82) - compile fail ... ok
+test fastlane-ring/src/leases.rs - leases::Producer<'_,N,P>::try_reserve (line 31) ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+

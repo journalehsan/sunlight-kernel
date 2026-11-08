@@ -1,0 +1,35 @@
+[
+  {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "output": ""
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--no-index",
+      "--check",
+      "/dev/null",
+      "fastlane-ring/src/data_plane.rs"
+    ],
+    "exit_code": 1,
+    "output": ""
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--no-index",
+      "--check",
+      "/dev/null",
+      "docs/ipc/fastlane-data-plane-draft.md"
+    ],
+    "exit_code": 1,
+    "output": ""
+  }
+]

@@ -2929,7 +2929,7 @@ fn sys_native_futex(frame: &mut SyscallFrame) -> u64 {
                 #[cfg(all(debug_assertions, feature = "futex_lifecycle_diag"))]
                 crate::serial_println!("[T4B-DIAG] missing-result cpu={} tid={} inc={} state={:?} address={:#x} wait={:?} deadline={:?} receipt={:?}",crate::sched::current_cpu_id(),process.pid,process.foreground.incarnation,process.state,address,process.native_futex_wait,process.native_futex_deadline,process.native_futex_result);
                 ERR_EINVAL
-            },
+            }
         };
     }
     if frame.rsi == 0 {
@@ -2952,7 +2952,15 @@ fn sys_native_futex(frame: &mut SyscallFrame) -> u64 {
         Ok(value) => value,
         Err(error) => {
             #[cfg(all(debug_assertions, feature = "futex_lifecycle_diag"))]
-            crate::serial_println!("[T4B-DIAG] invalid-word cpu={} tid={} inc={} op={} address={:#x} error={:?}",crate::sched::current_cpu_id(),process.pid,process.foreground.incarnation,frame.rsi,address,error);
+            crate::serial_println!(
+                "[T4B-DIAG] invalid-word cpu={} tid={} inc={} op={} address={:#x} error={:?}",
+                crate::sched::current_cpu_id(),
+                process.pid,
+                process.foreground.incarnation,
+                frame.rsi,
+                address,
+                error
+            );
             let _ = error;
             return u64::MAX - 5;
         }
@@ -3260,7 +3268,9 @@ fn sys_linux_futex(frame: &mut SyscallFrame) -> u64 {
     if command == 1 {
         // Linux val is a signed 32-bit int, even on the x86-64 register ABI.
         let limit = frame.rdx as u32 as i32;
-        if limit < 0 { return linux_errno(22); }
+        if limit < 0 {
+            return linux_errno(22);
+        }
         let woken = sched.wake_linux_futex(identity, address, limit as usize) as u64;
         #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
         crate::sched::t4a_fixture::wake_done(address, woken);

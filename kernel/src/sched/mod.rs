@@ -70,7 +70,7 @@
 //! entry closes idle before kernel work; all idle and exit trampolines use the
 //! same loop. Busy = elapsed capacity - halt time, including interrupt and
 //! scheduler work not attributed to a task. No allocation/floating point.
-//! See `docs/CPU_ACCOUNTING_AUDIT.md` for ABI, normalization, and validation.
+//! See `docs/kernel/CPU_ACCOUNTING_AUDIT.md` for ABI, normalization, and validation.
 //!
 //! ### SMP Phase 0 → Phase 1 Transition
 //! BSP brings APs online via smp::start_aps(); main.rs then calls

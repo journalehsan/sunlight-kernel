@@ -6,7 +6,7 @@ screen objects, no hardware cursor, and no multimonitor.
 
 Related guides:
 
-- Driver model notes: [`docs/2026-06-21_RING3_KEYBOARD_DRIVER.md`](../2026-06-21_RING3_KEYBOARD_DRIVER.md)
+- Driver model notes: [`docs/kernel/2026-06-21_RING3_KEYBOARD_DRIVER.md`](../2026-06-21_RING3_KEYBOARD_DRIVER.md)
 - Display policy: [`docs/GUI/VM_DISPLAY_POLICY.md`](../GUI/VM_DISPLAY_POLICY.md)
 - VirtIO GPU plan (sibling path): [`docs/GUI/VIRTIO_GPU_2D_DRIVER_PLAN.md`](../GUI/VIRTIO_GPU_2D_DRIVER_PLAN.md)
 - Serial debugging under VMware: [`docs/vmware/VMWARE_SERIAL_DEBUGGING.md`](VMWARE_SERIAL_DEBUGGING.md)

@@ -1,0 +1,406 @@
+HEAD 3002d96dd46eec90f2479062f9af471b17520f11
+ M .version_state.json
+ M Cargo.lock
+ M PHASE_5.8_COMPLETION.txt
+ M certificatectl/Cargo.toml
+ M chronos-core/Cargo.toml
+ M compat-linux/Cargo.toml
+ M count-lines.sh
+ M cpu-utils/Cargo.toml
+ D docs/2026-06-20_FETCH_HTTP_AND_STORAGE.md
+ D docs/2026-06-21_RING3_KEYBOARD_DRIVER.md
+ D docs/2026-06-22_RING3_MOUSE_DRIVER.md
+ D docs/2026-07-09_HTTP_REQWLESS_SPIKE.md
+ D docs/ACPI_IMPLEMENTATION.md
+ D docs/ADDING_STATEFUL_SERVICES.md
+ D docs/AUDIO_CAPTURE_PHASE1.md
+ D docs/AUDIO_PLAYBACK_FOUNDATION_V1.md
+ D docs/AUDIO_UI_STALL_REGRESSION.md
+ D docs/AUDIO_VOICE_RECORDER_PHASE2.md
+ D docs/AUTHENTICATION_IMPLEMENTATION.md
+ D docs/Bite_Fix_TLS_Startup.md
+ D docs/CPU_ACCOUNTING_AUDIT.md
+ D docs/DNS_RESOLVER_PHASE3_SUMMARY.md
+ D docs/FILESYSTEM_SECURITY.md
+ D "docs/FINAL_SESSION_SUMMARY (copy).md"
+ D docs/FINAL_SESSION_SUMMARY.md
+ D docs/FINAL_SUMMARY.md
+ D docs/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md
+ M docs/ImutableFixForFilesInRootFileSystem.md
+ D docs/MELODY_MINA_PHASE1.md
+ D docs/MEMORY_BUDGET.md
+ D docs/MEMORY_LEAK_HYPOTHESIS_TEST.md
+ D docs/PHASE5_CURRENT_STATE.md
+ D docs/PHASE5_STORAGE_ARCHITECTURE.md
+ D docs/PHASE6_5_STEP2_ENV_PATH.md
+ D docs/PHASE6_5_STEP3_NEXT_SESSION.md
+ D docs/PHASE6_5_STEP3_VFS_ELF.md
+ D docs/PHASE6_5_USERLAND_EXPECTATIONS.md
+ D docs/PHASE6_5_USERLAND_PLAN.md
+ D docs/PHASE6_IMPLEMENTATION.md
+ D docs/PHASE6_INSTALLER_STRUCTURE.md
+ D docs/PHASE6_NICE_PRIORITY_PLAN.md
+ D docs/PHASE6_QUICKSTART.md
+ D docs/PHASE_0_10_SECRET_STORAGE.md
+ D docs/PHASE_2.5_SUMMARY.md
+ D docs/PHASE_2_DELIVERY_SUMMARY.md
+ D docs/PHASE_2_IMPLEMENTATION_COMPLETE.md
+ D docs/PHASE_2_QUICK_START.md
+ D docs/PHASE_2_TIMED_ARCHITECTURE.md
+ D docs/PHASE_3_0_SUMMARY.md
+ D docs/PHASE_3_5_SUMMARY.md
+ D docs/PHASE_3_6_SUMMARY.md
+ D docs/PHASE_3_7_SUMMARY.md
+ D docs/PHASE_3_8_SUMMARY.md
+ D docs/PHASE_3_9_SUMMARY.md
+ D docs/PHASE_3_ARCHITECTURE_OVERVIEW.md
+ D docs/PHASE_3_BORE_SCHEDULER_DESIGN.md
+ D docs/PHASE_3_BORE_SCHEDULER_READY.md
+ D docs/PHASE_3_CURRENT_SCHEDULER_ANALYSIS.md
+ D docs/PHASE_3_IMPLEMENTATION_CHECKLIST.md
+ D docs/PHASE_3_NEXT_SESSION_PROMPT.md
+ D docs/PHASE_3_ROADMAP.md
+ D docs/PHASE_4_5_SUMMARY.md
+ D docs/PHASE_4_SUMMARY.md
+ D docs/PHASE_5.8_SUMMARY.md
+ D docs/PHASE_510_USER_MANAGEMENT_COMPLETE.md
+ D docs/PHASE_511_PLAN_BUILTIN_REVIEW_AND_PATH.md
+ D docs/PHASE_59_COMPLETE.md
+ D docs/PHASE_5X_PLAN.md
+ D docs/PHASE_5_SUMMARY.md
+ D docs/PHASE_62_SCROLLBACK_COMPLETE.md
+ D docs/PHASE_6_2_PLAN.md
+ D docs/PHYSICAL_MEMORY_ACCOUNTING.md
+ M docs/README.md
+ D docs/README_TUI.md
+ D docs/SECURE_RANDOMNESS.md
+ D docs/SESSION_STATE_20260611.md
+ D docs/SESSION_SUMMARY_5_11_COMPLETE.md
+ D docs/SESSION_SUMMARY_PHASE_510_COMPLETE.md
+ D docs/SUNLIGHTD_AUDIT.md
+ D docs/SUNLIGHTD_IMPL.md
+ D docs/SUNLIGHT_LIBC_STDIO_AUDIT.md
+ D docs/SUNLIGHT_LIBC_TIME_AUDIT.md
+ D docs/SUNLIGHT_SM_STORAGE_MANAGER.md
+ D docs/SWAP1_AUDIT.md
+ D docs/SunlightOS-LIBC-FREEBSD-SUPPRT-GOAL.md
+ D docs/SunlightOS-LIBC-ZOXIDE-CLONE.md
+ D docs/THERMAL_SERVICE.md
+ D docs/TIMEKEEPING_LONG_UPTIME_AUDIT.md
+ D docs/TLS_RUSTLS_PROGRESS.md
+ D docs/TOOLS_SUMMARY.md
+ D docs/UAC_CAPABILITY_AND_ELEVATION_AUDIT.md
+ D docs/UTILITIES_INTEGRATION_PLAN.md
+ D docs/UTILITIES_INTEGRATION_STATUS.md
+ D docs/VORTEX_SHELL_LIBC_INTEGRATION_AUDIT.md
+ D docs/WISEOWL_ACTION_OUTCOME_OBSERVER_V1.md
+ D docs/WISEOWL_BOUNDED_ACTION_PLANNER_V1.md
+ D docs/WISEOWL_CONVERSATIONAL_ACTION_COORDINATOR_V1.md
+ D docs/WISEOWL_DELEGATED_SESSION_LIFECYCLE_IPC_V1.md
+ D docs/WISEOWL_GRAPHICAL_CONSOLE_V1.md
+ D docs/WISEOWL_GUI_BRIDGE_FOUNDATION_V1.md
+ D docs/WISEOWL_GUI_CONVERSATION_V1.md
+ D docs/WISEOWL_GUI_LIVE_ACTION_INTEGRATION_V1.md
+ D docs/WISEOWL_PRODUCTION_TRUST_RUNTIME_PLUMBING_V1.md
+ D docs/WISEOWL_TRUSTED_ACTION_EXECUTOR_V1.md
+ D docs/WISEOWL_TRUSTED_SESSION_READINESS_V1.md
+ D docs/WISE_OWL_ACTION_RECEIPT_LEDGER_V1.md
+ D docs/WISE_OWL_BRAIN_FOUNDATION.md
+ D docs/WISE_OWL_BRAIN_PHASE4B_NATIVE.md
+ D docs/WISE_OWL_BRAIN_PHASE4C_MTM.md
+ D docs/WISE_OWL_BRAIN_V1_CONTRACT.md
+ D docs/WISE_OWL_DOCUMENT_INGESTION.md
+ D docs/WISE_OWL_LONG_TERM_MEMORY.md
+ D docs/WISE_OWL_MEMORY_FOUNDATION.md
+ D docs/ZRAM_IMPLEMENTATION.md
+ D docs/ZRAM_SWAP_PLAN.md
+ D docs/account-broker.md
+ D docs/deviced.md
+ D docs/es1371-capture.md
+ D docs/es1371.md
+ D docs/fetch-proxy.md
+ D docs/fstab-inventory.md
+ M docs/ipc-kv-history-lessons.md
+ M docs/ipc-performance-audit.md
+ D docs/javascript-validation.md
+ D docs/javascript.md
+ D docs/kv-security.md
+ D docs/networkd.md
+ D docs/partitioned-storage.md
+ D docs/phase4-plan.md
+ D docs/phase5-roadmap.md
+ D docs/phase5x-roadmap.md
+ D docs/powerd.md
+ D docs/resolved.md
+ D docs/runtime-storage.md
+ D docs/sign-in-fixture.md
+ D docs/storage-audit-fat32-block-vfs.md
+ D docs/sunlight_libc_std_sunsay_prompt.md
+ D docs/system-sounds-foundation-v1.md
+ D docs/usb-storage.md
+ D docs/wise-owl-persistent-identity-design.md
+ D docs/wiseowl-action-intent-v1.md
+ D docs/wiseowl-confirmation-authority-v1.md
+ D docs/wiseowl-foundation-memory.md
+ D docs/wiseowl-identity-phase-a.md
+ D docs/wiseowl-policy-engine-v1.md
+ D docs/wiseowl-runtime-context-v1.md
+ M drivers/Cargo.toml
+ M fastlane-doorbell/Cargo.toml
+ M fastlane-ring/Cargo.toml
+ M golden-fish/Cargo.toml
+ M helios-note/Cargo.toml
+ M hello-linux/Cargo.toml
+ M ipc/Cargo.toml
+ M kernel/Cargo.toml
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/main.rs
+ M melody-mina/Cargo.toml
+ M memoryctl/Cargo.toml
+ M mezzoctl/Cargo.toml
+ M rappid-rabbit/Cargo.toml
+ M rappid-rabbit/src/launch_url.rs
+ M rappid-rabbit/src/lib.rs
+ M rappid-rabbit/src/main.rs
+ M services/eyes/Cargo.toml
+ M services/init/Cargo.toml
+ M services/install_sunlightos/Cargo.toml
+ M services/mezzo/Cargo.toml
+ M services/net_server/Cargo.toml
+ M services/pty_server/Cargo.toml
+ M services/rand_service/Cargo.toml
+ M services/secret_store_test/Cargo.toml
+ M services/solar/Cargo.toml
+ M services/sun-exec/Cargo.toml
+ M services/sun-open/Cargo.toml
+ M services/sunlight-audiod/Cargo.toml
+ M services/sunlight-clipd/Cargo.toml
+ M services/sunlight-control-panel/Cargo.toml
+ M services/sunlight-deviced/Cargo.toml
+ M services/sunlight-dialogd/Cargo.toml
+ M services/sunlight-display/Cargo.toml
+ M services/sunlight-gcd/Cargo.toml
+ M services/sunlight-kbd/Cargo.toml
+ M services/sunlight-mouse/Cargo.toml
+ M services/sunlight-networkd/Cargo.toml
+ M services/sunlight-niced/Cargo.toml
+ M services/sunlight-powerd/Cargo.toml
+ M services/sunlight-resolved/Cargo.toml
+ M services/sunlight-runner/Cargo.toml
+ M services/sunlight-sessionctl/Cargo.toml
+ M services/sunlight-sessiond/Cargo.toml
+ M services/sunlight-sm/Cargo.toml
+ M services/sunlight-startup-fixture/Cargo.toml
+ M services/sunlight-swapd/Cargo.toml
+ M services/sunlight-tasks/Cargo.toml
+ M services/sunlight-terminal/Cargo.toml
+ M services/sunlight-thermald/Cargo.toml
+ M services/sunlight-thumbd/Cargo.toml
+ M services/sunlight-uac/Cargo.toml
+ M services/sunlight-usb-mouse/Cargo.toml
+ M services/sunlight-vortex-shell/Cargo.toml
+ M services/sunlightctl/Cargo.toml
+ M services/sunlightd/Cargo.toml
+ M services/timed/Cargo.toml
+ M services/timer_server/Cargo.toml
+ M services/timezone_service/Cargo.toml
+ M services/tty_server/Cargo.toml
+ M services/vfs_server/Cargo.toml
+ M std-proof/sunlight-dict/Cargo.toml
+ M std-proof/sunlight-sunsay/Cargo.toml
+ M std-proof/sunlight-zoxide/Cargo.toml
+ M sun-font/Cargo.toml
+ M sun-img/Cargo.toml
+ M sun-imgc/Cargo.toml
+ M sunlight-account-broker/Cargo.toml
+ M sunlight-api-lab/Cargo.toml
+ M sunlight-audio/Cargo.toml
+ M sunlight-bench/Cargo.toml
+ M sunlight-block/Cargo.toml
+ M sunlight-calculator/Cargo.toml
+ M sunlight-calendar/Cargo.toml
+ M sunlight-chronos/Cargo.toml
+ M sunlight-clipman/Cargo.toml
+ M sunlight-devices/Cargo.toml
+ M sunlight-dialogs/Cargo.toml
+ M sunlight-docserv/Cargo.toml
+ M sunlight-docview/Cargo.toml
+ M sunlight-edit/Cargo.toml
+ M sunlight-elf/Cargo.toml
+ M sunlight-emoji-picker/Cargo.toml
+ M sunlight-fat/Cargo.toml
+ M sunlight-fetch/Cargo.toml
+ M sunlight-files/Cargo.toml
+ M sunlight-fs/Cargo.toml
+ M sunlight-hangman/Cargo.toml
+ M sunlight-http/Cargo.toml
+ M sunlight-js-cli/Cargo.toml
+ M sunlight-js/Cargo.toml
+ M sunlight-js/README.md
+ M sunlight-js/src/lib.rs
+ M sunlight-kv/Cargo.toml
+ M sunlight-kvctl/Cargo.toml
+ M sunlight-libc/Cargo.toml
+ M sunlight-light-lens/Cargo.toml
+ M sunlight-locale/Cargo.toml
+ M sunlight-media/Cargo.toml
+ M sunlight-net-utils/Cargo.toml
+ M sunlight-net/Cargo.toml
+ M sunlight-reminders/Cargo.toml
+ M sunlight-sensors/Cargo.toml
+ M sunlight-shell-appstate/Cargo.toml
+ M sunlight-silicon-echoes/Cargo.toml
+ M sunlight-smbios/Cargo.toml
+ M sunlight-telemetry/Cargo.toml
+ M sunlight-tls/Cargo.toml
+ M sunlight-top/Cargo.toml
+ M sunlight-tty/Cargo.toml
+ M sunlight-tz/Cargo.toml
+ M sunlight-ui/Cargo.toml
+ M sunlight-utils/Cargo.toml
+ M sunlight-virtio/Cargo.toml
+ M sunlight-voice-recorder/Cargo.toml
+ M sunlight-wallpaper/Cargo.toml
+ M sunlight-welcome/Cargo.toml
+ M sunlight-widget-gallery/Cargo.toml
+ M sunlight-writer/Cargo.toml
+ M sunshell/Cargo.toml
+ M tools/hayro-native-probe/Cargo.toml
+ M tools/hayro-prototype/Cargo.toml
+ M tools/native-std-probe/Cargo.toml
+ M tools/tests/README.md
+ M tools/tests/fd-description/Cargo.toml
+ M wiseowl-brain/Cargo.toml
+ M wiseowl-console/Cargo.toml
+ M wiseowl-identity/Cargo.toml
+ M wiseowl-index/Cargo.toml
+ M wiseowl-memory/Cargo.toml
+ M wiseowl-memorydb/Cargo.toml
+?? .threading-evidence/t4b/20261108T170143Z-current-audit/
+?? .threading-evidence/t4b/20261108T170443.484411Z-suite-races/
+?? .threading-evidence/t4b/20261108T170444.746257Z-races-host-kernel/
+?? .threading-evidence/t4b/20261108T170536.734637Z-races-host-linux/
+?? .threading-evidence/t4b/20261108T170538.835094Z-races-host-scheduler/
+?? .threading-evidence/t4b/20261108T170543.300670Z-races-lifecycle-host/
+?? .threading-evidence/t4b/20261108T170544.988405Z-races-receipts/
+?? .threading-evidence/t4b/20261108T170546.118599Z-races-build/
+?? .threading-evidence/t4b/20261108T170637.714396Z-races-freeze/
+?? .threading-evidence/t4b/20261108T170638.985865Z-races-abi/
+?? .threading-evidence/t4b/20261108T170640.193970Z-races-iso/
+?? .threading-evidence/t4b/20261108T170643.002391Z-races-2cpu/
+?? .threading-evidence/t4b/20261108T170730.076339Z-suite-races/
+?? .threading-evidence/t4b/20261108T170730.345956Z-races-host-kernel/
+?? .threading-evidence/t4b/20261108T170751.844817Z-races-host-linux/
+?? .threading-evidence/t4b/20261108T170753.097288Z-races-host-scheduler/
+?? .threading-evidence/t4b/20261108T170757.884267Z-races-lifecycle-host/
+?? .threading-evidence/t4b/20261108T170759.507789Z-races-receipts/
+?? .threading-evidence/t4b/20261108T170800.713703Z-races-build/
+?? .threading-evidence/t4b/20261108T170821.044313Z-races-freeze/
+?? .threading-evidence/t4b/20261108T170822.240234Z-races-abi/
+?? .threading-evidence/t4b/20261108T170823.348436Z-races-iso/
+?? .threading-evidence/t4b/20261108T170826.906625Z-races-2cpu/
+?? .threading-evidence/t4b/20261108T170908.190176Z-races-1cpu/
+?? .threading-evidence/t4b/20261108T170908.191088Z-races-4cpu/
+?? .threading-evidence/t4b/20261108T170957.741122Z-races-12cpu/
+?? .threading-evidence/t4b/20261108T171048.292093Z-suite-std/
+?? .threading-evidence/t4b/20261108T171048.565759Z-std-users/
+?? .threading-evidence/t4b/20261108T171134.074065Z-std-supervisor/
+?? .threading-evidence/t4b/20261108T171140.782870Z-std-kernel/
+?? .threading-evidence/t4b/20261108T171231.454219Z-std-freeze/
+?? .threading-evidence/t4b/20261108T171232.870156Z-std-abi/
+?? .threading-evidence/t4b/20261108T171234.127675Z-std-iso/
+?? .threading-evidence/t4b/20261108T171237.080783Z-std-2cpu/
+?? .threading-evidence/t4b/20261108T171326.734571Z-std-1cpu/
+?? .threading-evidence/t4b/20261108T171326.734893Z-std-4cpu/
+?? .threading-evidence/t4b/20261108T171423.910324Z-std-12cpu/
+?? .threading-evidence/t4b/20261108T171530.807699Z-suite-production/
+?? .threading-evidence/t4b/20261108T171531.081897Z-production-restore-supervisor/
+?? .threading-evidence/t4b/20261108T171537.029101Z-production-debug/
+?? .threading-evidence/t4b/20261108T171606.050386Z-production-release/
+?? .threading-evidence/t4b/20261108T171631.971447Z-production-freeze/
+?? .threading-evidence/t4b/20261108T171633.148973Z-production-abi/
+?? .threading-evidence/t4b/20261108T171634.790823Z-production-iso/
+?? .threading-evidence/t4b/20261108T171640.408060Z-production-2cpu/
+?? .threading-evidence/t4b/20261108T171717.701054Z-suite-linux/
+?? .threading-evidence/t4b/20261108T171717.970336Z-linux-build/
+?? .threading-evidence/t4b/20261108T171747.779136Z-linux-freeze/
+?? .threading-evidence/t4b/20261108T171748.961219Z-linux-abi/
+?? .threading-evidence/t4b/20261108T171750.057743Z-linux-iso/
+?? .threading-evidence/t4b/20261108T171752.875777Z-linux-2cpu/
+?? .threading-evidence/t4b/20261108T171900Z-clippy-current/
+?? .threading-evidence/t4b/20261108T172200Z-clippy-current-formatted/
+?? .threading-evidence/t4b/20261108T172558.810957Z-suite-races/
+?? .threading-evidence/t4b/20261108T172559.544897Z-races-host-kernel/
+?? .threading-evidence/t4b/20261108T172601.401440Z-races-host-linux/
+?? .threading-evidence/t4b/20261108T172602.906996Z-races-host-scheduler/
+?? .threading-evidence/t4b/20261108T172608.725166Z-races-lifecycle-host/
+?? .threading-evidence/t4b/20261108T172610.692626Z-races-receipts/
+?? .threading-evidence/t4b/20261108T172612.060767Z-races-build/
+?? .threading-evidence/t4b/20261108T172633.503630Z-races-freeze/
+?? .threading-evidence/t4b/20261108T172634.674300Z-races-abi/
+?? .threading-evidence/t4b/20261108T172635.845917Z-races-iso/
+?? .threading-evidence/t4b/20261108T172638.884620Z-races-2cpu/
+?? count-lines.py
+?? docs/apps/rappid-rabbit.md
+?? docs/audio/
+?? docs/code-metrics.md
+?? docs/guides/
+?? docs/history/
+?? docs/kernel/2026-06-21_RING3_KEYBOARD_DRIVER.md
+?? docs/kernel/2026-06-22_RING3_MOUSE_DRIVER.md
+?? docs/kernel/ACPI_IMPLEMENTATION.md
+?? docs/kernel/CPU_ACCOUNTING_AUDIT.md
+?? docs/kernel/MEMORY_BUDGET.md
+?? docs/kernel/MEMORY_LEAK_HYPOTHESIS_TEST.md
+?? docs/kernel/PHYSICAL_MEMORY_ACCOUNTING.md
+?? docs/kernel/TIMEKEEPING_LONG_UPTIME_AUDIT.md
+?? docs/kernel/threading-t4b-futex-lifecycle.md
+?? docs/libc/
+?? docs/networking/
+?? docs/security/AUTHENTICATION_IMPLEMENTATION.md
+?? docs/security/Bite_Fix_TLS_Startup.md
+?? docs/security/FILESYSTEM_SECURITY.md
+?? docs/security/SECURE_RANDOMNESS.md
+?? docs/security/UAC_CAPABILITY_AND_ELEVATION_AUDIT.md
+?? docs/security/account-broker.md
+?? docs/security/kv-security.md
+?? docs/security/sign-in-fixture.md
+?? docs/services/ADDING_STATEFUL_SERVICES.md
+?? docs/services/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md
+?? docs/services/SUNLIGHTD_AUDIT.md
+?? docs/services/SUNLIGHTD_IMPL.md
+?? docs/services/THERMAL_SERVICE.md
+?? docs/services/UTILITIES_INTEGRATION_PLAN.md
+?? docs/services/UTILITIES_INTEGRATION_STATUS.md
+?? docs/services/deviced.md
+?? docs/services/powerd.md
+?? docs/storage/
+?? docs/wiseowl/WISEOWL_ACTION_OUTCOME_OBSERVER_V1.md
+?? docs/wiseowl/WISEOWL_BOUNDED_ACTION_PLANNER_V1.md
+?? docs/wiseowl/WISEOWL_CONVERSATIONAL_ACTION_COORDINATOR_V1.md
+?? docs/wiseowl/WISEOWL_DELEGATED_SESSION_LIFECYCLE_IPC_V1.md
+?? docs/wiseowl/WISEOWL_GRAPHICAL_CONSOLE_V1.md
+?? docs/wiseowl/WISEOWL_GUI_BRIDGE_FOUNDATION_V1.md
+?? docs/wiseowl/WISEOWL_GUI_CONVERSATION_V1.md
+?? docs/wiseowl/WISEOWL_GUI_LIVE_ACTION_INTEGRATION_V1.md
+?? docs/wiseowl/WISEOWL_PRODUCTION_TRUST_RUNTIME_PLUMBING_V1.md
+?? docs/wiseowl/WISEOWL_TRUSTED_ACTION_EXECUTOR_V1.md
+?? docs/wiseowl/WISEOWL_TRUSTED_SESSION_READINESS_V1.md
+?? docs/wiseowl/WISE_OWL_ACTION_RECEIPT_LEDGER_V1.md
+?? docs/wiseowl/WISE_OWL_BRAIN_FOUNDATION.md
+?? docs/wiseowl/WISE_OWL_BRAIN_PHASE4B_NATIVE.md
+?? docs/wiseowl/WISE_OWL_BRAIN_PHASE4C_MTM.md
+?? docs/wiseowl/WISE_OWL_BRAIN_V1_CONTRACT.md
+?? docs/wiseowl/WISE_OWL_DOCUMENT_INGESTION.md
+?? docs/wiseowl/WISE_OWL_LONG_TERM_MEMORY.md
+?? docs/wiseowl/WISE_OWL_MEMORY_FOUNDATION.md
+?? docs/wiseowl/wise-owl-persistent-identity-design.md
+?? docs/wiseowl/wiseowl-action-intent-v1.md
+?? docs/wiseowl/wiseowl-confirmation-authority-v1.md
+?? docs/wiseowl/wiseowl-foundation-memory.md
+?? docs/wiseowl/wiseowl-identity-phase-a.md
+?? docs/wiseowl/wiseowl-policy-engine-v1.md
+?? docs/wiseowl/wiseowl-runtime-context-v1.md
+?? rappid-rabbit/assets/
+?? rappid-rabbit/src/startpage.rs
+?? tools/test_count_lines.py

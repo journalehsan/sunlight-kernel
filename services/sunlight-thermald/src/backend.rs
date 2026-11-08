@@ -6,7 +6,7 @@
 //! report monitoring-only or unavailable for writes.
 //!
 //! Live power constraints from real DTS are disabled until physical T440p
-//! validation (see docs/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md).
+//! validation (see docs/services/HARDWARE_IDENTITY_AND_THERMAL_TELEMETRY.md).
 
 #![allow(dead_code)]
 

@@ -1,0 +1,41 @@
+[
+  {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "output": "",
+    "whitespace_check_passed": true,
+    "interpretation": "Tracked diff whitespace check."
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--no-index",
+      "--check",
+      "/dev/null",
+      "fastlane-ring/src/data_plane.rs"
+    ],
+    "exit_code": 1,
+    "output": "",
+    "whitespace_check_passed": true,
+    "interpretation": "With --no-index, exit 1 and empty --check output records the expected new-file difference; no whitespace diagnostics."
+  },
+  {
+    "command": [
+      "git",
+      "diff",
+      "--no-index",
+      "--check",
+      "/dev/null",
+      "docs/ipc/fastlane-data-plane-draft.md"
+    ],
+    "exit_code": 1,
+    "output": "",
+    "whitespace_check_passed": true,
+    "interpretation": "With --no-index, exit 1 and empty --check output records the expected new-file difference; no whitespace diagnostics."
+  }
+]

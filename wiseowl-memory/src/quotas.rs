@@ -1,6 +1,6 @@
 //! Quota configuration and accounting for the short-term memory service.
 //!
-//! Defaults target low-memory hardware (see docs/MEMORY_BUDGET.md guidance).
+//! Defaults target low-memory hardware (see docs/kernel/MEMORY_BUDGET.md guidance).
 //! All limits are hard; client-supplied sizes never drive unchecked allocations.
 
 /// Configurable hard limits. Conservative defaults for a 512 MiB class system.

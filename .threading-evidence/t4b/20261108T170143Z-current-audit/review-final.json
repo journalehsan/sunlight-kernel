@@ -1,0 +1,51 @@
+{
+  "current_file_count": 11315,
+  "current_full_source_manifest": ".threading-evidence/t4b/20261108T170143Z-current-audit/final-source.json",
+  "drift_report": ".threading-evidence/t4b/20261108T170143Z-current-audit/review-drift.json",
+  "final_t4b_status": "PARTIAL",
+  "head": "3002d96dd46eec90f2479062f9af471b17520f11",
+  "post_run_status_entries": 405,
+  "reason": "The post-format 2-CPU guest emitted the PASS marker but source-integrity failed during concurrent workspace drift; no expansion was accepted.",
+  "review_date": "2026-11-08",
+  "validated_bundles": {
+    "final_clippy": ".threading-evidence/t4b/20261108T172200Z-clippy-current-formatted/result.json",
+    "final_race_rejected": ".threading-evidence/t4b/20261108T172558.810957Z-suite-races/result.json",
+    "linux_preformat": ".threading-evidence/t4b/20261108T171717.701054Z-suite-linux/result.json",
+    "production_preformat": ".threading-evidence/t4b/20261108T171530.807699Z-suite-production/result.json",
+    "race_preformat": ".threading-evidence/t4b/20261108T170730.076339Z-suite-races/result.json",
+    "std_preformat": ".threading-evidence/t4b/20261108T171048.292093Z-suite-std/result.json"
+  },
+  "boundary_decision": {
+    "status": "PARTIAL (Deferred to Signal Subsystem Epoch)",
+    "date": "2026-11-08",
+    "complete_this_cycle": false,
+    "deferred_dependencies": [
+      "Kernel userspace signal dispatch mechanism and user signal-handler delivery",
+      "Syscall restart architecture: restart_syscall, ERESTARTSYS and SA_RESTART",
+      "POSIX pthread cancellation points during wait loops",
+      "Linux timed-wait ABI alignment"
+    ],
+    "unsupported": [
+      "EINTR",
+      "pthread_cancel",
+      "Linux timed futex WAIT"
+    ],
+    "isolation": "Recorded passing host baseline; preserve unrelated dirty and untracked workspace files",
+    "host_baseline": ".threading-evidence/t4b/20261108T175345.242506Z-deferred-boundary/host-baseline.json",
+    "source_integrity": "Original failed/rejected attempts remain rejected; host baseline is not native qualification",
+    "tooling": "Direct kernel Clippy: 161 diagnostics; workspace formatting: unrelated pre-existing failures; neither is reclassified as PASS",
+    "next_work": "Draft bounded FastLane SHM layout in fastlane-ring/src/data_plane.rs; synchronous kernel control-plane IPC",
+    "fastlane_contract": "docs/ipc/fastlane-data-plane-draft.md",
+    "fastlane_checks": ".threading-evidence/t4b/20261108T175345.242506Z-deferred-boundary/fastlane-checks.json",
+    "workspace_preservation": ".threading-evidence/t4b/20261108T175345.242506Z-deferred-boundary/preservation.json",
+    "follow_up_state": "OPEN - EINTR and pthread cancellation deferred to Signal Subsystem Epoch",
+    "handoff": "Keep supported futex behavior and FastLane draft; complete-workspace local commit requested; no push",
+    "commit_review": {
+      "scope": "Complete current workspace, including 134 recognized documentation moves",
+      "source_docs_staged_whitespace": "PASS",
+      "full_staged_whitespace": "Warnings in captured evidence logs; originals retained unchanged",
+      "new_runtime_tests": "NOT_RUN during documentation and commit handoff; preceding implementation receipts retained",
+      "generated_images": "No ISO, ELF or disk images staged"
+    }
+  }
+}
