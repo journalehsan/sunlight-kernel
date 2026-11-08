@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- Reduced from the captured Arch package search CSS and table structure. -->
+<style>
+body { margin: 0; font: normal 100% sans-serif; }
+.filter-criteria div { float: left; margin-right: 1.65em; }
+.filter-criteria label { display: block; }
+table { width: 100%; border-collapse: collapse; }
+th, td { white-space: nowrap; text-align: left; }
+table .wrap { white-space: normal; }
+.results th { padding: .5em 1em .25em .25em; background: white; }
+.results td { padding: .3em 1em .3em 3px; }
+.results tr:nth-child(even of :not([hidden])) { background: #e4eeff; }
+</style>
+<fieldset id="filters" class="filter-criteria">
+  <div><label>Arch</label><select><option>x86_64</option></select></div>
+  <div><label>Keywords</label><input type="text"></div>
+</fieldset>
+<table id="packages" class="results">
+<thead><tr id="header"><th id="h-name">Name</th><th id="h-version">Version</th><th id="h-desc">Description</th></tr></thead>
+<tbody>
+<tr id="first"><td id="name">kernel</td><td id="version">6.12.1</td><td id="description" class="wrap">A long package description which wraps within its own column rather than moving other columns. This extra sentence also describes the package dependencies and supported architectures so the description needs several lines even in the wide viewport.</td></tr>
+<tr hidden><td>hidden row</td></tr>
+<tr id="second"><td id="next-name">linux-firmware</td><td id="next-version">2026.11</td><td id="next-description" class="wrap">Firmware files</td></tr>
+</tbody>
+</table>
+<p id="after">After the results</p>

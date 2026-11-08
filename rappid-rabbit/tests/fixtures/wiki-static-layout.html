@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- Vector's static dropdown/header and ArchWiki's block column pattern. -->
+<style>
+body { margin:0; }
+.header { position:relative; display:flex; height:48px; align-items:center; }
+.dropdown { position:relative; }
+.checkbox { position:absolute; top:0; left:0; opacity:0; width:100%; height:100%; }
+.menu { position:absolute; top:100%; opacity:0; visibility:hidden; height:0; }
+.titlebar { display:flex; justify-content:flex-end; }
+.title { flex-grow:1; }
+.columns { column-count:2; column-gap:20px; }
+.columns > div { display:inline-block; width:100%; height:40px; }
+@media print { .article { display:none; } }
+@media screen and (prefers-color-scheme:dark) { body { background:black; } }
+</style>
+<div id="header" class="header"><div class="dropdown">
+<input id="checkbox" class="checkbox" type="checkbox"><label>Main menu</label>
+<div id="menu" class="menu"><div style="height:600px">Hidden menu</div></div>
+</div></div>
+<main id="article" class="article">
+<div class="titlebar"><h1 id="title" class="title">Main page</h1><span id="languages">32 languages</span></div>
+<div id="columns" class="columns"><div id="a">Arch Linux</div><div id="b">Frequently asked questions</div><div id="c">Installation guide</div><div id="d">General recommendations</div></div>
+</main>

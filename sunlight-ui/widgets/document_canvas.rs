@@ -783,10 +783,10 @@ impl DocumentScene {
     /// point. Consumers can inspect [`RenderObject::interaction`] to dispatch
     /// links without teaching the canvas about URLs or navigation.
     pub fn hit_test(&self, point: Point) -> Option<&RenderObject> {
-        self.objects
-            .iter()
-            .rev()
-            .find(|object| object.bounds.contains(point))
+        self.objects.iter().rev().find(|object| {
+            object.bounds.contains(point)
+                && object.clip_bounds.is_none_or(|clip| clip.contains(point))
+        })
     }
 
     /// Applies an incremental object patch to this retained scene. The

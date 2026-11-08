@@ -15,6 +15,18 @@ pub const MAX_IMAGE_DIMENSION: u32 = 4_096;
 pub const MAX_IMAGE_CACHE_ENTRIES: usize = 32;
 pub const MAX_IMAGE_CACHE_BYTES: usize = 28 * 1024 * 1024;
 
+/// Keep the first document images resident until the initial scene exists.
+/// Fetching more entries than this bounded cache can hold only evicts the
+/// header/logo for later images before anything can be painted.
+pub fn initial_image_candidates(
+    candidates: &[crate::resources::discovery::ResourceCandidate],
+) -> impl Iterator<Item = &crate::resources::discovery::ResourceCandidate> {
+    candidates
+        .iter()
+        .filter(|c| c.resource_type == crate::resources::request::ResourceType::Image)
+        .take(MAX_IMAGE_CACHE_ENTRIES)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageFormat {
     Png,
@@ -275,6 +287,42 @@ fn validate_pixels(width: u32, height: u32, pixel_count: usize) -> Result<(), St
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn a_long_page_keeps_its_banner_in_the_initial_image_batch() {
+        use crate::resources::{
+            discovery::{DiscoveryClassification, ResourceCandidate},
+            request::ResourceType,
+        };
+        let mut candidates = Vec::new();
+        for index in 0..64 {
+            candidates.push(ResourceCandidate {
+                raw_url: alloc::format!("/image-{index}.png"),
+                resolved_url: alloc::format!("https://example.org/image-{index}.png"),
+                resource_type: ResourceType::Image,
+                classification: DiscoveryClassification::EmbeddedResource,
+                enqueue_for_fetch: true,
+            });
+            candidates.push(ResourceCandidate {
+                raw_url: alloc::format!("/page-{index}"),
+                resolved_url: alloc::format!("https://example.org/page-{index}"),
+                resource_type: ResourceType::Navigation,
+                classification: DiscoveryClassification::OrdinaryNavigationLink,
+                enqueue_for_fetch: false,
+            });
+        }
+        let mut cache = ImageCache::default();
+        for candidate in initial_image_candidates(&candidates) {
+            cache.insert_decoded(
+                candidate.resolved_url.clone(),
+                decode_image(TINY_PNG, Some("image/png"), &candidate.resolved_url).unwrap(),
+            );
+        }
+        assert!(cache.decoded("https://example.org/image-0.png").is_some());
+        assert!(cache.decoded("https://example.org/image-31.png").is_some());
+        assert!(cache.get("https://example.org/image-63.png").is_none());
+        assert!(cache.entries.len() <= MAX_IMAGE_CACHE_ENTRIES);
+    }
 
     #[test]
     fn jpeg_uses_shared_decoder_and_browser_limits() {

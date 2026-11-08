@@ -406,9 +406,16 @@ impl CacheImageMetrics<'_> {
 impl ImageMetrics for CacheImageMetrics<'_> {
     fn intrinsic_size(&self, src: &str) -> Option<layout::RectSize> {
         let url = self.resolved(src)?;
-        self.cache.decoded(&url).map(|decoded| {
-            layout::RectSize::new(decoded.image.width as f32, decoded.image.height as f32)
-        })
+        self.cache
+            .decoded(&url)
+            .map(|decoded| {
+                layout::RectSize::new(decoded.image.width as f32, decoded.image.height as f32)
+            })
+            .or_else(|| {
+                self.cache
+                    .failed(&url)
+                    .map(|_| layout::RectSize::new(16.0, 16.0))
+            })
     }
 }
 
@@ -492,6 +499,47 @@ fn render_document(
         &scene_image_source,
     );
     crate::backgrounds::paint(&mut scene, &result, styles, &scene_image_source);
+    // Apply ancestor overflow clips to every retained paint and hit object,
+    // including CSS backgrounds and links. Geometry stays in the arena.
+    let boxes: alloc::collections::BTreeMap<_, _> = result
+        .geometry
+        .boxes
+        .iter()
+        .map(|b| (b.dom_node, b))
+        .collect();
+    for object in &mut scene.objects {
+        let mut ancestor = dom.parent(object.owner_node_id.0 as usize);
+        while let Some(id) = ancestor {
+            if styles
+                .style_for(id)
+                .and_then(|s| s.value(&Property::Overflow))
+                .is_some_and(|v| {
+                    matches!(v.display().as_str(), "hidden" | "clip" | "auto" | "scroll")
+                })
+            {
+                if let Some(b) = boxes.get(&id) {
+                    let rect = b.padding_box;
+                    let clip = sunlight_ui::Rect::new(
+                        rect.x as i32,
+                        rect.y as i32,
+                        rect.width.max(0.0) as u32,
+                        rect.height.max(0.0) as u32,
+                    );
+                    object.clip_bounds = Some(object.clip_bounds.map_or(clip, |old| {
+                        let x = old.x.max(clip.x);
+                        let y = old.y.max(clip.y);
+                        sunlight_ui::Rect::new(
+                            x,
+                            y,
+                            (old.right().min(clip.right()) - x).max(0) as u32,
+                            (old.bottom().min(clip.bottom()) - y).max(0) as u32,
+                        )
+                    }));
+                }
+            }
+            ancestor = dom.parent(id);
+        }
+    }
     (scene, geometry)
 }
 
@@ -534,9 +582,16 @@ fn unsupported_features(dom: &Document, styles: &StyleContext) -> Vec<&'static s
         let style = styles.nearest_element_style(dom, node_id);
         if matches!(
             tag_name.to_ascii_lowercase().as_str(),
-            "table" | "thead" | "tbody" | "tfoot" | "tr" | "td" | "th"
+            "col" | "colgroup" | "caption"
         ) {
-            push_unique(&mut unsupported, "table");
+            push_unique(&mut unsupported, "table-columns-caption");
+        }
+        if tag_name == "table"
+            && style
+                .and_then(|s| s.value(&Property::BorderCollapse))
+                .is_some_and(|v| v.display() == "collapse")
+        {
+            push_unique(&mut unsupported, "table-border-collapse");
         }
         // The engine lays out and paints the common single-line
         // controls; only the widgets it still approximates are reported.
@@ -1237,13 +1292,13 @@ mod tests {
     }
 
     #[test]
-    fn renderer_reports_unsupported_tables_and_forms_but_supports_sibling_floats() {
+    fn renderer_supports_basic_tables_and_reports_remaining_form_controls() {
         let new = render(
             "<style>.f{float:left}</style><div class=f>float</div><table><tr><td>cell</td></tr></table><form><textarea>notes</textarea></form>",
         );
         let unsupported = &new.diagnostics.unsupported;
         assert!(!unsupported.contains(&"float"));
-        assert!(unsupported.contains(&"table"));
+        assert!(!unsupported.contains(&"table"));
         assert!(unsupported.contains(&"form-control"));
     }
 

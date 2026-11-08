@@ -31,6 +31,10 @@ use sunlight_ui::{
 
 use crate::css::{ComputedStyle, Property, PropertyValue, StyleContext};
 
+mod columns;
+mod positioned;
+mod table;
+
 const EPSILON: f32 = 0.01;
 const MAX_LAYOUT_BOXES: usize = 32_768;
 const MAX_INLINE_TOKENS: usize = 65_536;
@@ -135,6 +139,10 @@ pub enum BoxSizing {
 pub enum Display {
     Block,
     Flex,
+    Table,
+    TableRowGroup,
+    TableRow,
+    TableCell,
     Inline,
     InlineBlock,
     None,
@@ -511,6 +519,18 @@ impl<'a> StyleTree<'a> {
                     viewport_height,
                     font_size * 1.2,
                 )
+            })
+            .or_else(|| {
+                // Unitless line-height inherits as a multiplier, evaluated
+                // against each descendant's own font size.
+                computed
+                    .and_then(|s| s.value(&Property::LineHeight))
+                    .and_then(|v| match v {
+                        PropertyValue::Raw(v) | PropertyValue::Keyword(v) => v.parse::<f32>().ok(),
+                        _ => None,
+                    })
+                    .filter(|v| v.is_finite() && *v >= 0.0)
+                    .map(|factor| font_size * factor)
             })
             .unwrap_or(font_size * 1.2);
         LayoutStyle {
@@ -1153,6 +1173,7 @@ pub fn layout_document<'a>(
             engine.context.viewport_width,
             engine.context.viewport_height,
         );
+        engine.arrange_positioned();
         engine.finish_parent_boxes(root);
         engine.tree.content_size = engine.tree.boxes.iter().fold(
             RectSize::new(
@@ -1233,6 +1254,38 @@ impl<'a> LayoutEngine<'a> {
         }
         if matches!(node, Node::Document { .. }) {
             style.display = Display::Block;
+        }
+        if style.display == Display::Table {
+            // HTML center establishes legacy centering for descendant tables.
+            // Ordinary CSS text-align:center still only aligns inline content.
+            let mut ancestor = document.parent(node_id);
+            while let Some(id) = ancestor {
+                if document.tag_name(id) == Some("center") {
+                    let computed = self.context.styles.computed(node_id);
+                    if computed
+                        .and_then(|s| {
+                            s.properties
+                                .iter()
+                                .find(|p| p.property == Property::MarginLeft)
+                        })
+                        .is_none_or(|p| p.matched.is_none())
+                    {
+                        style.margin.left = Dimension::Auto;
+                    }
+                    if computed
+                        .and_then(|s| {
+                            s.properties
+                                .iter()
+                                .find(|p| p.property == Property::MarginRight)
+                        })
+                        .is_none_or(|p| p.matched.is_none())
+                    {
+                        style.margin.right = Dimension::Auto;
+                    }
+                    break;
+                }
+                ancestor = document.parent(id);
+            }
         }
         // Visibility pruning happens before a `LayoutBox` is created, so a
         // hidden node occupies no arena slot and no space in the layout tree.
@@ -1421,6 +1474,7 @@ impl<'a> LayoutEngine<'a> {
             BoxType::Inline => self.measure_inline_container(id),
             BoxType::Block => match style.display {
                 Display::Flex => self.measure_flex(id),
+                Display::Table => self.measure_table(id),
                 _ => self.measure_block(id),
             },
         };
@@ -1432,6 +1486,7 @@ impl<'a> LayoutEngine<'a> {
         let mut min_width: f32 = 0.0;
         let mut max_width: f32 = 0.0;
         let mut height: f32 = 0.0;
+        let mut float_width = 0.0_f32;
         let mut inline_children = Vec::new();
         let flush_inline = |items: &mut Vec<LayoutId>,
                             min_width: &mut f32,
@@ -1449,6 +1504,9 @@ impl<'a> LayoutEngine<'a> {
         };
         for &child in &layout_box.children {
             let child_box = &self.tree.boxes[child.0 as usize];
+            if self.out_of_flow(child) {
+                continue;
+            }
             if child_box.is_block_container() {
                 flush_inline(
                     &mut inline_children,
@@ -1488,7 +1546,13 @@ impl<'a> LayoutEngine<'a> {
                         self.context.viewport_width,
                         used_border_dimension(
                             &self.context,
-                            child_box.style.width,
+                            // Percentages have no definite containing width
+                            // during intrinsic measurement.
+                            if matches!(child_box.style.width, Dimension::Percent(_)) {
+                                Dimension::Auto
+                            } else {
+                                child_box.style.width
+                            },
                             &child_box.style,
                             self.context.viewport_width,
                             content,
@@ -1505,6 +1569,12 @@ impl<'a> LayoutEngine<'a> {
                     max_width,
                     child_width(child_box.intrinsic.max_content_width),
                 );
+                if child_box.style.float != FloatSide::None {
+                    float_width += child_width(child_box.intrinsic.max_content_width);
+                    max_width = max(max_width, float_width);
+                } else {
+                    float_width = 0.0;
+                }
                 let margins = self
                     .context
                     .signed_dimension(child_box.style.margin.top, self.context.viewport_width)
@@ -1544,7 +1614,11 @@ impl<'a> LayoutEngine<'a> {
 
     fn measure_flex(&self, id: LayoutId) -> IntrinsicSize {
         let layout_box = &self.tree.boxes[id.0 as usize];
-        let mut children = layout_box.children.iter().copied();
+        let mut children = layout_box
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| !self.out_of_flow(c));
         if layout_box.style.flex_direction == FlexDirection::Row {
             let mut min = 0.0;
             let mut max_width = 0.0;
@@ -1592,9 +1666,22 @@ impl<'a> LayoutEngine<'a> {
     /// the parent's padding edge is known.
     fn establishes_float_context(&self, id: LayoutId) -> bool {
         let b = &self.tree.boxes[id.0 as usize];
+        let computed = self.context.styles.computed(b.dom_node);
         b.parent.is_none()
+            || matches!(
+                self.context.styles.document().tag_name(b.dom_node),
+                Some("fieldset")
+            )
+            || keyword(computed, Property::Display) == "flow-root"
+            || matches!(
+                keyword(computed, Property::Overflow).as_str(),
+                "hidden" | "auto" | "scroll"
+            )
             || b.style.float != FloatSide::None
-            || matches!(b.style.display, Display::InlineBlock | Display::Flex)
+            || matches!(
+                b.style.display,
+                Display::InlineBlock | Display::Flex | Display::Table | Display::TableCell
+            )
             || b.parent
                 .is_some_and(|p| self.tree.boxes[p.0 as usize].style.display == Display::Flex)
     }
@@ -1668,7 +1755,8 @@ impl<'a> LayoutEngine<'a> {
                     + outer_horizontal
             }
             (None, _)
-                if style.display == Display::InlineBlock || style.float != FloatSide::None =>
+                if matches!(style.display, Display::InlineBlock | Display::Table)
+                    || style.float != FloatSide::None =>
             {
                 let intrinsic = self.tree.boxes[index].intrinsic;
                 max(
@@ -1691,6 +1779,12 @@ impl<'a> LayoutEngine<'a> {
             border_width,
             outer_horizontal,
         );
+        if style.display == Display::Table {
+            border_width = max(
+                border_width,
+                self.tree.boxes[index].intrinsic.min_content_width + outer_horizontal,
+            );
+        }
         let content_width = max(0.0, border_width - outer_horizontal);
         // Auto margins absorb positive free space only in normal block flow.
         // Inline-level auto margins remain zero; text-align positions the line.
@@ -1767,6 +1861,10 @@ impl<'a> LayoutEngine<'a> {
                     available_height,
                     definite_content_height,
                 ),
+                Display::Table => self.arrange_table_children(id, content_width, available_height),
+                _ if self.column_count(id) > 1 => {
+                    self.arrange_columns(id, content_width, available_height)
+                }
                 _ => {
                     let (height, floats) = self.arrange_block_children(
                         id,
@@ -1892,6 +1990,9 @@ impl<'a> LayoutEngine<'a> {
         };
         for child in children {
             let index = child.0 as usize;
+            if self.out_of_flow(child) {
+                continue;
+            }
             let style = self.tree.boxes[index].style.clone();
             if style.float != FloatSide::None {
                 flush_inline(self, &mut inline_run, &mut cursor, &floats);
@@ -2093,10 +2194,15 @@ impl<'a> LayoutEngine<'a> {
         let p = parent.0 as usize;
         let style = self.tree.boxes[p].style.clone();
         let origin = self.tree.boxes[p].content_box;
-        let children = self.tree.boxes[p].children.clone();
+        let children: Vec<_> = self.tree.boxes[p]
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| !self.out_of_flow(c))
+            .collect();
         let row = style.flex_direction == FlexDirection::Row;
         let gap = if row { style.column_gap } else { style.row_gap };
-        let sizes: Vec<f32> = children
+        let mut sizes: Vec<f32> = children
             .iter()
             .map(|&c| {
                 if row {
@@ -2113,6 +2219,31 @@ impl<'a> LayoutEngine<'a> {
         } else {
             definite_height.unwrap_or(sizes.iter().sum::<f32>() + gaps)
         };
+        if row {
+            let grows: Vec<_> = children
+                .iter()
+                .map(|&id| {
+                    keyword(
+                        self.context
+                            .styles
+                            .computed(self.tree.boxes[id.0 as usize].dom_node),
+                        Property::FlexGrow,
+                    )
+                    .parse::<f32>()
+                    .ok()
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(0.0)
+                    .max(0.0)
+                })
+                .collect();
+            let total: f32 = grows.iter().sum();
+            if total > 0.0 {
+                let extra = (extent - sizes.iter().sum::<f32>() - gaps).max(0.0);
+                for (size, grow) in sizes.iter_mut().zip(grows) {
+                    *size += extra * grow / total;
+                }
+            }
+        }
         let free = max(0.0, extent - sizes.iter().sum::<f32>() - gaps);
         let (mut cursor, distributed_gap) =
             distribute_main_axis(style.justify_content, free, children.len());
@@ -2209,6 +2340,28 @@ impl<'a> LayoutEngine<'a> {
         let document = self.context.styles.document();
         for item in &self.tree.boxes {
             let computed = self.context.styles.computed(item.dom_node);
+            if matches!(
+                keyword(computed, Property::Visibility).as_str(),
+                "hidden" | "collapse"
+            ) {
+                continue;
+            }
+            let mut ancestor = Some(item.id);
+            let mut transparent = false;
+            while let Some(id) = ancestor {
+                let b = &self.tree.boxes[id.0 as usize];
+                if matches!(
+                    css_value(self.context.styles.computed(b.dom_node), Property::Opacity),
+                    Some(PropertyValue::Percentage(0))
+                ) {
+                    transparent = true;
+                    break;
+                }
+                ancestor = b.parent;
+            }
+            if transparent {
+                continue;
+            }
             if !matches!(document.get(item.dom_node), Some(Node::Element { .. }))
                 || keyword(computed, Property::Display) != "list-item"
             {
@@ -2284,57 +2437,70 @@ impl<'a> LayoutEngine<'a> {
 
     fn flatten(&self, id: LayoutId, output: &mut Vec<RenderBox<'a>>) {
         let layout_box = &self.tree.boxes[id.0 as usize];
+        let computed = self.context.styles.computed(layout_box.dom_node);
+        if matches!(
+            css_value(computed, Property::Opacity),
+            Some(PropertyValue::Percentage(0))
+        ) {
+            return;
+        }
+        let visible = !matches!(
+            keyword(computed, Property::Visibility).as_str(),
+            "hidden" | "collapse"
+        );
         let resolved = resolve_output_style(layout_box);
         let link = layout_box.link.clone();
-        match &layout_box.kind {
-            BoxType::Block => {
-                output.push(RenderBox {
-                    node_id: layout_box.dom_node,
-                    bounds: layout_box.border_box,
-                    style: resolved.clone(),
-                    node_type: BoxType::Block,
-                    link: link.clone(),
-                });
-            }
-            BoxType::Inline => {
-                if layout_box.border_box.width > 0.0 || layout_box.border_box.height > 0.0 {
+        if visible {
+            match &layout_box.kind {
+                BoxType::Block => {
                     output.push(RenderBox {
                         node_id: layout_box.dom_node,
                         bounds: layout_box.border_box,
                         style: resolved.clone(),
-                        node_type: BoxType::Inline,
+                        node_type: BoxType::Block,
                         link: link.clone(),
                     });
                 }
-            }
-            BoxType::Image(image) => {
-                output.push(RenderBox {
-                    node_id: layout_box.dom_node,
-                    bounds: layout_box.content_box,
-                    style: resolved.clone(),
-                    node_type: BoxType::Image(image.clone()),
-                    link: link.clone(),
-                });
-            }
-            BoxType::Form(widget) => {
-                output.push(RenderBox {
-                    node_id: layout_box.dom_node,
-                    bounds: layout_box.border_box,
-                    style: resolved.clone(),
-                    node_type: BoxType::Form(widget.clone()),
-                    link: link.clone(),
-                });
-            }
-            BoxType::TextRun(_) => {
-                for fragment in &layout_box.fragments {
-                    if !fragment.text.is_empty() {
+                BoxType::Inline => {
+                    if layout_box.border_box.width > 0.0 || layout_box.border_box.height > 0.0 {
                         output.push(RenderBox {
                             node_id: layout_box.dom_node,
-                            bounds: fragment.bounds,
+                            bounds: layout_box.border_box,
                             style: resolved.clone(),
-                            node_type: BoxType::TextRun(fragment.text),
+                            node_type: BoxType::Inline,
                             link: link.clone(),
                         });
+                    }
+                }
+                BoxType::Image(image) => {
+                    output.push(RenderBox {
+                        node_id: layout_box.dom_node,
+                        bounds: layout_box.content_box,
+                        style: resolved.clone(),
+                        node_type: BoxType::Image(image.clone()),
+                        link: link.clone(),
+                    });
+                }
+                BoxType::Form(widget) => {
+                    output.push(RenderBox {
+                        node_id: layout_box.dom_node,
+                        bounds: layout_box.border_box,
+                        style: resolved.clone(),
+                        node_type: BoxType::Form(widget.clone()),
+                        link: link.clone(),
+                    });
+                }
+                BoxType::TextRun(_) => {
+                    for fragment in &layout_box.fragments {
+                        if !fragment.text.is_empty() {
+                            output.push(RenderBox {
+                                node_id: layout_box.dom_node,
+                                bounds: fragment.bounds,
+                                style: resolved.clone(),
+                                node_type: BoxType::TextRun(fragment.text),
+                                link: link.clone(),
+                            });
+                        }
                     }
                 }
             }
@@ -2375,6 +2541,14 @@ fn collect_inline_tokens<'a>(
             break;
         }
         let item = &boxes[id.0 as usize];
+        if !matches!(item.kind, BoxType::TextRun(_))
+            && matches!(
+                keyword(context.styles.computed(item.dom_node), Property::Position).as_str(),
+                "absolute" | "fixed"
+            )
+        {
+            continue;
+        }
         if matches!(context.styles.document().get(item.dom_node),
             Some(Node::Element { tag_name, .. }) if tag_name.eq_ignore_ascii_case("br"))
         {
@@ -2658,7 +2832,14 @@ fn text_intrinsic(
     for word in text.split_ascii_whitespace() {
         longest = max(longest, text_advance(context, style, word));
     }
-    (longest, full)
+    (
+        if style.white_space == WhiteSpace::Nowrap {
+            full
+        } else {
+            longest
+        },
+        full,
+    )
 }
 
 /// A single-line form widget's natural content size in device-independent
@@ -2945,7 +3126,7 @@ fn inline_lines<'a>(
     available: Option<f32>,
     nowrap: bool,
 ) -> (Vec<InlineLine<'a>>, f32) {
-    inline_lines_in_flow(context, tokens, available, nowrap, &[], 0.0, 0.0)
+    inline_lines_in_flow(context, tokens, available, nowrap, &[], 0.0, 0.0, 0.0)
 }
 
 fn finish_inline_line<'a>(
@@ -2992,6 +3173,7 @@ fn inline_lines_in_flow<'a>(
     floats: &[(Rect, FloatSide)],
     flow_y: f32,
     line_height: f32,
+    indent: f32,
 ) -> (Vec<InlineLine<'a>>, f32) {
     let mut y = 0.0;
     let mut lines = Vec::new();
@@ -3030,7 +3212,10 @@ fn inline_lines_in_flow<'a>(
                                 flow_y,
                                 max(line_height, style.line_height),
                                 width,
-                            );
+                            )
+                            .map(|limit| {
+                                (limit - if lines.is_empty() { indent } else { 0.0 }).max(0.0)
+                            });
                             let wrap = style.white_space == WhiteSpace::PreWrap
                                 && !nowrap
                                 && !line.items.is_empty()
@@ -3098,7 +3283,8 @@ fn inline_lines_in_flow<'a>(
                         flow_y,
                         max(line_height, style.line_height),
                         width,
-                    );
+                    )
+                    .map(|limit| (limit - if lines.is_empty() { indent } else { 0.0 }).max(0.0));
                     let wrap = !nowrap
                         && style.white_space != WhiteSpace::Nowrap
                         && limit
@@ -3149,7 +3335,8 @@ fn inline_lines_in_flow<'a>(
                     flow_y,
                     max(line_height, size.height),
                     size.width,
-                );
+                )
+                .map(|limit| (limit - if lines.is_empty() { indent } else { 0.0 }).max(0.0));
                 let wrap = !nowrap
                     && limit
                         .is_some_and(|limit| line.width + separator + size.width > limit + EPSILON)
@@ -3202,9 +3389,17 @@ fn measure_inline<'a>(
         false,
     );
     let (lines, longest) = inline_lines(context, tokens, available, false);
+    let max_width = lines.iter().map(|line| line.width).fold(0.0, max);
     (
-        longest,
-        lines.iter().map(|line| line.width).fold(0.0, max),
+        if ids
+            .iter()
+            .all(|id| boxes[id.0 as usize].style.white_space == WhiteSpace::Nowrap)
+        {
+            max_width
+        } else {
+            longest
+        },
+        max_width,
         lines.iter().map(InlineLine::height).sum(),
     )
 }
@@ -3236,6 +3431,16 @@ impl<'a> LayoutEngine<'a> {
         }
         let style = self.tree.boxes[parent.0 as usize].style.clone();
         let tokens = collect_inline_tokens(&self.context, &self.tree.boxes, ids, available, true);
+        let indent = css_length(
+            self.context
+                .styles
+                .computed(self.tree.boxes[parent.0 as usize].dom_node),
+            Property::TextIndent,
+            self.context.viewport_width,
+            self.context.viewport_height,
+            available,
+        )
+        .unwrap_or(0.0);
         let (lines, _) = inline_lines_in_flow(
             &self.context,
             tokens,
@@ -3244,11 +3449,12 @@ impl<'a> LayoutEngine<'a> {
             floats,
             flow_y,
             style.line_height,
+            indent,
         );
         let mut y = 0.0;
         let mut widest = 0.0_f32;
         let mut owners: Vec<LayoutId> = Vec::new();
-        for mut line in lines {
+        for (line_index, mut line) in lines.into_iter().enumerate() {
             if !line.items.is_empty() {
                 line.ascent = max(line.ascent, text_baseline(&style));
                 line.descent = max(line.descent, style.line_height - text_baseline(&style));
@@ -3259,7 +3465,9 @@ impl<'a> LayoutEngine<'a> {
             let (left, right) =
                 float_span(floats, flow_y + line.offset_y, line.height(), available);
             let line_width = max(0.0, right - left);
+            let indent = if line_index == 0 { indent } else { 0.0 };
             let offset = left
+                + indent
                 + match style.text_align {
                     TextAlign::Center => max(0.0, line_width - line.width) * 0.5,
                     TextAlign::End => max(0.0, line_width - line.width),
@@ -3486,7 +3694,11 @@ fn optional_dimension(style: Option<&ComputedStyle>, property: Property) -> Opti
 
 fn display(style: Option<&ComputedStyle>) -> Display {
     match keyword(style, Property::Display).as_str() {
-        "block" | "list-item" | "table" | "table-row" | "table-cell" => Display::Block,
+        "block" | "list-item" | "flow-root" => Display::Block,
+        "table" => Display::Table,
+        "table-row-group" | "table-header-group" | "table-footer-group" => Display::TableRowGroup,
+        "table-row" => Display::TableRow,
+        "table-cell" => Display::TableCell,
         "flex" => Display::Flex,
         "inline" => Display::Inline,
         "inline-block" | "inline-flex" => Display::InlineBlock,

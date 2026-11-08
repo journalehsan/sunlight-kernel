@@ -1068,10 +1068,7 @@ impl RabbitApp {
     #[cfg(feature = "dom")]
     fn fetch_images(&mut self, candidates: &[ResourceCandidate]) {
         use rappid_rabbit::images::{detect_format, ImageFormat};
-        for candidate in candidates
-            .iter()
-            .filter(|c| c.resource_type == ResourceType::Image)
-        {
+        for candidate in rappid_rabbit::images::initial_image_candidates(candidates) {
             let url = &candidate.resolved_url;
             if self.image_cache.get(url).is_some() {
                 continue;

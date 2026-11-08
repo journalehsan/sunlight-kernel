@@ -225,22 +225,21 @@ impl<'a> Parser<'a> {
 
         self.stream.expect_and_skip_cond(b'>');
 
-        let closing_tag_matches_parent = self
-            .stack
-            .last()
-            .and_then(|last_handle| last_handle.get(self))
-            .and_then(|last_item| last_item.as_tag())
-            .map_or(false, |last_tag| {
-                last_tag
-                    .name()
-                    .as_bytes()
-                    .eq_ignore_ascii_case(closing_tag_name)
-            });
-
-        if !closing_tag_matches_parent {
-            return;
+        // End tags close intervening elements with omitted end tags. This
+        // also handles </tr> while a td/th is still open in classic tables.
+        let position = self.stack.iter().rposition(|handle| {
+            handle
+                .get(self)
+                .and_then(|node| node.as_tag())
+                .is_some_and(|tag| tag.name().as_bytes().eq_ignore_ascii_case(closing_tag_name))
+        });
+        let Some(position) = position else { return };
+        while self.stack.len() > position {
+            self.finish_open_tag();
         }
+    }
 
+    fn finish_open_tag(&mut self) {
         if let Some(handle) = self.stack.pop() {
             let tag = self
                 .tags
@@ -347,6 +346,48 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Apply the optional-end rules within the nearest table/list scope.
+    /// An inner table must never close a cell in its enclosing table.
+    fn close_optional_tags(&mut self, name: &[u8]) {
+        let names: &[&[u8]] =
+            if name.eq_ignore_ascii_case(b"td") || name.eq_ignore_ascii_case(b"th") {
+                &[b"td", b"th"]
+            } else if name.eq_ignore_ascii_case(b"tr") {
+                &[b"tr"]
+            } else if [b"thead".as_slice(), b"tbody", b"tfoot"]
+                .iter()
+                .any(|s| name.eq_ignore_ascii_case(s))
+            {
+                &[b"thead", b"tbody", b"tfoot"]
+            } else if name.eq_ignore_ascii_case(b"li") {
+                &[b"li"]
+            } else if name.eq_ignore_ascii_case(b"dt") || name.eq_ignore_ascii_case(b"dd") {
+                &[b"dt", b"dd"]
+            } else {
+                return;
+            };
+        let mut position = None;
+        for (index, handle) in self.stack.iter().enumerate().rev() {
+            let tag = handle.get(self).and_then(|node| node.as_tag()).unwrap();
+            let open = tag.name().as_bytes();
+            if names.iter().any(|s| open.eq_ignore_ascii_case(s)) {
+                position = Some(index);
+                break;
+            }
+            if [b"table".as_slice(), b"ul", b"ol", b"dl"]
+                .iter()
+                .any(|s| open.eq_ignore_ascii_case(s))
+            {
+                break;
+            }
+        }
+        if let Some(position) = position {
+            while self.stack.len() > position {
+                self.finish_open_tag();
+            }
+        }
+    }
+
     fn parse_tag(&mut self) -> Option<()> {
         let start = self.stream.idx;
 
@@ -362,6 +403,8 @@ impl<'a> Parser<'a> {
             _ => {
                 let name = self.read_ident()?;
                 self.skip_whitespaces();
+
+                self.close_optional_tags(name);
 
                 let attr = self.parse_attributes()?;
 
@@ -382,7 +425,11 @@ impl<'a> Parser<'a> {
                 // we don't always want to push them to the stack
                 // e.g. <br><p>Hello</p>
                 // <p> should not be a subtag of <br>
-                if !is_self_closing && !constants::VOID_TAGS.contains(&name) {
+                if !is_self_closing
+                    && !constants::VOID_TAGS
+                        .iter()
+                        .any(|tag| name.eq_ignore_ascii_case(tag))
+                {
                     self.stack.push(this);
                     if name.eq_ignore_ascii_case(b"script") || name.eq_ignore_ascii_case(b"style") {
                         self.read_raw_text(name);
