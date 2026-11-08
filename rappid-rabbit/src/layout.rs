@@ -1227,6 +1227,7 @@ impl<'a> LayoutEngine<'a> {
             return None;
         }
         let document = self.context.styles.document();
+        if self.context.styles.context.is_shield_hidden(node_id) { return None; }
         let node = document.get(node_id)?;
         let mut style = self.context.styles.resolve(
             node_id,

@@ -8,6 +8,8 @@ use crate::prelude::String;
 /// Every error fetch can produce, with enough context to diagnose.
 #[derive(Debug)]
 pub enum FetchError {
+    /// A caller policy rejected a request before transport dispatch.
+    BlockedByPolicy,
     /// Argument parsing failure
     InvalidArgs(String),
 
@@ -68,6 +70,7 @@ pub enum FetchError {
 impl fmt::Display for FetchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::BlockedByPolicy => write!(f, "request blocked by Content Shield"),
             Self::InvalidArgs(msg) => write!(f, "invalid arguments: {msg}"),
             Self::DnsResolutionFailed(host) => {
                 write!(f, "DNS resolution failed for '{host}'")

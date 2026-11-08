@@ -1237,7 +1237,7 @@ fn strip_comments(css: &str) -> String {
     result
 }
 
-fn parse_selector(input: &str) -> Option<Selector> {
+pub(crate) fn parse_selector(input: &str) -> Option<Selector> {
     parse_selector_with_original(input, None)
 }
 
@@ -2680,6 +2680,8 @@ pub struct StyleContext {
     viewport_width: u32,
     styles: Vec<Option<alloc::sync::Arc<ComputedStyle>>>,
     root_font_size: i32,
+    pub(crate) shield: Option<alloc::sync::Arc<crate::content_shield::CosmeticPolicy>>,
+    hidden: alloc::collections::BTreeSet<NodeId>,
 }
 
 #[cfg(feature = "dom")]
@@ -2700,6 +2702,8 @@ impl StyleContext {
             viewport_width,
             styles: vec![None; document.node_count()],
             root_font_size: 16,
+            shield: None,
+            hidden: alloc::collections::BTreeSet::new(),
         };
         // Intern complete immutable styles, including inspector provenance.
         // Long tables repeat a small set of styles across thousands of cells.
@@ -2761,7 +2765,18 @@ impl StyleContext {
 
     pub fn for_viewport(&self, document: &Document, viewport_width: u32) -> Self {
         Self::build_with_viewport(document, &self.sheets, viewport_width)
+            .with_shield(document, self.shield.clone())
     }
+
+    /// Presentation policy leaves original computed styles and DOM untouched.
+    pub fn with_shield(mut self, document: &Document, policy: Option<alloc::sync::Arc<crate::content_shield::CosmeticPolicy>>) -> Self {
+        self.hidden = policy.as_ref().map(|p| p.hidden_nodes(document)).unwrap_or_default();
+        self.shield = policy;
+        self
+    }
+    pub fn is_shield_hidden(&self, node_id: NodeId) -> bool { self.hidden.contains(&node_id) }
+    pub fn shield_hidden_count(&self) -> usize { self.hidden.len() }
+    pub fn shield_revision(&self) -> Option<u64> { self.shield.as_ref().map(|p|p.revision) }
 
     pub fn style_for(&self, node_id: NodeId) -> Option<&ComputedStyle> {
         self.styles.get(node_id).and_then(Option::as_deref)

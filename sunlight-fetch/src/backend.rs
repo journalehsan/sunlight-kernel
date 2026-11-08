@@ -86,13 +86,44 @@ pub fn perform_request_limited(
     })
 }
 
+/// A consumer-owned policy gate for subresources. Called before initial DNS and
+/// again before resolving each redirect target. It cannot relax TLS, transport
+/// checks or redirect limits. Existing unfiltered callers retain their behavior.
+pub fn perform_request_filtered(
+    url: ParsedUrl,
+    request: HttpRequest,
+    limit: usize,
+    policy: &mut dyn FnMut(&ParsedUrl) -> FetchResult<()>,
+) -> FetchResult<RequestResult> {
+    policy(&url)?;
+    ipc::acquire_capabilities()?;
+    let addr = ipc::dns_resolve(&url.host)?;
+    let mut pending = begin_request_guarded(url, addr, request, None, None, &[], Some(policy))?;
+    let body = ipc::read_body_limited(&mut pending.handle, pending.request_method,
+        &pending.response, &pending.initial_body, limit)?;
+    Ok(RequestResult { response: pending.response, body, final_url: Some(pending.final_url),
+        duration_ms: elapsed_ms(pending.started_at) })
+}
+
 pub(crate) fn begin_request_from_resolved(
+    start_url: ParsedUrl,
+    start_addr: ResolvedAddr,
+    request: HttpRequest,
+    on_event: Option<&mut dyn FnMut(RequestEvent)>,
+    proxy: Option<sunlight_net::socks5::Proxy>,
+    overrides: &[crate::cli::ResolveOverride],
+) -> FetchResult<PendingRequest> {
+    begin_request_guarded(start_url,start_addr,request,on_event,proxy,overrides,None)
+}
+
+fn begin_request_guarded(
     start_url: ParsedUrl,
     start_addr: ResolvedAddr,
     request: HttpRequest,
     mut on_event: Option<&mut dyn FnMut(RequestEvent)>,
     proxy: Option<sunlight_net::socks5::Proxy>,
     overrides: &[crate::cli::ResolveOverride],
+    mut policy: Option<&mut dyn FnMut(&ParsedUrl) -> FetchResult<()>>,
 ) -> FetchResult<PendingRequest> {
     let started_at = start_timer();
     let mut url = start_url;
@@ -150,6 +181,7 @@ pub(crate) fn begin_request_from_resolved(
             }
 
             let next_url = resolve_redirect_location(&url, location)?;
+            if let Some(policy) = policy.as_mut() { policy(&next_url)?; }
             if !is_broker_callback(&next_url) {
                 emit_event(
                     &mut on_event,

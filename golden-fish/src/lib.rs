@@ -41,6 +41,8 @@ mod mutation;
 mod named_entities;
 pub mod node;
 pub mod parser;
+/// Reusable, bounded content policy. No network, script, storage or UI authority.
+pub mod shield;
 
 #[cfg(not(target_os = "none"))]
 mod convert;

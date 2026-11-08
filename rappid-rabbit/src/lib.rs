@@ -7,6 +7,8 @@ use sunlight_http::{HttpError, HttpRequest, ParsedUrl, UrlScheme};
 #[cfg(feature = "js-dom-fixture")]
 pub mod account_fixture;
 pub mod css;
+#[cfg(feature = "dom")]
+pub mod content_shield;
 pub mod developer_tools;
 pub mod document_lifecycle;
 #[cfg(feature = "js-dom-fixture")]

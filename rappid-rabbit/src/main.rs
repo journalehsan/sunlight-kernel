@@ -3,8 +3,14 @@
 extern crate alloc;
 
 mod browser_ui;
+#[cfg(feature = "dom")]
+mod shield_ui;
 #[cfg(all(test, feature = "dom"))]
 mod browser_ui_tests;
+#[cfg(all(test, feature = "dom"))]
+mod shield_tests;
+#[cfg(feature = "js-dom-fixture")]
+mod shield_probe;
 
 use alloc::{borrow::Cow, collections::BTreeMap, format, string::String, vec::Vec};
 // Heap diagnostics use a stack buffer to avoid allocating while logging.
@@ -240,6 +246,7 @@ impl SourceContent {
 }
 
 struct NavigationOutput {
+    shield_revision: u64,
     final_url: String,
     status: String,
     source: SourceContent,
@@ -259,6 +266,7 @@ struct NavigationOutput {
 #[cfg(feature = "dom")]
 struct ImageOutput {
     generation: u64,
+    shield_revision: u64,
     cache: ImageCache,
     diagnostics: DeveloperToolsState,
 }
@@ -294,6 +302,11 @@ struct ReflowOutput {
 }
 
 struct RabbitApp {
+    shield: golden_fish::shield::FilterListManager,
+    shield_stats: alloc::sync::Arc<rappid_rabbit::content_shield::ShieldStats>,
+    shield_settings_open: bool,
+    shield_persistence_status: String,
+    shield_reflow_pending: bool,
     #[cfg(feature = "dom")]
     image_completion: Option<oneshot::Receiver<ImageOutput>>,
     #[cfg(feature = "dom")]
@@ -361,6 +374,7 @@ struct RabbitLayout {
     url_bar: Rect,
     view: Rect,
     devtools: Rect,
+    shield: Rect,
 }
 
 impl RabbitApp {
@@ -392,6 +406,11 @@ impl RabbitApp {
         );
 
         let mut app = Self {
+            shield: rappid_rabbit::content_shield::bundled_manager(),
+            shield_stats: Default::default(),
+            shield_settings_open: false,
+            shield_persistence_status: String::new(),
+            shield_reflow_pending: false,
             #[cfg(feature = "dom")]
             image_completion: None,
             #[cfg(feature = "dom")]
@@ -459,6 +478,8 @@ impl RabbitApp {
         if self.pending_fetch || self.navigation_draining {
             return;
         }
+        self.shield_stats.cancelled.store(true, core::sync::atomic::Ordering::Release);
+        self.shield_stats = Default::default();
         // Navigation is an explicit request to show a new page. Completion
         // never changes this choice, so Source/DevTools opened while loading
         // retain focus on success and failure alike.
@@ -491,6 +512,10 @@ impl RabbitApp {
                 Ok(output) => {
                     self.completion = None;
                     self.pending_fetch = false;
+                    if output.shield_revision != self.shield.revision {
+                        self.set_navigation_error("Content Shield changed; reload the page");
+                        return true;
+                    }
                     if output.document_lifecycle.generation()
                         != self.document_lifecycle.generation()
                     {
@@ -562,10 +587,15 @@ impl RabbitApp {
         self.source = SourceContent::Placeholder("Loading...");
         let bounds = self.client_bounds;
         let panel = self.developer_tools.panel.clone();
+        let shield = self.shield.clone();
+        let shield_stats = self.shield_stats.clone();
         let (sender, receiver) = oneshot::channel();
         self.completion = Some(receiver);
         runtime.spawn_blocking(move || {
             let mut worker = RabbitApp::new(None);
+            worker.shield = shield;
+            worker.shield_stats = shield_stats;
+            worker.navigation_url = normalized.clone();
             worker.url_input.set_text(&normalized);
             worker.document_lifecycle = lifecycle;
             worker.developer_tools.panel = panel;
@@ -580,6 +610,7 @@ impl RabbitApp {
 
     fn into_navigation_output(self) -> NavigationOutput {
         NavigationOutput {
+            shield_revision: self.shield.revision,
             final_url: String::from(self.url_input.value()),
             status: self.status,
             source: self.source,
@@ -627,6 +658,7 @@ impl RabbitApp {
     }
 
     fn begin_navigation_session(&mut self, requested_url: &str, request: &HttpRequest) {
+        self.shield_reflow_pending = false;
         let generation = self.document_lifecycle.begin_navigation();
         self.document_scroll = ScrollState::new();
         self.title_revision = None;
@@ -684,6 +716,7 @@ impl RabbitApp {
             .as_ref()
             .map(format_url)
             .unwrap_or_else(|| String::from(requested_url));
+        self.navigation_url = final_url.clone();
         // Follow redirects only while the requested URL is still displayed.
         if self.url_input.value().trim() == requested_url {
             self.url_input.set_text(&final_url);
@@ -768,7 +801,8 @@ impl RabbitApp {
                         let viewport = self.render_viewport();
                         let layout_started = std::time::Instant::now();
                         let style_context =
-                            StyleContext::build_with_viewport(&document, &stylesheets, viewport.w);
+                            StyleContext::build_with_viewport(&document, &stylesheets, viewport.w)
+                                .with_shield(&document, Some(rappid_rabbit::content_shield::CosmeticPolicy::for_document(&self.shield, &final_url)));
                         let style_ms = layout_started.elapsed().as_millis();
                         if let Some(base_url) = final_url_parsed.as_ref() {
                             discover_background_images(
@@ -954,7 +988,11 @@ impl RabbitApp {
             self.developer_tools
                 .network
                 .set_request_state(request_id, RequestState::Connecting);
-            let result = match perform_request(parsed_url, request) {
+            let document = self.navigation_url.clone();
+            let mut policy = |url: &ParsedUrl| rappid_rabbit::content_shield::check_request(
+                &self.shield, &self.shield_stats, url, &document,
+                golden_fish::shield::ResourceType::Stylesheet);
+            let result = match sunlight_fetch::backend::perform_request_filtered(parsed_url, request, MAX_STYLESHEET_BYTES, &mut policy) {
                 Ok(result) => result,
                 Err(error) => {
                     self.developer_tools.network.fail_request(
@@ -1183,9 +1221,15 @@ impl RabbitApp {
             );
             #[cfg(test)]
             let fetcher = self.image_fetcher;
+            let document = self.navigation_url.clone();
+            let mut policy = |url: &ParsedUrl| rappid_rabbit::content_shield::check_request(
+                &self.shield, &self.shield_stats, url, &document,
+                golden_fish::shield::ResourceType::Image);
+            #[cfg(test)]
+            let result = policy(&parsed).and_then(|()|fetcher(parsed, request, MAX_IMAGE_RESPONSE_BYTES));
             #[cfg(not(test))]
-            let fetcher = perform_request_limited;
-            match fetcher(parsed, request, MAX_IMAGE_RESPONSE_BYTES) {
+            let result = sunlight_fetch::backend::perform_request_filtered(parsed, request, MAX_IMAGE_RESPONSE_BYTES, &mut policy);
+            match result {
                 Ok(result) => {
                     if completion.is_closed() {
                         return;
@@ -1320,7 +1364,8 @@ impl RabbitApp {
             match receiver.try_recv() {
                 Ok(output) => {
                     self.image_completion = None;
-                    if output.generation != self.document_lifecycle.generation() {
+                    if output.generation != self.document_lifecycle.generation()
+                        || output.shield_revision != self.shield.revision {
                         return false;
                     }
                     self.image_cache = output.cache;
@@ -1425,6 +1470,9 @@ impl RabbitApp {
         let generation = self.document_lifecycle.generation();
         let lifecycle = self.document_lifecycle.clone();
         let cache = self.image_cache.clone();
+        let shield = self.shield.clone();
+        let shield_stats = self.shield_stats.clone();
+        let document = state.final_url.clone();
         let (sender, receiver) = oneshot::channel();
         self.image_completion = Some(receiver);
         #[cfg(test)]
@@ -1435,6 +1483,9 @@ impl RabbitApp {
                 return;
             }
             let mut worker = RabbitApp::new(None);
+            worker.shield = shield;
+            worker.shield_stats = shield_stats;
+            worker.navigation_url = document;
             worker.document_lifecycle = lifecycle;
             // Diagnostics carry the target generation; no DOM crosses this job.
             worker.image_cache = cache;
@@ -1446,6 +1497,7 @@ impl RabbitApp {
             worker.fetch_images(&[candidate], &sender);
             let _ = sender.send(ImageOutput {
                 generation,
+                shield_revision: worker.shield.revision,
                 cache: worker.image_cache,
                 diagnostics: worker.developer_tools,
             });
@@ -1642,7 +1694,7 @@ impl RabbitApp {
             tab: Rect::new(
                 root.x + 6,
                 root.y + 3,
-                root.w.saturating_sub(12).min(240),
+                root.w.saturating_sub(46).min(240),
                 TAB_H.saturating_sub(3).min(top_bar.h),
             ),
             back: toolbar[0].bounds(),
@@ -1650,6 +1702,7 @@ impl RabbitApp {
             url_bar: toolbar[2].bounds(),
             view: toolbar[3].bounds(),
             devtools: toolbar[4].bounds(),
+            shield: Rect::new(root.right()-34,root.y+3,28,TAB_H.saturating_sub(3).min(top_bar.h)),
         }
     }
 
@@ -1786,6 +1839,7 @@ impl RabbitApp {
                     let current = self.render_state.as_ref();
                     if output.version == self.viewport_version
                         && output.state.document_id == self.document_lifecycle.generation()
+                        && output.state.styles.shield_revision().is_none_or(|revision| revision == self.shield.revision)
                         && current.is_some_and(|state| {
                             state.image_revision == output.state.image_revision
                                 && state.dom_revision == output.state.dom_revision
@@ -1813,6 +1867,7 @@ impl RabbitApp {
                             .dom
                             .update_styles(output.state.styles.clone());
                         self.render_state = Some(output.state);
+                        self.shield_reflow_pending = false;
                         self.patch_all_controls();
                         self.clamp_scrolls();
                         // Counts are already computed on the worker. Avoid
@@ -1850,16 +1905,17 @@ impl RabbitApp {
         else {
             return changed;
         };
-        if state.viewport == self.latest_viewport && !state.images_need_update() {
+        if state.viewport == self.latest_viewport && !state.images_need_update() && !self.shield_reflow_pending {
             return changed;
         }
-        let mut snapshot = if state.viewport == self.latest_viewport && state.images_need_update() {
+        let mut snapshot = if !self.shield_reflow_pending && state.viewport == self.latest_viewport && state.images_need_update() {
             state.image_snapshot()
         } else {
             state.reflow_snapshot()
         };
         let viewport = self.latest_viewport;
         let version = self.viewport_version;
+        let shield = self.shield_reflow_pending.then(|| self.shield.clone());
         let (sender, receiver) = oneshot::channel();
         self.reflow_completion = Some(receiver);
         debug_log(&format!(
@@ -1875,6 +1931,10 @@ impl RabbitApp {
                 return;
             }
             let start = std::time::Instant::now();
+            if let Some(shield) = shield {
+                let policy = rappid_rabbit::content_shield::CosmeticPolicy::for_document(&shield, &snapshot.final_url);
+                snapshot.set_shield_policy(policy, &RABBIT_FONTS);
+            }
             snapshot.update_for_viewport(viewport, &RABBIT_FONTS);
             debug_log(&format!(
                 "[RABBIT][LAYOUT] reflow gen={} version={} viewport={}x{} elapsed_ms={} worker=yes",
@@ -3150,6 +3210,7 @@ impl App for RabbitApp {
             self.draw_chrome_hint(canvas, theme);
         }
         self.url_input.draw_context_menu(canvas, theme);
+        self.draw_shield_settings(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
@@ -3202,6 +3263,7 @@ impl RabbitApp {
         if self.url_input.context_menu_open() {
             return self.url_input.update(event);
         }
+        if self.update_shield_ui(event) { return true; }
 
         if self.handle_document_scroll(event) {
             return true;
@@ -3567,6 +3629,13 @@ fn trace_layout(state: &DocumentRenderState) {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "js-dom-fixture")]
+    {
+        let args:Vec<String>=std::env::args().collect();
+        if args.get(1).map(String::as_str)==Some("--shield-probe") {
+            return shield_probe::run(args.get(2).ok_or("fixture URL required")?);
+        }
+    }
+    #[cfg(feature = "js-dom-fixture")]
     if std::env::args().any(|arg| arg == "--account-fixture") {
         return rappid_rabbit::account_fixture::run();
     }
@@ -3646,6 +3715,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .thread_stack_size(4 * 1024 * 1024)
         .build()?;
     let mut app = RabbitApp::new(initial_url.as_deref());
+    if let Some(settings) = rappid_rabbit::content_shield::load_settings() {
+        app.shield.settings = settings;
+        app.shield.changed();
+        app.shield_persistence_status = "Preferences restored".into();
+    }
     app.runtime = Some(runtime.handle().clone());
     #[cfg(feature = "dom")]
     {
@@ -4313,6 +4387,7 @@ mod progressive_tests {
         );
         assert!(sender
             .send(ImageOutput {
+                shield_revision: app.shield.revision,
                 generation: 1,
                 cache,
                 diagnostics: DeveloperToolsState::default()
@@ -4389,6 +4464,7 @@ mod progressive_tests {
             app.begin_navigation_session("http://fixture/next", &build_get_request(&url));
             assert!(app.image_completion.is_none());
             let result = sender.send(ImageOutput {
+                shield_revision: app.shield.revision,
                 generation: 1,
                 cache,
                 diagnostics: DeveloperToolsState::default(),

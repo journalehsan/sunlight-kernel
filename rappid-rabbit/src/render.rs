@@ -157,6 +157,11 @@ struct ImageDependency {
 }
 
 impl DocumentRenderState {
+    /// Reversible presentation invalidation. Does not reparse, detach or edit DOM.
+    pub fn set_shield_policy(&mut self, policy: Arc<crate::content_shield::CosmeticPolicy>, measurer: &dyn TextMeasurer) {
+        self.styles = Arc::new(self.styles.as_ref().clone().with_shield(&self.dom, Some(policy)));
+        self.rebuild(self.viewport, measurer);
+    }
     pub fn new(
         document_id: u64,
         final_url: String,
@@ -271,7 +276,7 @@ impl DocumentRenderState {
             &self.dom,
             &sheets,
             self.viewport.w,
-        ));
+        ).with_shield(&self.dom, self.styles.shield.clone()));
         self.rebuild(self.viewport, measurer);
     }
 

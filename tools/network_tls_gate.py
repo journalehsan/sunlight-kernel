@@ -33,6 +33,7 @@ class Fixture(http.server.BaseHTTPRequestHandler):
     exchanges = 0
     issued_secrets = set()
     connection_requests = 0
+    shield_requests = []
 
     def log_message(self, *_args):
         pass
@@ -58,6 +59,22 @@ class Fixture(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
+        if url.path in ("/shield", "/images/good.jpg", "/ads/banners/sale.png", "/css/ads-native.css"):
+            type(self).shield_requests.append(url.path)
+            root = Path(__file__).resolve().parents[1]
+            if url.path == "/shield":
+                data = (root / "rappid-rabbit/tests/fixtures/content-shield.html").read_bytes()
+                mime = "text/html"
+            elif url.path.endswith(".css"):
+                data, mime = b"body { background: red; }", "text/css"
+            else:
+                data, mime = (root / "sun-img/tests/fixtures/gray.jpg").read_bytes(), "image/jpeg"
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if url.path.startswith("/connections/"):
             # Eleven separate TLS connections per fetch, all owned by the
             # same daemon. Twelve batches exceed both its former ~84-socket
@@ -372,6 +389,8 @@ def gate(args, root):
             if args.ui_only:
                 cases = [(f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
                          ("certificatectl install ca testca /tmp/ca.der", 0)]
+            if args.content_shield_only:
+                cases = []
             for command, expected in cases:
                 start = len(serial.read_text(errors="replace"))
                 type_text(command + "\n")
@@ -379,7 +398,7 @@ def gate(args, root):
                 if f"[TTY]  exit: {command} -> {expected}\n" not in text:
                     raise RuntimeError(f"Unexpected exit status: {command}; see {serial}")
                 print(f"PASS (exit {expected}): {command}", flush=True)
-            if not args.ui_only:
+            if not args.ui_only and not args.content_shield_only:
                 expected_connections = CONNECTION_BATCHES * (CONNECTION_REDIRECTS + 1)
                 if Fixture.connection_requests != expected_connections:
                     raise RuntimeError(f"Connection soak incomplete: {Fixture.connection_requests}/{expected_connections}")
@@ -418,7 +437,15 @@ def gate(args, root):
                 text = serial.read_text(errors="replace")
                 assert "native-mock-access" not in text and "native-mock-refresh" not in text
                 assert all(secret not in text for secret in Fixture.issued_secrets)
-            print(f"TCP/TLS gate passed on {args.cpus} CPUs; evidence: {output}", flush=True)
+            if args.content_shield:
+                from content_shield_ui_gate import verify_ui
+                verify_ui(request, type_text, wait_for, serial, output, http_url, Fixture.shield_requests)
+                assert "/shield" in Fixture.shield_requests and "/images/good.jpg" in Fixture.shield_requests
+                assert Fixture.shield_requests.count("/ads/banners/sale.png") == 1
+                assert Fixture.shield_requests.count("/css/ads-native.css") == 1
+                print("Content Shield native request, DOM, settings and UI gate passed", flush=True)
+            label = "Content Shield" if args.content_shield_only else "TCP/TLS"
+            print(f"{label} gate passed on {args.cpus} CPUs; evidence: {output}", flush=True)
     finally:
         if process is not None:
             process.terminate()
@@ -438,6 +465,8 @@ if __name__ == "__main__":
     parser.add_argument("--cpus", type=int, default=12)
     parser.add_argument("--uefi", action="store_true")
     parser.add_argument("--tcg", action="store_true", help="Use software emulation even when /dev/kvm is accessible")
+    parser.add_argument("--content-shield", action="store_true", help="Verify the opt-in native Shield probe and capture browser screenshots")
+    parser.add_argument("--content-shield-only", action="store_true", help="Run only the Content Shield native fixture (requires --content-shield)")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--evidence", default="target/network-tls")
     parser.add_argument("--account-provider-preflight", action="store_true",
@@ -452,6 +481,8 @@ if __name__ == "__main__":
     parser.add_argument("--arch-resolve", help="Also fetch Arch directly using this IPv4 DNS override")
     parser.add_argument("--arch-proxy", help="Also fetch archlinux.org through this guest-visible SOCKS IPv4:port")
     arguments = parser.parse_args()
+    if arguments.content_shield_only and not arguments.content_shield:
+        parser.error("--content-shield-only requires --content-shield")
     if arguments.ui_only and not arguments.online_accounts_ui:
         parser.error("--ui-only requires --online-accounts-ui")
     if arguments.online_accounts_ui and not arguments.account_broker_flow:

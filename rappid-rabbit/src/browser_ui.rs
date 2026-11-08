@@ -103,6 +103,7 @@ impl RabbitApp {
     }
 
     pub(super) fn cursor_at(&mut self, point: Point) -> CursorShape {
+        if self.shield_settings_open || self.shield_reflow_pending {return CursorShape::Pointer;}
         if self.url_input.context_menu_open() {
             return CursorShape::Pointer;
         }
@@ -113,6 +114,7 @@ impl RabbitApp {
             return CursorShape::Text;
         }
         if self.devtools_button_rect().contains(point)
+            || self.layout.shield.contains(point)
             || self.view_button_rect().contains(point)
             || (!self.navigation_draining && self.url_action_rect().contains(point))
         {
@@ -277,6 +279,7 @@ impl RabbitApp {
     }
 
     pub(super) fn stop_navigation(&mut self) {
+        self.shield_stats.cancelled.store(true,core::sync::atomic::Ordering::Release);
         if !self.pending_fetch {
             return;
         }
@@ -324,7 +327,9 @@ impl RabbitApp {
         let Some(point) = self.pointer else {
             return;
         };
-        let label = if self.devtools_button_rect().contains(point) {
+        let label = if self.layout.shield.contains(point) {
+            "Content Shield (Ctrl+Shift+S)"
+        } else if self.devtools_button_rect().contains(point) {
             "Developer tools (F12)"
         } else if self.view_button_rect().contains(point) {
             "Page source / Render"
@@ -414,6 +419,8 @@ impl RabbitApp {
         }
         self.draw_url_bar(canvas, theme);
         for (rect, label, active) in [
+            (self.layout.shield, "S", self.shield.settings.enabled
+                && self.shield_site_active()),
             (
                 self.view_button_rect(),
                 "<>",
@@ -468,7 +475,7 @@ fn compact_title(text: &str) -> String {
     title
 }
 
-fn fit_text(text: &str, width: u32, font: &dyn VecText) -> String {
+pub(super) fn fit_text(text: &str, width: u32, font: &dyn VecText) -> String {
     if font.measure_w(text) <= width {
         return text.into();
     }

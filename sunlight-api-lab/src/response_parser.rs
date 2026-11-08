@@ -95,6 +95,12 @@ pub fn parse_response(
 
 pub fn describe_fetch_error(err: &FetchError, duration_ms: Option<u64>) -> ParsedResponseDisplay {
     let (status_label, body_text, console_text, console_severity) = match err {
+        FetchError::BlockedByPolicy => (
+            String::from("Blocked by Content Shield"),
+            String::new(),
+            String::from("Request blocked by Content Shield."),
+            NoticeSeverity::Warn,
+        ),
         FetchError::InvalidUrl(message) => (
             if message.contains("only http:// and https://") {
                 String::from("Unsupported URL scheme")

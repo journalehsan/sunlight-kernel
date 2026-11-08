@@ -1,0 +1,10 @@
+{
+  "source": "https://publicsuffix.org/list/public_suffix_list.dat",
+  "license": "MPL-2.0",
+  "version": "2026-11-06_09-01-47_UTC",
+  "sha256": {
+    "public_suffix_list.dat": "027fe126522e646b2335c3d564750d7223f0994a1a460107ce4f3a40bd682310",
+    "public_suffix_ascii.txt": "0065dc534775e475c8fc3d3181a306a169ddf55c1d238f0fae7926228bde6f82"
+  },
+  "derivation": "Strip comments and blanks; encode labels with Python IDNA; retain wildcard and exception prefixes and private section."
+}
