@@ -8,6 +8,7 @@
 //!   TLS_CONNECT_EX(endpoint, ports, name_len, proxy; SHM name) -> session id
 //!   TLS_SEND(sid, plaintext via shm)           (encrypts + transmits)
 //!   TLS_RECV(sid) -> plaintext via shm + eof   (receives + decrypts)
+//!   TLS_CERT_DER(sid, index; caller SHM)       (bounded certificate snapshot)
 //!   TLS_CLOSE(sid)                             (close_notify + socket close)
 //!
 //! Trust anchors (root CAs) live in sunlight-kv under compact `tls.ca.*` keys.
@@ -161,6 +162,7 @@ mod sunlightos_impl {
     // Four inline words: endpoint IP, target/proxy ports, hostname length,
     // proxy flag. caps[0] carries the full hostname in SHM.
     const TLS_CONNECT_EX: u64 = 0x5408;
+    const TLS_CERT_DER: u64 = 0x5409;
     const TLS_REPLY: u64 = 0x54FF;
     const TLS_ERROR: u64 = 0x54EE;
 
@@ -207,7 +209,10 @@ mod sunlightos_impl {
 
     static mut CLIENT_CONFIG: Option<Arc<ClientConfig>> = None;
 
+    static mut ROOT_DERS: Vec<Vec<u8>> = Vec::new();
+
     struct Session {
+        root_der: Option<Vec<u8>>,
         id: u64,
         conn: UnbufferedClientConnection,
         socket_id: u64,
@@ -592,6 +597,9 @@ mod sunlightos_impl {
     }
 
     fn build_root_store() -> RootCertStore {
+        unsafe {
+            (&mut *core::ptr::addr_of_mut!(ROOT_DERS)).clear();
+        }
         serial_println!("[SUNLIGHT-TLS] dbg: build_root_store start");
         let mut roots = RootCertStore::empty();
         seed_trust_if_empty();
@@ -605,8 +613,13 @@ mod sunlightos_impl {
                     };
                     if let Some(der) = kv_get_shm(&key) {
                         if !der.is_empty() {
-                            match roots.add(CertificateDer::from(der)) {
-                                Ok(()) => serial_println!("[SUNLIGHT-TLS] trust += {}", name),
+                            match roots.add(CertificateDer::from(der.clone())) {
+                                Ok(()) => {
+                                    unsafe {
+                                        (&mut *core::ptr::addr_of_mut!(ROOT_DERS)).push(der);
+                                    }
+                                    serial_println!("[SUNLIGHT-TLS] trust += {}", name);
+                                }
                                 Err(_) => serial_println!("[SUNLIGHT-TLS] bad cert {}", name),
                             }
                         }
@@ -615,9 +628,9 @@ mod sunlightos_impl {
             }
         }
         if roots.is_empty() {
-            // kv unavailable — fall back to the compiled-in root so HTTPS still works.
-            let _ = roots.add(CertificateDer::from(EMBEDDED_GTS_R4.to_vec()));
-            serial_println!("[SUNLIGHT-TLS] using embedded fallback root");
+            // KV remains authoritative whenever it supplies usable anchors.
+            roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+            serial_println!("[SUNLIGHT-TLS] using webpki-roots fallback");
         }
         roots
     }
@@ -917,6 +930,7 @@ mod sunlightos_impl {
             rustls::Error::InvalidCertificate(rustls::CertificateError::Expired) => {
                 ERR_CERT_EXPIRED
             }
+            rustls::Error::InvalidCertificate(_) => 6,
             _ => 50,
         }
     }
@@ -1006,7 +1020,7 @@ mod sunlightos_impl {
             Ok(n) => n.to_owned(),
             Err(_) => return Err(11),
         };
-        let mut conn = match UnbufferedClientConnection::new(cfg, sni) {
+        let mut conn = match UnbufferedClientConnection::new(cfg.clone(), sni) {
             Ok(c) => c,
             Err(_) => return Err(12),
         };
@@ -1020,9 +1034,7 @@ mod sunlightos_impl {
             return Err(14);
         }
         if proxy.is_some() {
-            if let Err(error) =
-                sunlight_net::socks5::connect(&mut SocksSocket(socket_id), host, port)
-            {
+            if let Err(error) = sunlight_net::socks5::connect(&mut SocksSocket(socket_id), host, port) {
                 serial_println!("[SUNLIGHT-TLS] SOCKS CONNECT failed: {:?}", error);
                 net_close(socket_id);
                 return Err(15);
@@ -1033,7 +1045,36 @@ mod sunlightos_impl {
             net_close(socket_id);
             return Err(code);
         }
+        // Find an actual verifying KV anchor, rather than guessing from issuer text.
+        let root_der = (|| {
+            use rustls::client::danger::ServerCertVerifier;
+            let peers = conn.peer_certificates()?;
+            let leaf = peers.first()?;
+            let now = OsTimeProvider.current_time()?;
+            let name = ServerName::try_from(host).ok()?;
+            let candidates = unsafe { &*core::ptr::addr_of!(ROOT_DERS) };
+            for der in candidates.iter().take(128) {
+                let mut roots = RootCertStore::empty();
+                if roots.add(CertificateDer::from(der.clone())).is_err() {
+                    continue;
+                }
+                let verifier = rustls::client::WebPkiServerVerifier::builder_with_provider(
+                    Arc::new(roots),
+                    cfg.crypto_provider().clone(),
+                )
+                .build()
+                .ok()?;
+                if verifier
+                    .verify_server_cert(leaf, &peers[1..], &name, &[], now)
+                    .is_ok()
+                {
+                    return Some(der.clone());
+                }
+            }
+            None
+        })();
         let session = Session {
+            root_der,
             id,
             conn,
             socket_id,
@@ -1293,6 +1334,44 @@ mod sunlightos_impl {
                         reply.words[0] = 4;
                     }
                 }
+                // Caller-owned page; bounded DER query, leaf first. No daemon page leak.
+                TLS_CERT_DER => {
+                    let der = find_session_index(msg.words[0]).and_then(|idx| unsafe {
+                        let slots = &*core::ptr::addr_of!(SESSIONS);
+                        let session = slots[idx].as_ref()?;
+                        let peers = session.conn.peer_certificates()?;
+                        let index = msg.words[1] as usize;
+                        if index == peers.len() {
+                            reply.words[1] = 1;
+                            session
+                                .root_der
+                                .clone()
+                                .filter(|root| !peers.iter().any(|peer| peer.as_ref() == root.as_slice()))
+                        } else {
+                            peers.get(index).map(|der| der.as_ref().to_vec())
+                        }
+                    });
+                    if let Some(der) = der.filter(|der| der.len() <= SHM_PAGE) {
+                        let token = msg.caps[0];
+                        if let Ok((ptr, capacity)) = sunlight_ipc::shm_map_sized(token) {
+                            if capacity < der.len() {
+                                let _ = shm_free(token);
+                                reply.label = TLS_ERROR;
+                            } else {
+                                unsafe {
+                                    core::ptr::copy_nonoverlapping(der.as_ptr(), ptr, der.len());
+                                }
+                                let _ = shm_free(token);
+                                reply.words[0] = der.len() as u64;
+                            }
+                        } else {
+                            reply.label = TLS_ERROR;
+                        }
+                    } else {
+                        reply.words[0] = 0;
+                    }
+                }
+
                 TLS_LIST => {
                     let index = kv_get_shm(TLS_CA_INDEX_KEY).unwrap_or_default();
                     let s = String::from_utf8(index).unwrap_or_default();

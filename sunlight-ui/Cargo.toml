@@ -252,6 +252,7 @@ description = "SunlightOS framebuffer widget toolkit"
 license     = "MIT"
 
 [dependencies]
+sunlight-cert = { path = "../sunlight-cert" }
 unicode-segmentation = { version = "1.13.3", default-features = false }
 # Optional: enables the app module (event-loop wrapper over SGP protocol).
 sunlight-ipc = { path = "../ipc", optional = true }

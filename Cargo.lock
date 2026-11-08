@@ -1993,6 +1993,7 @@ version = "0.2.6843-alpha.2"
 dependencies = [
  "golden-fish",
  "sun-font",
+ "sunlight-cert",
  "sunlight-fetch",
  "sunlight-http",
  "sunlight-ipc",
@@ -2722,6 +2723,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-cert"
+version = "0.1.0"
+
+[[package]]
 name = "sunlight-chronos"
 version = "0.2.6843-alpha.2"
 dependencies = [
@@ -2923,6 +2928,7 @@ version = "0.2.6843-alpha.2"
 dependencies = [
  "log",
  "rustls",
+ "sunlight-cert",
  "sunlight-http",
  "sunlight-ipc",
  "sunlight-libc",
@@ -3345,9 +3351,11 @@ dependencies = [
  "rustls",
  "rustls-rustcrypto",
  "sha2",
+ "sunlight-cert",
  "sunlight-ipc",
  "sunlight-libc",
  "sunlight-net",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -3420,6 +3428,7 @@ version = "0.2.6843-alpha.2"
 dependencies = [
  "resvg",
  "sun-img",
+ "sunlight-cert",
  "sunlight-ipc",
  "unicode-segmentation",
 ]

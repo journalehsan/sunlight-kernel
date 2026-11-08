@@ -53,6 +53,9 @@ pub enum FetchError {
     /// TLS server certificate has expired
     TlsCertExpired,
 
+    /// TLS verifier rejected the server certificate.
+    TlsCertInvalid(String),
+
     /// URL parsing failure
     InvalidUrl(String),
 
@@ -92,6 +95,7 @@ impl fmt::Display for FetchError {
             Self::IoError(msg) => write!(f, "I/O error: {msg}"),
             Self::Interrupted => write!(f, "download interrupted"),
             Self::TlsHandshakeFailed(reason) => write!(f, "TLS handshake failed: {reason}"),
+            Self::TlsCertInvalid(reason) => write!(f, "Invalid TLS certificate: {reason}"),
             Self::TlsCertExpired => write!(f, "TLS certificate expired"),
             Self::InvalidUrl(msg) => write!(f, "invalid URL: {msg}"),
             Self::UnknownContentLength => {

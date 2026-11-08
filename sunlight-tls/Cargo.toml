@@ -645,12 +645,15 @@ sunlightos = [
     "dep:heapless",
     "dep:linked_list_allocator",
     "dep:rustls",
+    "dep:webpki-roots",
     "dep:rustls-rustcrypto",
     "dep:sha2",
     "dep:getrandom",
 ]
 
 [dependencies]
+webpki-roots = { version = "0.26", optional = true }
+sunlight-cert = { path = "../sunlight-cert" }
 sunlight-net = { path = "../sunlight-net", optional = true }
 sunlight-ipc  = { path = "../ipc", optional = true }
 sunlight-libc = { path = "../sunlight-libc", optional = true }

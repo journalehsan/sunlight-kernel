@@ -415,6 +415,7 @@ name = "progressive_presentation"
 required-features = ["dom"]
 
 [dependencies]
+sunlight-cert = { path = "../sunlight-cert" }
 unicode-segmentation = { version = "1.12", default-features = false }
 sun-font = { path = "../sun-font" }
 sunlight-fetch = { path = "../sunlight-fetch", default-features = false, features = ["sunlightos"] }

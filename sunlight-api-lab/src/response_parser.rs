@@ -117,7 +117,7 @@ pub fn describe_fetch_error(err: &FetchError, duration_ms: Option<u64>) -> Parse
             format!("DNS lookup failed for {host}."),
             NoticeSeverity::Error,
         ),
-        FetchError::TlsHandshakeFailed(reason) => (
+        FetchError::TlsHandshakeFailed(reason) | FetchError::TlsCertInvalid(reason) => (
             String::from("TLS failed"),
             String::from("A secure connection could not be established."),
             format!("TLS handshake failed: {reason}"),
@@ -470,6 +470,8 @@ mod tests {
     #[test]
     fn json_responses_are_pretty_printed() {
         let result = RequestResult {
+            connection_security: Default::default(),
+            cert_info: None,
             response: HttpResponse {
                 status_code: 200,
                 status_text: String::from("OK"),
@@ -506,6 +508,8 @@ mod tests {
             "application/problem+json",
         ] {
             let result = RequestResult {
+                connection_security: Default::default(),
+                cert_info: None,
                 response: HttpResponse {
                     status_code: 200,
                     status_text: String::from("OK"),
@@ -526,6 +530,8 @@ mod tests {
     #[test]
     fn valid_json_without_content_type_is_pretty_printed() {
         let result = RequestResult {
+            connection_security: Default::default(),
+            cert_info: None,
             response: HttpResponse {
                 status_code: 200,
                 status_text: String::from("OK"),
@@ -544,6 +550,8 @@ mod tests {
     #[test]
     fn malformed_json_stays_plain_text() {
         let result = RequestResult {
+            connection_security: Default::default(),
+            cert_info: None,
             response: HttpResponse {
                 status_code: 200,
                 status_text: String::from("OK"),
@@ -571,6 +579,8 @@ mod tests {
             (HttpMethod::Get, 200),
         ] {
             let result = RequestResult {
+                connection_security: Default::default(),
+                cert_info: None,
                 response: HttpResponse {
                     status_code,
                     status_text: String::from("OK"),

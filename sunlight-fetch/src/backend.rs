@@ -12,6 +12,8 @@ type RequestTimer = ();
 
 #[derive(Debug, Clone)]
 pub struct RequestResult {
+    pub connection_security: sunlight_cert::ConnectionSecurity,
+    pub cert_info: Option<sunlight_cert::CertInfo>,
     pub response: HttpResponse,
     pub body: Vec<u8>,
     pub final_url: Option<ParsedUrl>,
@@ -47,6 +49,11 @@ impl PendingRequest {
         )?;
 
         Ok(RequestResult {
+            connection_security: self.handle.connection_security(),
+            cert_info: self.handle.cert_info().map(|mut cert| {
+                cert.verified_host = Some(self.final_url.host.clone());
+                cert
+            }),
             response: self.response,
             body,
             final_url: Some(self.final_url),
@@ -79,6 +86,11 @@ pub fn perform_request_limited(
         limit,
     );
     Ok(RequestResult {
+        connection_security: pending.handle.connection_security(),
+        cert_info: pending.handle.cert_info().map(|mut cert| {
+            cert.verified_host = Some(pending.final_url.host.clone());
+            cert
+        }),
         response: pending.response,
         body: body?,
         final_url: Some(pending.final_url),
@@ -99,10 +111,24 @@ pub fn perform_request_filtered(
     ipc::acquire_capabilities()?;
     let addr = ipc::dns_resolve(&url.host)?;
     let mut pending = begin_request_guarded(url, addr, request, None, None, &[], Some(policy))?;
-    let body = ipc::read_body_limited(&mut pending.handle, pending.request_method,
-        &pending.response, &pending.initial_body, limit)?;
-    Ok(RequestResult { response: pending.response, body, final_url: Some(pending.final_url),
-        duration_ms: elapsed_ms(pending.started_at) })
+    let body = ipc::read_body_limited(
+        &mut pending.handle,
+        pending.request_method,
+        &pending.response,
+        &pending.initial_body,
+        limit,
+    )?;
+    Ok(RequestResult {
+        connection_security: pending.handle.connection_security(),
+        cert_info: pending.handle.cert_info().map(|mut cert| {
+            cert.verified_host = Some(pending.final_url.host.clone());
+            cert
+        }),
+        response: pending.response,
+        body,
+        final_url: Some(pending.final_url),
+        duration_ms: elapsed_ms(pending.started_at),
+    })
 }
 
 pub(crate) fn begin_request_from_resolved(
@@ -113,7 +139,9 @@ pub(crate) fn begin_request_from_resolved(
     proxy: Option<sunlight_net::socks5::Proxy>,
     overrides: &[crate::cli::ResolveOverride],
 ) -> FetchResult<PendingRequest> {
-    begin_request_guarded(start_url,start_addr,request,on_event,proxy,overrides,None)
+    begin_request_guarded(
+        start_url, start_addr, request, on_event, proxy, overrides, None,
+    )
 }
 
 fn begin_request_guarded(
@@ -181,7 +209,9 @@ fn begin_request_guarded(
             }
 
             let next_url = resolve_redirect_location(&url, location)?;
-            if let Some(policy) = policy.as_mut() { policy(&next_url)?; }
+            if let Some(policy) = policy.as_mut() {
+                policy(&next_url)?;
+            }
             if !is_broker_callback(&next_url) {
                 emit_event(
                     &mut on_event,

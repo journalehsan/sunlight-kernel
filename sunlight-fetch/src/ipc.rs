@@ -91,6 +91,16 @@ pub struct TcpHandle {
     conn: sunlight::OsConnection,
 }
 
+impl TcpHandle {
+    /// Snapshot after the handshake and response headers, before session close.
+    pub fn connection_security(&self) -> sunlight_cert::ConnectionSecurity {
+        self.conn.connection_security()
+    }
+    pub fn cert_info(&self) -> Option<sunlight_cert::CertInfo> {
+        self.conn.cert_info()
+    }
+}
+
 impl Drop for TcpHandle {
     fn drop(&mut self) {
         let _ = self.close();
@@ -513,7 +523,37 @@ mod host {
         Tls(rustls::StreamOwned<rustls::ClientConnection, TcpStream>),
     }
 
+    fn map_io_error(error: std::io::Error) -> FetchError {
+        if let Some(rustls::Error::InvalidCertificate(reason)) = error
+            .get_ref()
+            .and_then(|inner| inner.downcast_ref::<rustls::Error>())
+        {
+            return FetchError::TlsCertInvalid(format!("{reason:?}"));
+        }
+        FetchError::IoError(error.to_string())
+    }
+
     impl HostConnection {
+        pub(super) fn connection_security(&self) -> sunlight_cert::ConnectionSecurity {
+            match self {
+                Self::Plain(_) => sunlight_cert::ConnectionSecurity::NotSecure,
+                _ => sunlight_cert::ConnectionSecurity::Secure,
+            }
+        }
+
+        pub(super) fn cert_info(&self) -> Option<sunlight_cert::CertInfo> {
+            match self {
+                Self::Tls(stream) => sunlight_cert::peer_chain(
+                    stream
+                        .conn
+                        .peer_certificates()?
+                        .iter()
+                        .map(|der| der.as_ref()),
+                ),
+                Self::Plain(_) => None,
+            }
+        }
+
         fn send_all(&mut self, data: &[u8]) -> FetchResult<()> {
             let mut written = 0;
             while written < data.len() {
@@ -521,7 +561,7 @@ mod host {
                     Self::Plain(stream) => stream.write(&data[written..]),
                     Self::Tls(stream) => stream.write(&data[written..]),
                 }
-                .map_err(|e| FetchError::IoError(e.to_string()))?;
+                .map_err(map_io_error)?;
                 if n == 0 {
                     return Err(FetchError::IoError(String::from(
                         "connection closed while sending request",
@@ -684,7 +724,7 @@ mod host {
             Err(e) if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {
                 Ok(Vec::new())
             }
-            Err(e) => Err(FetchError::IoError(e.to_string())),
+            Err(e) => Err(map_io_error(e)),
         }
     }
 
@@ -924,6 +964,7 @@ mod sunlight {
     // TLS IPC protocol labels — must match sunlight-tls/src/main.rs.
     // Design B: the daemon owns the socket + crypto; we exchange plaintext only.
     const TLS_CONNECT_EX: u64 = 0x5408;
+    const TLS_CERT_DER: u64 = 0x5409;
     const TLS_SEND: u64 = 0x5402;
     const TLS_RECV: u64 = 0x5403;
     const TLS_CLOSE: u64 = 0x5405;
@@ -950,6 +991,57 @@ mod sunlight {
     }
 
     impl OsConnection {
+        pub(super) fn connection_security(&self) -> sunlight_cert::ConnectionSecurity {
+            match self {
+                Self::Tcp { .. } => sunlight_cert::ConnectionSecurity::NotSecure,
+                _ => sunlight_cert::ConnectionSecurity::Secure,
+            }
+        }
+
+        pub(super) fn cert_info(&self) -> Option<sunlight_cert::CertInfo> {
+            let Self::Tls { session_id, .. } = self else {
+                return None;
+            };
+            let cap = tls_cap().ok()?;
+            let mut ders = Vec::new();
+            let mut anchor_der = None;
+            for index in 0..16 {
+                let (ptr, token) = shm_alloc().ok()?;
+                let reply = ipc_call(
+                    cap,
+                    IpcMsg::with_label(TLS_CERT_DER)
+                        .word(0, *session_id)
+                        .word(1, index)
+                        .with_cap(0, token),
+                );
+                let len = reply.words[0] as usize;
+                let der = if reply.label == TLS_REPLY && len > 0 && len <= TLS_SHM_PAGE {
+                    Some(unsafe { core::slice::from_raw_parts(ptr, len) }.to_vec())
+                } else {
+                    None
+                };
+                let _ = shm_free(token);
+                match der {
+                    Some(der) if reply.words[1] == 1 => {
+                        anchor_der = Some(der);
+                        break;
+                    }
+                    Some(der) => ders.push(der),
+                    None => break,
+                }
+            }
+            let mut info = sunlight_cert::peer_chain(ders.iter().map(Vec::as_slice))?;
+            if let Some(root) = anchor_der
+                .as_deref()
+                .and_then(|der| sunlight_cert::parse_der(der, true))
+            {
+                let mut root = root;
+                root.trust = sunlight_cert::CertificateTrust::TrustAnchor;
+                info.chain.insert(0, root);
+            }
+            Some(info)
+        }
+
         pub(super) fn send_all(&mut self, data: &[u8]) -> FetchResult<()> {
             match self {
                 Self::Tcp { socket_id } => net_send(*socket_id, data),
@@ -1245,6 +1337,7 @@ mod sunlight {
                 TLS_ERR_SESSIONS_FULL => {
                     FetchError::TlsHandshakeFailed(String::from("TLS sessions full on daemon"))
                 }
+                6 => FetchError::TlsCertInvalid(String::from("Certificate validation failed (host, date, issuer or signature)")),
                 TLS_ERR_CERT_EXPIRED => FetchError::TlsCertExpired,
                 TLS_ERR_SOCKET_ALLOC => FetchError::ConnectionFailed {
                     host: String::from(host),

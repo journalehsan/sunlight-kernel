@@ -13,6 +13,8 @@ fn fixture(html: &str) -> RabbitApp {
     app.apply_result(
         "http://fixture/",
         RequestResult {
+            connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+            cert_info: None,
             response: sunlight_http::HttpResponse {
                 status_code: 200,
                 status_text: "OK".into(),
@@ -372,7 +374,6 @@ fn disabled_history_has_no_action_and_reload_uses_current_document_url() {
 #[test]
 fn stop_discards_late_navigation_and_bounds_outstanding_work() {
     let mut app = app();
-    let scene = app.render_state.as_ref().unwrap().current_scene.clone();
     let (sender, receiver) = oneshot::channel();
     app.queue_fetch();
     app.completion = Some(receiver);
@@ -383,14 +384,19 @@ fn stop_discards_late_navigation_and_bounds_outstanding_work() {
         app.update(Event::Tick);
     }
     assert!(!app.pending_fetch);
-    let output = fixture("<title>Must not appear</title>").into_navigation_output();
+    let mut output = fixture("<title>Must not appear</title>").into_navigation_output();
+    output.cert_info = sunlight_cert::peer_chain([include_bytes!(
+        "../../sunlight-tls/src/roots/gts_root_r4.der"
+    ).as_slice()]);
+    output.connection_security = sunlight_cert::ConnectionSecurity::Secure;
     assert!(sender.send(output).is_ok());
     app.update(Event::Tick);
     assert!(!app.navigation_draining);
-    assert!(alloc::sync::Arc::ptr_eq(
-        &scene,
-        &app.render_state.as_ref().unwrap().current_scene
-    ));
+    // queue_fetch releases the old scene; a canceled completion must not
+    // restore it or publish certificate information from that completion.
+    assert!(app.render_state.is_none());
+    assert!(app.cert_info.is_none());
+    assert_eq!(app.connection_security, sunlight_cert::ConnectionSecurity::Unknown);
     assert_ne!(app.tab_title, "Must not appear");
 }
 

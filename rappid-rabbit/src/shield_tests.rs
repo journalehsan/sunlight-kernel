@@ -20,7 +20,7 @@ fn app() -> RabbitApp {
     let url = ParsedUrl::parse("http://page.test/").unwrap();
     app.url_input.set_text(&format_url(&url));
     app.begin_navigation_session(&format_url(&url), &build_get_request(&url));
-    app.apply_result(&format_url(&url),RequestResult{response:sunlight_http::HttpResponse{status_code:200,status_text:"OK".into(),headers:vec![("content-type".into(),"text/html".into())],header_len:0},body:b"<div class='advert'><a href='/ad'>Ad</a></div><p>Good</p><img src='/ads/banner.png'><img src='/images/good.png'><img src='/ads/allow.png'>".to_vec(),final_url:Some(url),duration_ms:None});
+    app.apply_result(&format_url(&url),RequestResult{cert_info:None,connection_security:Default::default(),response:sunlight_http::HttpResponse{status_code:200,status_text:"OK".into(),headers:vec![("content-type".into(),"text/html".into())],header_len:0},body:b"<div class='advert'><a href='/ad'>Ad</a></div><p>Good</p><img src='/ads/banner.png'><img src='/images/good.png'><img src='/ads/allow.png'>".to_vec(),final_url:Some(url),duration_ms:None});
     app
 }
 fn fetch(
@@ -30,6 +30,8 @@ fn fetch(
 ) -> Result<RequestResult, FetchError> {
     FETCHED.fetch_add(1, Ordering::Relaxed);
     Ok(RequestResult {
+        connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+        cert_info: None,
         response: sunlight_http::HttpResponse {
             status_code: 200,
             status_text: "OK".into(),
@@ -225,6 +227,8 @@ fn stylesheet_block_fails_before_dns_and_keeps_embedded_content() {
     app.apply_result(
         &format_url(&url),
         RequestResult {
+            connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+            cert_info: None,
             response: sunlight_http::HttpResponse {
                 status_code: 200,
                 status_text: "OK".into(),

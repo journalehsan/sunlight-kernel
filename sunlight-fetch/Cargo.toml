@@ -662,6 +662,7 @@ sunlightos = [
 ]
 
 [dependencies]
+sunlight-cert = { path = "../sunlight-cert" }
 sunlight-libc = { path = "../sunlight-libc", optional = true }
 sunlight-ipc = { path = "../ipc", optional = true }
 sunlight-net = { path = "../sunlight-net", optional = true }

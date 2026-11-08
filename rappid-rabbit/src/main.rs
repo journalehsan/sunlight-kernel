@@ -246,6 +246,9 @@ impl SourceContent {
 }
 
 struct NavigationOutput {
+    cert_info: Option<sunlight_cert::CertInfo>,
+    connection_security: sunlight_cert::ConnectionSecurity,
+    certificate_error: Option<String>,
     shield_revision: u64,
     final_url: String,
     status: String,
@@ -304,6 +307,10 @@ struct ReflowOutput {
 struct RabbitApp {
     shield: golden_fish::shield::FilterListManager,
     shield_stats: alloc::sync::Arc<rappid_rabbit::content_shield::ShieldStats>,
+    certificate_panel: sunlight_ui::widgets::CertificatePanel,
+    cert_info: Option<sunlight_cert::CertInfo>,
+    connection_security: sunlight_cert::ConnectionSecurity,
+    certificate_error: Option<String>,
     shield_settings_open: bool,
     shield_persistence_status: String,
     shield_reflow_pending: bool,
@@ -408,6 +415,10 @@ impl RabbitApp {
         let mut app = Self {
             shield: rappid_rabbit::content_shield::bundled_manager(),
             shield_stats: Default::default(),
+            certificate_panel: Default::default(),
+            cert_info: None,
+            connection_security: Default::default(),
+            certificate_error: None,
             shield_settings_open: false,
             shield_persistence_status: String::new(),
             shield_reflow_pending: false,
@@ -478,6 +489,10 @@ impl RabbitApp {
         if self.pending_fetch || self.navigation_draining {
             return;
         }
+        self.cert_info = None;
+        self.connection_security = sunlight_cert::ConnectionSecurity::Unknown;
+        self.certificate_error = None;
+        self.certificate_panel.open = false;
         self.shield_stats.cancelled.store(true, core::sync::atomic::Ordering::Release);
         self.shield_stats = Default::default();
         // Navigation is an explicit request to show a new page. Completion
@@ -535,6 +550,9 @@ impl RabbitApp {
                     if self.url_input.value().trim() == self.navigation_url.as_str() {
                         self.url_input.set_text(&output.final_url);
                     }
+                    self.cert_info = output.cert_info;
+                    self.connection_security = output.connection_security;
+                    self.certificate_error = output.certificate_error;
                     self.status = output.status;
                     self.source = output.source;
                     self.render_status = output.render_status;
@@ -636,6 +654,9 @@ impl RabbitApp {
 
     fn into_navigation_output(self) -> NavigationOutput {
         NavigationOutput {
+            cert_info: self.cert_info,
+            connection_security: self.connection_security,
+            certificate_error: self.certificate_error,
             shield_revision: self.shield.revision,
             final_url: String::from(self.url_input.value()),
             status: self.status,
@@ -685,6 +706,8 @@ impl RabbitApp {
             self.apply_result(
                 canonical,
                 RequestResult {
+                    connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+                    cert_info: None,
                     response: sunlight_http::HttpResponse {
                         status_code: 200,
                         status_text: String::from("OK"),
@@ -751,6 +774,10 @@ impl RabbitApp {
     }
 
     fn reset_navigation_state(&mut self) -> u64 {
+        self.cert_info = None;
+        self.connection_security = sunlight_cert::ConnectionSecurity::Unknown;
+        self.certificate_error = None;
+        self.certificate_panel.open = false;
         self.shield_reflow_pending = false;
         let generation = self.document_lifecycle.begin_navigation();
         self.document_scroll = ScrollState::new();
@@ -782,6 +809,9 @@ impl RabbitApp {
     }
 
     fn apply_result(&mut self, requested_url: &str, result: RequestResult) {
+        self.cert_info = result.cert_info.clone();
+        self.connection_security = result.connection_security;
+        self.certificate_error = None;
         let generation = self.document_lifecycle.generation();
         let status_code = result.response.status_code;
         let status_text = if result.response.status_text.is_empty() {
@@ -1688,6 +1718,11 @@ impl RabbitApp {
     }
 
     fn apply_fetch_error(&mut self, err: FetchError) {
+        self.cert_info = None;
+        self.connection_security = if matches!(&err, FetchError::TlsCertExpired | FetchError::TlsCertInvalid(_)) {
+            sunlight_cert::ConnectionSecurity::Invalid
+        } else { sunlight_cert::ConnectionSecurity::Unknown };
+        self.certificate_error = Some(format!("{err}"));
         self.status = String::from("Request failed");
         self.render_status = format!("Render unavailable: {err}");
         self.source = SourceContent::Message(String::from(
@@ -2365,6 +2400,22 @@ impl RabbitApp {
         self.clamp_scrolls();
     }
 
+    fn certificate_panel_rect(&self) -> Rect {
+        let anchor = self.url_site_rect();
+        Rect::new(
+            anchor.x.max(0),
+            anchor.bottom() + 6,
+            self.client_bounds
+                .w
+                .saturating_sub(anchor.x.max(0) as u32)
+                .min(560),
+            self.client_bounds
+                .h
+                .saturating_sub(anchor.bottom().max(0) as u32 + 12)
+                .min(540),
+        )
+    }
+
     fn draw_url_bar(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let rect = self.url_bar_rect();
         let focused = self.url_input.active;
@@ -2403,6 +2454,11 @@ impl RabbitApp {
             canvas.fill_rect(Rect::new(cx + 4, cy - 4, 1, 1), sun);
             canvas.fill_rect(Rect::new(cx - 4, cy + 4, 1, 1), sun);
             canvas.fill_rect(Rect::new(cx + 4, cy + 4, 1, 1), sun);
+        } else if self.connection_security == sunlight_cert::ConnectionSecurity::Secure {
+            canvas.stroke_rounded_rect(Rect::new(cx - 4, cy - 7, 9, 10), 4, 1, theme.ok);
+            canvas.fill_rounded_rect(Rect::new(cx - 6, cy - 1, 13, 9), 2, theme.ok);
+        } else if self.connection_security == sunlight_cert::ConnectionSecurity::Invalid {
+            canvas.draw_text(cx - 4, cy - 5, "!", theme.warn);
         } else {
             // The URL scheme alone cannot establish that TLS was verified.
             canvas.stroke_rounded_rect(Rect::new(cx - 5, cy - 5, 11, 11), 5, 1, theme.icon_muted);
@@ -3318,9 +3374,69 @@ impl App for RabbitApp {
         }
         self.url_input.draw_context_menu(canvas, theme);
         self.draw_shield_settings(canvas, theme);
+        self.certificate_panel.draw(
+            canvas, theme, self.certificate_panel_rect(), self.connection_security,
+            self.cert_info.as_ref(), self.certificate_error.as_deref(),
+        );
     }
 
     fn update(&mut self, event: Event) -> bool {
+        if let Event::MouseDown { x, y, button: 0 } = event {
+            let point = Point::new(x, y);
+            if self.url_site_rect().contains(point) {
+                self.certificate_panel.open = !self.certificate_panel.open;
+                self.certificate_panel.scroll = 0;
+                return true;
+            }
+            if self.certificate_panel.open {
+                let rect = self.certificate_panel_rect();
+                if sunlight_ui::widgets::CertificatePanel::details_rect(rect).contains(point) {
+                    self.certificate_panel.expanded = !self.certificate_panel.expanded;
+                    self.certificate_panel.scroll = 0;
+                } else if !rect.contains(point) {
+                    self.certificate_panel.open = false;
+                }
+                return true;
+            }
+        }
+        if self.certificate_panel.open {
+            if let Event::MouseWheel { x, y, delta } = event {
+                if self.certificate_panel_rect().contains(Point::new(x, y)) {
+                    let count = self
+                        .certificate_panel
+                        .lines(
+                            self.certificate_panel_rect().w,
+                            self.connection_security,
+                            self.cert_info.as_ref(),
+                            self.certificate_error.as_deref(),
+                        )
+                        .len();
+                    if delta < 0 {
+                        self.certificate_panel.scroll =
+                            (self.certificate_panel.scroll + 1).min(count.saturating_sub(1));
+                    } else {
+                        self.certificate_panel.scroll =
+                            self.certificate_panel.scroll.saturating_sub(1);
+                    }
+                    return true;
+                }
+            }
+            if matches!(
+                event,
+                Event::Key('\u{1b}') | Event::FocusChanged { focused: false }
+            ) {
+                self.certificate_panel.open = false;
+                return true;
+            }
+            if event
+                .pos()
+                .is_some_and(|p| self.certificate_panel_rect().contains(p))
+            {
+                return true;
+            }
+        }
+
+
         let previous_pointer = self.pointer;
         let previous_cursor = self.cursor;
         let previous_title_revision = self.title_revision;
@@ -3988,6 +4104,8 @@ mod navigation_tests {
         worker.apply_result(
             url,
             RequestResult {
+                connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+                cert_info: None,
                 response: sunlight_http::HttpResponse {
                     status_code: 200,
                     status_text: String::from("OK"),
@@ -4185,6 +4303,8 @@ mod view_and_reflow_tests {
                     worker.apply_result(
                         "http://example.com/",
                         RequestResult {
+                            connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+                            cert_info: None,
                             response: sunlight_http::HttpResponse {
                                 status_code: 200,
                                 status_text: "OK".into(),
@@ -4418,6 +4538,8 @@ mod progressive_tests {
         _: usize,
     ) -> Result<RequestResult, FetchError> {
         Ok(RequestResult {
+            connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+            cert_info: None,
             response: sunlight_http::HttpResponse {
                 status_code: 200,
                 status_text: "OK".into(),
@@ -4443,6 +4565,8 @@ mod progressive_tests {
         app.apply_result(
             "http://fixture/",
             RequestResult {
+                connection_security: sunlight_cert::ConnectionSecurity::NotSecure,
+                cert_info: None,
                 response: sunlight_http::HttpResponse {
                     status_code: 200,
                     status_text: "OK".into(),
@@ -4746,5 +4870,67 @@ mod progressive_tests {
         for _ in 0..100 {
             assert!(!broken.update(Event::Tick));
         }
+    }
+}
+
+#[cfg(test)]
+mod certificate_panel_tests {
+    use super::*;
+
+    #[test]
+    fn certificate_follows_navigation_and_panel_clicks() {
+        let mut app = RabbitApp::new(None);
+        app.set_client_bounds(900, 700);
+        let cert = sunlight_cert::peer_chain([include_bytes!(
+            "../../sunlight-tls/src/roots/gts_root_r4.der"
+        )
+        .as_slice()])
+        .unwrap();
+        app.cert_info = Some(cert.clone());
+        app.connection_security = sunlight_cert::ConnectionSecurity::Secure;
+        let output = app.into_navigation_output();
+        assert_eq!(output.cert_info, Some(cert));
+        assert_eq!(
+            output.connection_security,
+            sunlight_cert::ConnectionSecurity::Secure
+        );
+
+        let mut app = RabbitApp::new(None);
+        app.set_client_bounds(900, 700);
+        let site = app.url_site_rect();
+        assert!(app.update(Event::MouseDown {
+            x: site.x + 2,
+            y: site.y + 2,
+            button: 0
+        }));
+        assert!(app.certificate_panel.open);
+        let details =
+            sunlight_ui::widgets::CertificatePanel::details_rect(app.certificate_panel_rect());
+        app.update(Event::MouseDown {
+            x: details.x + 2,
+            y: details.y + 2,
+            button: 0,
+        });
+        assert!(app.certificate_panel.expanded);
+        app.update(Event::Key('\u{1b}'));
+        assert!(!app.certificate_panel.open);
+        app.apply_fetch_error(FetchError::TlsCertInvalid("Wrong hostname".into()));
+        assert_eq!(
+            app.connection_security,
+            sunlight_cert::ConnectionSecurity::Invalid
+        );
+        assert!(app
+            .certificate_error
+            .as_deref()
+            .unwrap()
+            .contains("Wrong hostname"));
+        app.pending_fetch = false;
+        app.queue_fetch();
+        assert!(app.cert_info.is_none());
+        assert!(app.certificate_error.is_none());
+        assert_eq!(
+            app.connection_security,
+            sunlight_cert::ConnectionSecurity::Unknown
+        );
     }
 }

@@ -1,3 +1,5 @@
+pub mod certificate_panel;
+pub use certificate_panel::CertificatePanel;
 pub mod button;
 pub mod calendar;
 pub mod checkbox;
