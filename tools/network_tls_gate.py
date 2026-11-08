@@ -32,6 +32,7 @@ class Fixture(http.server.BaseHTTPRequestHandler):
     authorizations = 0
     exchanges = 0
     issued_secrets = set()
+    connection_requests = 0
 
     def log_message(self, *_args):
         pass
@@ -57,6 +58,18 @@ class Fixture(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
+        if url.path.startswith("/connections/"):
+            # Eleven separate TLS connections per fetch, all owned by the
+            # same daemon. Twelve batches exceed both its former ~84-socket
+            # heap failure point and the TCP table's 128-slot limit.
+            remaining = int(url.path.rsplit("/", 1)[1])
+            type(self).connection_requests += 1
+            if remaining:
+                self.send_response(302)
+                self.send_header("Location", f"/connections/{remaining - 1}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
         if url.path.startswith("/authorize/"):
             fields = urllib.parse.parse_qs(url.query, strict_parsing=True)
             case = url.path.rsplit("/", 1)[1]
@@ -153,6 +166,8 @@ LONG_HOST = "long-hostname-for-tls.sunlight.test"
 LARGE_BODY_SIZE = 192 * 1024
 LARGE_BODY = (b"sunlight-https-large-body\n" * ((LARGE_BODY_SIZE // 26) + 1))[:LARGE_BODY_SIZE]
 LARGE_FETCH_REPEATS = 8
+CONNECTION_BATCHES = 12
+CONNECTION_REDIRECTS = 10
 
 
 class SocksFixture(socketserver.BaseRequestHandler):
@@ -249,7 +264,7 @@ def gate(args, root):
             "-object", f"filter-dump,id=dump,netdev=net0,file={output / 'network.pcap'}",
             "-device", "virtio-rng-pci,disable-modern=on", "-no-reboot", "-no-shutdown",
         ]
-        if os.access("/dev/kvm", os.R_OK | os.W_OK):
+        if not args.tcg and os.access("/dev/kvm", os.R_OK | os.W_OK):
             command += ["-enable-kvm", "-cpu", "host"]
         else:
             command += ["-accel", "tcg,thread=multi", "-cpu", "max"]
@@ -319,6 +334,9 @@ def gate(args, root):
                 (f"fetch -o /tmp/untrusted {https_url}/payload", 1),
                 (f"fetch -o /tmp/ca.der {http_url}/ca.der", 0),
                 ("certificatectl install ca testca /tmp/ca.der", 0),
+                *[(f"fetch -o /tmp/connections{i} {https_url}/connections/{CONNECTION_REDIRECTS}", 0)
+                  for i in range(CONNECTION_BATCHES)],
+                (f"fetch -o /tmp/after-connections {http_url}/payload", 0),
                 *[(f"fetch -o /tmp/large{i} {https_url}/large", 0) for i in range(LARGE_FETCH_REPEATS)],
                 (f"fetch -o /tmp/after-large {https_url}/payload", 0),
                 *[(f"fetch -o /tmp/verified{i} {https_url}/slow", 0) for i in range(3)],
@@ -362,6 +380,10 @@ def gate(args, root):
                     raise RuntimeError(f"Unexpected exit status: {command}; see {serial}")
                 print(f"PASS (exit {expected}): {command}", flush=True)
             if not args.ui_only:
+                expected_connections = CONNECTION_BATCHES * (CONNECTION_REDIRECTS + 1)
+                if Fixture.connection_requests != expected_connections:
+                    raise RuntimeError(f"Connection soak incomplete: {Fixture.connection_requests}/{expected_connections}")
+                print(f"PASS: {expected_connections} TLS connections without daemon restart", flush=True)
                 if args.account_broker_probe and "[ACCOUNT-BROKER] native IPC probe PASS" not in text:
                     raise RuntimeError("Missing native account broker IPC probe")
                 if "InvalidCertificate(UnknownIssuer)" not in text:
@@ -415,6 +437,7 @@ if __name__ == "__main__":
     parser.add_argument("--iso", default="target/sunlightos.iso")
     parser.add_argument("--cpus", type=int, default=12)
     parser.add_argument("--uefi", action="store_true")
+    parser.add_argument("--tcg", action="store_true", help="Use software emulation even when /dev/kvm is accessible")
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--evidence", default="target/network-tls")
     parser.add_argument("--account-provider-preflight", action="store_true",

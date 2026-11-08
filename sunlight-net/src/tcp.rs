@@ -419,9 +419,22 @@ impl TcpManager {
                     tcp::State::CloseWait => {
                         if socket.can_recv() {
                             slot.peer_closed = false;
+                            if !slot.local_closed {
+                                slot.deadline_ms = None;
+                            }
                         } else {
                             slot.peer_closed = true;
-                            slot.deadline_ms = Some(now_ms.saturating_add(HALF_CLOSE_TIMEOUT_MS));
+                            // Arm once after the receive buffer drains. Moving
+                            // this deadline on every poll retains the socket
+                            // and its buffers forever. An explicit local close
+                            // already has a shorter deadline; preserve it.
+                            if !slot.local_closed
+                                && (slot.last_tcp_state != tcp::State::CloseWait
+                                    || slot.deadline_ms.is_none())
+                            {
+                                slot.deadline_ms =
+                                    Some(now_ms.saturating_add(HALF_CLOSE_TIMEOUT_MS));
+                            }
                         }
                     }
                     tcp::State::Closed | tcp::State::TimeWait => {
@@ -435,7 +448,13 @@ impl TcpManager {
                         } else if matches!(slot.last_tcp_state, tcp::State::CloseWait) {
                             slot.peer_closed = true;
                         }
-                        slot.deadline_ms = Some(now_ms.saturating_add(TERMINAL_REAP_DELAY_MS));
+                        // Terminal states shorten any existing deadline and
+                        // subsequent polls must never postpone reclamation.
+                        let terminal_deadline = now_ms.saturating_add(TERMINAL_REAP_DELAY_MS);
+                        slot.deadline_ms =
+                            Some(slot.deadline_ms.map_or(terminal_deadline, |deadline| {
+                                deadline.min(terminal_deadline)
+                            }));
                     }
                     _ => {}
                 }
@@ -1043,6 +1062,175 @@ mod tests {
         assert_eq!(
             diagnostics.socket_alloc_total - diagnostics.socket_release_total,
             diagnostics.socket_live
+        );
+    }
+
+    fn loopback() -> (smoltcp::phy::Loopback, smoltcp::iface::Interface) {
+        use smoltcp::wire::{EthernetAddress, HardwareAddress, IpCidr, Ipv4Address};
+        let mut device = smoltcp::phy::Loopback::new(smoltcp::phy::Medium::Ethernet);
+        let config = smoltcp::iface::Config::new(HardwareAddress::Ethernet(EthernetAddress([
+            2, 0, 0, 0, 0, 1,
+        ])));
+        let mut iface = smoltcp::iface::Interface::new(
+            config,
+            &mut device,
+            smoltcp::time::Instant::from_millis(0),
+        );
+        iface.update_ip_addrs(|addrs| {
+            addrs
+                .push(IpCidr::new(Ipv4Address::new(127, 0, 0, 1).into(), 8))
+                .unwrap();
+        });
+        (device, iface)
+    }
+
+    #[test]
+    fn repeated_failed_connections_release_slots_and_buffers() {
+        let (mut device, mut iface) = loopback();
+        let mut sockets = socket_set();
+        let mut manager = TcpManager::new();
+        // More than the table limit, and well beyond the ~84 requests that
+        // exhaust net_server's 1 MiB heap if closed buffers are retained.
+        for attempt in 0..512 {
+            let socket = manager.alloc_socket(34, &mut sockets).unwrap();
+            manager
+                .connect(
+                    34,
+                    socket,
+                    [127, 0, 0, 1],
+                    443,
+                    &mut iface,
+                    &mut sockets,
+                    &mut device,
+                )
+                .unwrap();
+            let start = attempt * 200;
+            for elapsed in (0..=150).step_by(10) {
+                manager.progress(&mut iface, &mut sockets, &mut device, start + elapsed);
+            }
+            assert_eq!(manager.active_count(), 0, "leaked connection {attempt}");
+            let d = manager.diagnostics();
+            assert_eq!(d.socket_alloc_total, d.socket_release_total);
+            assert_eq!(d.rx_bytes_reserved + d.tx_bytes_reserved, 0);
+            assert_eq!(d.rx_buffers_live + d.tx_buffers_live, 0);
+            assert_eq!(d.stream_live, 0);
+        }
+    }
+
+    fn connected_pair() -> (
+        smoltcp::phy::Loopback,
+        smoltcp::iface::Interface,
+        SocketSet<'static>,
+        TcpManager,
+        super::SocketIdentity,
+        smoltcp::iface::SocketHandle,
+    ) {
+        use smoltcp::socket::tcp;
+        let (mut device, mut iface) = loopback();
+        let mut sockets = socket_set();
+        let peer = sockets.add(tcp::Socket::new(
+            tcp::SocketBuffer::new(vec![0; 1024]),
+            tcp::SocketBuffer::new(vec![0; 1024]),
+        ));
+        sockets.get_mut::<tcp::Socket>(peer).listen(443).unwrap();
+        let mut manager = TcpManager::new();
+        let socket = manager.alloc_socket(34, &mut sockets).unwrap();
+        manager
+            .connect(
+                34,
+                socket,
+                [127, 0, 0, 1],
+                443,
+                &mut iface,
+                &mut sockets,
+                &mut device,
+            )
+            .unwrap();
+        for now in (0..100).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        assert_eq!(
+            sockets.get::<tcp::Socket>(peer).state(),
+            tcp::State::Established
+        );
+        (device, iface, sockets, manager, socket, peer)
+    }
+
+    #[test]
+    fn peer_half_close_deadline_survives_polling_and_allows_buffered_reads() {
+        use smoltcp::socket::tcp;
+        let (mut device, mut iface, mut sockets, mut manager, socket, peer) = connected_pair();
+        sockets
+            .get_mut::<tcp::Socket>(peer)
+            .send_slice(b"last bytes")
+            .unwrap();
+        sockets.get_mut::<tcp::Socket>(peer).close();
+        for now in (100..1000).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        let handle = manager.slots[&socket.id()].handle;
+        assert_eq!(
+            sockets.get::<tcp::Socket>(handle).state(),
+            tcp::State::CloseWait
+        );
+        assert_eq!(
+            manager.recv(34, socket, 1024, &mut sockets).unwrap(),
+            b"last bytes"
+        );
+        for now in (1000..=31_010).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        assert_eq!(manager.active_count(), 0);
+        assert_eq!(manager.diagnostics().half_close_reaps_total, 1);
+        assert_eq!(manager.diagnostics().rx_bytes_reserved, 0);
+    }
+
+    #[test]
+    fn time_wait_is_reaped_without_postponing_the_terminal_deadline() {
+        use smoltcp::socket::tcp;
+        let (mut device, mut iface, mut sockets, mut manager, socket, peer) = connected_pair();
+        manager.close(34, socket, &mut sockets).unwrap();
+        // close() uses the guest clock; supply this fixture's simulated time.
+        manager.slots.get_mut(&socket.id()).unwrap().deadline_ms = Some(5100);
+        for now in (100..200).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        sockets.get_mut::<tcp::Socket>(peer).close();
+        manager.progress(&mut iface, &mut sockets, &mut device, 200);
+        let handle = manager.slots[&socket.id()].handle;
+        assert_eq!(
+            sockets.get::<tcp::Socket>(handle).state(),
+            tcp::State::TimeWait
+        );
+        for now in (210..=310).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        assert_eq!(manager.active_count(), 0);
+        assert_eq!(manager.diagnostics().close_deadline_reaps_total, 1);
+        assert_eq!(manager.diagnostics().tx_bytes_reserved, 0);
+    }
+
+    #[test]
+    fn local_close_keeps_its_short_deadline_while_peer_data_is_unread() {
+        use smoltcp::socket::tcp;
+        let (mut device, mut iface, mut sockets, mut manager, socket, peer) = connected_pair();
+        sockets
+            .get_mut::<tcp::Socket>(peer)
+            .send_slice(b"unread")
+            .unwrap();
+        sockets.get_mut::<tcp::Socket>(peer).close();
+        for now in (100..200).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        manager.close(34, socket, &mut sockets).unwrap();
+        manager.slots.get_mut(&socket.id()).unwrap().deadline_ms = Some(5200);
+        for now in (200..=5210).step_by(10) {
+            manager.progress(&mut iface, &mut sockets, &mut device, now);
+        }
+        assert_eq!(manager.active_count(), 0);
+        assert_eq!(
+            manager.diagnostics().socket_alloc_total,
+            manager.diagnostics().socket_release_total
         );
     }
 }

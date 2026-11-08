@@ -167,6 +167,7 @@ mod sunlightos_impl {
     // TLS error codes returned to clients in word[0] of a TLS_ERROR reply.
     const ERR_SESSIONS_FULL: u64 = 3;
     const ERR_CERT_EXPIRED: u64 = 5;
+    const ERR_SOCKET_ALLOC: u64 = 13;
 
     // kv protocol (we are a *client* of sunlight-kv).
     const KV_REPLY: u64 = 0x4BFF;
@@ -347,6 +348,11 @@ mod sunlightos_impl {
         let cap = net_cap()?;
         let reply = ipc_call(cap, IpcMsg::with_label(NET_SOCKET));
         if reply.label != NET_SOCKET || reply.words[0] == 0 {
+            serial_println!(
+                "[SUNLIGHT-TLS] socket allocation failed: label={:#x} status={}",
+                reply.label,
+                reply.words[1]
+            );
             return None;
         }
         Some(reply.words[0])
@@ -1007,7 +1013,7 @@ mod sunlightos_impl {
         let id = new_sid()?;
         let socket_id = match net_socket() {
             Some(s) => s,
-            None => return Err(13),
+            None => return Err(ERR_SOCKET_ALLOC),
         };
         if !net_connect(socket_id, ip_packed, proxy.map_or(port, |proxy| proxy.port)) {
             net_close(socket_id);
