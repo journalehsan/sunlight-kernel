@@ -1,15 +1,25 @@
 //! Certificate details supplied by the network backend.
-use crate::{geom::Rect, paint::Canvas, theme::Theme};
+use crate::{font::VecText, geom::Rect, paint::Canvas, theme::Theme};
 use alloc::{format, string::String, vec::Vec};
 use sunlight_cert::{CertInfo, ConnectionSecurity};
 
 #[derive(Default)]
-pub struct CertificatePanel {
+pub struct CertificatePanel<'a> {
     pub open: bool,
     pub expanded: bool,
     pub scroll: usize,
+    font: Option<&'a dyn VecText>,
 }
-impl CertificatePanel {
+impl<'a> CertificatePanel<'a> {
+    pub fn with_font(mut self, font: &'a dyn VecText) -> Self {
+        self.font = Some(font);
+        self
+    }
+
+    fn measure_text(&self, text: &str) -> u32 {
+        self.font
+            .map_or_else(|| Canvas::measure_text(text), |font| font.measure_w(text))
+    }
     pub fn rows(
         &self,
         security: ConnectionSecurity,
@@ -83,18 +93,18 @@ impl CertificatePanel {
         cert: Option<&CertInfo>,
         error: Option<&str>,
     ) -> Vec<String> {
-        let columns = (width.saturating_sub(24) as usize / 8).max(1);
+        let available_width = width.saturating_sub(24);
         let mut lines = Vec::new();
         for row in self.rows(security, cert, error) {
             let mut line = String::new();
-            let mut count = 0;
             for ch in row.chars() {
-                if count == columns {
+                let ch = if ch.is_control() { ' ' } else { ch };
+                line.push(ch);
+                if self.measure_text(&line) > available_width && line.len() > ch.len_utf8() {
+                    line.pop();
                     lines.push(core::mem::take(&mut line));
-                    count = 0;
+                    line.push(ch);
                 }
-                line.push(if ch.is_control() { ' ' } else { ch });
-                count += 1;
             }
             lines.push(line);
         }
@@ -123,7 +133,8 @@ impl CertificatePanel {
         }
         canvas.fill_rounded_rect(rect, 8, theme.panel);
         canvas.stroke_rounded_rect(rect, 8, 1, theme.border);
-        let max_rows = rect.h.saturating_sub(52) / 20;
+        let row_height = self.font.map_or(20, |font| font.line_height().max(20));
+        let max_rows = rect.h.saturating_sub(52) / row_height;
         for (index, row) in self
             .lines(rect.w, security, cert, error)
             .iter()
@@ -131,30 +142,37 @@ impl CertificatePanel {
             .take(max_rows as usize)
             .enumerate()
         {
-            let text = row;
-            canvas.draw_text(
-                rect.x + 12,
-                rect.y + 12 + index as i32 * 20,
-                text,
-                if index + self.scroll == 0 && security == ConnectionSecurity::Invalid {
-                    theme.warn
-                } else {
-                    theme.text
-                },
-            );
+            let color = if index + self.scroll == 0 && security == ConnectionSecurity::Invalid {
+                theme.warn
+            } else {
+                theme.text
+            };
+            let y = rect.y + 12 + index as i32 * row_height as i32;
+            if let Some(font) = self.font {
+                font.draw_vcenter(canvas, row, rect.x + 12, y, row_height, color);
+            } else {
+                canvas.draw_text(rect.x + 12, y, row, color);
+            }
         }
         let button = Self::details_rect(rect);
         canvas.fill_rounded_rect(button, 4, theme.panel_alt);
-        canvas.draw_text(
-            button.x + 6,
-            button.y + 7,
-            if self.expanded {
-                "Hide Details"
-            } else {
-                "View Full Chain"
-            },
-            theme.accent,
-        );
+        let label = if self.expanded {
+            "Hide Details"
+        } else {
+            "View Full Chain"
+        };
+        if let Some(font) = self.font {
+            font.draw_vcenter(
+                canvas,
+                label,
+                button.x + 6,
+                button.y,
+                button.h,
+                theme.accent,
+            );
+        } else {
+            canvas.draw_text(button.x + 6, button.y + 7, label, theme.accent);
+        }
     }
 }
 #[cfg(test)]

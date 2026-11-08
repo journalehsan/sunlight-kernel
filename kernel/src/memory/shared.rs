@@ -1,3 +1,8 @@
+//! Legacy bearer SHM has aggregate accounting but no two-endpoint isolation;
+//! that contract belongs to restricted channel mappings. Native receive stays
+//! bounded-copy because cooperative leases do not make producer-writable
+//! mappings safe for zero-copy reads.
+
 use crate::capability::{CapabilityBroker, CapabilityToken};
 use crate::memory::pmm::PhysicalMemoryManager;
 use crate::process::Process;
@@ -69,6 +74,9 @@ pub fn alloc_shared_region(
     if actual_size > SHARED_REGION_MAX_SIZE {
         return Err(SharedMemError::InvalidArgument);
     }
+    let quota_identity = caller.native_shared_owner.unwrap_or(caller.pid) as u64;
+    let quota = crate::memory::shared_quota::reserve(quota_identity, actual_size)
+        .ok_or(SharedMemError::OutOfMemory)?;
     caller
         .owned_shared
         .try_reserve(1)
@@ -136,7 +144,8 @@ pub fn alloc_shared_region(
 
     // Publication is the commit point: backing frames and the complete owner
     // mapping exist before the token becomes observable.
-    let token = prepared.commit(frames, actual_size, caller.pid);
+    let token = prepared.commit(frames, actual_size, caller.pid, quota_identity);
+    quota.commit();
 
     caller
         .address_space

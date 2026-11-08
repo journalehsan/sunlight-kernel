@@ -7,6 +7,7 @@ pub mod m31_retention_gate;
 pub mod pmm;
 pub mod security;
 pub mod shared;
+pub(crate) mod shared_quota;
 #[cfg(any(feature = "fastlane_f11_audit", feature = "cap_issuance_test"))]
 pub mod shared_authority_gate;
 pub mod shared_lifetime;

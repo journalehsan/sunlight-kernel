@@ -278,7 +278,9 @@ impl Scheduler {
                     return Err(Error::Capacity);
                 }
             };
-            let token = prepared.commit(frames, shared::PAGE_SIZE, p.pid);
+            // Restricted channels use their authenticated session admission,
+            // not the legacy bearer SHM quota.
+            let token = prepared.commit(frames, shared::PAGE_SIZE, p.pid, 0);
             caps.shared_regions
                 .iter_mut()
                 .find(|e| e.token == token)

@@ -307,7 +307,7 @@ struct ReflowOutput {
 struct RabbitApp {
     shield: golden_fish::shield::FilterListManager,
     shield_stats: alloc::sync::Arc<rappid_rabbit::content_shield::ShieldStats>,
-    certificate_panel: sunlight_ui::widgets::CertificatePanel,
+    certificate_panel: sunlight_ui::widgets::CertificatePanel<'static>,
     cert_info: Option<sunlight_cert::CertInfo>,
     connection_security: sunlight_cert::ConnectionSecurity,
     certificate_error: Option<String>,
@@ -415,7 +415,7 @@ impl RabbitApp {
         let mut app = Self {
             shield: rappid_rabbit::content_shield::bundled_manager(),
             shield_stats: Default::default(),
-            certificate_panel: Default::default(),
+            certificate_panel: sunlight_ui::widgets::CertificatePanel::default().with_font(&F_UI),
             cert_info: None,
             connection_security: Default::default(),
             certificate_error: None,

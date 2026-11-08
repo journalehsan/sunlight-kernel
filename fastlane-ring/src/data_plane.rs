@@ -5,6 +5,11 @@
 //! memory and never attaches Rust references to a peer-controlled mapping.
 //! Cooperative zero-copy leases remain in [`crate::Ring`]; hostile peers must
 //! use [`crate::hostile`] until the kernel can enforce slot ownership.
+//!
+//! The native receive adapter intentionally remains bounded-copy: it copies
+//! into caller-owned storage before releasing the lease. A cooperative lease
+//! proves only local cursor ownership for the lease duration; it is not a
+//! substitute for a safe zero-copy read from a producer-writable mapping.
 
 use crate::{Header, LayoutError, PAGE};
 

@@ -1,4 +1,5 @@
 [package]
 name = "sunlight-cert"
-version = "0.1.0"
+version = "0.2.6862-alpha.2"
+
 edition = "2021"

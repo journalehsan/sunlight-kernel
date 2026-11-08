@@ -476,7 +476,9 @@ impl<M: Memory> Consumer<M> {
     }
 
     /// Copy into caller-owned storage with [`Integrity::PRIVATE_COPY`], exactly
-    /// as for [`Self::try_read`]. Success does not establish coherent publication
+    /// as for [`Self::try_read`]. This bounded-copy adapter is the safe native
+    /// receive contract; cooperative leases are not safe zero-copy reads from
+    /// a producer-writable mapping. Success does not establish coherent publication
     /// or authenticity. Validate only the private output, never the shared page.
     /// If reclamation fails after copying, output may have changed despite an
     /// error; the local endpoint is terminal and must not retry publication.

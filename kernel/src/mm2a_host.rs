@@ -50,6 +50,8 @@ pub mod entropy {
 #[cfg(test)]
 pub mod memory {
     pub use crate::shared_lifetime;
+    #[path = "../memory/shared_quota.rs"]
+    pub mod shared_quota;
     pub mod security {
         pub fn revoke_display_authority_for_owner(_: usize) {}
         pub fn revoke_display_authority_for_endpoint(_: u32) {}

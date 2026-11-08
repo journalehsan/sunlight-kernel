@@ -340,6 +340,8 @@ struct ShmEntry {
     token: CapabilityToken,
     obj: ShmObject,
     owner_pid: usize,
+    pub(crate) quota_identity: u64,
+    pub(crate) quota_bytes: usize,
     // Counts views, including multiple views in one address space. Retirement
     // fences admission without discarding backing needed by existing views.
     lifetime: crate::memory::shared_lifetime::SharedLifetime,
@@ -415,6 +417,7 @@ impl PreparedSharedRegion<'_> {
         frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
         size: usize,
         owner_pid: usize,
+        quota_identity: u64,
     ) -> CapabilityToken {
         assert!(!self.broker.token_in_use(self.token));
         assert!(self.broker.shared_regions.len() < self.broker.shared_regions.capacity());
@@ -425,6 +428,8 @@ impl PreparedSharedRegion<'_> {
             token: self.token,
             obj: ShmObject { frames, size },
             owner_pid,
+            quota_identity,
+            quota_bytes: size,
             lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
         });
         #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
@@ -1195,7 +1200,7 @@ impl CapabilityBroker {
             .try_reserve_exact(1)
             .map_err(|_| CapError::CapabilityStoreFull)?;
         frames.push(frame);
-        Ok(prepared.commit(frames, 4096, owner_pid))
+        Ok(prepared.commit(frames, 4096, owner_pid, 0))
     }
 
     /// Resolve a shared-page capability token to its physical frame (first page for compat / 1-page regions).
@@ -1353,6 +1358,7 @@ impl CapabilityBroker {
             .expect("SHM mapping count underflow")
         {
             let entry = self.shared_regions.swap_remove(idx);
+            crate::memory::shared_quota::release(entry.quota_identity, entry.quota_bytes);
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             entry.trace(crate::memory::census_trace::SHM_RELEASE, 0);
             return Some(entry.obj.frames);
@@ -1375,7 +1381,9 @@ impl CapabilityBroker {
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RETIRE, 0);
             if releasable {
-                return Some(self.shared_regions.swap_remove(idx).obj.frames);
+                let entry = self.shared_regions.swap_remove(idx);
+                crate::memory::shared_quota::release(entry.quota_identity, entry.quota_bytes);
+                return Some(entry.obj.frames);
             }
         }
         None
