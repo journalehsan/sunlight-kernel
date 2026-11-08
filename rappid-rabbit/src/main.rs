@@ -644,7 +644,7 @@ impl RabbitApp {
             worker.document_lifecycle = lifecycle;
             worker.developer_tools.panel = panel;
             worker.set_client_bounds(bounds.w, bounds.h);
-            worker.perform_fetch_sync();
+            worker.perform_fetch_sync_existing_session();
             let output = worker.into_navigation_output();
             // A closed window drops the receiver and the completed document.
             let _ = sender.send(output);
@@ -676,6 +676,18 @@ impl RabbitApp {
     }
 
     fn perform_fetch_sync(&mut self) {
+        self.perform_fetch_sync_inner(true);
+    }
+
+    // The UI thread has already opened the navigation session before handing
+    // work to the blocking pool. Starting another session here would advance
+    // the document generation and cause the completed output to be discarded
+    // as stale.
+    fn perform_fetch_sync_existing_session(&mut self) {
+        self.perform_fetch_sync_inner(false);
+    }
+
+    fn perform_fetch_sync_inner(&mut self, begin_session: bool) {
         self.pending_fetch = false;
         self.source_scroll = 0;
 
@@ -735,7 +747,9 @@ impl RabbitApp {
         };
 
         let request = build_get_request(&parsed);
-        self.begin_navigation_session(&normalized, &request);
+        if begin_session {
+            self.begin_navigation_session(&normalized, &request);
+        }
         match perform_request(parsed, request) {
             Ok(result) => self.apply_result(&normalized, result),
             Err(err) => self.apply_fetch_error(err),
