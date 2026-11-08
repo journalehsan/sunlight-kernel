@@ -153,7 +153,10 @@ impl ScrollState {
     /// Add delta_y to the vertical offset.  Positive = scroll down.
     pub fn scroll_by(&mut self, dy: i32) -> bool {
         let previous = self.offset_y;
-        self.offset_y = (self.offset_y + dy).clamp(0, self.max_offset_y());
+        self.offset_y = self
+            .offset_y
+            .saturating_add(dy)
+            .clamp(0, self.max_offset_y());
         self.offset_y != previous
     }
 
@@ -165,18 +168,19 @@ impl ScrollState {
     }
 
     /// Apply a wheel delta using `pixels_per_step` for a conventional detent.
-    /// Small HID deltas are treated as one step; fixed-point deltas use
+    /// Small HID deltas retain their detent count; fixed-point deltas use
     /// 120 units per step.
     pub fn scroll_by_wheel(&mut self, delta: i16, pixels_per_step: i32) -> bool {
         if delta == 0 || pixels_per_step == 0 {
             return false;
         }
-        let steps = if delta.unsigned_abs() >= 120 {
-            delta as i32 / 120
+        let pixels = (delta as i32).saturating_mul(pixels_per_step);
+        let pixels = if delta.unsigned_abs() >= 120 {
+            pixels / 120
         } else {
-            delta.signum() as i32
+            pixels
         };
-        self.scroll_by(steps.saturating_mul(pixels_per_step))
+        self.scroll_by(pixels)
     }
 
     /// Page down by approximately one viewport.
@@ -450,6 +454,26 @@ mod tests {
         assert_eq!(s.offset_y, 90);
         assert!(s.scroll_by_wheel(-120, 30));
         assert_eq!(s.offset_y, 60);
+    }
+
+    #[test]
+    fn wheel_retains_hid_magnitude_and_partial_fixed_point_detents() {
+        let mut state = state_with(200, 1000);
+        state.scroll_by_wheel(3, 30);
+        assert_eq!(state.offset_y, 90);
+        state.scroll_by_wheel(180, 30);
+        assert_eq!(state.offset_y, 135);
+        state.scroll_by_wheel(-2, 30);
+        assert_eq!(state.offset_y, 75);
+        state.scroll_by_wheel(-180, 30);
+        assert_eq!(state.offset_y, 30);
+        assert!(!state.scroll_by_wheel(0, 30));
+        state.scroll_by(i32::MAX);
+        assert_eq!(state.offset_y, 800);
+        state.scroll_by(i32::MAX);
+        assert_eq!(state.offset_y, 800);
+        state.scroll_by(i32::MIN);
+        assert_eq!(state.offset_y, 0);
     }
 
     #[test]

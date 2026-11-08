@@ -2,6 +2,10 @@
 
 extern crate alloc;
 
+mod browser_ui;
+#[cfg(all(test, feature = "dom"))]
+mod browser_ui_tests;
+
 use alloc::{borrow::Cow, collections::BTreeMap, format, string::String, vec::Vec};
 // Heap diagnostics use a stack buffer to avoid allocating while logging.
 use core::fmt::Write as _;
@@ -49,6 +53,7 @@ use sunlight_ipc::{
     debug_log,
     launch_trace::{self, LaunchSource, LaunchTrace},
 };
+use sunlight_ui::scroll::{draw_scrollbar, ScrollPolicy, ScrollState, SCROLLBAR_WIDTH};
 use sunlight_ui::widgets::{
     Button, ButtonState, Column as TableColumn, DocumentCanvas, DocumentCanvasPresentation, Label,
     Panel, TabBar, Table, TextInput, TextView, TreeHitTarget, TreeView,
@@ -58,9 +63,9 @@ use sunlight_ui::widgets::{
     DocumentFontFamily, DocumentNodeId, RenderInteraction, RenderObjectKind,
 };
 use sunlight_ui::{
-    request_close, App, AxisSizing, Canvas, Color, Column, Event, LayoutBox, LayoutInvalidation,
-    Point, Rect, Row, Size, Sizing, Theme, VecText, Window, WindowConfig, WindowDecoration,
-    WindowEvent,
+    request_close, set_client_cursor, App, AxisSizing, Canvas, Color, Column, CursorShape, Event,
+    LayoutBox, LayoutInvalidation, Point, Rect, Row, Size, Sizing, Theme, VecText, Window,
+    WindowConfig, WindowDecoration, WindowEvent,
 };
 
 static F_UI: VecFont = VecFont(FontRole::UiRegular);
@@ -133,13 +138,9 @@ static RABBIT_FONTS: RabbitFonts = RabbitFonts;
 
 const WIN_W: u32 = 1080;
 const WIN_H: u32 = 720;
-const PAD: i32 = 12;
-const TOP_BAR_H: u32 = 42;
-const METHOD_W: u32 = 56;
-const FETCH_W: u32 = 104;
-const DEVTOOLS_W: u32 = 96;
-const VIEW_W: u32 = 72;
-const STATUS_W: u32 = 220;
+const TOP_BAR_H: u32 = 64;
+const TAB_H: u32 = 26;
+const NAV_W: u32 = 28;
 const GUTTER: i32 = 12;
 const URL_INPUT_CAP: usize = 512;
 const URL_BAR_RADIUS: u32 = 8;
@@ -326,7 +327,13 @@ struct RabbitApp {
     source_scroll: usize,
     source: SourceContent,
     document_view: DocumentView,
-    render_scroll: u32,
+    document_scroll: ScrollState,
+    suppress_scroll_click: bool,
+    pointer: Option<Point>,
+    cursor: CursorShape,
+    navigation_draining: bool,
+    tab_title: String,
+    title_revision: Option<(u64, u64)>,
     render_status: String,
     #[cfg(feature = "dom")]
     render_state: Option<DocumentRenderState>,
@@ -348,12 +355,12 @@ struct RabbitLayout {
     root: Rect,
     top_bar: Rect,
     content: Rect,
-    method: Rect,
+    tab: Rect,
+    back: Rect,
+    forward: Rect,
     url_bar: Rect,
-    fetch: Rect,
     view: Rect,
     devtools: Rect,
-    status: Rect,
 }
 
 impl RabbitApp {
@@ -416,14 +423,16 @@ impl RabbitApp {
             pending_fetch: false,
             focus: FocusPane::Render,
             source_scroll: 0,
-            source: SourceContent::Placeholder(
-                "Enter a URL, then click Fetch/Open to inspect the response body.",
-            ),
+            source: SourceContent::Placeholder("Enter a URL and press Enter to open a page."),
             document_view: DocumentView::Render,
-            render_scroll: 0,
-            render_status: String::from(
-                "No rendered document yet. Enter a URL and select Fetch/Open.",
-            ),
+            document_scroll: ScrollState::new(),
+            suppress_scroll_click: false,
+            pointer: None,
+            cursor: CursorShape::Pointer,
+            navigation_draining: false,
+            tab_title: String::from("New page"),
+            title_revision: None,
+            render_status: String::from("Enter a URL and press Enter."),
             #[cfg(feature = "dom")]
             render_state: None,
             form_state: FormState::new(),
@@ -447,7 +456,7 @@ impl RabbitApp {
     }
 
     fn queue_fetch(&mut self) {
-        if self.pending_fetch {
+        if self.pending_fetch || self.navigation_draining {
             return;
         }
         // Navigation is an explicit request to show a new page. Completion
@@ -461,6 +470,9 @@ impl RabbitApp {
             started: Some(std::time::Instant::now()),
             ..Default::default()
         };
+        self.document_scroll.end_drag();
+        self.suppress_scroll_click = false;
+        self.title_revision = None;
         self.pending_fetch = true;
         self.status = String::from("Fetching...");
         self.render_status = String::from("Loading rendered document...");
@@ -507,7 +519,7 @@ impl RabbitApp {
                     self.document_lifecycle = output.document_lifecycle;
                     self.developer_tools.panel = panel;
                     self.source_scroll = 0;
-                    self.render_scroll = 0;
+                    self.document_scroll.offset_y = 0;
                     #[cfg(feature = "dom")]
                     self.refresh_render_viewport();
                 }
@@ -616,6 +628,8 @@ impl RabbitApp {
 
     fn begin_navigation_session(&mut self, requested_url: &str, request: &HttpRequest) {
         let generation = self.document_lifecycle.begin_navigation();
+        self.document_scroll = ScrollState::new();
+        self.title_revision = None;
         self.discovered_resources.clear();
         self.resource_queue.clear();
         #[cfg(feature = "dom")]
@@ -626,7 +640,7 @@ impl RabbitApp {
             self.image_discovery_revision = 0;
             self.presentation = Default::default();
         }
-        self.render_scroll = 0;
+        self.document_scroll.offset_y = 0;
         self.render_status = String::from("Loading rendered document...");
         #[cfg(feature = "dom")]
         {
@@ -769,7 +783,7 @@ impl RabbitApp {
                             self.discovered_resources = candidates;
                         }
                         let layout_started = std::time::Instant::now();
-                        self.render_scroll = 0;
+                        self.document_scroll.offset_y = 0;
                         self.render_state = Some(DocumentRenderState::new_with_images(
                             generation,
                             final_url.clone(),
@@ -1371,7 +1385,7 @@ impl RabbitApp {
         }
         let viewport = Rect::new(
             0,
-            self.render_scroll as i32,
+            self.document_scroll.offset_y,
             self.latest_viewport.w,
             self.latest_viewport.h,
         );
@@ -1591,50 +1605,51 @@ impl RabbitApp {
 
     fn compute_layout(root: Rect) -> RabbitLayout {
         let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
-        let inner = root.inset(PAD);
         let mut root_children = [
             LayoutBox::new(Rect::new(0, 0, 0, TOP_BAR_H))
                 .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(TOP_BAR_H))),
             LayoutBox::new(Rect::default()).with_sizing(fill),
         ];
-        let _ = Column::new(inner)
-            .with_gap(PAD.max(0) as u32)
-            .arrange(&mut root_children);
+        let _ = Column::new(root).arrange(&mut root_children);
         let top_bar = root_children[0].bounds();
         let content = root_children[1].bounds();
-
-        let controls = top_bar.inset(8);
+        let controls = Rect::new(
+            top_bar.x + 6,
+            top_bar.y + TAB_H as i32 + 3,
+            top_bar.w.saturating_sub(12),
+            top_bar.h.saturating_sub(TAB_H + 6),
+        );
+        // Below 420px omit unavailable history buttons; keep the address field
+        // and tools usable. Row clips fixed controls for even smaller surfaces.
+        let history_w = if root.w >= 420 { NAV_W } else { 0 };
         let fixed = |width| {
-            LayoutBox::new(Rect::new(0, 0, width, 28))
-                .with_sizing(Sizing::new(AxisSizing::Fixed(width), AxisSizing::Fixed(28)))
+            LayoutBox::new(Rect::new(0, 0, width, 30))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(width), AxisSizing::Fixed(30)))
         };
         let mut toolbar = [
-            fixed(METHOD_W),
-            LayoutBox::new(Rect::new(0, 0, 0, 28))
-                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(28))),
-            fixed(FETCH_W),
-            fixed(VIEW_W),
-            fixed(DEVTOOLS_W),
-            fixed(STATUS_W),
+            fixed(history_w),
+            fixed(history_w),
+            LayoutBox::new(Rect::new(0, 0, 0, 30))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(30))),
+            fixed(NAV_W),
+            fixed(NAV_W),
         ];
-        let _ = Row::new(controls).with_gap(8).arrange(&mut toolbar);
-        let status_box = toolbar[5].bounds();
-
+        let _ = Row::new(controls).with_gap(4).arrange(&mut toolbar);
         RabbitLayout {
             root,
             top_bar,
             content,
-            method: toolbar[0].bounds(),
-            url_bar: toolbar[1].bounds(),
-            fetch: toolbar[2].bounds(),
+            tab: Rect::new(
+                root.x + 6,
+                root.y + 3,
+                root.w.saturating_sub(12).min(240),
+                TAB_H.saturating_sub(3).min(top_bar.h),
+            ),
+            back: toolbar[0].bounds(),
+            forward: toolbar[1].bounds(),
+            url_bar: toolbar[2].bounds(),
             view: toolbar[3].bounds(),
             devtools: toolbar[4].bounds(),
-            status: Rect::new(
-                status_box.x,
-                status_box.y.saturating_sub(1),
-                status_box.w,
-                30,
-            ),
         }
     }
 
@@ -1654,22 +1669,16 @@ impl RabbitApp {
         self.client_bounds = bounds;
         self.layout_invalidation.invalidate();
         let changed = self.ensure_layout();
+        self.document_scroll.end_drag();
         #[cfg(feature = "dom")]
         self.refresh_render_viewport();
         self.clamp_scrolls();
+        self.refresh_cursor();
         changed
     }
 
     fn top_bar_rect(&self) -> Rect {
         self.layout.top_bar
-    }
-
-    fn method_rect(&self) -> Rect {
-        self.layout.method
-    }
-
-    fn status_rect(&self) -> Rect {
-        self.layout.status
     }
 
     fn devtools_button_rect(&self) -> Rect {
@@ -1680,25 +1689,26 @@ impl RabbitApp {
         self.layout.view
     }
 
-    fn fetch_rect(&self) -> Rect {
-        self.layout.fetch
-    }
-
     fn url_bar_rect(&self) -> Rect {
         self.layout.url_bar
     }
 
     fn url_site_rect(&self) -> Rect {
         let bar = self.url_bar_rect();
-        Rect::new(bar.x + 4, bar.y + 4, URL_SITE_W, bar.h.saturating_sub(8))
+        Rect::new(
+            bar.x + 4.min(bar.w as i32),
+            bar.y + 4,
+            URL_SITE_W.min(bar.w.saturating_sub(8)),
+            bar.h.saturating_sub(8),
+        )
     }
 
     fn url_action_rect(&self) -> Rect {
         let bar = self.url_bar_rect();
         Rect::new(
-            bar.right() - URL_ACTION_W as i32 - 4,
+            (bar.right() - URL_ACTION_W as i32 - 4).max(bar.x),
             bar.y + 4,
-            URL_ACTION_W,
+            URL_ACTION_W.min(bar.w.saturating_sub(8)),
             bar.h.saturating_sub(8),
         )
     }
@@ -1708,9 +1718,9 @@ impl RabbitApp {
         let site = self.url_site_rect();
         let action = self.url_action_rect();
         Rect::new(
-            site.right() + 5,
+            (site.right() + 5).min(bar.right()),
             bar.y + 2,
-            (action.x - site.right() - 10).max(32) as u32,
+            (action.x - site.right() - 10).max(0) as u32,
             bar.h.saturating_sub(4),
         )
     }
@@ -1718,7 +1728,7 @@ impl RabbitApp {
     fn update_url_chrome_hover(&mut self, x: i32, y: i32) -> bool {
         let point = Point::new(x, y);
         let hovered = self.url_bar_rect().contains(point);
-        let action_hovered = !self.pending_fetch && self.url_action_rect().contains(point);
+        let action_hovered = !self.navigation_draining && self.url_action_rect().contains(point);
         let changed = self.url_hovered != hovered || self.url_action_hovered != action_hovered;
         self.url_hovered = hovered;
         self.url_action_hovered = action_hovered;
@@ -1749,7 +1759,7 @@ impl RabbitApp {
     }
 
     fn render_viewport(&mut self) -> sunlight_ui::Size {
-        DocumentCanvas::new(self.source_panel_rect(), &[])
+        DocumentCanvas::new(self.document_rect(), &[])
             .with_presentation(DocumentCanvasPresentation::Browser)
             .viewport_size()
     }
@@ -1783,7 +1793,7 @@ impl RabbitApp {
                     {
                         let viewport = Rect::new(
                             0,
-                            self.render_scroll as i32,
+                            self.document_scroll.offset_y,
                             self.latest_viewport.w,
                             self.latest_viewport.h,
                         );
@@ -1958,7 +1968,7 @@ impl RabbitApp {
     }
 
     fn document_canvas(&mut self) -> DocumentCanvas<'_> {
-        let rect = self.source_panel_rect();
+        let rect = self.document_rect();
         let canvas = DocumentCanvas::new(rect, &[])
             .with_presentation(DocumentCanvasPresentation::Browser)
             .with_empty_label(self.render_status.as_str())
@@ -1969,7 +1979,7 @@ impl RabbitApp {
             return canvas
                 .with_scene(&render_state.current_scene)
                 .with_image_presentation(self.presentation.admitted())
-                .with_scroll_y(self.render_scroll);
+                .with_scroll_y(self.document_scroll.offset_y as u32);
         }
         canvas
     }
@@ -2001,6 +2011,9 @@ impl RabbitApp {
 
     #[cfg(feature = "dom")]
     fn handle_form_control_click(&mut self, point: Point) -> bool {
+        if self.document_view != DocumentView::Render {
+            return false;
+        }
         let canvas = self.document_canvas();
         let Some(object) = canvas.hit_test(point) else {
             return false;
@@ -2181,47 +2194,26 @@ impl RabbitApp {
         true
     }
 
-    fn draw_top_bar(&mut self, canvas: &mut Canvas, theme: &Theme) {
-        let top = self.top_bar_rect();
-        Panel::new(top).draw(canvas, theme);
-
-        let mut method = Button::secondary(self.method_rect(), "GET").with_font(&F_UI);
-        method.state = ButtonState::Normal;
-        method.draw(canvas, theme);
-
-        self.draw_url_bar(canvas, theme);
-
-        let mut fetch = Button::new(self.fetch_rect(), "Fetch/Open").with_font(&F_UI);
-        fetch.state = ButtonState::Normal;
-        fetch.draw(canvas, theme);
-
-        let tools_label = if self.developer_tools.panel.open {
-            "Hide Tools"
+    fn toggle_developer_tools(&mut self) {
+        if self.developer_tools.panel.open {
+            self.developer_tools.panel.close();
+            self.focus = match self.document_view {
+                DocumentView::Source => FocusPane::Source,
+                DocumentView::Render => FocusPane::Render,
+            };
         } else {
-            "DevTools"
-        };
-        let mut devtools =
-            Button::secondary(self.devtools_button_rect(), tools_label).with_font(&F_UI);
-        devtools.state = ButtonState::Normal;
-        devtools.draw(canvas, theme);
-
-        let view_label = match self.document_view {
-            DocumentView::Source => "Render",
-            DocumentView::Render => "Source",
-        };
-        let mut view = Button::secondary(self.view_button_rect(), view_label).with_font(&F_UI);
-        view.state = ButtonState::Normal;
-        view.draw(canvas, theme);
-
-        Label::new(self.status_rect(), self.status.as_str())
-            .with_font(&F_SMALL)
-            .draw(canvas, theme);
+            self.developer_tools.panel.open();
+            self.focus = FocusPane::DeveloperTools;
+        }
+        #[cfg(feature = "dom")]
+        self.refresh_render_viewport();
+        self.clamp_scrolls();
     }
 
     fn draw_url_bar(&mut self, canvas: &mut Canvas, theme: &Theme) {
         let rect = self.url_bar_rect();
         let focused = self.url_input.active;
-        let disabled = self.pending_fetch;
+        let disabled = self.navigation_draining;
         let fill = if disabled {
             theme.panel_alt.darken(18)
         } else if focused {
@@ -2242,21 +2234,14 @@ impl RabbitApp {
         };
         canvas.fill_rounded_rect(rect, URL_BAR_RADIUS, fill);
         canvas.stroke_rounded_rect(rect, URL_BAR_RADIUS, 1, border);
-        if focused {
-            canvas.stroke_rounded_rect(
-                rect.inset(2),
-                URL_BAR_RADIUS.saturating_sub(2),
-                1,
-                theme.accent.lighten(46),
-            );
-        }
-
+        // Neutral connection information: URL scheme alone cannot establish
+        // that a TLS connection has been verified. Never draw a lock for it.
         let site = self.url_site_rect();
-        let secure = self.url_input.value().starts_with("https://");
-        let site_color = if secure { theme.ok } else { theme.warn };
-        canvas.fill_rounded_rect(site, 5, theme.panel_alt);
-        canvas.stroke_rounded_rect(site, 5, 1, theme.border);
-        Self::draw_site_indicator(canvas, site, site_color);
+        let cx = site.x + site.w as i32 / 2;
+        let cy = site.y + site.h as i32 / 2;
+        canvas.stroke_rounded_rect(Rect::new(cx - 5, cy - 5, 11, 11), 5, 1, theme.icon_muted);
+        canvas.vline(cx, cy, 3, theme.icon_muted);
+        canvas.fill_rect(Rect::new(cx, cy - 3, 1, 1), theme.icon_muted);
 
         let action = self.url_action_rect();
         if self.url_action_hovered {
@@ -2272,29 +2257,18 @@ impl RabbitApp {
             } else {
                 theme.icon_muted
             },
-            disabled,
+            self.pending_fetch,
         );
 
         self.url_input.rect = self.url_text_rect();
         self.url_input.draw_content(canvas, theme);
     }
 
-    fn draw_site_indicator(canvas: &mut Canvas, rect: Rect, color: Color) {
-        let body = Rect::new(rect.x + 8, rect.y + 9, 10, 7);
-        canvas.draw_rect(body, color);
-        canvas.hbar(body.x + 2, body.y - 3, 6, 1, color);
-        canvas.vline(body.x + 2, body.y - 3, 4, color);
-        canvas.vline(body.right() - 3, body.y - 3, 4, color);
-        canvas.vline(body.x + 4, body.y + 2, 3, color);
-    }
-
     fn draw_reload_indicator(canvas: &mut Canvas, rect: Rect, color: Color, loading: bool) {
         let cx = rect.x + rect.w as i32 / 2;
         let cy = rect.y + rect.h as i32 / 2;
         if loading {
-            for offset in [-4, 0, 4] {
-                canvas.fill_rect(Rect::new(cx + offset - 1, cy - 1, 2, 2), color);
-            }
+            canvas.fill_rounded_rect(Rect::new(cx - 4, cy - 4, 8, 8), 1, color);
             return;
         }
         canvas.hbar(cx - 5, cy - 5, 7, 1, color);
@@ -2623,15 +2597,7 @@ impl RabbitApp {
         if self.document_view == DocumentView::Source {
             self.source_scroll = self.source_scroll.min(self.source_view().max_scroll());
         }
-        #[cfg(feature = "dom")]
-        {
-            let viewport_h = self.render_viewport().h;
-            if let Some(render_state) = self.render_state.as_ref() {
-                self.render_scroll = self
-                    .render_scroll
-                    .min(render_state.current_scene.max_scroll_y(viewport_h));
-            }
-        }
+        self.sync_document_scroll();
 
         let dev_layout = self.developer_panel_layout();
         if let Some(content_rect) = dev_layout.content_rect {
@@ -2737,33 +2703,22 @@ impl RabbitApp {
                 );
             }
             FocusPane::Render => {
-                #[cfg(feature = "dom")]
-                {
-                    let viewport_h = self.render_viewport().h;
-                    if let Some(render_state) = self.render_state.as_ref() {
-                        let max_scroll = render_state.current_scene.max_scroll_y(viewport_h);
-                        if home {
-                            self.render_scroll = 0;
-                        } else if end {
-                            self.render_scroll = max_scroll;
-                        } else {
-                            let step = if page {
-                                viewport_h.saturating_sub(24)
-                            } else {
-                                24
-                            } as i32;
-                            self.render_scroll = if delta < 0 {
-                                self.render_scroll.saturating_sub(step as u32)
-                            } else {
-                                self.render_scroll
-                                    .saturating_add(step as u32)
-                                    .min(max_scroll)
-                            };
-                        }
-                        return;
-                    }
+                self.sync_document_scroll();
+                if home {
+                    self.document_scroll.scroll_to_y(0);
+                } else if end {
+                    self.document_scroll
+                        .scroll_to_y(self.document_scroll.max_offset_y());
+                } else {
+                    let step = if page {
+                        self.document_scroll.viewport_h.saturating_sub(24) as i32
+                    } else {
+                        24
+                    };
+                    self.document_scroll.scroll_by(delta.saturating_mul(step));
                 }
             }
+
             FocusPane::DeveloperTools => self.scroll_developer_tools(delta, page, home, end),
         }
     }
@@ -3111,6 +3066,9 @@ impl App for RabbitApp {
             let _ = self.ensure_layout();
         }
         canvas.fill_rect(self.layout.root, theme.bg);
+        self.sync_document_scroll();
+        self.refresh_tab_title();
+        self.refresh_cursor();
         self.draw_top_bar(canvas, theme);
 
         match self.document_view {
@@ -3139,7 +3097,7 @@ impl App for RabbitApp {
                     }
                     let viewport = Rect::new(
                         0,
-                        self.render_scroll as i32,
+                        self.document_scroll.offset_y,
                         self.latest_viewport.w,
                         self.latest_viewport.h,
                     );
@@ -3181,38 +3139,108 @@ impl App for RabbitApp {
             }
         }
 
+        if self.document_view == DocumentView::Render {
+            self.draw_document_scrollbar(canvas, theme);
+        }
         self.draw_developer_tools(canvas, theme);
         // TextInput's menu is a window-local overlay.  It must paint after
         // document and developer-tool surfaces rather than as part of the
         // top-bar child draw, or those surfaces conceal its lower rows.
+        if !self.url_input.context_menu_open() {
+            self.draw_chrome_hint(canvas, theme);
+        }
         self.url_input.draw_context_menu(canvas, theme);
     }
 
     fn update(&mut self, event: Event) -> bool {
+        let previous_pointer = self.pointer;
+        let previous_cursor = self.cursor;
+        let previous_title_revision = self.title_revision;
+        let previous_hover = self.document_scroll.hovered;
+        if let Some(point) = event.pos() {
+            self.pointer = Some(point);
+        }
+        if matches!(
+            event,
+            Event::PointerOwnership {
+                owned: false,
+                captured: false
+            } | Event::FocusChanged { focused: false }
+        ) {
+            self.pointer = None;
+            self.document_scroll.end_drag();
+            self.suppress_scroll_click = false;
+        }
+        self.sync_document_scroll();
+        let changed = self.update_event(event);
+        self.sync_document_scroll();
+        self.refresh_tab_title();
+        self.refresh_cursor();
+        // Publish after all widget dispatch. Painting must not leave a cursor
+        // request queued into the next event (Pointer is a fallback request).
+        set_client_cursor(self.cursor);
+        changed
+            || previous_title_revision != self.title_revision
+            || previous_cursor != self.cursor
+            || previous_hover != self.document_scroll.hovered
+            || (matches!(event, Event::MouseMove { .. })
+                && (previous_pointer.is_some_and(|p| self.top_bar_rect().contains(p))
+                    || self
+                        .pointer
+                        .is_some_and(|p| self.top_bar_rect().contains(p))))
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        self.set_client_bounds(width, height)
+    }
+}
+
+impl RabbitApp {
+    fn update_event(&mut self, event: Event) -> bool {
         self.url_input.rect = self.url_text_rect();
         if self.url_input.context_menu_open() {
             return self.url_input.update(event);
         }
 
+        if self.handle_document_scroll(event) {
+            return true;
+        }
+
         if let Event::Click { x, y } = event {
-            if !self.pending_fetch && self.url_action_rect().contains(Point::new(x, y)) {
+            if !self.navigation_draining && self.url_action_rect().contains(Point::new(x, y)) {
                 self.url_input.active = false;
-                self.queue_fetch();
+                if self.pending_fetch {
+                    self.stop_navigation();
+                } else {
+                    self.reload();
+                }
                 return true;
             }
         }
 
-        if self.url_input.update(event) {
+        if self.url_input.active && matches!(event, Event::Key('\n') | Event::Key('\r')) {
+            self.queue_fetch();
             return true;
         }
-
+        let url_was_active = self.url_input.active;
+        let url_changed = self.url_input.update(event);
+        if url_changed && (!matches!(event, Event::Click { .. }) || self.url_input.active) {
+            return true;
+        }
         #[cfg(feature = "dom")]
-        if self.document_view == DocumentView::Render && self.handle_form_key(event) {
+        if !url_was_active
+            && self.document_view == DocumentView::Render
+            && self.handle_form_key(event)
+        {
             return true;
         }
 
         match event {
             Event::Tick => {
+                if self.navigation_draining {
+                    return self.poll_stopped_navigation();
+                }
                 if self.pending_fetch {
                     let changed = self.perform_pending_fetch();
                     if changed {
@@ -3227,7 +3255,7 @@ impl App for RabbitApp {
                     if let Some(state) = self.render_state.as_ref() {
                         let viewport = Rect::new(
                             0,
-                            self.render_scroll as i32,
+                            self.document_scroll.offset_y,
                             self.latest_viewport.w,
                             self.latest_viewport.h,
                         );
@@ -3309,12 +3337,6 @@ impl App for RabbitApp {
             Event::Click { x, y } => {
                 let point = Point::new(x, y);
 
-                let fetch_button = Button::new(self.fetch_rect(), "Fetch/Open");
-                if fetch_button.hit_test(x, y) {
-                    self.queue_fetch();
-                    return true;
-                }
-
                 let devtools_label = if self.developer_tools.panel.open {
                     "Hide Tools"
                 } else {
@@ -3323,19 +3345,7 @@ impl App for RabbitApp {
                 let devtools_button =
                     Button::secondary(self.devtools_button_rect(), devtools_label);
                 if devtools_button.hit_test(x, y) {
-                    if self.developer_tools.panel.open {
-                        self.developer_tools.panel.close();
-                        self.focus = match self.document_view {
-                            DocumentView::Source => FocusPane::Source,
-                            DocumentView::Render => FocusPane::Render,
-                        };
-                    } else {
-                        self.developer_tools.panel.open();
-                        self.focus = FocusPane::DeveloperTools;
-                    }
-                    #[cfg(feature = "dom")]
-                    self.refresh_render_viewport();
-                    self.clamp_scrolls();
+                    self.toggle_developer_tools();
                     return true;
                 }
 
@@ -3384,10 +3394,6 @@ impl App for RabbitApp {
                 }
                 false
             }
-            Event::Key('\n') if self.url_input.active => {
-                self.queue_fetch();
-                true
-            }
             // Some keyboard backends surface Ctrl+L as ASCII form-feed while
             // others retain the raw keycode/modifier tuple below.
             Event::Key('\u{c}') => {
@@ -3415,6 +3421,14 @@ impl App for RabbitApp {
                 ctrl,
                 ..
             } => {
+                if keycode == 0x58 {
+                    self.toggle_developer_tools();
+                    return true;
+                }
+                if ctrl && keycode == 0x13 {
+                    self.reload();
+                    return true;
+                }
                 if ctrl && keycode == KEY_Q {
                     request_close();
                     return true;
@@ -3456,6 +3470,9 @@ impl App for RabbitApp {
                         _ => {}
                     }
                 }
+                if self.url_input.active {
+                    return url_changed;
+                }
                 match keycode {
                     KEY_UP => self.scroll_focused(-1, false, false, false),
                     KEY_DOWN => self.scroll_focused(1, false, false, false),
@@ -3469,11 +3486,6 @@ impl App for RabbitApp {
             }
             _ => false,
         }
-    }
-
-    fn window_event(&mut self, event: WindowEvent) -> bool {
-        let WindowEvent::Resized { width, height } = event;
-        self.set_client_bounds(width, height)
     }
 }
 
@@ -3683,7 +3695,7 @@ fn adjust_scroll(
 
 #[cfg(test)]
 mod responsive_tests {
-    use super::{RabbitApp, Rect, Size, WIN_H, WIN_W};
+    use super::{RabbitApp, Rect, WIN_H, WIN_W};
 
     #[test]
     fn toolbar_and_page_area_follow_live_root() {
@@ -3691,9 +3703,9 @@ mod responsive_tests {
         let resized = RabbitApp::compute_layout(Rect::new(0, 0, 1360, 880));
         assert_eq!(initial.root.w, WIN_W);
         assert_eq!(resized.root.w, 1360);
-        assert_eq!(resized.top_bar.w, 1360 - 24);
+        assert_eq!(resized.top_bar.w, 1360);
         assert_eq!(resized.content.w, resized.top_bar.w);
-        assert_eq!(resized.content.bottom(), resized.root.bottom() - 12);
+        assert_eq!(resized.content.bottom(), resized.root.bottom());
         assert!(resized.content.h > initial.content.h);
     }
 
@@ -3701,9 +3713,9 @@ mod responsive_tests {
     fn address_field_is_the_horizontal_fill_participant() {
         let narrow = RabbitApp::compute_layout(Rect::new(0, 0, 820, 720));
         let wide = RabbitApp::compute_layout(Rect::new(0, 0, 1280, 720));
-        assert_eq!(narrow.method.w, wide.method.w);
-        assert_eq!(narrow.fetch.w, wide.fetch.w);
-        assert_eq!(narrow.status.w, wide.status.w);
+        assert_eq!(narrow.back.w, wide.back.w);
+        assert_eq!(narrow.forward.w, wide.forward.w);
+        assert_eq!(narrow.devtools.w, wide.devtools.w);
         assert_eq!(wide.url_bar.w - narrow.url_bar.w, 460);
     }
 
@@ -3726,7 +3738,8 @@ mod responsive_tests {
         for root in [Rect::new(0, 0, 0, 0), Rect::new(0, 0, 1, 1)] {
             let layout = RabbitApp::compute_layout(root);
             assert_eq!(layout.root, root);
-            assert_eq!(layout.content.size(), Size::new(0, 0));
+            assert_eq!(layout.content.h, 0);
+            assert!(layout.content.w <= root.w);
             assert_eq!(layout.url_bar.w, 0);
         }
     }
@@ -4285,7 +4298,9 @@ mod progressive_tests {
             text.selection_end = 3;
         }
         let expected = app.form_state.focused_text_state_mut().unwrap().clone();
-        app.render_scroll = 100;
+        let rect = app.document_rect();
+        app.update(Event::mouse_wheel(rect.x + 5, rect.y + 5, 3));
+        assert_eq!(app.document_scroll.offset_y, 144);
         let mut cache = ImageCache::default();
         cache.insert_decoded(
             "http://fixture/logo.jpg".into(),
@@ -4308,7 +4323,7 @@ mod progressive_tests {
         settle(&mut app);
         assert_eq!(app.form_state.focused_control, Some(control));
         assert_eq!(app.form_state.focused_text_state_mut().unwrap(), &expected);
-        assert_eq!(app.render_scroll, 100);
+        assert_eq!(app.document_scroll.offset_y, 144);
         assert!(app.metrics.first_image_us.is_some());
         assert_eq!(
             app.render_state.as_ref().unwrap().viewport,
@@ -4325,12 +4340,12 @@ mod progressive_tests {
         let html = include_str!("../tests/fixtures/progressive/archwiki.html")
             .replace("screen.jpg", "bad.jpg");
         let mut app = app(&html, &runtime);
-        app.render_scroll = app
-            .render_state
-            .as_ref()
-            .unwrap()
-            .current_scene
-            .max_scroll_y(app.latest_viewport.h);
+        let rect = app.document_rect();
+        app.update(Event::mouse_wheel(rect.x + 5, rect.y + 5, i16::MAX));
+        assert_eq!(
+            app.document_scroll.offset_y,
+            app.document_scroll.max_offset_y()
+        );
         app.poll_images();
         assert_eq!(
             app.image_attempts.first().unwrap(),
@@ -4340,7 +4355,7 @@ mod progressive_tests {
         assert!(app.image_cache.failed("http://fixture/bad.jpg").is_some());
         assert_eq!(app.metrics.cache_misses, 3);
         assert_eq!(app.image_attempts.len(), 3);
-        app.render_scroll = 0;
+        app.document_scroll.offset_y = 0;
         for _ in 0..10 {
             app.update(Event::Tick);
             paint(&mut app);

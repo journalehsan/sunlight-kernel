@@ -1,0 +1,17 @@
+<!doctype html><html><head><title id="title">Rabbit interaction fixture</title>
+<style>
+body { margin: 0; background: #ffffff; color: #202020; }
+a, input, button, textarea, .editable { display: block; margin: 12px; }
+.spacer { height: 1800px; }
+</style></head><body>
+<a id="link" href="/next">Follow local link</a>
+<form action="/search" method="get">
+<input id="field" name="q" value="rabbit">
+<button id="button" type="submit">Search</button>
+<button id="disabled" disabled>Unavailable</button>
+</form>
+<textarea id="textarea">Notes</textarea>
+<div id="editable" class="editable" contenteditable="true">Editable text</div>
+<div class="spacer">Long local document for scrolling</div>
+<a id="bottom" href="/last">Last local link</a>
+</body></html>
