@@ -72,9 +72,10 @@ mod tests {
         let html = source();
         assert!(html.contains("SunlightOS"));
         assert!(html.contains("id=\"search-box\""));
-        assert!(html.contains("Quick links"));
-        assert!(html.contains("Arch Wiki"));
-        assert!(html.contains("GitHub"));
-        assert!(html.contains("SunlightOS Docs"));
+        assert!(html.contains("Explore"));
+        assert!(html.contains("DistroWatch"));
+        assert!(html.contains("https://distrowatch.com/"));
+        assert!(html.contains("https://github.com/journalehsan/sunlight-kernel"));
+        assert!(!html.contains("wiki.archlinux.org"));
     }
 }

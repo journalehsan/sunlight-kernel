@@ -487,6 +487,16 @@ impl RabbitApp {
         if self.focus != FocusPane::DeveloperTools {
             self.focus = FocusPane::Render;
         }
+        // Drop the retained scene before the worker starts. Without this,
+        // the previous document (often the start page) remains painted while
+        // a new navigation is pending and looks like it is still loading.
+        self.source = SourceContent::Placeholder("Loading...");
+        #[cfg(feature = "dom")]
+        {
+            self.render_state = None;
+            self.resource_queue.clear();
+            self.discovered_resources.clear();
+        }
         self.metrics = PresentationMetrics {
             started: Some(std::time::Instant::now()),
             ..Default::default()
@@ -587,7 +597,6 @@ impl RabbitApp {
         let normalized = rappid_rabbit::startpage::resolve_custom_url(&normalized)
             .map(String::from)
             .unwrap_or(normalized);
-        let lifecycle = self.document_lifecycle.clone();
         self.url_input.set_text(&normalized);
         self.navigation_url = normalized.clone();
         if let Some(parsed) = parsed.as_ref() {
@@ -595,6 +604,11 @@ impl RabbitApp {
         } else {
             self.begin_internal_navigation_session(&normalized);
         }
+        // Capture the lifecycle after beginning this navigation. Capturing it
+        // before the session starts leaves the worker at generation zero, so
+        // its completed document is rejected as stale and the UI stays on the
+        // loading placeholder forever.
+        let lifecycle = self.document_lifecycle.clone();
         // Release the previous source before allocating the next response.
         self.source = SourceContent::Placeholder("Loading...");
         let bounds = self.client_bounds;
