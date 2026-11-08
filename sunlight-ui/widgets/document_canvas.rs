@@ -1,4 +1,10 @@
-use alloc::{collections::BTreeMap, string::String, sync::Arc, vec, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
 
 use super::document_editor::DocumentEditor;
 use super::rich_document::{ParagraphAlignment, RichDocument, TextStyle as RichTextStyle};
@@ -1305,6 +1311,11 @@ pub struct DocumentCanvas<'a> {
     /// Optional retained scene for generic read-only document rendering.
     /// Existing Writer callers can continue supplying `items` unchanged.
     pub scene: Option<&'a DocumentScene>,
+    /// Optional presentation filter. None preserves existing consumers' eager
+    /// paint behavior; resource and layout state are never modified by it.
+    pub admitted_images: Option<&'a BTreeSet<RenderObjectId>>,
+    /// Actual raster writes in this draw, including clipping and transparency.
+    pub image_pixels_written: Option<&'a core::cell::Cell<usize>>,
     pub scroll_y: u32,
     pub body_font: Option<&'a dyn VecText>,
     pub small_font: Option<&'a dyn VecText>,
@@ -1328,6 +1339,8 @@ impl<'a> DocumentCanvas<'a> {
             presentation: DocumentCanvasPresentation::Preview,
             items,
             scene: None,
+            admitted_images: None,
+            image_pixels_written: None,
             scroll_y: 0,
             body_font: None,
             small_font: None,
@@ -1384,6 +1397,16 @@ impl<'a> DocumentCanvas<'a> {
         self.scene = Some(scene);
         self.mode = DocumentCanvasMode::ReadOnly;
         self.scroll_y = self.scroll_y.min(scene.max_scroll_y(self.content_rect().h));
+        self
+    }
+
+    pub fn with_image_presentation(mut self, admitted: &'a BTreeSet<RenderObjectId>) -> Self {
+        self.admitted_images = Some(admitted);
+        self
+    }
+
+    pub fn with_image_paint_counter(mut self, counter: &'a core::cell::Cell<usize>) -> Self {
+        self.image_pixels_written = Some(counter);
         self
     }
 
@@ -1993,7 +2016,16 @@ impl<'a> DocumentCanvas<'a> {
                 RenderObjectKind::Image {
                     image, source_url, ..
                 } => {
+                    if self
+                        .admitted_images
+                        .is_some_and(|ids| !ids.contains(&object.id))
+                    {
+                        continue;
+                    }
                     let painted = draw_raster_image(canvas, clipped, bounds, image);
+                    if let Some(counter) = self.image_pixels_written {
+                        counter.set(counter.get().saturating_add(painted));
+                    }
                     #[cfg(all(feature = "app", target_os = "sunlightos"))]
                     log_image_paint(scene.document_id, object.id.0, source_url, image, painted);
                     let _ = (source_url, painted);

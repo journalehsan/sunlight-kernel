@@ -20,19 +20,22 @@ are unsupported. Rabbit now uses the shared decoder for PNG as well as JPEG
 and TGA. JPEG can produce ARGB directly, releasing progressive coefficient
 storage before conversion and avoiding an intermediate full-image RGBA copy.
 
-Discovery resolves image URLs relative to the final page URL. A single bounded
-blocking worker fetches and decodes images, then builds the two-pass layout and
-`DocumentScene`. `ImageCache` and scene objects share `Arc<RasterImage>` with
-straight ARGB pixels. An owned `NavigationOutput` crosses the one-shot channel;
+Discovery resolves image URLs relative to the final page URL. Navigation
+publishes its initial two-pass layout and `DocumentScene` after parsing and CSS. A separate single bounded image worker fetches/decodes images;
+The original layout worker constructs incremental scene updates. `ImageCache`
+and scene objects share `Arc<RasterImage>` with straight ARGB pixels. An owned `NavigationOutput` crosses the one-shot channel;
 the UI accepts it only for its current document generation. Navigation drops
 the previous DOM/cache; a dropped receiver drops an undeliverable result.
-This change preserves the existing one-navigation-at-a-time policy: initial
-publication waits for subresource processing. It does not add concurrent image
-jobs or blocking image work to UI callbacks.
+Initial document publication no longer waits for image processing. The
+one-initial-navigation-at-a-time policy remains; navigation may replace a page
+while image jobs are pending. Image jobs stay serialized across generations.
+See [progressive presentation](rappid-rabbit-progressive-presentation.md) for
+readiness, worker ownership, bounds and validation.
 
 `DocumentRenderState::complete_images` rejects another document's generation,
-ignores identical completions, and otherwise reflows once and diffs stable
-scene IDs. Intrinsic dimensions feed both layout passes; HTML/CSS dimensions
+ignores identical completions, and otherwise patches stable scene IDs using
+retained geometry when possible. Changed intrinsic dependencies use canonical
+layout. Intrinsic dimensions feed both layout passes; HTML/CSS dimensions
 and auto-axis aspect ratio continue to control the layout box. Pixel storage
 is shared across nodes, scene diffs, reflows and UI transfer.
 

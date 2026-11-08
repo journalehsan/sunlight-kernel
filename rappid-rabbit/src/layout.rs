@@ -1453,9 +1453,14 @@ impl<'a> LayoutEngine<'a> {
                 }
             }
             BoxType::Image(_) => {
-                let size = self.tree.boxes[index]
+                let mut size = self.tree.boxes[index]
                     .image_size
                     .unwrap_or(RectSize::new(160.0, 100.0));
+                // Explicit pixel dimensions must reserve stable intrinsic
+                // contributions too, including inline-block/table wrappers.
+                if let (Dimension::Px(w), Dimension::Px(h)) = (style.width, style.height) {
+                    size = RectSize::new(w.max(0.0), h.max(0.0));
+                }
                 IntrinsicSize {
                     min_content_width: size.width,
                     max_content_width: size.width,

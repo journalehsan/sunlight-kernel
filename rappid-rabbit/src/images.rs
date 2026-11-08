@@ -59,6 +59,11 @@ pub struct DecodedImage {
 pub enum ImageResourceState {
     Loading,
     Decoded(DecodedImage),
+    /// Pixel-budget eviction keeps geometry and terminal resource readiness.
+    Evicted {
+        width: u32,
+        height: u32,
+    },
     Failed(String),
 }
 
@@ -86,6 +91,16 @@ impl ImageCache {
         }
     }
 
+    pub fn intrinsic_dimensions(&self, url: &str) -> Option<(u32, u32)> {
+        match &self.get(url)?.state {
+            ImageResourceState::Decoded(decoded) => {
+                Some((decoded.image.width, decoded.image.height))
+            }
+            ImageResourceState::Evicted { width, height } => Some((*width, *height)),
+            _ => None,
+        }
+    }
+
     pub fn failed(&self, url: &str) -> Option<&str> {
         match self.get(url).map(|entry| &entry.state) {
             Some(ImageResourceState::Failed(error)) => Some(error.as_str()),
@@ -100,11 +115,28 @@ impl ImageCache {
             .pixels
             .len()
             .saturating_mul(core::mem::size_of::<u32>());
-        while !self.entries.is_empty()
-            && (self.entries.len() >= MAX_IMAGE_CACHE_ENTRIES
-                || self.decoded_bytes.saturating_add(decoded_len) > MAX_IMAGE_CACHE_BYTES)
-        {
+        while self.entries.len() >= MAX_IMAGE_CACHE_ENTRIES {
             self.remove_at(0);
+        }
+        while self.decoded_bytes.saturating_add(decoded_len) > MAX_IMAGE_CACHE_BYTES {
+            let Some(index) = self
+                .entries
+                .iter()
+                .position(|entry| matches!(entry.state, ImageResourceState::Decoded(_)))
+            else {
+                break;
+            };
+            let ImageResourceState::Decoded(old) = &self.entries[index].state else {
+                unreachable!()
+            };
+            let dimensions = (old.image.width, old.image.height);
+            self.decoded_bytes = self
+                .decoded_bytes
+                .saturating_sub(old.image.pixels.len().saturating_mul(4));
+            self.entries[index].state = ImageResourceState::Evicted {
+                width: dimensions.0,
+                height: dimensions.1,
+            };
         }
         if decoded_len > MAX_IMAGE_CACHE_BYTES || self.entries.len() >= MAX_IMAGE_CACHE_ENTRIES {
             return;

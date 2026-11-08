@@ -15,6 +15,44 @@ use sunlight_ui::{
 
 const MAX_BACKGROUND_TILES: usize = 4096;
 
+/// Geometry captured by canonical layout, sufficient to repaint URL backgrounds
+/// when pixels arrive without running either layout pass again.
+#[derive(Clone, Debug)]
+pub(crate) struct BackgroundBox {
+    pub(crate) node_id: usize,
+    order: usize,
+    area: crate::layout::Rect,
+    pub(crate) clip: crate::layout::Rect,
+}
+
+pub(crate) fn capture(result: &LayoutResult<'_>, styles: &StyleContext) -> Vec<BackgroundBox> {
+    let geometry: alloc::collections::BTreeMap<_, _> = result
+        .geometry
+        .boxes
+        .iter()
+        .map(|g| (g.dom_node, g))
+        .collect();
+    result
+        .render_boxes
+        .iter()
+        .enumerate()
+        .filter_map(|(order, item)| {
+            if !matches!(item.node_type, BoxType::Block | BoxType::Inline) {
+                return None;
+            }
+            let style = styles.style_for(item.node_id)?;
+            css_image_url(&value(style, Property::BackgroundImage, "none"))?;
+            let geometry = geometry.get(&item.node_id)?;
+            Some(BackgroundBox {
+                node_id: item.node_id,
+                order,
+                area: geometry.padding_box,
+                clip: geometry.border_box,
+            })
+        })
+        .collect()
+}
+
 fn value(style: &ComputedStyle, property: Property, default: &str) -> String {
     style
         .value(&property)
@@ -62,9 +100,9 @@ fn int_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
     )
 }
 
-pub(crate) fn paint<S: SceneImageSource + ?Sized>(
+pub(crate) fn paint_cached<S: SceneImageSource + ?Sized>(
     scene: &mut DocumentScene,
-    result: &LayoutResult<'_>,
+    boxes: &[BackgroundBox],
     styles: &StyleContext,
     images: &S,
 ) {
@@ -80,10 +118,8 @@ pub(crate) fn paint<S: SceneImageSource + ?Sized>(
         };
     }
     let mut tiles = Vec::new();
-    for (order, item) in result.render_boxes.iter().enumerate() {
-        if !matches!(item.node_type, BoxType::Block | BoxType::Inline) {
-            continue;
-        }
+    for item in boxes {
+        let order = item.order;
         let Some(style) = styles.style_for(item.node_id) else {
             continue;
         };
@@ -100,16 +136,8 @@ pub(crate) fn paint<S: SceneImageSource + ?Sized>(
         let Some(image) = images.decoded(url) else {
             continue;
         };
-        let Some(geometry) = result
-            .geometry
-            .boxes
-            .iter()
-            .find(|g| g.dom_node == item.node_id)
-        else {
-            continue;
-        };
-        let area = geometry.padding_box;
-        let clip = geometry.border_box;
+        let area = item.area;
+        let clip = item.clip;
         let (w, h) = size(
             &value(style, Property::BackgroundSize, "auto"),
             (area.width, area.height),

@@ -50,6 +50,27 @@ impl Default for NetworkTabState {
 }
 
 impl NetworkTabState {
+    /// Append worker-owned terminal resource records without replacing the
+    /// user's current network selection, scroll or focused pane.
+    pub fn append_completed(&mut self, entries: &[NetworkRequestEntry]) {
+        for entry in entries {
+            let id = self.begin_request(
+                &entry.method,
+                entry.original_url.clone(),
+                entry.request_headers.clone(),
+                entry.resource_type,
+                entry.priority,
+                entry.request_state,
+            );
+            let sequence = self.session.entry(id).unwrap().sequence_number;
+            let mut completed = entry.clone();
+            completed.request_id = id;
+            completed.sequence_number = sequence;
+            *self.session.entry_mut(id).unwrap() = completed;
+        }
+        self.invalidate_caches();
+    }
+
     pub fn clear_for_new_page(&mut self) {
         self.session.clear();
         self.list_scroll_offset = 0;

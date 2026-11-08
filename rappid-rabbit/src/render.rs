@@ -138,9 +138,22 @@ pub struct DocumentRenderState {
     pub viewport: Size,
     pub diagnostics: LayoutDiagnostics,
     images: ImageCache,
+    image_dependencies: Arc<Vec<ImageDependency>>,
+    background_boxes: Arc<Vec<crate::backgrounds::BackgroundBox>>,
+    images_dirty: bool,
+    /// Number of canonical two-pass layout runs, excluding pixel-only patches.
+    pub layout_runs: usize,
+    // Shared across snapshots so superseded worker layouts remain measurable.
+    executed_layout_runs: Arc<core::sync::atomic::AtomicUsize>,
     pub image_revision: u64,
     /// Reject worker snapshots created before a controlled DOM mutation.
     pub dom_revision: u64,
+}
+
+#[derive(Clone, Debug)]
+struct ImageDependency {
+    src: String,
+    natural: layout::RectSize,
 }
 
 impl DocumentRenderState {
@@ -172,15 +185,16 @@ impl DocumentRenderState {
         measurer: &dyn TextMeasurer,
         images: ImageCache,
     ) -> Self {
-        let (current_scene, layout_geometry) = render_document(
-            document_id,
-            &final_url,
-            &dom,
-            &styles,
-            viewport,
-            measurer,
-            &images,
-        );
+        let (current_scene, layout_geometry, image_dependencies, background_boxes) =
+            render_document(
+                document_id,
+                &final_url,
+                &dom,
+                &styles,
+                viewport,
+                measurer,
+                &images,
+            );
         let mut diagnostics = diagnose_scene(&current_scene);
         diagnostics.unsupported = unsupported_features(&dom, &styles);
         Self {
@@ -196,6 +210,11 @@ impl DocumentRenderState {
             viewport,
             diagnostics,
             images,
+            image_dependencies: Arc::new(image_dependencies),
+            background_boxes: Arc::new(background_boxes),
+            images_dirty: false,
+            layout_runs: 1,
+            executed_layout_runs: Arc::new(core::sync::atomic::AtomicUsize::new(1)),
             image_revision: 0,
             dom_revision: 0,
         }
@@ -227,6 +246,11 @@ impl DocumentRenderState {
             viewport: self.viewport,
             diagnostics: LayoutDiagnostics::default(),
             images: self.images.clone(),
+            image_dependencies: self.image_dependencies.clone(),
+            background_boxes: self.background_boxes.clone(),
+            images_dirty: self.images_dirty,
+            layout_runs: self.layout_runs,
+            executed_layout_runs: self.executed_layout_runs.clone(),
             image_revision: self.image_revision,
             dom_revision: self.dom_revision,
         }
@@ -252,10 +276,12 @@ impl DocumentRenderState {
     }
 
     pub fn rebuild(&mut self, viewport: Size, measurer: &dyn TextMeasurer) {
+        self.executed_layout_runs
+            .fetch_add(1, core::sync::atomic::Ordering::Relaxed);
         if viewport.w != self.viewport.w && self.styles.viewport_changes_rules(viewport.w) {
             self.styles = Arc::new(self.styles.for_viewport(&self.dom, viewport.w));
         }
-        let (scene, layout_geometry) = render_document(
+        let (scene, layout_geometry, image_dependencies, background_boxes) = render_document(
             self.document_id,
             &self.final_url,
             &self.dom,
@@ -270,6 +296,10 @@ impl DocumentRenderState {
         self.previous_scene = Some(self.current_scene.clone());
         self.current_scene = Arc::new(scene);
         self.layout_geometry = layout_geometry;
+        self.image_dependencies = Arc::new(image_dependencies);
+        self.background_boxes = Arc::new(background_boxes);
+        self.images_dirty = false;
+        self.layout_runs = self.layout_runs.saturating_add(1);
         self.viewport = viewport;
         self.scene_generation = self.scene_generation.saturating_add(1);
     }
@@ -286,13 +316,157 @@ impl DocumentRenderState {
         measurer: &dyn TextMeasurer,
         images: ImageCache,
     ) -> bool {
+        if !self.stage_images(document_id, images) {
+            return false;
+        }
+        self.update_for_viewport(self.viewport, measurer);
+        true
+    }
+
+    /// UI-side resource acceptance only. No DOM execution, layout or painting.
+    pub fn stage_images(&mut self, document_id: u64, images: ImageCache) -> bool {
         if document_id != self.document_id || images == self.images {
             return false;
         }
         self.images = images;
         self.image_revision = self.image_revision.wrapping_add(1);
-        self.rebuild(self.viewport, measurer);
+        self.images_dirty = true;
         true
+    }
+
+    pub fn executed_layout_runs(&self) -> usize {
+        self.executed_layout_runs
+            .load(core::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn images_need_update(&self) -> bool {
+        self.images_dirty
+    }
+
+    pub fn image_snapshot(&self) -> Self {
+        let mut snapshot = self.reflow_snapshot();
+        snapshot.layout_geometry = self.layout_geometry.clone();
+        snapshot
+    }
+
+    /// Coalesce geometry and resource changes in one worker transaction.
+    /// Explicit pixel sizes and unchanged intrinsic metrics need only paint.
+    /// Other intrinsic changes conservatively use the canonical layout path.
+    pub fn update_for_viewport(&mut self, viewport: Size, measurer: &dyn TextMeasurer) -> bool {
+        let metrics = CacheImageMetrics {
+            cache: &self.images,
+            base_url: ParsedUrl::parse(&self.final_url).ok(),
+        };
+        let intrinsic_changed = self.images_dirty
+            && self.image_dependencies.iter().any(|d| {
+                metrics
+                    .intrinsic_size(&d.src)
+                    .unwrap_or(layout::RectSize::new(160.0, 100.0))
+                    != d.natural
+            });
+        if viewport != self.viewport || intrinsic_changed {
+            self.rebuild(viewport, measurer);
+            return true;
+        }
+        if !self.images_dirty {
+            return false;
+        }
+        let mut scene = (*self.current_scene).clone();
+        // Background tile IDs occupy the high half of the ID space. The
+        // canvas background sentinel remains part of the non-image scene.
+        scene
+            .objects
+            .retain(|o| o.id.0 >> 63 == 0 || o.id.0 == u64::MAX);
+        for object in &mut scene.objects {
+            let (src, alt) = match &object.kind {
+                RenderObjectKind::ImagePlaceholder { src, alt } => (src.clone(), alt.clone()),
+                RenderObjectKind::Image {
+                    source_url, alt, ..
+                } => (source_url.clone(), alt.clone()),
+                _ => continue,
+            };
+            object.kind = if let Some(decoded) = self.images.decoded(&src) {
+                RenderObjectKind::Image {
+                    image: decoded.image.clone(),
+                    source_url: src,
+                    intrinsic_width: decoded.image.width,
+                    intrinsic_height: decoded.image.height,
+                    alt,
+                }
+            } else {
+                RenderObjectKind::ImagePlaceholder { src, alt }
+            };
+        }
+        scene.finalize();
+        crate::backgrounds::paint_cached(
+            &mut scene,
+            &self.background_boxes,
+            &self.styles,
+            &metrics,
+        );
+        apply_overflow_clips(&mut scene, &self.dom, &self.styles, &self.layout_geometry);
+        self.diagnostics = diagnose_scene(&scene);
+        self.diagnostics.unsupported = unsupported_features(&self.dom, &self.styles);
+        self.last_patch = diff_scenes(&self.current_scene, &scene);
+        self.previous_scene = Some(self.current_scene.clone());
+        self.current_scene = Arc::new(scene);
+        self.scene_generation = self.scene_generation.saturating_add(1);
+        self.images_dirty = false;
+        true
+    }
+
+    /// Resource priorities include CSS backgrounds, which have no paint
+    /// object until decoded. Uses retained geometry and never changes layout.
+    pub fn image_resource_priorities(
+        &self,
+        viewport: sunlight_ui::Rect,
+    ) -> alloc::collections::BTreeMap<String, u8> {
+        let mut priorities = alloc::collections::BTreeMap::new();
+        for object in &self.current_scene.objects {
+            let url = match &object.kind {
+                RenderObjectKind::ImagePlaceholder { src, .. } => src,
+                RenderObjectKind::Image { source_url, .. } => source_url,
+                _ => continue,
+            };
+            let priority =
+                crate::presentation::priority(crate::presentation::paint_bounds(object), viewport);
+            priorities
+                .entry(url.clone())
+                .and_modify(|p: &mut u8| *p = (*p).min(priority))
+                .or_insert(priority);
+        }
+        let metrics = CacheImageMetrics {
+            cache: &self.images,
+            base_url: ParsedUrl::parse(&self.final_url).ok(),
+        };
+        for item in self.background_boxes.iter() {
+            let Some(raw) = self
+                .styles
+                .style_for(item.node_id)
+                .and_then(|s| s.value(&Property::BackgroundImage))
+                .and_then(|v| crate::css::css_image_url(&v.display()).map(String::from))
+            else {
+                continue;
+            };
+            let Some(url) = metrics.resolved(&raw) else {
+                continue;
+            };
+            let b = item.clip;
+            let priority = crate::presentation::priority(
+                Some(sunlight_ui::Rect::new(
+                    b.x.floor() as i32,
+                    b.y.floor() as i32,
+                    b.width.max(0.0).ceil() as u32,
+                    b.height.max(0.0).ceil() as u32,
+                )),
+                viewport,
+            );
+            priorities
+                .entry(url)
+                .and_modify(|p| *p = (*p).min(priority))
+                .or_insert(priority);
+        }
+        priorities
     }
 
     /// Patch one retained control after browser-owned form state changes.
@@ -407,10 +581,8 @@ impl ImageMetrics for CacheImageMetrics<'_> {
     fn intrinsic_size(&self, src: &str) -> Option<layout::RectSize> {
         let url = self.resolved(src)?;
         self.cache
-            .decoded(&url)
-            .map(|decoded| {
-                layout::RectSize::new(decoded.image.width as f32, decoded.image.height as f32)
-            })
+            .intrinsic_dimensions(&url)
+            .map(|(width, height)| layout::RectSize::new(width as f32, height as f32))
             .or_else(|| {
                 self.cache
                     .failed(&url)
@@ -468,7 +640,12 @@ fn render_document(
     viewport: Size,
     measurer: &dyn TextMeasurer,
     images: &ImageCache,
-) -> (DocumentScene, Vec<LayoutGeometry>) {
+) -> (
+    DocumentScene,
+    Vec<LayoutGeometry>,
+    Vec<ImageDependency>,
+    Vec<crate::backgrounds::BackgroundBox>,
+) {
     let base_url = ParsedUrl::parse(final_url).ok();
     let fonts = MeasurerFonts { measurer };
     let image_metrics = CacheImageMetrics {
@@ -480,7 +657,7 @@ fn render_document(
         cache: images,
         base_url,
     };
-    let geometry = result
+    let geometry: Vec<LayoutGeometry> = result
         .geometry
         .boxes
         .iter()
@@ -498,15 +675,40 @@ fn render_document(
         &result,
         &scene_image_source,
     );
-    crate::backgrounds::paint(&mut scene, &result, styles, &scene_image_source);
-    // Apply ancestor overflow clips to every retained paint and hit object,
-    // including CSS backgrounds and links. Geometry stays in the arena.
-    let boxes: alloc::collections::BTreeMap<_, _> = result
+    let background_boxes = crate::backgrounds::capture(&result, styles);
+    crate::backgrounds::paint_cached(&mut scene, &background_boxes, styles, &scene_image_source);
+    let image_dependencies = result
         .geometry
         .boxes
         .iter()
-        .map(|b| (b.dom_node, b))
+        .filter_map(|b| {
+            let layout::BoxType::Image(image) = &b.kind else {
+                return None;
+            };
+            if matches!(
+                (b.style.width, b.style.height),
+                (layout::Dimension::Px(_), layout::Dimension::Px(_))
+            ) {
+                return None;
+            }
+            Some(ImageDependency {
+                src: String::from(image.src),
+                natural: b.image_size.unwrap_or(layout::RectSize::new(160.0, 100.0)),
+            })
+        })
         .collect();
+    apply_overflow_clips(&mut scene, dom, styles, &geometry);
+    (scene, geometry, image_dependencies, background_boxes)
+}
+
+fn apply_overflow_clips(
+    scene: &mut DocumentScene,
+    dom: &Document,
+    styles: &StyleContext,
+    geometry: &[LayoutGeometry],
+) {
+    let boxes: alloc::collections::BTreeMap<_, _> =
+        geometry.iter().map(|b| (b.node_id, b)).collect();
     for object in &mut scene.objects {
         let mut ancestor = dom.parent(object.owner_node_id.0 as usize);
         while let Some(id) = ancestor {
@@ -540,7 +742,6 @@ fn render_document(
             ancestor = dom.parent(id);
         }
     }
-    (scene, geometry)
 }
 
 /// Counts retained object kinds and reports paint features the scene dropped.

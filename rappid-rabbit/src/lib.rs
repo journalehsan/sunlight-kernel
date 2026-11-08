@@ -19,6 +19,8 @@ pub mod launch_url;
 #[cfg(feature = "dom")]
 pub mod layout;
 #[cfg(feature = "dom")]
+pub mod presentation;
+#[cfg(feature = "dom")]
 pub mod render;
 pub mod resources;
 #[cfg(feature = "svg")]

@@ -6,10 +6,11 @@ locked libc/System allocator with a 128 MiB process heap budget. The kernel keep
 its freestanding target; Rabbit no longer embeds a 32 MiB static heap.
 
 The UI thread owns the window and widgets. A Tokio current-thread runtime owns
-one blocking worker, with a 4 MiB stack. A navigation runs DNS, TLS, response
-collection, HTML parsing, stylesheet/image loading and initial scene construction
-on that worker. A one-shot channel moves only owned document state back to the
-UI. UI ticks poll the channel without waiting and redraw when state changes.
+one blocking worker, with a 4 MiB stack, for DNS, TLS, response collection,
+HTML parsing, stylesheet loading and initial scene construction. A second
+single-worker runtime prepares images independently, with one shared lane guard
+across navigation generations. Initial scene publication precedes image work.
+A one-shot channel moves only owned document state back to the UI. UI ticks poll the channel without waiting and redraw when state changes.
 A navigation already in progress rejects additional fetch clicks, bounding the
 number of live pipelines and buffers. Completion preserves URL edits and the
 current developer-panel configuration, checks the document generation, and
@@ -37,8 +38,11 @@ all image objects again. Hidden Source text is not scanned to clamp its scroll. 
 made while the worker ran survive. Inspector DOM/styles share the same owned
 snapshots, and accepted media styles invalidate its text caches. Image completion
 revision checks prevent an old reflow from replacing newly attached pixels.
-Initial navigation still waits for bounded subresource fetch/decode; this change
-does not add concurrent image tasks or expand the heap/cache limits.
+Image resources now complete independently of presentation, and viewport-aware
+paint admission progressively exposes cached pixels. The original layout worker
+still serializes all DOM/layout operations. Image response/decode/cache limits
+remain bounded. See [progressive presentation](rappid-rabbit-progressive-presentation.md)
+for resource readiness, cache metadata, cancellation and measurements.
 
 The previous source, DOM and caches are released when navigation begins. Worker
 scratch spaces and fetch responses are dropped when pipeline processing ends;
@@ -50,11 +54,11 @@ Tokio enables `rt`, `sync` and `time`, with its socket reactor disabled. The
 existing capability IPC transport supplies networking; native std's unsupported
 `std::net` implementation is not used. Native thread spawn/join, TLS, futex
 parking and clocks supply Tokio's requirements without epoll/eventfd stubs.
-The runtime currently schedules blocking jobs directly; it does not drive an
+The runtimes schedule blocking jobs directly; they do not drive an
 async event loop alongside `Window::run`. Future timer/async futures must be
 driven with `block_on` or a separate executor thread.
 
-On close, the UI drops its receiver and shuts the runtime down without waiting
+On close, the UI drops its receivers and shuts both runtimes down without waiting
 for blocking network timeouts. An already running blocking job cannot be
 cancelled by Tokio; normal native std process group exit terminates the workers.
 If a worker drops its sender, the UI reports a navigation error. Native aborting

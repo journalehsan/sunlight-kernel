@@ -256,12 +256,58 @@ struct NavigationOutput {
 }
 
 #[cfg(feature = "dom")]
+struct ImageOutput {
+    generation: u64,
+    cache: ImageCache,
+    diagnostics: DeveloperToolsState,
+}
+
+/// One image job across navigation generations, including canceled blocking IO.
+/// A guard prevents canceled generations accumulating queued image closures.
+#[cfg(feature = "dom")]
+struct ImageLaneGuard(alloc::sync::Arc<core::sync::atomic::AtomicBool>);
+#[cfg(feature = "dom")]
+impl Drop for ImageLaneGuard {
+    fn drop(&mut self) {
+        self.0.store(false, core::sync::atomic::Ordering::Release);
+    }
+}
+
+#[derive(Default)]
+struct PresentationMetrics {
+    started: Option<std::time::Instant>,
+    initial_us: Option<u128>,
+    first_image_us: Option<u128>,
+    visible_complete_us: Option<u128>,
+    page_ready_us: Option<u128>,
+    visible_view: Option<(u64, Rect)>,
+    repaints: usize,
+    cache_hits: usize,
+    cache_misses: usize,
+}
+
+#[cfg(feature = "dom")]
 struct ReflowOutput {
     version: u64,
     state: DocumentRenderState,
 }
 
 struct RabbitApp {
+    #[cfg(feature = "dom")]
+    image_completion: Option<oneshot::Receiver<ImageOutput>>,
+    #[cfg(feature = "dom")]
+    image_runtime: Option<Handle>,
+    #[cfg(feature = "dom")]
+    image_lane: alloc::sync::Arc<core::sync::atomic::AtomicBool>,
+    #[cfg(feature = "dom")]
+    image_attempts: Vec<String>,
+    #[cfg(feature = "dom")]
+    image_discovery_revision: u64,
+    #[cfg(feature = "dom")]
+    presentation: rappid_rabbit::presentation::ImagePresentation,
+    metrics: PresentationMetrics,
+    #[cfg(test)]
+    image_fetcher: fn(ParsedUrl, HttpRequest, usize) -> Result<RequestResult, FetchError>,
     #[cfg(feature = "dom")]
     reflow_completion: Option<oneshot::Receiver<ReflowOutput>>,
     #[cfg(feature = "dom")]
@@ -340,6 +386,21 @@ impl RabbitApp {
 
         let mut app = Self {
             #[cfg(feature = "dom")]
+            image_completion: None,
+            #[cfg(feature = "dom")]
+            image_runtime: None,
+            #[cfg(feature = "dom")]
+            image_lane: alloc::sync::Arc::new(core::sync::atomic::AtomicBool::new(false)),
+            #[cfg(feature = "dom")]
+            image_attempts: Vec::new(),
+            #[cfg(feature = "dom")]
+            image_discovery_revision: 0,
+            #[cfg(feature = "dom")]
+            presentation: Default::default(),
+            metrics: PresentationMetrics::default(),
+            #[cfg(test)]
+            image_fetcher: perform_request_limited,
+            #[cfg(feature = "dom")]
             reflow_completion: None,
             #[cfg(feature = "dom")]
             viewport_version: 0,
@@ -396,6 +457,10 @@ impl RabbitApp {
         if self.focus != FocusPane::DeveloperTools {
             self.focus = FocusPane::Render;
         }
+        self.metrics = PresentationMetrics {
+            started: Some(std::time::Instant::now()),
+            ..Default::default()
+        };
         self.pending_fetch = true;
         self.status = String::from("Fetching...");
         self.render_status = String::from("Loading rendered document...");
@@ -556,6 +621,10 @@ impl RabbitApp {
         #[cfg(feature = "dom")]
         {
             self.image_cache = ImageCache::default();
+            self.image_completion = None;
+            self.image_attempts.clear();
+            self.image_discovery_revision = 0;
+            self.presentation = Default::default();
         }
         self.render_scroll = 0;
         self.render_status = String::from("Loading rendered document...");
@@ -697,7 +766,6 @@ impl RabbitApp {
                             );
                             let candidates = core::mem::take(&mut self.discovered_resources);
                             self.resource_queue.replace_from_candidates(&candidates);
-                            self.fetch_images(&candidates);
                             self.discovered_resources = candidates;
                         }
                         let layout_started = std::time::Instant::now();
@@ -1066,9 +1134,16 @@ impl RabbitApp {
     }
 
     #[cfg(feature = "dom")]
-    fn fetch_images(&mut self, candidates: &[ResourceCandidate]) {
+    fn fetch_images(
+        &mut self,
+        candidates: &[ResourceCandidate],
+        completion: &oneshot::Sender<ImageOutput>,
+    ) {
         use rappid_rabbit::images::{detect_format, ImageFormat};
         for candidate in rappid_rabbit::images::initial_image_candidates(candidates) {
+            if completion.is_closed() {
+                return;
+            }
             let url = &candidate.resolved_url;
             if self.image_cache.get(url).is_some() {
                 continue;
@@ -1092,8 +1167,15 @@ impl RabbitApp {
                 ResourcePriority::Embedded,
                 RequestState::Connecting,
             );
-            match perform_request_limited(parsed, request, MAX_IMAGE_RESPONSE_BYTES) {
+            #[cfg(test)]
+            let fetcher = self.image_fetcher;
+            #[cfg(not(test))]
+            let fetcher = perform_request_limited;
+            match fetcher(parsed, request, MAX_IMAGE_RESPONSE_BYTES) {
                 Ok(result) => {
+                    if completion.is_closed() {
+                        return;
+                    }
                     let status = result.response.status_code;
                     let content_type = result.response.header("content-type").map(String::from);
                     let final_url = result.final_url.as_ref().map(format_url);
@@ -1213,6 +1295,156 @@ impl RabbitApp {
                 }
             }
         }
+    }
+
+    /// Resource jobs are bounded independently of presentation. Offscreen
+    /// resources still reach terminal readiness under the existing contract.
+    #[cfg(feature = "dom")]
+    fn poll_images(&mut self) -> bool {
+        let mut changed = false;
+        if let Some(receiver) = self.image_completion.as_mut() {
+            match receiver.try_recv() {
+                Ok(output) => {
+                    self.image_completion = None;
+                    if output.generation != self.document_lifecycle.generation() {
+                        return false;
+                    }
+                    self.image_cache = output.cache;
+                    if let Some(state) = self.render_state.as_mut() {
+                        state.stage_images(output.generation, self.image_cache.clone());
+                    }
+                    self.developer_tools
+                        .network
+                        .append_completed(output.diagnostics.network.entries());
+                    for entry in output.diagnostics.console.entries() {
+                        self.developer_tools.console.push(
+                            entry.severity,
+                            entry.source,
+                            entry.message.clone(),
+                        );
+                    }
+                    changed = self.developer_tools.panel.open;
+                }
+                Err(oneshot::error::TryRecvError::Empty) => return false,
+                Err(oneshot::error::TryRecvError::Closed) => {
+                    self.image_completion = None;
+                    // The URL was recorded before submission: never spin on
+                    // a failed worker. Other bounded resources may proceed.
+                    if let Some(url) = self.image_attempts.last() {
+                        self.image_cache
+                            .insert_failed(url.clone(), "Image worker stopped");
+                        if let Some(state) = self.render_state.as_mut() {
+                            state.stage_images(
+                                self.document_lifecycle.generation(),
+                                self.image_cache.clone(),
+                            );
+                        }
+                    }
+                    changed = self.developer_tools.panel.open;
+                }
+            }
+        }
+        if self.pending_fetch {
+            return changed;
+        }
+        if let Some(state) = self.render_state.as_ref() {
+            if self.image_discovery_revision != state.dom_revision {
+                let Ok(base) = ParsedUrl::parse(&state.final_url) else {
+                    return changed;
+                };
+                let mut candidates =
+                    rappid_rabbit::resources::discovery::discover_resources(&state.dom, &base);
+                discover_background_images(&mut candidates, &state.dom, &state.styles, &[], &base);
+                self.discovered_resources = candidates;
+                self.image_discovery_revision = state.dom_revision;
+                self.metrics.page_ready_us = None;
+            }
+        }
+        let (Some(state), Some(runtime)) = (
+            self.render_state.as_ref(),
+            self.image_runtime.as_ref().or(self.runtime.as_ref()),
+        ) else {
+            return changed;
+        };
+        if self.metrics.page_ready_us.is_some() {
+            return changed;
+        }
+        let viewport = Rect::new(
+            0,
+            self.render_scroll as i32,
+            self.latest_viewport.w,
+            self.latest_viewport.h,
+        );
+        let priorities = state.image_resource_priorities(viewport);
+        let candidate = rappid_rabbit::images::initial_image_candidates(&self.discovered_resources)
+            .filter(|c| !self.image_attempts.contains(&c.resolved_url))
+            .min_by_key(|c| priorities.get(&c.resolved_url).copied().unwrap_or(2))
+            .cloned();
+        let candidate = candidate
+            .filter(|_| self.image_attempts.len() < rappid_rabbit::images::MAX_IMAGE_CACHE_ENTRIES);
+        let Some(candidate) = candidate else {
+            if self.metrics.page_ready_us.is_none() {
+                self.metrics.page_ready_us = self.metrics.started.map(|s| s.elapsed().as_micros());
+                self.log_presentation_metrics("page-ready");
+            }
+            return changed;
+        };
+        if self
+            .image_lane
+            .compare_exchange(
+                false,
+                true,
+                core::sync::atomic::Ordering::Acquire,
+                core::sync::atomic::Ordering::Relaxed,
+            )
+            .is_err()
+        {
+            return changed;
+        }
+        let lane = ImageLaneGuard(self.image_lane.clone());
+        self.image_attempts.push(candidate.resolved_url.clone());
+        if self.image_cache.get(&candidate.resolved_url).is_some() {
+            self.metrics.cache_hits += 1;
+            return changed;
+        }
+        self.metrics.cache_misses += 1;
+        let generation = self.document_lifecycle.generation();
+        let lifecycle = self.document_lifecycle.clone();
+        let cache = self.image_cache.clone();
+        let (sender, receiver) = oneshot::channel();
+        self.image_completion = Some(receiver);
+        #[cfg(test)]
+        let fetcher = self.image_fetcher;
+        runtime.spawn_blocking(move || {
+            let _lane = lane;
+            if sender.is_closed() {
+                return;
+            }
+            let mut worker = RabbitApp::new(None);
+            worker.document_lifecycle = lifecycle;
+            // Diagnostics carry the target generation; no DOM crosses this job.
+            worker.image_cache = cache;
+            #[cfg(test)]
+            {
+                worker.image_fetcher = fetcher;
+            }
+            worker.developer_tools.console.clear();
+            worker.fetch_images(&[candidate], &sender);
+            let _ = sender.send(ImageOutput {
+                generation,
+                cache: worker.image_cache,
+                diagnostics: worker.developer_tools,
+            });
+        });
+        changed
+    }
+
+    fn log_presentation_metrics(&self, milestone: &str) {
+        #[cfg(feature = "dom")]
+        debug_log(&format!("[RABBIT][PRESENT] gen={} milestone={} initial_us={:?} first_image_us={:?} visible_complete_us={:?} page_ready_us={:?} layout_runs={} layout_passes={} repaints={} cache_hits={} cache_misses={}",
+            self.document_lifecycle.generation(), milestone, self.metrics.initial_us, self.metrics.first_image_us,
+            self.metrics.visible_complete_us, self.metrics.page_ready_us,
+            self.render_state.as_ref().map_or(0, |s| s.executed_layout_runs()), self.render_state.as_ref().map_or(0, |s| 2 * s.executed_layout_runs()), self.metrics.repaints, self.metrics.cache_hits, self.metrics.cache_misses));
     }
 
     #[cfg(feature = "dom")]
@@ -1549,6 +1781,24 @@ impl RabbitApp {
                                 && state.dom_revision == output.state.dom_revision
                         })
                     {
+                        let viewport = Rect::new(
+                            0,
+                            self.render_scroll as i32,
+                            self.latest_viewport.w,
+                            self.latest_viewport.h,
+                        );
+                        let repaint = self.developer_tools.panel.open
+                            || current.is_none_or(|state| {
+                                state.viewport != output.state.viewport
+                                    || state.current_scene.content_size
+                                        != output.state.current_scene.content_size
+                            })
+                            || output
+                                .state
+                                .last_patch
+                                .dirty_regions
+                                .iter()
+                                .any(|region| region.intersect(viewport).is_some());
                         self.developer_tools
                             .dom
                             .update_styles(output.state.styles.clone());
@@ -1565,7 +1815,7 @@ impl RabbitApp {
                         );
                         debug_log(&format!("[RABBIT][LAYOUT] commit gen={} version={} viewport={}x{} ui_us={} ui_thread=yes",
                             self.document_lifecycle.generation(), self.viewport_version, self.latest_viewport.w, self.latest_viewport.h, ui_started.elapsed().as_micros()));
-                        changed = true;
+                        changed |= repaint;
                     } else {
                         debug_log(&format!(
                             "[RABBIT][LAYOUT] discard gen={} version={} latest={}",
@@ -1590,10 +1840,14 @@ impl RabbitApp {
         else {
             return changed;
         };
-        if state.viewport == self.latest_viewport {
+        if state.viewport == self.latest_viewport && !state.images_need_update() {
             return changed;
         }
-        let mut snapshot = state.reflow_snapshot();
+        let mut snapshot = if state.viewport == self.latest_viewport && state.images_need_update() {
+            state.image_snapshot()
+        } else {
+            state.reflow_snapshot()
+        };
         let viewport = self.latest_viewport;
         let version = self.viewport_version;
         let (sender, receiver) = oneshot::channel();
@@ -1611,7 +1865,7 @@ impl RabbitApp {
                 return;
             }
             let start = std::time::Instant::now();
-            snapshot.rebuild_for_viewport(viewport, &RABBIT_FONTS);
+            snapshot.update_for_viewport(viewport, &RABBIT_FONTS);
             debug_log(&format!(
                 "[RABBIT][LAYOUT] reflow gen={} version={} viewport={}x{} elapsed_ms={} worker=yes",
                 snapshot.document_id,
@@ -1714,6 +1968,7 @@ impl RabbitApp {
         if let Some(render_state) = self.render_state.as_ref() {
             return canvas
                 .with_scene(&render_state.current_scene)
+                .with_image_presentation(self.presentation.admitted())
                 .with_scroll_y(self.render_scroll);
         }
         canvas
@@ -2864,7 +3119,66 @@ impl App for RabbitApp {
                 source_panel.draw(canvas, theme);
                 self.source_view().draw(canvas, theme);
             }
-            DocumentView::Render => self.document_canvas().draw(canvas, theme),
+            DocumentView::Render => {
+                let written = core::cell::Cell::new(0);
+                self.document_canvas()
+                    .with_image_paint_counter(&written)
+                    .draw(canvas, theme);
+                self.metrics.repaints += 1;
+                #[cfg(feature = "dom")]
+                if let Some(state) = self.render_state.as_ref() {
+                    if self.metrics.initial_us.is_none() {
+                        self.metrics.initial_us =
+                            self.metrics.started.map(|s| s.elapsed().as_micros());
+                        self.log_presentation_metrics("initial-document");
+                    }
+                    if written.get() > 0 && self.metrics.first_image_us.is_none() {
+                        self.metrics.first_image_us =
+                            self.metrics.started.map(|s| s.elapsed().as_micros());
+                        self.log_presentation_metrics("first-visible-image");
+                    }
+                    let viewport = Rect::new(
+                        0,
+                        self.render_scroll as i32,
+                        self.latest_viewport.w,
+                        self.latest_viewport.h,
+                    );
+                    let view = (state.scene_generation, viewport);
+                    if self.metrics.visible_view != Some(view) {
+                        self.metrics.visible_view = Some(view);
+                        self.metrics.visible_complete_us = None;
+                    }
+                    if self.metrics.visible_complete_us.is_none() {
+                        let priorities = state.image_resource_priorities(viewport);
+                        let pending_visible = rappid_rabbit::images::initial_image_candidates(
+                            &self.discovered_resources,
+                        )
+                        .any(|c| {
+                            priorities.get(&c.resolved_url) == Some(&0)
+                                && self.image_cache.get(&c.resolved_url).is_none()
+                                && ((self.image_attempts.len()
+                                    < rappid_rabbit::images::MAX_IMAGE_CACHE_ENTRIES
+                                    && !self.image_attempts.contains(&c.resolved_url))
+                                    || (self.image_completion.is_some()
+                                        && self.image_attempts.last() == Some(&c.resolved_url)))
+                        });
+                        if !pending_visible
+                            && !state.images_need_update()
+                            && self
+                                .presentation
+                                .visible_complete(&state.current_scene, viewport)
+                        {
+                            if self.metrics.visible_complete_us.is_none() {
+                                self.metrics.visible_complete_us =
+                                    self.metrics.started.map(|s| s.elapsed().as_micros());
+                                self.log_presentation_metrics("visible-images-complete");
+                            }
+                        } else {
+                            self.metrics.visible_complete_us = None;
+                        }
+                    }
+                }
+            }
         }
 
         self.draw_developer_tools(canvas, theme);
@@ -2907,7 +3221,24 @@ impl App for RabbitApp {
                     return changed;
                 }
                 #[cfg(feature = "dom")]
-                return self.poll_reflow();
+                {
+                    let mut changed = self.poll_images();
+                    changed |= self.poll_reflow();
+                    if let Some(state) = self.render_state.as_ref() {
+                        let viewport = Rect::new(
+                            0,
+                            self.render_scroll as i32,
+                            self.latest_viewport.w,
+                            self.latest_viewport.h,
+                        );
+                        changed |= self.presentation.advance(
+                            &state.current_scene,
+                            state.scene_generation,
+                            viewport,
+                        );
+                    }
+                    return changed;
+                }
                 #[cfg(not(feature = "dom"))]
                 false
             }
@@ -3295,8 +3626,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .max_blocking_threads(1)
         .thread_stack_size(4 * 1024 * 1024)
         .build()?;
+    // Resource IO/decode cannot hold up a navigation or viewport reflow.
+    // Layout/DOM still use only the original single blocking worker.
+    #[cfg(feature = "dom")]
+    let image_runtime = tokio::runtime::Builder::new_current_thread()
+        .max_blocking_threads(1)
+        .thread_stack_size(4 * 1024 * 1024)
+        .build()?;
     let mut app = RabbitApp::new(initial_url.as_deref());
     app.runtime = Some(runtime.handle().clone());
+    #[cfg(feature = "dom")]
+    {
+        app.image_runtime = Some(image_runtime.handle().clone());
+    }
     let mut window = Window::connect(WindowConfig {
         width: WIN_W,
         height: WIN_H,
@@ -3309,6 +3651,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Blocking IPC cannot be aborted by Tokio. Do not hold window close up
     // waiting for a network timeout; native std group exit reaps all workers.
     runtime.shutdown_timeout(std::time::Duration::ZERO);
+    #[cfg(feature = "dom")]
+    image_runtime.shutdown_timeout(std::time::Duration::ZERO);
     Ok(())
 }
 
@@ -3830,5 +4174,341 @@ mod view_and_reflow_tests {
         assert!(candidates
             .iter()
             .any(|c| c.resolved_url == "https://document.example/inline.svg"));
+    }
+}
+
+#[cfg(all(test, feature = "dom"))]
+mod progressive_tests {
+    use super::*;
+    fn fixture_fetch(
+        url: ParsedUrl,
+        _: HttpRequest,
+        _: usize,
+    ) -> Result<RequestResult, FetchError> {
+        Ok(RequestResult {
+            response: sunlight_http::HttpResponse {
+                status_code: 200,
+                status_text: "OK".into(),
+                headers: vec![("content-type".into(), "image/jpeg".into())],
+                header_len: 0,
+            },
+            body: if url.path.contains("bad") {
+                b"broken".to_vec()
+            } else {
+                include_bytes!("../../sun-img/tests/fixtures/gray.jpg").to_vec()
+            },
+            final_url: Some(url),
+            duration_ms: Some(30),
+        })
+    }
+    fn app(html: &str, runtime: &tokio::runtime::Runtime) -> RabbitApp {
+        let mut app = RabbitApp::new(None);
+        app.runtime = Some(runtime.handle().clone());
+        app.image_fetcher = fixture_fetch;
+        app.metrics.started = Some(std::time::Instant::now());
+        let url = ParsedUrl::parse("http://fixture/").unwrap();
+        app.begin_navigation_session("http://fixture/", &build_get_request(&url));
+        app.apply_result(
+            "http://fixture/",
+            RequestResult {
+                response: sunlight_http::HttpResponse {
+                    status_code: 200,
+                    status_text: "OK".into(),
+                    headers: vec![("content-type".into(), "text/html".into())],
+                    header_len: 0,
+                },
+                body: html.as_bytes().to_vec(),
+                final_url: Some(url),
+                duration_ms: Some(1),
+            },
+        );
+        app.refresh_render_viewport();
+        app
+    }
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap()
+    }
+    fn paint(app: &mut RabbitApp) {
+        let mut pixels = vec![0; 1080 * 720];
+        app.view(
+            &mut Canvas::new(&mut pixels, 1080, 1080, 720),
+            &Theme::sunlight_light(),
+        );
+    }
+    fn settle(app: &mut RabbitApp) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while app.metrics.page_ready_us.is_none() || app.reflow_completion.is_some() {
+            app.update(Event::Tick);
+            paint(app);
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+    #[test]
+    fn initial_document_is_interactive_while_image_result_is_deliberately_withheld() {
+        let runtime = runtime();
+        let mut app = app(
+            include_str!("../tests/fixtures/progressive/archwiki.html"),
+            &runtime,
+        );
+        assert_eq!(
+            app.render_state
+                .as_ref()
+                .unwrap()
+                .diagnostics
+                .placeholder_count,
+            3
+        );
+        assert!(app.image_cache.get("http://fixture/logo.jpg").is_none());
+        let (sender, receiver) = oneshot::channel();
+        app.image_completion = Some(receiver);
+        paint(&mut app);
+        assert!(app.metrics.initial_us.is_some());
+        assert!(app.metrics.first_image_us.is_none());
+        assert!(app.metrics.page_ready_us.is_none());
+        assert!(!app.pending_fetch);
+        let control = app
+            .form_state
+            .controls
+            .keys()
+            .copied()
+            .find(|id| matches!(app.form_state.controls[id], FormControlState::Text { .. }))
+            .unwrap();
+        app.form_state.focus_control(control);
+        app.form_state.insert_char('X');
+        {
+            let text = app.form_state.focused_text_state_mut().unwrap();
+            text.selection_start = 1;
+            text.selection_end = 3;
+        }
+        let expected = app.form_state.focused_text_state_mut().unwrap().clone();
+        app.render_scroll = 100;
+        let mut cache = ImageCache::default();
+        cache.insert_decoded(
+            "http://fixture/logo.jpg".into(),
+            decode_image(
+                include_bytes!("../../sun-img/tests/fixtures/gray.jpg"),
+                None,
+                "logo.jpg",
+            )
+            .unwrap(),
+        );
+        assert!(sender
+            .send(ImageOutput {
+                generation: 1,
+                cache,
+                diagnostics: DeveloperToolsState::default()
+            })
+            .is_ok());
+        app.image_attempts.push("http://fixture/logo.jpg".into());
+        app.set_client_bounds(840, 540);
+        settle(&mut app);
+        assert_eq!(app.form_state.focused_control, Some(control));
+        assert_eq!(app.form_state.focused_text_state_mut().unwrap(), &expected);
+        assert_eq!(app.render_scroll, 100);
+        assert!(app.metrics.first_image_us.is_some());
+        assert_eq!(
+            app.render_state.as_ref().unwrap().viewport,
+            app.latest_viewport
+        );
+        assert_eq!(app.metrics.cache_misses, 2);
+        for _ in 0..100 {
+            assert!(!app.update(Event::Tick));
+        }
+    }
+    #[test]
+    fn scroll_before_images_arrive_prioritizes_current_view_and_keeps_terminal_failures() {
+        let runtime = runtime();
+        let html = include_str!("../tests/fixtures/progressive/archwiki.html")
+            .replace("screen.jpg", "bad.jpg");
+        let mut app = app(&html, &runtime);
+        app.render_scroll = app
+            .render_state
+            .as_ref()
+            .unwrap()
+            .current_scene
+            .max_scroll_y(app.latest_viewport.h);
+        app.poll_images();
+        assert_eq!(
+            app.image_attempts.first().unwrap(),
+            "http://fixture/footer.jpg"
+        );
+        settle(&mut app);
+        assert!(app.image_cache.failed("http://fixture/bad.jpg").is_some());
+        assert_eq!(app.metrics.cache_misses, 3);
+        assert_eq!(app.image_attempts.len(), 3);
+        app.render_scroll = 0;
+        for _ in 0..10 {
+            app.update(Event::Tick);
+            paint(&mut app);
+        }
+        let state = app.render_state.as_ref().unwrap();
+        assert!(app.presentation.visible_complete(
+            &state.current_scene,
+            Rect::new(0, 0, app.latest_viewport.w, app.latest_viewport.h)
+        ));
+        for _ in 0..100 {
+            assert!(!app.update(Event::Tick));
+        }
+    }
+    #[test]
+    fn rapid_navigation_and_close_drop_pending_image_results_and_owned_pixels() {
+        let runtime = runtime();
+        for _ in 0..32 {
+            let mut app = app("<img src='a.jpg' width=16 height=16>", &runtime);
+            let (sender, receiver) = oneshot::channel();
+            app.image_completion = Some(receiver);
+            let decoded = decode_image(
+                include_bytes!("../../sun-img/tests/fixtures/gray.jpg"),
+                None,
+                "a.jpg",
+            )
+            .unwrap();
+            let weak = std::sync::Arc::downgrade(&decoded.image);
+            let mut cache = ImageCache::default();
+            cache.insert_decoded("http://fixture/a.jpg".into(), decoded);
+            let url = ParsedUrl::parse("http://fixture/next").unwrap();
+            app.begin_navigation_session("http://fixture/next", &build_get_request(&url));
+            assert!(app.image_completion.is_none());
+            let result = sender.send(ImageOutput {
+                generation: 1,
+                cache,
+                diagnostics: DeveloperToolsState::default(),
+            });
+            assert!(result.is_err());
+            drop(result);
+            assert!(weak.upgrade().is_none());
+            assert!(app.render_state.is_none());
+        }
+    }
+    #[cfg(feature = "js-dom-fixture")]
+    #[test]
+    fn fixture_src_changes_discover_resources_without_reexecuting_scripts() {
+        let runtime = runtime();
+        let mut app = app(
+            "<p id='out'>ready</p><img id='img' src='a.jpg' width=16 height=16>",
+            &runtime,
+        );
+        settle(&mut app);
+        let mut js =
+            rappid_rabbit::dom_fixture::FixtureSession::new(app.render_state.as_ref().unwrap())
+                .unwrap();
+        js.evaluate(
+            app.render_state.as_mut().unwrap(),
+            "let executions=1;document.getElementById('img').setAttribute('src','new.jpg');",
+            &RABBIT_FONTS,
+        )
+        .unwrap();
+        // The prior page-ready milestone is invalidated by resource discovery.
+        app.update(Event::Tick);
+        settle(&mut app);
+        assert_eq!(
+            app.image_attempts,
+            vec!["http://fixture/a.jpg", "http://fixture/new.jpg"]
+        );
+        assert!(app.image_cache.decoded("http://fixture/new.jpg").is_some());
+        js.evaluate(
+            app.render_state.as_mut().unwrap(),
+            "if(executions!==1){throw 'script reordered';}",
+            &RABBIT_FONTS,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn canceled_image_io_cannot_queue_more_images_or_hold_the_navigation_worker() {
+        let images = runtime();
+        let runtime = runtime();
+        let mut app = app("<img src='a.jpg' width=16 height=16>", &runtime);
+        app.image_runtime = Some(images.handle().clone());
+        // Hold the image lane as a real blocking IO operation would. The
+        // navigation/layout pool must remain independently runnable.
+        let (release, wait) = std::sync::mpsc::channel();
+        let lane = ImageLaneGuard(app.image_lane.clone());
+        app.image_lane
+            .store(true, core::sync::atomic::Ordering::Release);
+        images.spawn_blocking(move || {
+            let _lane = lane;
+            wait.recv().unwrap();
+        });
+        for _ in 0..100 {
+            app.poll_images();
+        }
+        assert!(app.image_attempts.is_empty());
+        assert!(app.image_completion.is_none());
+        let (sender, receiver) = oneshot::channel();
+        runtime.spawn_blocking(move || {
+            sender.send(42).unwrap();
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut receiver = receiver;
+        loop {
+            if let Ok(value) = receiver.try_recv() {
+                assert_eq!(value, 42);
+                break;
+            }
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        release.send(()).unwrap();
+        settle(&mut app);
+        assert_eq!(app.image_attempts.len(), 1);
+    }
+
+    #[test]
+    fn resource_completion_does_not_wait_for_layout_or_presentation() {
+        let runtime = runtime();
+        let mut app = app(
+            include_str!("../tests/fixtures/progressive/archwiki.html"),
+            &runtime,
+        );
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        // Deliberately never run poll_reflow or advance image presentation.
+        while app.metrics.page_ready_us.is_none() {
+            app.poll_images();
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert_eq!(app.image_attempts.len(), 3);
+        assert!(app.render_state.as_ref().unwrap().images_need_update());
+        assert_eq!(
+            app.render_state
+                .as_ref()
+                .unwrap()
+                .diagnostics
+                .placeholder_count,
+            3
+        );
+        assert!(app.metrics.first_image_us.is_none());
+        assert!(app.presentation.admitted().is_empty());
+        assert_eq!(app.metrics.cache_misses, 3);
+    }
+
+    #[test]
+    fn closed_image_worker_is_terminal_and_text_only_navigation_needs_no_image_job() {
+        let runtime = runtime();
+        let mut text = app(
+            include_str!("../tests/fixtures/progressive/text.html"),
+            &runtime,
+        );
+        settle(&mut text);
+        assert_eq!(text.metrics.cache_misses, 0);
+        assert!(text.metrics.first_image_us.is_none());
+        let mut broken = app("<img src='bad.jpg' width=16 height=16>", &runtime);
+        let (sender, receiver) = oneshot::channel();
+        drop(sender);
+        broken.image_completion = Some(receiver);
+        broken.image_attempts.push("http://fixture/bad.jpg".into());
+        settle(&mut broken);
+        assert_eq!(
+            broken.image_cache.failed("http://fixture/bad.jpg"),
+            Some("Image worker stopped")
+        );
+        for _ in 0..100 {
+            assert!(!broken.update(Event::Tick));
+        }
     }
 }
