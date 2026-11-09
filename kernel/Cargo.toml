@@ -717,6 +717,8 @@ key_inject = []
 launch_trace = []
 # Deterministic PMM allocation failures for the focused MM-2A QEMU gate only.
 mm2a_test_injection = []
+# Kernel-only accounting/reclamation evidence; no userspace admission.
+shared_quota_test = ["mm2a_test_injection"]
 # Focused 12-core remote TLB replacement gate.
 mm2b_smp_test = []
 # Focused bounded address-space ledger consistency gate.

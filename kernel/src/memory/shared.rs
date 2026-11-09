@@ -74,8 +74,26 @@ pub fn alloc_shared_region(
     if actual_size > SHARED_REGION_MAX_SIZE {
         return Err(SharedMemError::InvalidArgument);
     }
-    let quota_identity = caller.native_shared_owner.unwrap_or(caller.pid) as u64;
-    let quota = crate::memory::shared_quota::reserve(quota_identity, actual_size)
+    // Descriptor-sharing owner PIDs do not establish process identity. Charge
+    // the authenticated process incarnation (captured at worker creation);
+    // authenticated PTY descendants also
+    // share a cumulative session ceiling. Sessionless services are bounded by
+    // their own process lifetime, including backing retained by peer views.
+    let owner = caller.shared_quota_owner.unwrap_or(
+        crate::memory::shared_quota::ProcessIdentity {
+            pid: caller.pid,
+            incarnation: caller.foreground.incarnation,
+        },
+    );
+    let f = &caller.foreground;
+    let session = if f.session_broker == 0 && f.session == 0 && f.generation == 0 {
+        None
+    } else {
+        Some(crate::memory::shared_quota::SessionIdentity::Pty {
+            broker: f.session_broker, id: f.session, generation: f.generation,
+        })
+    };
+    let quota = crate::memory::shared_quota::reserve(owner, session, actual_size)
         .ok_or(SharedMemError::OutOfMemory)?;
     caller
         .owned_shared
@@ -144,8 +162,7 @@ pub fn alloc_shared_region(
 
     // Publication is the commit point: backing frames and the complete owner
     // mapping exist before the token becomes observable.
-    let token = prepared.commit(frames, actual_size, caller.pid, quota_identity);
-    quota.commit();
+    let token = prepared.commit(frames, actual_size, caller.pid, Some(quota));
 
     caller
         .address_space
@@ -400,10 +417,8 @@ pub fn free_shared_page(
             },
             caps.shared_region_map_count(token).unwrap_or(0),
         );
-        if let Some(frames) = released {
-            for f in &frames {
-                pmm.free_frame(f.start_address());
-            }
+        if let Some(backing) = released {
+            backing.reclaim(pmm);
         }
     }
 

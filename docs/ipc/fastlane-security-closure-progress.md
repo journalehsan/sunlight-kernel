@@ -152,3 +152,52 @@ passed on 2/4/12 CPUs. These scoped results do not close the pending-reply race
 above or enable production transport. Contracts, unsafe audit, exact validation
 matrix and retained evidence are in
 [Secure native integration boundary](fastlane-native-integration-boundary.md).
+
+## 2026-11-09 identity and quota update
+
+M5.3 quota acceptance is **BLOCKED**. Generation-qualified backing receipts,
+process budgets, authenticated foreground PTY budgets and restricted Account
+session charges are implemented. General login-session membership remains a
+separate dependency. Final-source kernel reclamation prerequisites passed on
+1/2/4/12 CPUs, including real remote TLB acknowledgements and guarded frame
+reuse. The fresh userspace M1/M2 gate failed at the private-stack continuation
+assertion before M2 mapping tests; scheduled lifecycle quota acceptance remains
+unvalidated. Production FastLane and normal restricted admission stay disabled.
+
+See `fastlane-m53-identity-quotas.md` and
+`.fastlane-evidence/m53-quota-20261108T230044Z/REPORT.md` for scope and evidence.
+
+## 2026-11-09 M5.3R continuation qualification
+
+The M1 continuation assertion is reproduced 2/2 on the unmodified M5.3 tree and
+2/2 on its exact pristine baseline. Ordinary syscall entry already owns the
+private stack; the obsolete fixture repivot is removed while fatal ownership
+checks remain. Final-source restricted M1/M2 runs pass on 2/4/12 CPUs, and kernel
+quota prerequisites pass on 1/2/4/12 with zero measured frame/quota drift.
+
+M5.3R remains **BLOCKED** for complete acceptance: authenticated all-login session
+membership, scheduled legacy quota closure, native incarnation reuse and races
+with mapped backing remain unvalidated. Production FastLane and normal restricted
+admission remain disabled. Details and exact evidence are in
+[Private-stack continuation qualification](fastlane-m53r-continuations.md).
+
+## 2026-11-09 M5.3R2 qualification
+
+Acceptance remains **BLOCKED**. The wider IPC boot fixture installed incarnation
+zero after M5.3 began assigning process incarnations during construction. It now
+uses the actual caller incarnation and emits bounded assertion receipts; strict
+assessment rejects any original `UNEXPECTED` result. Production identity checks
+and M1 continuation ownership assertions are preserved.
+
+The membership audit confirms that the authenticated Account session registry
+does not attach general spawned processes to a login. A trusted PTY tuple is not
+that login identity. Consequently legacy SHM's PTY grouping does not prove the
+1 GiB authenticated login aggregate, and shared-service resource attribution,
+scheduled quota closure and native receipt attacks remain acceptance blockers.
+Fresh passing kernel IPC races do not close those separate requirements. Failed
+and incomplete native attempts remain retained; consult the source-qualified
+matrix in `.fastlane-evidence/m53r2-20261109T153723Z/REPORT.md`.
+
+Production FastLane and normal restricted admission stay disabled. See
+[M5.3R2 membership and lifecycle boundary](fastlane-m53r2-membership-lifecycle.md)
+for the scope correction and required next milestone.

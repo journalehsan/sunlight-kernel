@@ -18,6 +18,17 @@ pub struct Foreground {
 }
 
 impl Foreground {
+    /// Reserve process identity before any prepublication resource setup.
+    /// Scheduler publication and exec preserve it. Exhaustion fails closed.
+    pub fn for_process() -> Self {
+        let incarnation = Self::allocate_incarnation().unwrap_or(0);
+        Self {
+            incarnation,
+            forced_exit: (incarnation == 0).then_some(129),
+            ..Self::default()
+        }
+    }
+
     pub fn matches_session(&self, broker: u64, session: u64, generation: u64) -> bool {
         broker != 0
             && generation != 0

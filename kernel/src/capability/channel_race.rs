@@ -21,7 +21,9 @@ static WINNER_RETURN: AtomicU64 = AtomicU64::new(0);
 static OBSERVATIONS: AtomicU64 = AtomicU64::new(0);
 // Per actor/phase: start, deadline, entry/exit/first-resume CPU, yield count,
 // entry/resume IF, end, status (0 unused, 1 waiting, 2 complete).
-static WAITS: [[AtomicU64; 10]; 8] = [const { [const { AtomicU64::new(0) }; 10] }; 8];
+// Additional private continuation witness: PID, incarnation, VM, stack top,
+// first pre/post-yield RSP, checked resumes. Printed only after both actors end.
+static WAITS: [[AtomicU64; 17]; 8] = [const { [const { AtomicU64::new(0) }; 17] }; 8];
 static READY: AtomicU64 = AtomicU64::new(0);
 static SEQ: AtomicU64 = AtomicU64::new(1);
 fn event(event: &str, actor: u64, who: RecipientIdentity, result: u64) -> u64 {
@@ -58,7 +60,7 @@ fn save(a: &[AtomicU64; 3], p: RecipientIdentity) {
 }
 // No guard is held at a yield. Keep scalar observations in actor-private,
 // fixed slots: serial output here can itself make the contention window vanish.
-fn wait(actor: u64, phase: &str, mut f: impl FnMut() -> bool) {
+fn wait(actor: u64, phase: &str, owner: RecipientIdentity, top: u64, mut f: impl FnMut() -> bool) {
     #[cfg(feature = "fastlane_coord_spin")]
     if MODE.load(Relaxed) == 2 && phase == "entry" {
         // Exact old entry behavior: IF-clear atomic spin, five-second deadline,
@@ -91,6 +93,14 @@ fn wait(actor: u64, phase: &str, mut f: impl FnMut() -> bool) {
     };
     let trace = &WAITS[(actor as usize - 1) * 4 + phase_id];
     assert_eq!(trace[9].load(Relaxed), 0, "duplicate coordination wait");
+    for (field, value) in trace[10..14].iter().zip([
+        owner.pid as u64,
+        owner.incarnation,
+        owner.vm_generation,
+        top,
+    ]) {
+        field.store(value, Relaxed);
+    }
     let start = crate::timekeeping::monotonic_ms();
     trace[0].store(start, Relaxed);
     trace[1].store(start + 5000, Relaxed);
@@ -117,14 +127,25 @@ fn wait(actor: u64, phase: &str, mut f: impl FnMut() -> bool) {
             trace[9].store(2, Release);
             return;
         }
-        // SAFETY: no live guard, process is live, and this helper owns the
-        // otherwise unused private kernel stack until this invocation resumes.
+        // SAFETY: no live guard; ordinary entry owns this private stack.
+        // The helper retains it and verifies ownership before/after scheduling.
+        let before: u64;
+        let after: u64;
         unsafe {
-            yield_on_kernel_stack();
+            core::arch::asm!("mov {}, rsp", out(reg) before, options(nomem, nostack, preserves_flags));
+            assert_eq!(
+                yield_on_kernel_stack(owner.incarnation, owner.vm_generation),
+                top
+            );
+            core::arch::asm!("mov {}, rsp", out(reg) after, options(nomem, nostack, preserves_flags));
         }
+        assert_eq!(before, after, "M1 continuation stack pointer changed");
+        trace[16].store(attempt + 1, Relaxed);
         let flags = u64::from(x86_64::instructions::interrupts::are_enabled());
         assert_eq!(flags, 0, "M1 continuation resumed with IF set");
         if attempt == 0 {
+            trace[14].store(before, Relaxed);
+            trace[15].store(after, Relaxed);
             trace[4].store(crate::sched::current_cpu_id() as u64, Relaxed);
             trace[7].store(flags, Relaxed);
         }
@@ -132,48 +153,70 @@ fn wait(actor: u64, phase: &str, mut f: impl FnMut() -> bool) {
     panic!("channel race exhausted");
 }
 
-// Same private-stack lifetime and saved-IF contract as doorbell_stack, but
-// only the yield executes there. All channel/exit authority stays on its
-// existing path. Callee-saved RBX and the original stack are restored only
-// after this same process resumes; no userspace data pointer is dereferenced.
+// Ordinary syscall entry already owns this task's private kernel stack.
+// Retain the live dispatcher and its return chain below RSP. In particular,
+// never pivot back to stack_top - 256: that is occupied by syscall_entry.
+// RBX carries the owned stack top across the ordinary scheduler
+// handoff; no scheduler/broker guard survives the interrupt.
 #[unsafe(naked)]
-unsafe extern "C" fn yield_on_kernel_stack() {
+unsafe extern "C" fn yield_on_kernel_stack(_incarnation: u64, _vm: u64) -> u64 {
     core::arch::naked_asm!(
         "push rbx",
-        "mov rdi, rsp",
-        "call {stack_top}",
-        "mov rbx, rsp",
-        "mov rsp, rax",
-        "sub rsp, 256",
-        "and rsp, -16",
-        "push rbx",
-        "sub rsp, 8",
+        "mov rdx, rsp",
         "call {prepare}",
+        "mov rbx, rax",
         "int {vector}",
-        "add rsp, 8",
-        "pop rsp",
+        "mov rdi, rsp",
+        "mov rsi, rbx",
+        "call {resume}",
         "pop rbx",
         "ret",
-        stack_top = sym stack_top,
         prepare = sym prepare_yield,
+        resume = sym resume_yield,
         vector = const crate::arch::x86_64::interrupts::RESCHEDULE_VECTOR,
     );
 }
-extern "C" fn stack_top(old_rsp: u64) -> u64 {
-    let top = SCHEDULER.lock().current_process().kernel_stack_top;
-    assert_ne!(top, 0);
+fn assert_private_continuation(p: &crate::process::Process, rsp: u64) {
+    crate::arch::x86_64::syscall_stack::validate(p);
+    let top = p.kernel_stack_top;
     assert!(
-        old_rsp < top - crate::process::KERNEL_STACK_SIZE as u64 || old_rsp >= top,
+        rsp >= top - crate::process::KERNEL_STACK_SIZE as u64 && rsp < top - 256,
         "M1 yield cannot overwrite a live private-stack continuation"
     );
-    top
+    assert_eq!(p.state, crate::process::ProcessState::Running);
+    assert_eq!(p.owning_core as usize, crate::sched::current_cpu_id());
+    assert_eq!(p.queued_on_core, u8::MAX);
+    assert_ne!(p.foreground.incarnation, 0);
+    assert!(!x86_64::instructions::interrupts::are_enabled());
 }
-extern "C" fn prepare_yield() {
+extern "C" fn prepare_yield(incarnation: u64, vm: u64, rsp: u64) -> u64 {
     let mut s = SCHEDULER.lock();
     let p = s.current_process_mut();
-    assert_eq!(p.state, crate::process::ProcessState::Running);
+    assert_private_continuation(p, rsp);
+    assert_eq!(
+        p.foreground.incarnation, incarnation,
+        "M1 continuation owner changed"
+    );
+    assert_eq!(
+        p.address_space.identity().generation,
+        vm,
+        "M1 continuation VM changed"
+    );
+    let top = p.kernel_stack_top;
     p.state = crate::process::ProcessState::Ready;
     crate::sched::request_reschedule();
+    top
+}
+extern "C" fn resume_yield(rsp: u64, top: u64) -> u64 {
+    // A lifecycle lock may now be held by the other actor. Do not acquire it
+    // before the caller's real contention probe. The saved top is supervisor
+    // state retained in RBX by this exact continuation, not a user argument.
+    assert!(
+        rsp >= top - crate::process::KERNEL_STACK_SIZE as u64 && rsp < top - 256,
+        "M1 resumed outside its private-stack continuation"
+    );
+    assert!(!x86_64::instructions::interrupts::are_enabled());
+    top
 }
 pub(super) fn arm(
     b: &CapabilityBroker,
@@ -272,9 +315,12 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
     } else {
         panic!("channel race peer missing");
     }
+    let stack_top = sched.current_process().kernel_stack_top;
     drop(sched);
     assert_eq!(ENTERED.fetch_or(actor, AcqRel) & actor, 0);
-    wait(actor, "entry", || ENTERED.load(Acquire) == 3);
+    wait(actor, "entry", who, stack_top, || {
+        ENTERED.load(Acquire) == 3
+    });
     assert_ne!(
         CPUS[0].load(Acquire),
         CPUS[1].load(Acquire),
@@ -284,7 +330,7 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
     if actor == winner {
         // The contender is independently running before lock acquisition.
         // No peer wait occurs while the lifecycle lock is owned.
-        wait(actor, "ready", || READY.load(Acquire) != 0);
+        wait(actor, "ready", who, stack_top, || READY.load(Acquire) != 0);
         let sched = SCHEDULER.lock();
         assert_eq!(RecipientIdentity::of(sched.current_process()), who);
         HELD.store(actor, Release);
@@ -292,7 +338,7 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
         (sched, actor)
     } else {
         READY.store(actor, Release);
-        wait(actor, "held", || HELD.load(Acquire) != 0);
+        wait(actor, "held", who, stack_top, || HELD.load(Acquire) != 0);
         let contended = SCHEDULER.try_lock().is_none();
         let seq = event(
             if contended {
@@ -311,7 +357,7 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
         // Ordinary serialization decides the result; the winner never waits
         // for this observation. A missed contention window fails explicitly.
         let mut acquired = None;
-        wait(actor, "unlock", || {
+        wait(actor, "unlock", who, stack_top, || {
             acquired = SCHEDULER.try_lock();
             acquired.is_some()
         });
@@ -352,9 +398,9 @@ pub(crate) fn finished(actor: u64, result: u64) {
             if trace[9].load(Acquire) == 0 {
                 continue;
             }
-            let v: [u64; 10] = core::array::from_fn(|i| trace[i].load(Relaxed));
-            observation(format_args!("event=wait generation={} actor={} phase={} start={} deadline={} entry_cpu={} exit_cpu={} resume_cpu={} yields={} entry_if={} resume_if={} end={} status={} entry_sched_owned=0 yield_sched_owned=0 exit_sched_owned={} broker_owned=0 untraced_yields={}",
-                GENERATION.load(Relaxed), index / 4 + 1, index % 4, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], u8::from(index % 4 == 3), v[5].saturating_sub(1)));
+            let v: [u64; 17] = core::array::from_fn(|i| trace[i].load(Relaxed));
+            observation(format_args!("event=wait generation={} actor={} phase={} start={} deadline={} entry_cpu={} exit_cpu={} resume_cpu={} yields={} entry_if={} resume_if={} end={} status={} entry_sched_owned=0 yield_sched_owned=0 exit_sched_owned={} broker_owned=0 untraced_yields={} pid={} inc={} vm={} stack_top={} rsp_before={} rsp_after={} checked_resumes={}",
+                GENERATION.load(Relaxed), index / 4 + 1, index % 4, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], u8::from(index % 4 == 3), v[5].saturating_sub(1), v[10], v[11], v[12], v[13], v[14], v[15], v[16]));
         }
         let n = OBSERVATIONS.load(Relaxed);
         crate::serial_println!("[FL-COORD] event=complete generation={} mode={} entries={} held={} contended={} finished=3 records={} overflow={} missing={} if={} cpu={} qualified={}",

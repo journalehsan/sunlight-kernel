@@ -175,7 +175,7 @@ pub fn init() {
 
     // MM-2B synchronous remote TLB shootdown IPI.
     idt[crate::memory::tlb::SHOOTDOWN_VECTOR].set_handler_fn(tlb_shootdown_ipi_entry);
-    #[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
+    #[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test", feature = "shared_quota_test"))]
     idt[crate::memory::tlb::TEST_VECTOR].set_handler_fn(tlb_test_ipi_entry);
 
     idt.load();
@@ -253,7 +253,7 @@ extern "x86-interrupt" fn tlb_shootdown_nmi_entry(_stack_frame: InterruptStackFr
     crate::memory::tlb::handle_shootdown_ipi();
 }
 
-#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test"))]
+#[cfg(any(feature = "mm2b_smp_test", feature = "fastlane_hybrid_lifecycle_test", feature = "shared_quota_test"))]
 extern "x86-interrupt" fn tlb_test_ipi_entry(_stack_frame: InterruptStackFrame) {
     crate::sched::accounting::interrupt_entry_local();
     crate::memory::tlb::handle_test_ipi();

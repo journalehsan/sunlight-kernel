@@ -75,10 +75,8 @@ impl Scheduler {
                 let Some(token) = caps.channels.rows[i].backing[region] else {
                     continue;
                 };
-                if let Some(frames) = caps.revoke_shared(token) {
-                    for f in frames {
-                        pmm.free_frame(f.start_address());
-                    }
+                if let Some(backing) = caps.revoke_shared(token) {
+                    backing.reclaim(pmm);
                 }
                 for p in &mut self.processes {
                     while p.mapped_shared.iter().any(|(t, _, _)| *t == token) {
@@ -131,6 +129,16 @@ impl Scheduler {
             .count();
         if pending != 0 {
             return (objects as u64, views as u64 | ((pending as u64) << 32));
+        }
+        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        {
+            let (bytes, entries) = crate::memory::shared_quota::account_observation();
+            let receipts = caps
+                .shared_regions
+                .iter()
+                .filter(|e| e.restricted && e.quota.is_some())
+                .count();
+            crate::serial_println!("[FL-QUOTA] event=checkpoint checkpoint={} account_bytes={} account_entries={} restricted_receipts={} objects={} views={} frames={}", checkpoint, bytes, entries, receipts, objects, views, frames);
         }
         #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
         {
@@ -215,7 +223,14 @@ impl Scheduler {
         let mut caps = CAP_BROKER.lock();
         self.fastlane_drain_mappings(&mut pmm, &mut caps);
         let (role, region, writable) = caps.channel_mapping_authorize(h, who, arg)?;
-        let old = caps.channels.row_mut(h)?.backing[region];
+        let row = caps.channels.row_mut(h)?;
+        let old = row.backing[region];
+        let quota_owner = crate::memory::shared_quota::ProcessIdentity {
+            pid: row.creator.pid, incarnation: row.creator.incarnation,
+        };
+        let quota_session = crate::memory::shared_quota::SessionIdentity::Account {
+            id: row.session.id, epoch: row.session.epoch,
+        };
         let p = self.current_process_mut();
         p.mapped_shared
             .try_reserve(1)
@@ -248,6 +263,9 @@ impl Scheduler {
             (token, va)
         } else {
             let free_before = pmm.free_page_count();
+            let quota = crate::memory::shared_quota::reserve(
+                quota_owner, Some(quota_session), shared::PAGE_SIZE,
+            ).ok_or(Error::Capacity)?;
             let prepared = caps.prepare_shared_region().map_err(|_| Error::Capacity)?;
             let mut frames = alloc::vec::Vec::new();
             frames.try_reserve_exact(1).map_err(|_| Error::Capacity)?;
@@ -279,8 +297,8 @@ impl Scheduler {
                 }
             };
             // Restricted channels use their authenticated session admission,
-            // not the legacy bearer SHM quota.
-            let token = prepared.commit(frames, shared::PAGE_SIZE, p.pid, 0);
+            // not the legacy bearer SHM authorization contract.
+            let token = prepared.commit(frames, shared::PAGE_SIZE, p.pid, Some(quota));
             caps.shared_regions
                 .iter_mut()
                 .find(|e| e.token == token)

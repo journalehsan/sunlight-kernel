@@ -198,6 +198,8 @@ pub fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     let local = crate::sched::current_cpu_id();
     let targets = ((1u64 << cpus) - 1) & !(1u64 << local);
     assert_ne!(targets, 0, "remote SHM retirement requires a real AP target");
+    #[cfg(feature = "shared_quota_test")]
+    crate::serial_println!("[SHM-M53-REMOTE] event=established pid={} incarnation={} vm={} root={} frame={} targets={} quota_live=4096", owner.pid, owner.foreground.incarnation, identity.generation, identity.pml4_phys, old_frame.as_u64(), targets);
     tlb::test_activate_and_read(identity, base.as_u64(), targets);
     for cpu in 0..cpus {
         if cpu != local {
@@ -262,6 +264,11 @@ pub fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     pmm.free_frame(guard);
     pmm.free_frame(replacement);
     assert_eq!(pmm.free_page_count(), baseline);
+    #[cfg(feature = "shared_quota_test")]
+    {
+        assert_eq!(super::shared_quota::observation(super::shared_quota::ProcessIdentity { pid: owner.pid, incarnation: owner.foreground.incarnation }, None), (0,0));
+        crate::serial_println!("[SHM-M53-REMOTE] event=complete pid={} incarnation={} vm={} frame={} reused_after_ack={} acknowledgements={} views_retired=1 frames_released=1 quota_after=0 free_before={} free_after={}", owner.pid, owner.foreground.incarnation, identity.generation, old_frame.as_u64(), guard.as_u64(), targets.count_ones(), baseline, pmm.free_page_count());
+    }
     crate::serial_println!(
         "[FASTLANE-F1] remote SHM release: cpus={} acknowledgements={} OK",
         cpus,

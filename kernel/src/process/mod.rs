@@ -157,6 +157,9 @@ pub struct Process {
     pub tty_read_wait: Option<usize>,
     /// Opt-in std workers share this owner's descriptor table and cwd.
     pub native_shared_owner: Option<usize>,
+    /// Immutable quota owner captured when a native worker joins its process.
+    /// Separate from descriptor ownership and from the worker's VM lifetime.
+    pub(crate) shared_quota_owner: Option<crate::memory::shared_quota::ProcessIdentity>,
     pub capabilities: Vec<Capability>,
     /// Present while the task may execute. Reaping drops the allocation before
     /// the task slot becomes reusable.
@@ -501,6 +504,7 @@ impl Process {
             tty_write_wait: None,
             tty_read_wait: None,
             native_shared_owner: None,
+            shared_quota_owner: None,
             capabilities: Vec::new(),
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,
@@ -538,7 +542,7 @@ impl Process {
             next_deferred_reply_token: 0,
             fd_table: fd_table::FdTable::new_boxed(),
             capability_mode: false,
-            foreground: foreground::Foreground::default(),
+            foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
@@ -739,6 +743,7 @@ impl Process {
             tty_write_wait: None,
             tty_read_wait: None,
             native_shared_owner: None,
+            shared_quota_owner: None,
             capabilities,
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,
@@ -776,7 +781,7 @@ impl Process {
             next_deferred_reply_token: 0,
             fd_table,
             capability_mode: false,
-            foreground: foreground::Foreground::default(),
+            foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,

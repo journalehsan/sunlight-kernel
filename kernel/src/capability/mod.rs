@@ -331,6 +331,68 @@ pub struct ShmObject {
     pub size: usize, // requested/rounded size in bytes
 }
 
+/// Unmapped backing transferred under the PMM/broker locks. Dropping this
+/// result without reclamation deliberately retains its quota (and physical
+/// backing); accounting is refunded only after every frame is returned.
+#[must_use = "return unmapped backing to the PMM with reclaim"]
+pub(crate) struct ReclaimedShared {
+    pub(crate) frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+    quota: core::mem::ManuallyDrop<Option<crate::memory::shared_quota::Reservation>>,
+}
+impl ReclaimedShared {
+    #[cfg(not(test))]
+    pub(crate) fn reclaim(mut self, pmm: &mut crate::memory::pmm::PhysicalMemoryManager) {
+        #[cfg(all(
+            debug_assertions,
+            feature = "fastlane_mapping_test",
+            feature = "fastlane_census_trace"
+        ))]
+        let trace = self.quota.as_ref().and_then(|r| r.restricted_trace()).map(
+            |(owner, session, bytes)| {
+                let before = crate::memory::shared_quota::observation(owner, Some(session));
+                (
+                    owner,
+                    session,
+                    bytes,
+                    before,
+                    self.frames.len(),
+                    pmm.free_page_count(),
+                    self.frames[0].start_address().as_u64(),
+                )
+            },
+        );
+        for frame in self.frames.drain(..) {
+            pmm.free_frame(frame.start_address());
+        }
+        // All views have synchronously retired and all backing is now free.
+        unsafe { core::mem::ManuallyDrop::drop(&mut self.quota) };
+        #[cfg(all(
+            debug_assertions,
+            feature = "fastlane_mapping_test",
+            feature = "fastlane_census_trace"
+        ))]
+        if let Some((
+            owner,
+            crate::memory::shared_quota::SessionIdentity::Account { id, epoch },
+            bytes,
+            before,
+            frames,
+            free_before,
+            frame,
+        )) = trace
+        {
+            let after = crate::memory::shared_quota::observation(
+                owner,
+                Some(crate::memory::shared_quota::SessionIdentity::Account { id, epoch }),
+            );
+            assert_eq!(before.0.checked_sub(bytes), Some(after.0));
+            assert_eq!(before.1.checked_sub(bytes), Some(after.1));
+            assert_eq!(pmm.free_page_count(), free_before + frames);
+            crate::serial_println!("[FL-QUOTA] event=reclaimed pid={} inc={} session={} epoch={} bytes={} frames={} frame={} free_before={} free_after={} process_before={} process_after={} session_before={} session_after={} cpu={}", owner.pid, owner.incarnation, id, epoch, bytes, frames, frame, free_before, pmm.free_page_count(), before.0, after.0, before.1, after.1, crate::sched::current_cpu_id());
+        }
+    }
+}
+
 /// Entry in the shared-region table.
 struct ShmEntry {
     #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
@@ -340,8 +402,7 @@ struct ShmEntry {
     token: CapabilityToken,
     obj: ShmObject,
     owner_pid: usize,
-    pub(crate) quota_identity: u64,
-    pub(crate) quota_bytes: usize,
+    quota: Option<crate::memory::shared_quota::Reservation>,
     // Counts views, including multiple views in one address space. Retirement
     // fences admission without discarding backing needed by existing views.
     lifetime: crate::memory::shared_lifetime::SharedLifetime,
@@ -417,7 +478,7 @@ impl PreparedSharedRegion<'_> {
         frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
         size: usize,
         owner_pid: usize,
-        quota_identity: u64,
+        quota: Option<crate::memory::shared_quota::Reservation>,
     ) -> CapabilityToken {
         assert!(!self.broker.token_in_use(self.token));
         assert!(self.broker.shared_regions.len() < self.broker.shared_regions.capacity());
@@ -428,8 +489,7 @@ impl PreparedSharedRegion<'_> {
             token: self.token,
             obj: ShmObject { frames, size },
             owner_pid,
-            quota_identity,
-            quota_bytes: size,
+            quota,
             lifetime: crate::memory::shared_lifetime::SharedLifetime::new(),
         });
         #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
@@ -1200,7 +1260,7 @@ impl CapabilityBroker {
             .try_reserve_exact(1)
             .map_err(|_| CapError::CapabilityStoreFull)?;
         frames.push(frame);
-        Ok(prepared.commit(frames, 4096, owner_pid, 0))
+        Ok(prepared.commit(frames, 4096, owner_pid, None))
     }
 
     /// Resolve a shared-page capability token to its physical frame (first page for compat / 1-page regions).
@@ -1343,10 +1403,10 @@ impl CapabilityBroker {
     /// Decrement the mapping reference count for `token`.
     /// Returns the backing frames when this was the last mapping, so the caller
     /// can free the physical memory via the PMM.
-    pub fn decrement_map_count(
+    pub(crate) fn decrement_map_count(
         &mut self,
         token: CapabilityToken,
-    ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
+    ) -> Option<ReclaimedShared> {
         let idx = self
             .shared_regions
             .iter()
@@ -1358,10 +1418,12 @@ impl CapabilityBroker {
             .expect("SHM mapping count underflow")
         {
             let entry = self.shared_regions.swap_remove(idx);
-            crate::memory::shared_quota::release(entry.quota_identity, entry.quota_bytes);
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             entry.trace(crate::memory::census_trace::SHM_RELEASE, 0);
-            return Some(entry.obj.frames);
+            return Some(ReclaimedShared {
+                frames: entry.obj.frames,
+                quota: core::mem::ManuallyDrop::new(entry.quota),
+            });
         }
         #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
         self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RELEASE, 0);
@@ -1372,18 +1434,20 @@ impl CapabilityBroker {
     /// Existing views keep the entry and frames pinned until verified unmap.
     /// Only a zero-view object transfers its backing to the caller here.
     #[must_use = "unmapped backing must be returned to the PMM by the caller"]
-    pub fn revoke_shared(
+    pub(crate) fn revoke_shared(
         &mut self,
         token: CapabilityToken,
-    ) -> Option<alloc::vec::Vec<PhysFrame<Size4KiB>>> {
+    ) -> Option<ReclaimedShared> {
         if let Some(idx) = self.shared_regions.iter().position(|e| e.token == token) {
             let releasable = self.shared_regions[idx].lifetime.retire();
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RETIRE, 0);
             if releasable {
                 let entry = self.shared_regions.swap_remove(idx);
-                crate::memory::shared_quota::release(entry.quota_identity, entry.quota_bytes);
-                return Some(entry.obj.frames);
+                return Some(ReclaimedShared {
+                    frames: entry.obj.frames,
+                    quota: core::mem::ManuallyDrop::new(entry.quota),
+                });
             }
         }
         None

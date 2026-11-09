@@ -2788,6 +2788,13 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     thread.native_thread = true;
     thread.capability_mode = sched.current_process().capability_mode;
     thread.native_shared_owner = shared_descriptors.then_some(shared_owner);
+    let parent = sched.current_process();
+    thread.shared_quota_owner = Some(parent.shared_quota_owner.unwrap_or(
+        crate::memory::shared_quota::ProcessIdentity {
+            pid: parent.pid,
+            incarnation: parent.foreground.incarnation,
+        },
+    ));
     // Borrower threads retain the parent's endpoint authorization boundary.
     thread.service_lookup_restrictions = parent_service_restrictions;
     // Set up the iretq frame: RIP = trampoline, RSP = user_stack_top,

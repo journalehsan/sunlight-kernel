@@ -576,8 +576,8 @@ impl Scheduler {
     }
 
     pub fn add_process_after_reaping(&mut self, mut process: Process) -> usize {
-        process.foreground.incarnation =
-            crate::process::foreground::Foreground::allocate_incarnation().unwrap_or(0);
+        // Process construction reserves identity before resource setup.
+        // Publication must not transfer those resources to another incarnation.
         if process.foreground.incarnation == 0 {
             process.foreground.forced_exit = Some(129);
         }

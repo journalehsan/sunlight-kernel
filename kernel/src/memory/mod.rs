@@ -8,10 +8,12 @@ pub mod pmm;
 pub mod security;
 pub mod shared;
 pub(crate) mod shared_quota;
+#[cfg(all(debug_assertions, feature = "shared_quota_test"))]
+pub(crate) mod shared_quota_gate;
 #[cfg(any(feature = "fastlane_f11_audit", feature = "cap_issuance_test"))]
 pub mod shared_authority_gate;
 pub mod shared_lifetime;
-#[cfg(any(feature = "fastlane_f1_audit", feature = "fastlane_hybrid_lifecycle_test"))]
+#[cfg(any(feature = "fastlane_f1_audit", feature = "fastlane_hybrid_lifecycle_test", feature = "shared_quota_test"))]
 pub mod shared_lifetime_gate;
 pub mod swap;
 pub mod swap_slot;

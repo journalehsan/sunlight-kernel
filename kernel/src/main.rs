@@ -3581,6 +3581,8 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         memory::security::run_boot_self_tests(&mut pmm, hhdm_offset);
     }
     crate::sched::run_mm0_address_space_lifecycle_test(hhdm_offset);
+    #[cfg(all(debug_assertions, feature = "shared_quota_test"))]
+    memory::shared_quota_gate::run(&mut PMM.lock(), hhdm_offset);
     #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
     memory::shared_lifetime_gate::remote_release(&mut PMM.lock(), hhdm_offset);
     #[cfg(feature = "fastlane_f1_audit")]
@@ -4021,7 +4023,7 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         ) -> IpcCallId {
             let caller_pid = sched.processes[caller_idx].pid;
             let call = IpcCallId {
-                incarnation: 0,
+                incarnation: sched.processes[caller_idx].foreground.incarnation,
                 pid: caller_pid,
                 generation,
             };
@@ -4397,6 +4399,17 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
             serial_println!("[SEC]  IPC deferred reply lifecycle: UNEXPECTED");
         }
 
+        // Bounded boot-method receipts distinguish a fixture identity mismatch
+        // from a failed terminal transition. These Process records are not
+        // executing userspace actors and do not establish session membership.
+        #[cfg(debug_assertions)]
+        {
+            let caller = &sched.processes[caller_idx];
+            let server = &sched.processes[server_idx];
+            serial_println!("[IPC-R2] event=identity pid={} inc={} vm={} call_inc={} server={} server_inc={} server_vm={} session=none channel=none mappings=0 authority=kernel-fixture scope=boot-method", caller.pid, caller.foreground.incarnation, caller.address_space.identity().generation, reply_call.incarnation, server.pid, server.foreground.incarnation, server.address_space.identity().generation);
+            serial_println!("[IPC-R2] event=assertions recv_woke={} recv_timeout={} call_woke={} call_timeout={} reply_commit={} cancel_after_reply={} reply_survived={} deadline_won={} late_dropped={} stale_ignored={} stress={} deferred={}", u8::from(recv_woke), u8::from(recv_timed_out), u8::from(call_woke), u8::from(call_timed_out), u8::from(reply_committed), u8::from(cancel_after_reply), u8::from(reply_survived), u8::from(deadline_won), u8::from(late_reply_dropped), u8::from(stale_ignored), u8::from(smp_stress_ok), u8::from(deferred_lifecycle_ok));
+        }
+
         #[cfg(all(debug_assertions, feature = "ipc_deferred_test"))]
         crate::ipc::deferred_test::run(&mut sched, caller_idx, server_idx);
 
@@ -4470,11 +4483,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         }
         // Clean up: remove the grant entirely and free the frame.
         let frames = caps.revoke_shared(token).expect("unmapped sectest backing");
-        assert_eq!(frames.len(), 1);
-        assert_eq!(frames[0].start_address(), phys);
-        for frame in frames {
-            pmm.free_frame(frame.start_address());
-        }
+        assert_eq!(frames.frames.len(), 1);
+        assert_eq!(frames.frames[0].start_address(), phys);
+        frames.reclaim(&mut pmm);
     }
 
     serial_println!("[SEC]  Security hardening: PASSED");
@@ -5410,3 +5421,6 @@ unsafe fn count_pci_class(target_class: u8) -> u8 {
 compile_error!("fastlane_channel_test requires a debug experimental image");
 #[cfg(all(feature = "fastlane_channel_test", feature = "native_session_h4_test"))]
 compile_error!("select one authenticated lifecycle fixture per image");
+
+#[cfg(all(feature = "shared_quota_test", not(debug_assertions)))]
+compile_error!("shared_quota_test requires a debug evidence image");
