@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-uac"
-version = "0.2.6862-alpha.2"
+version = "0.2.6935-alpha.2"
+
 
 
 
@@ -673,6 +674,8 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+quota-lifecycle-test = ["session-launch-test"]
+quota-remote-test = ["fastlane-mapping-test"]
 session-launch-test = ["session-race-test"]
 fastlane-contract-test = ["fastlane-mediated-accounting-test"]
 fastlane-mediated-accounting-test = ["fastlane-measurement-test"]

@@ -23,7 +23,10 @@ pub(crate) enum SessionIdentity {
         generation: u64,
     },
     // Restricted channels already authenticate their Account session.
-    Account { id: u64, epoch: u64 },
+    Account {
+        id: u64,
+        epoch: u64,
+    },
 }
 impl SessionIdentity {
     fn valid(self) -> bool {
@@ -148,12 +151,16 @@ pub(crate) struct Reservation {
     owner: ProcessIdentity,
     session: Option<SessionIdentity>,
     bytes: usize,
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    trace_id: u64,
 }
 pub(crate) fn reserve(
     owner: ProcessIdentity,
     session: Option<SessionIdentity>,
     bytes: usize,
 ) -> Option<Reservation> {
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::reservation_attempt(owner, session, bytes);
     LEDGER
         .lock()
         .reserve(owner, session, bytes)
@@ -161,6 +168,8 @@ pub(crate) fn reserve(
             owner,
             session,
             bytes,
+            #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+            trace_id: super::quota_lifecycle::reserved(owner, session, bytes),
         })
 }
 impl Drop for Reservation {
@@ -169,6 +178,17 @@ impl Drop for Reservation {
             LEDGER.lock().release(self.owner, self.session, self.bytes),
             "SHM quota receipt corrupted"
         );
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        super::quota_lifecycle::consumed(self.trace_id, self.owner, self.session, self.bytes);
+    }
+}
+#[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+impl Reservation {
+    pub(crate) fn lifecycle_id(&self) -> u64 {
+        self.trace_id
+    }
+    pub(crate) fn lifecycle_charged(&self) {
+        super::quota_lifecycle::charged(self.trace_id, self.owner, self.session, self.bytes);
     }
 }
 #[cfg(all(
@@ -212,6 +232,7 @@ pub(crate) fn account_observation() -> (usize, usize) {
         debug_assertions,
         any(
             feature = "shared_quota_test",
+            feature = "quota_lifecycle_test",
             all(feature = "fastlane_mapping_test", feature = "fastlane_census_trace")
         )
     )

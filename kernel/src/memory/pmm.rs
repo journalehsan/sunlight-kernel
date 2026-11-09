@@ -255,7 +255,10 @@ impl PhysicalMemoryManager {
         FREE_FRAMES -= 1;
         self.scan_cursor = byte_idx;
         accounting::note_alloc(class, 1);
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         super::census_trace::physical(
             super::census_trace::CLAIM,
             frame as u64 * FRAME_SIZE as u64,
@@ -282,6 +285,32 @@ impl PhysicalMemoryManager {
         #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
         crate::capability::mapping_trace::physical(frame as u64 * FRAME_SIZE as u64, "claim");
         Some(PhysAddr::new(frame as u64 * FRAME_SIZE as u64))
+    }
+
+    /// Private evidence allocation of one *already free* retired fixture frame.
+    /// Does not move scan_cursor or change the ordinary search policy. The sole
+    /// caller derives the address from its authorized retired channel, never
+    /// from a user-supplied physical address. Caller holds PMM.
+    #[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+    pub(crate) fn claim_retired_test_frame(&mut self, address: u64) -> Option<PhysAddr> {
+        let frame = usize::try_from(address / FRAME_SIZE as u64).ok()?;
+        if address & 4095 != 0 || frame >= MAX_FRAMES {
+            return None;
+        }
+        unsafe {
+            if BITMAP[frame / 8] & (1 << (frame % 8)) != 0 || FRAME_OWNER[frame] != PMM_OWNER_FREE {
+                return None;
+            }
+            let cursor = self.scan_cursor;
+            let result = self.claim_frame(
+                frame / 8,
+                frame % 8,
+                PMM_OWNER_KERNEL,
+                PhysicalMemoryClass::KernelCore,
+            );
+            self.scan_cursor = cursor;
+            result
+        }
     }
 
     /// Allocate `count` physically-contiguous 4 KiB frames.
@@ -332,7 +361,10 @@ impl PhysicalMemoryManager {
                     BITMAP[f / 8] |= 1 << (f % 8);
                     FRAME_OWNER[f] = pack_owner(owner_pid, class);
                     FREE_FRAMES -= 1;
-                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    #[cfg(all(
+                        debug_assertions,
+                        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                    ))]
                     super::census_trace::physical(
                         super::census_trace::CLAIM,
                         f as u64 * FRAME_SIZE as u64,
@@ -357,7 +389,10 @@ impl PhysicalMemoryManager {
                 let packed = FRAME_OWNER[frame];
                 if packed != PMM_OWNER_FREE {
                     let class = unpack_class(packed);
-                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    #[cfg(all(
+                        debug_assertions,
+                        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                    ))]
                     super::census_trace::physical(
                         super::census_trace::FREE,
                         addr.as_u64(),
@@ -407,7 +442,10 @@ impl PhysicalMemoryManager {
             if old == new_class {
                 return;
             }
-            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            #[cfg(all(
+                debug_assertions,
+                any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+            ))]
             super::census_trace::physical(
                 super::census_trace::RECLASS,
                 addr.as_u64(),
@@ -421,7 +459,10 @@ impl PhysicalMemoryManager {
     }
 
     /// Caller holds PMM: identities and counters refer to the same boundary.
-    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    #[cfg(all(
+        debug_assertions,
+        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+    ))]
     pub(crate) fn trace_census(&self, checkpoint: u64) {
         for frame in 0..MAX_FRAMES {
             let packed = unsafe { FRAME_OWNER[frame] };

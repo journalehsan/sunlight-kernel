@@ -216,7 +216,10 @@ impl AddressSpace {
         }
 
         let identity = allocate_identity(&NEXT_ADDRESS_SPACE_GENERATION, pml4_phys.as_u64());
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         crate::memory::census_trace::record(
             crate::memory::census_trace::ROOT,
             [pml4_phys.as_u64(), identity.generation, 0, 0, 0, 0, 0, 0],
@@ -224,7 +227,10 @@ impl AddressSpace {
         let ledger = match Self::allocate_ledger(identity) {
             Ok(handle) => handle,
             Err(error) => {
-                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                #[cfg(all(
+                    debug_assertions,
+                    any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                ))]
                 crate::memory::census_trace::record(
                     crate::memory::census_trace::TABLE_RETIRE,
                     [
@@ -707,7 +713,10 @@ impl AddressSpace {
             Err(error) => return Err(error),
         };
 
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         if let Some((entry, frame)) = created[0] {
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE,
@@ -733,7 +742,10 @@ impl AddressSpace {
             }
         };
 
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         if let Some((entry, frame)) = created[1] {
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE,
@@ -759,7 +771,10 @@ impl AddressSpace {
             }
         };
 
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         if let Some((entry, frame)) = created[2] {
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE,
@@ -788,6 +803,20 @@ impl AddressSpace {
             flags
         };
         p1_entry.set_addr(phys.start_address(), leaf_flags);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::census_trace::record(
+            21,
+            [
+                phys.start_address().as_u64(),
+                self.identity.generation,
+                self.pml4_phys.as_u64(),
+                page.start_address().as_u64(),
+                leaf_flags.bits(),
+                0,
+                0,
+                0,
+            ],
+        );
         Ok(())
     }
 
@@ -1160,7 +1189,10 @@ impl AddressSpace {
 
         let mut reclaimed = 1usize;
         p2e.set_unused();
-        #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+        #[cfg(all(
+            debug_assertions,
+            any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+        ))]
         crate::memory::census_trace::record(
             crate::memory::census_trace::TABLE_RETIRE,
             [
@@ -1178,7 +1210,10 @@ impl AddressSpace {
         if p2.iter().all(PageTableEntry::is_unused) {
             reclaimed += 1;
             p3e.set_unused();
-            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            #[cfg(all(
+                debug_assertions,
+                any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+            ))]
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE_RETIRE,
                 [
@@ -1196,7 +1231,10 @@ impl AddressSpace {
             if p3.iter().all(PageTableEntry::is_unused) {
                 reclaimed += 1;
                 p4e.set_unused();
-                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                #[cfg(all(
+                    debug_assertions,
+                    any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                ))]
                 crate::memory::census_trace::record(
                     crate::memory::census_trace::TABLE_RETIRE,
                     [
@@ -1443,7 +1481,10 @@ impl AddressSpace {
 
         if p1.iter().all(PageTableEntry::is_unused) {
             p2e.set_unused();
-            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            #[cfg(all(
+                debug_assertions,
+                any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+            ))]
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE_RETIRE,
                 [
@@ -1460,7 +1501,10 @@ impl AddressSpace {
             pmm.free_frame(p1_phys);
             if p2.iter().all(PageTableEntry::is_unused) {
                 p3e.set_unused();
-                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                #[cfg(all(
+                    debug_assertions,
+                    any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                ))]
                 crate::memory::census_trace::record(
                     crate::memory::census_trace::TABLE_RETIRE,
                     [
@@ -1477,7 +1521,10 @@ impl AddressSpace {
                 pmm.free_frame(p2_phys);
                 if p3.iter().all(PageTableEntry::is_unused) {
                     p4e.set_unused();
-                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    #[cfg(all(
+                        debug_assertions,
+                        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                    ))]
                     crate::memory::census_trace::record(
                         crate::memory::census_trace::TABLE_RETIRE,
                         [
@@ -1591,7 +1638,10 @@ impl AddressSpace {
                     }
 
                     p2e.set_unused();
-                    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                    #[cfg(all(
+                        debug_assertions,
+                        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                    ))]
                     crate::memory::census_trace::record(
                         crate::memory::census_trace::TABLE_RETIRE,
                         [
@@ -1610,7 +1660,10 @@ impl AddressSpace {
                 }
 
                 p3e.set_unused();
-                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                #[cfg(all(
+                    debug_assertions,
+                    any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                ))]
                 crate::memory::census_trace::record(
                     crate::memory::census_trace::TABLE_RETIRE,
                     [
@@ -1629,7 +1682,10 @@ impl AddressSpace {
             }
 
             p4e.set_unused();
-            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            #[cfg(all(
+                debug_assertions,
+                any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+            ))]
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE_RETIRE,
                 [
@@ -1650,7 +1706,10 @@ impl AddressSpace {
         if free_root {
             self.destroy_ledger()
                 .expect("address-space ledger teardown failed");
-            #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+            #[cfg(all(
+                debug_assertions,
+                any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+            ))]
             crate::memory::census_trace::record(
                 crate::memory::census_trace::TABLE_RETIRE,
                 [
@@ -1676,7 +1735,10 @@ impl AddressSpace {
     /// Read-only table census under scheduler and PMM locks. Shared kernel
     /// tables are outside this per-process lower-half walk and remain explicit
     /// unmatched allocations unless another observer supplies their identity.
-    #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+    #[cfg(all(
+        debug_assertions,
+        any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+    ))]
     pub(crate) unsafe fn trace_tables(&self, checkpoint: u64, owner: (usize, u64), hhdm: VirtAddr) {
         if self.is_reclaimed() {
             return;
@@ -1875,7 +1937,10 @@ impl AddressSpace {
         }
         for item in created.iter_mut().rev() {
             if let Some((_, frame)) = item.take() {
-                #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
+                #[cfg(all(
+                    debug_assertions,
+                    any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
+                ))]
                 crate::memory::census_trace::record(
                     crate::memory::census_trace::TABLE_RETIRE,
                     [

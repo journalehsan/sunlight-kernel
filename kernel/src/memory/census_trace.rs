@@ -17,6 +17,7 @@ static EVENTS: [Slot; CAPACITY] = [const {
         data: [const { AtomicU64::new(0) }; 8],
     }
 }; CAPACITY];
+static WINDOW: AtomicBool = AtomicBool::new(!cfg!(feature = "quota_lifecycle_test"));
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 static OBJECT: AtomicU64 = AtomicU64::new(1);
 
@@ -46,6 +47,9 @@ pub(crate) fn object_id() -> u64 {
 }
 
 pub(crate) fn record(kind: u64, data: [u64; 8]) {
+    if !WINDOW.load(Ordering::Relaxed) {
+        return;
+    }
     let index = NEXT.fetch_add(1, Ordering::Relaxed);
     if let Some(slot) = EVENTS.get(index) {
         slot.kind.store(kind, Ordering::Relaxed);
@@ -57,7 +61,10 @@ pub(crate) fn record(kind: u64, data: [u64; 8]) {
 }
 
 pub(crate) fn physical(kind: u64, frame: u64, class: u8, owner: u32, new_class: u8) {
-    if matches!(class, 6 | 8 | 15) || matches!(new_class, 6 | 8 | 15) {
+    if cfg!(feature = "quota_lifecycle_test")
+        || matches!(class, 6 | 8 | 15)
+        || matches!(new_class, 6 | 8 | 15)
+    {
         record(
             kind,
             [
@@ -75,6 +82,11 @@ pub(crate) fn physical(kind: u64, frame: u64, class: u8, owner: u32, new_class: 
 }
 
 pub(crate) fn checkpoint(checkpoint: u64) {
+    // A lifecycle image owns exactly one declared interval. Later independent
+    // M2 checkpoints must not dump or relabel that already-closed evidence.
+    if cfg!(feature = "quota_lifecycle_test") {
+        return;
+    }
     record(CHECKPOINT, [checkpoint, 3, 0, 0, 0, 0, 0, 0]);
     let count = NEXT.load(Ordering::Acquire);
     crate::serial_println!(
@@ -87,6 +99,11 @@ pub(crate) fn checkpoint(checkpoint: u64) {
     if checkpoint != 999 {
         return;
     }
+    dump(false);
+}
+
+fn dump(lifecycle: bool) {
+    let count = NEXT.load(Ordering::Acquire);
     let mut incomplete = 0;
     for (index, slot) in EVENTS.iter().take(count).enumerate() {
         if !slot.ready.load(Ordering::Acquire) {
@@ -95,7 +112,8 @@ pub(crate) fn checkpoint(checkpoint: u64) {
         }
         let d = &slot.data;
         crate::serial_println!(
-            "[FL-OWN] seq={} kind={} x0={} x1={} x2={} x3={} x4={} x5={} x6={} x7={}",
+            "[{}] seq={} kind={} x0={} x1={} x2={} x3={} x4={} x5={} x6={} x7={}",
+            if lifecycle { "R51-OWN" } else { "FL-OWN" },
             index,
             slot.kind.load(Ordering::Relaxed),
             d[0].load(Ordering::Relaxed),
@@ -109,10 +127,66 @@ pub(crate) fn checkpoint(checkpoint: u64) {
         );
     }
     crate::serial_println!(
-        "[FL-CENSUS-TRACE-END] reserved={} emitted={} incomplete={} overflow={}",
+        "[{}] reserved={} emitted={} incomplete={} overflow={}",
+        if lifecycle {
+            "R51-CENSUS-TRACE-END"
+        } else {
+            "FL-CENSUS-TRACE-END"
+        },
         count,
         count.min(CAPACITY) - incomplete,
         incomplete,
         count.saturating_sub(CAPACITY)
     );
+}
+
+/// Single bounded observation interval. The caller holds SCHEDULER and PMM.
+/// Never reset or overwrite receipts. No allocator or accounting policy changes.
+#[cfg(feature = "quota_lifecycle_test")]
+pub(crate) fn lifecycle_begin() {
+    assert_eq!(
+        NEXT.load(Ordering::Acquire),
+        0,
+        "census window already used"
+    );
+    WINDOW.store(true, Ordering::Release);
+    record(CHECKPOINT, [1, 0, 0, 0, 0, 0, 0, 0]);
+}
+#[cfg(feature = "quota_lifecycle_test")]
+pub(crate) fn lifecycle_end() {
+    record(CHECKPOINT, [2, 0, 0, 0, 0, 0, 0, 0]);
+    WINDOW.store(false, Ordering::Release);
+    dump(true);
+}
+
+/// Re-read the actual leaves created in this interval. No shadow mapping state.
+/// Caller holds SCHEDULER and PMM, so VM identity/PTEs cannot change mid-walk.
+#[cfg(feature = "quota_lifecycle_test")]
+pub(crate) unsafe fn lifecycle_views(p: &crate::process::Process, hhdm: x86_64::VirtAddr) {
+    let count = NEXT.load(Ordering::Acquire).min(CAPACITY);
+    for slot in EVENTS.iter().take(count) {
+        if !slot.ready.load(Ordering::Acquire)
+            || slot.kind.load(Ordering::Relaxed) != 21
+            || slot.data[1].load(Ordering::Relaxed) != p.address_space.identity().generation
+        {
+            continue;
+        }
+        let va = slot.data[3].load(Ordering::Relaxed);
+        let page = x86_64::structures::paging::Page::<x86_64::structures::paging::Size4KiB>::from_start_address(x86_64::VirtAddr::new(va)).expect("recorded page");
+        if let Some((phys, flags)) = p.address_space.lookup_entry(page, hhdm) {
+            record(
+                22,
+                [
+                    phys.as_u64(),
+                    p.address_space.identity().generation,
+                    p.address_space.identity().pml4_phys,
+                    va,
+                    flags.bits(),
+                    p.pid as u64,
+                    p.foreground.incarnation,
+                    2,
+                ],
+            );
+        }
+    }
 }

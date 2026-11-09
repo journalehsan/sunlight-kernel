@@ -17,6 +17,13 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use x86_64::{structures::paging::PhysFrame, VirtAddr};
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+// One isolated diagnostic owner; no Account charge or channel receipt is forged.
+// The original backing has been freed through the ordinary path before this
+// private test owner is created. SCHEDULER serializes acquisition and release.
+#[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+static REUSE: spin::Mutex<Option<(RecipientIdentity, Handle, u64, u64)>> = spin::Mutex::new(None);
+#[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+static REUSE_GENERATION: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
 
 impl Scheduler {
     /// Expiry, logical death, image replacement, session withdrawal and explicit
@@ -212,6 +219,129 @@ impl Scheduler {
         (objects as u64, views as u64)
     }
 
+    /// Fixture-only retryable rendezvous. The existing SCHEDULER guard pins
+    /// process selection once real remote residency is observed. No extra
+    /// delay, global flush, VM activation or admission override is introduced.
+    #[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+    pub(crate) fn fastlane_remote_revoke(&mut self, h: Handle) -> Result<(), Error> {
+        let who = RecipientIdentity::of(self.current_process());
+        let local = crate::sched::current_cpu_id();
+        let (consumer, identity, va, frame, targets) = {
+            let mut caps = CAP_BROKER.lock();
+            let row = caps.channels.row_mut(h)?;
+            if row.creator != who || row.state != State::Attached {
+                return Err(Error::Denied);
+            }
+            let consumer = row.consumer.ok_or(Error::Incomplete)?;
+            let token = row.backing[0].ok_or(Error::Incomplete)?;
+            let p = self.channel_process(consumer).ok_or(Error::Denied)?;
+            let va = p
+                .mapped_shared
+                .iter()
+                .find(|(t, _, _)| *t == token)
+                .ok_or(Error::Incomplete)?
+                .1
+                .as_u64();
+            let identity = p.address_space.identity();
+            let targets = crate::memory::tlb::active_cpu_mask(identity) & !(1u64 << local);
+            if targets == 0
+                || p.state != crate::process::ProcessState::Running
+                || p.owning_core == u8::MAX
+                || targets != 1u64 << p.owning_core
+            {
+                return Err(Error::Pending);
+            }
+            let frame = caps
+                .shared_region_for_cleanup(token)
+                .ok_or(Error::Terminal)?
+                .frames[0]
+                .start_address()
+                .as_u64();
+            (consumer, identity, va, frame, targets)
+        };
+        crate::serial_println!("[R5-REMOTE] event=resident generation={} pid={} incarnation={} vm={} root={} va={} frame={} targets={} cpu={}", h.generation, consumer.pid, consumer.incarnation, identity.generation, identity.pml4_phys, va, frame, targets, local);
+        // Re-enter the ordinary exact-identity and role-authorized revoke API.
+        self.fastlane_channel(
+            4,
+            h,
+            0,
+            sunlight_ipc::account_session::SessionRef { id: 0, epoch: 0 },
+        )?;
+        crate::serial_println!(
+            "[R5-REMOTE] event=revoke-committed generation={} vm={} frame={} cpu={}",
+            h.generation,
+            identity.generation,
+            frame,
+            local
+        );
+        self.fastlane_mapping_sweep();
+        {
+            let mut witness = REUSE.lock();
+            if witness.is_some() {
+                return Err(Error::Capacity);
+            }
+            let mut pmm = crate::PMM.lock();
+            let claimed = pmm
+                .claim_retired_test_frame(frame)
+                .ok_or(Error::Incomplete)?;
+            let generation = REUSE_GENERATION
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                    value.checked_add(1)
+                })
+                .expect("reuse generation exhausted");
+            let hhdm = crate::HHDM_REQ.response().expect("reuse HHDM").offset;
+            unsafe {
+                ((hhdm + claimed.as_u64()) as *mut u64).write_volatile(generation);
+            }
+            *witness = Some((who, h, frame, generation));
+            crate::serial_println!("[R51-REUSE] event=claimed frame={} channel_generation={} owner_kind=isolated-kernel-test owner_generation={} pid={} incarnation={} vm={}",
+                frame, h.generation, generation, who.pid, who.incarnation, who.vm_generation);
+        }
+        crate::serial_println!(
+            "[R5-REMOTE] event=retired generation={} vm={} frame={} cpu={}",
+            h.generation,
+            identity.generation,
+            frame,
+            local
+        );
+        Ok(())
+    }
+
+    #[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+    pub(crate) fn fastlane_remote_reuse_release(&mut self, h: Handle) -> Result<(), Error> {
+        let who = RecipientIdentity::of(self.current_process());
+        let mut witness = REUSE.lock();
+        let (owner, original, frame, generation) = witness.as_ref().copied().ok_or(Error::Stale)?;
+        if who != owner || h != original {
+            return Err(Error::Denied);
+        }
+        let mut pmm = crate::PMM.lock();
+        let address = x86_64::PhysAddr::new(frame);
+        assert_eq!(
+            pmm.owner_of(address),
+            Some(crate::memory::pmm::PMM_OWNER_KERNEL)
+        );
+        assert_eq!(
+            pmm.class_of(address),
+            Some(crate::memory::accounting::PhysicalMemoryClass::KernelCore)
+        );
+        let hhdm = crate::HHDM_REQ.response().expect("reuse HHDM").offset;
+        assert_eq!(
+            unsafe { ((hhdm + frame) as *const u64).read_volatile() },
+            generation,
+            "isolated reused backing modified through stale mapping"
+        );
+        pmm.free_frame(address);
+        *witness = None;
+        crate::serial_println!(
+            "[R51-REUSE] event=released frame={} channel_generation={} owner_generation={}",
+            frame,
+            h.generation,
+            generation
+        );
+        Ok(())
+    }
+
     /// arg = role * 3 + region. Maps exactly one page, once per role/region.
     pub(crate) fn fastlane_map(&mut self, h: Handle, arg: u64) -> Result<(u64, u64), Error> {
         self.fastlane_mapping_sweep();
@@ -226,10 +356,12 @@ impl Scheduler {
         let row = caps.channels.row_mut(h)?;
         let old = row.backing[region];
         let quota_owner = crate::memory::shared_quota::ProcessIdentity {
-            pid: row.creator.pid, incarnation: row.creator.incarnation,
+            pid: row.creator.pid,
+            incarnation: row.creator.incarnation,
         };
         let quota_session = crate::memory::shared_quota::SessionIdentity::Account {
-            id: row.session.id, epoch: row.session.epoch,
+            id: row.session.id,
+            epoch: row.session.epoch,
         };
         let p = self.current_process_mut();
         p.mapped_shared
@@ -264,8 +396,11 @@ impl Scheduler {
         } else {
             let free_before = pmm.free_page_count();
             let quota = crate::memory::shared_quota::reserve(
-                quota_owner, Some(quota_session), shared::PAGE_SIZE,
-            ).ok_or(Error::Capacity)?;
+                quota_owner,
+                Some(quota_session),
+                shared::PAGE_SIZE,
+            )
+            .ok_or(Error::Capacity)?;
             let prepared = caps.prepare_shared_region().map_err(|_| Error::Capacity)?;
             let mut frames = alloc::vec::Vec::new();
             frames.try_reserve_exact(1).map_err(|_| Error::Capacity)?;

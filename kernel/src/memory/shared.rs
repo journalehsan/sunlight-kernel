@@ -152,6 +152,10 @@ pub fn alloc_shared_region(
         frames.push(frame);
     }
 
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    let lifecycle_id = quota.lifecycle_id();
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::event(lifecycle_id, "before-mapping-publication", actual_size as u64, 0);
     let virt = match unsafe {
         caller.address_space.map_shared_region(
             &frames,
@@ -172,6 +176,10 @@ pub fn alloc_shared_region(
 
     // Publication is the commit point: backing frames and the complete owner
     // mapping exist before the token becomes observable.
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    for frame in &frames {
+        super::quota_lifecycle::event(lifecycle_id, "backing", frame.start_address().as_u64(), actual_size as u64);
+    }
     let token = prepared.commit(frames, actual_size, caller.pid, Some(quota));
 
     caller
@@ -197,6 +205,8 @@ pub fn alloc_shared_region(
     #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
     caps.trace_view_add(caller, token, virt.as_u64(), actual_size);
 
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::view(caps, caller, token, virt.as_u64(), "published");
     Ok((virt, token))
 }
 
@@ -255,6 +265,8 @@ pub fn map_shared_page(
     caps.increment_map_count(token);
 
     receiver.mapped_shared.push((token, virt, size));
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::view(caps, receiver, token, virt.as_u64(), "attached");
     #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
     caps.trace_view_add(receiver, token, virt.as_u64(), size);
     #[cfg(feature = "authenticated_exec_test")]
@@ -319,6 +331,8 @@ pub fn free_shared_page(
     }
 
     let (_, expected_base, expected_size) = process.mapped_shared[pos];
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::view(caps, process, token, expected_base.as_u64(), "before-unmap");
     let expected_region = process
         .address_space
         .lookup_region(expected_base.as_u64())
@@ -411,6 +425,8 @@ pub fn free_shared_page(
             .address_space
             .remove_region_exact(expected_region)
             .expect("preflighted SHM ledger changed under scheduler lock");
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        super::quota_lifecycle::view(caps, process, token, base_virt.as_u64(), "after-unmap");
         process.mapped_shared.remove(pos);
         // Decrement the mapping ref count; the broker returns the frames only
         // when this was the last live mapping, so the PMM is safe to reclaim them.

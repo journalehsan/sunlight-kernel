@@ -221,6 +221,8 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
     }
 
     let targets = active & !local_bit;
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::tlb(identity, kind.mailbox_fields().0, sequence, targets, "request");
     #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
     super::census_trace::record(
         super::census_trace::TLB_REQUEST,
@@ -255,6 +257,8 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
     );
     if targets == 0 {
         NO_REMOTE_TARGETS.fetch_add(1, Ordering::Relaxed);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        super::quota_lifecycle::tlb(identity, kind.mailbox_fields().0, sequence, targets, "complete");
         #[cfg(feature = "authenticated_exec_test")]
         crate::capability::exec_retirement_trace::tlb(
             identity,
@@ -339,6 +343,8 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
         }
         core::hint::spin_loop();
     }
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::tlb(identity, kind.mailbox_fields().0, sequence, targets, "complete");
     #[cfg(feature = "authenticated_exec_test")]
     {
         for ack_cpu in 0..MAX_TRACKED_CPUS {
@@ -436,6 +442,8 @@ pub fn handle_shootdown_ipi() {
             u64::from(current == Some(request.target)),
         ],
     );
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    super::quota_lifecycle::ack(request.sequence, cpu_id, current == Some(request.target));
     mailbox.acknowledge(request.sequence);
     ACKNOWLEDGEMENTS.fetch_add(1, Ordering::Relaxed);
 }

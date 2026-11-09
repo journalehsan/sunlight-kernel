@@ -53,13 +53,14 @@ def main():
     p.add_argument('--census-hold',action='store_true',help='opt-in independent SHM hold across checkpoint 100; requires census trace')
     p.add_argument('--census-leak',action='store_true',help='safe negative fixture; expected native FAIL; requires hold and trace')
     p.add_argument('--census-trace',action='store_true',help='debug-only bounded ownership observations; incomplete evidence fails closed')
+    p.add_argument('--remote-witness',action='store_true',help='require exact remote residency before ordinary M2 revoke')
     p.add_argument('--m31-retention',action='store_true',help='debug-only M3.1B page-table retention/teardown fixture (boot gate)')
     p.add_argument('--evidence-root',type=Path,default=BASE);p.add_argument('--timeout',type=int,default=180)
     args=p.parse_args();out=args.evidence_root.resolve()/(args.section+'-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ'));out.mkdir(parents=True)
     if args.census_hold and not args.census_trace:p.error('--census-hold requires --census-trace')
     if args.census_leak and not args.census_hold:p.error('--census-leak requires --census-hold --census-trace')
-    service_features=['fastlane-mapping-test']+(['fastlane-census-hold-test'] if args.census_hold else [])+(['fastlane-census-leak-test'] if args.census_leak else [])
-    features=['fastlane_mapping_test','key_inject']+(['fastlane_census_trace'] if args.census_trace else [])+(['fastlane_m31_retention_test'] if args.m31_retention else [])
+    service_features=['fastlane-mapping-test']+(['quota-remote-test'] if args.remote_witness else [])+(['fastlane-census-hold-test'] if args.census_hold else [])+(['fastlane-census-leak-test'] if args.census_leak else [])
+    features=['fastlane_mapping_test','key_inject']+(['restricted_remote_test'] if args.remote_witness else [])+(['fastlane_census_trace'] if args.census_trace else [])+(['fastlane_m31_retention_test'] if args.m31_retention else [])
     summary={'milestone':'M2','status':'RUNNING','revision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
              'source_sha256':sources(),'checks':[],'native':[],'production_fastlane':'BLOCKED'}
     def save():(out/'validation-summary.json').write_text(json.dumps(summary,indent=2)+'\n')
@@ -171,6 +172,12 @@ def main():
                             except subprocess.TimeoutExpired:proc.kill()
                         proc.wait()
                 assessment=assess(raw(),cpus,identity,failure,census_trace=args.census_trace,census_hold=args.census_hold)
+                if args.remote_witness:
+                    from fastlane_m53r5_remote import assess_remote
+                    remote = assess_remote(raw(), cpus)
+                    assessment['remote_witness'] = remote
+                    assessment['errors'] += remote['errors']
+                    if remote['status'] != 'PASS': assessment['status'] = 'FAIL'
                 row={'cpus':cpus,'command':command,'failure':failure,'assessment':assessment,'serial':str(serial),'serial_sha256':digest(serial)}
                 if assessment['status']=='PASS':
                     ack={'cpus':cpus,'serial_sha256':digest(serial),'image':image,'identity':identity,'security_assertions':'PASS','cleanup':'PASS'}

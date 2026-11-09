@@ -60,6 +60,10 @@ extern "C" fn worker(_: *mut u8) -> *mut u8 {
     core::ptr::null_mut()
 }
 pub fn run(args: &[&str]) -> ! {
+    #[cfg(feature = "quota-lifecycle-test")]
+    if args.get(1).is_some_and(|s| s.starts_with("r5-")) {
+        super::quota_lifecycle_fixture::actor(args);
+    }
     observe("entry");
     if sunlight_libc::getuid() == 1000 {
         observe("dropped-credentials-child");
@@ -135,6 +139,18 @@ pub fn run(args: &[&str]) -> ! {
     )
     .expect("component ready");
     assert_eq!(ready.label, sunlight_ipc::SessionMsg::REPLY);
+    #[cfg(feature = "quota-lifecycle-test")]
+    super::quota_lifecycle_fixture::controller();
+    #[cfg(feature = "quota-remote-test")]
+    {
+        let child = sunlight_libc::spawn(
+            b"/tmp/session-race-probe",
+            &[b"session-race-probe", b"FL-M2"],
+            None,
+        ).expect("authenticated remote mapping child");
+        assert_eq!(super::reap(child), 0);
+        sunlight_ipc::debug_log("[R5-REMOTE] event=controller-complete");
+    }
     // Session IDs alone must not authorize an ordinary user process.
     let spawn = CapabilityToken(0xCAFEBABE_DEADBEEF);
     let req = SpawnRequest::new("/bin/session-launch-probe", "forged");
@@ -223,6 +239,8 @@ pub fn run(args: &[&str]) -> ! {
     action(sunlight_ipc::SessionAction::UnlockCompleted);
     observe("resumed");
     sunlight_ipc::shm_free(token).expect("retained SHM release after suspension");
+    #[cfg(feature = "quota-lifecycle-test")]
+    super::quota_lifecycle_fixture::prepare_retirement();
     observe("complete");
     sunlight_ipc::debug_log("[SL41-USER] stage=complete");
     action(sunlight_ipc::SessionAction::Logout);

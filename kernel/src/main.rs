@@ -5425,5 +5425,8 @@ compile_error!("fastlane_channel_test requires a debug experimental image");
 #[cfg(all(feature = "fastlane_channel_test", feature = "native_session_h4_test"))]
 compile_error!("select one authenticated lifecycle fixture per image");
 
+#[cfg(all(feature = "quota_lifecycle_test", not(debug_assertions)))]
+compile_error!("quota_lifecycle_test requires a debug evidence image");
+
 #[cfg(all(feature = "shared_quota_test", not(debug_assertions)))]
 compile_error!("shared_quota_test requires a debug evidence image");

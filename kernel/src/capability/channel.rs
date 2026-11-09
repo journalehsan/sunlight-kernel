@@ -21,7 +21,11 @@ pub(crate) enum Error {
     Cancelled = 9,
     #[cfg(any(test, feature = "fastlane_doorbell_test"))]
     Changed = 10,
-    #[cfg(any(test, feature = "fastlane_doorbell_test"))]
+    #[cfg(any(
+        test,
+        feature = "fastlane_doorbell_test",
+        feature = "restricted_remote_test"
+    ))]
     Pending = 11,
 }
 #[derive(Clone, Copy, PartialEq, Eq)]

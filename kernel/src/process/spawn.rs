@@ -285,6 +285,8 @@ pub fn exec_into_process(
             process.address_space.activate();
         }
     }
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    crate::memory::quota_lifecycle::process(process, "exec-new-vm");
     if !process.mapped_shared.is_empty() || !process.owned_shared.is_empty() {
         let new_address_space = core::mem::replace(&mut process.address_space, old_address_space);
         {

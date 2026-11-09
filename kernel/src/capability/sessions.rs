@@ -253,6 +253,13 @@ impl CapabilityBroker {
     fn remove_session(&mut self, index: usize) {
         let reference = self.sessions.rows.swap_remove(index).reference;
         self.remove_session_grants(reference);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        {
+            let (_, bytes) = crate::memory::shared_quota::observation(
+                crate::memory::shared_quota::ProcessIdentity { pid: 0, incarnation: 0 },
+                Some(crate::memory::shared_quota::SessionIdentity::Account { id: reference.id, epoch: reference.epoch }));
+            crate::serial_println!("[R51-SESSION] event=retired session={} epoch={} outstanding_bytes={} registry_present=0", reference.id, reference.epoch, bytes);
+        }
     }
 
     pub(crate) fn expire_sessions(&mut self, now: u64) {

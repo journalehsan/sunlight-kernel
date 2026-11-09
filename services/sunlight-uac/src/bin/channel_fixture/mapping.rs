@@ -106,10 +106,31 @@ pub(super) fn actor_command(op: u64, h: fl::Handle, arg: u64) {
             panic!("forbidden access returned");
         }
         SPIN => {
+            #[cfg(feature = "quota-remote-test")]
+            assert_eq!(unsafe { sunlight_libc::sys::syscall1(0xf1c3, 1) }, 0);
             // Ordinary private IPC releases the supervisor, then this VM keeps
             // its channel translation active without kernel impersonation.
             let va = arg;
+            #[cfg(feature = "quota-remote-test")]
+            let gate = {
+                let gate = sunlight_ipc::shm_map(CapabilityToken(h.token))
+                    .expect("remote independent gate");
+                // Populate the actual channel translation before rendezvous.
+                unsafe {
+                    let _ = load(va);
+                }
+                gate as u64
+            };
             reply(0, 0, 0);
+            #[cfg(feature = "quota-remote-test")]
+            {
+                // Keep this exact VM active on its real CPU while revocation
+                // and isolated same-frame allocation complete on the revoker.
+                // No syscall, timer or scheduling luck releases this gate.
+                while unsafe { load_word(gate) } != 1 {
+                    core::hint::spin_loop();
+                }
+            }
             sunlight_ipc::debug_log(&alloc::format!(
                 "[FL-ACCESS] generation={} pid={} va={} write=0 expected=remote-stale",
                 h.generation,
@@ -333,14 +354,58 @@ pub fn supervisor() -> ! {
         let h = pair_victim(a, 1);
         let va = actor_map(a, h, 1, 0);
         let _ = map(h, 0, 0);
+        #[cfg(feature = "quota-remote-test")]
+        let (gate, gate_token) = sunlight_ipc::shm_create(4096, 0).expect("remote gate");
+        #[cfg(feature = "quota-remote-test")]
+        expect(
+            a,
+            SPIN,
+            fl::Handle {
+                token: gate_token.0,
+                generation: h.generation,
+            },
+            va,
+            0,
+        );
+        #[cfg(not(feature = "quota-remote-test"))]
         expect(a, SPIN, h, va, 0);
-        // Yield permits actual peer execution; the raw instruction witness and
-        // shootdown target mask, rather than timing, decide acceptance.
-        for _ in 0..16 {
-            sunlight_ipc::process_yield();
+        #[cfg(feature = "quota-remote-test")]
+        {
+            assert_eq!(unsafe { sunlight_libc::sys::syscall1(0xf1c3, 0) }, 0);
+            let start = sunlight_ipc::monotonic_millis();
+            loop {
+                match fl::operate(42, h, 0) {
+                    Ok(0) => break,
+                    Err(fl::Error::Pending) => {
+                        assert!(
+                            sunlight_ipc::monotonic_millis().saturating_sub(start) < 5000,
+                            "remote residency not established"
+                        );
+                        sunlight_ipc::process_yield();
+                    }
+                    other => panic!("remote rendezvous rejected: {:?}", other),
+                }
+            }
         }
-        assert_eq!(fl::operate(4, h, 0), Ok(0));
+        #[cfg(not(feature = "quota-remote-test"))]
+        {
+            // Legacy witness retained for comparison in ordinary M2 fixtures.
+            for _ in 0..16 {
+                sunlight_ipc::process_yield();
+            }
+            assert_eq!(fl::operate(4, h, 0), Ok(0));
+        }
+        #[cfg(feature = "quota-remote-test")]
+        unsafe {
+            store_word(gate as u64, 1);
+        }
         fault_reap(a, h, "remote-revocation-fault");
+        #[cfg(feature = "quota-remote-test")]
+        {
+            assert_eq!(fl::operate(43, h, 0), Ok(0));
+            assert_eq!(fl::operate(43, h, 0), Err(fl::Error::Stale));
+            sunlight_ipc::shm_free(gate_token).expect("remote gate release");
+        }
     }
     // Same-guest repeated lifecycles, alternating peer exit and revoke.
     for cycle in 0..6 {

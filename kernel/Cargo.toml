@@ -1,6 +1,7 @@
 [package]
 name = "sunlight-kernel"
-version = "0.2.6862-alpha.2"
+version = "0.2.6935-alpha.2"
+
 
 
 
@@ -681,6 +682,9 @@ lz4_flex = { version = "0.11", default-features = false }
 [features]
 # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
 session_launch_test = []
+# Native authenticated lifecycle receipts; never admitted in release.
+quota_lifecycle_test = ["session_launch_test"]
+restricted_remote_test = ["quota_lifecycle_test", "fastlane_mapping_test"]
 # Isolated bounded thread admission and allocation fault controls; debug only.
 thread_admission_test = []
 thread_lifecycle_race_test = []

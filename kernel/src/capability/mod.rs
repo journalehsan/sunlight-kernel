@@ -361,9 +361,21 @@ impl ReclaimedShared {
                 )
             },
         );
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        let lifecycle_id = self.quota.as_ref().map_or(0, |r| r.lifecycle_id());
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        if let Some(receipt) = self.quota.as_ref() { receipt.lifecycle_charged(); }
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::event(lifecycle_id, "before-reclaim", self.frames.len() as u64, pmm.free_page_count() as u64);
         for frame in self.frames.drain(..) {
+            #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+            let physical = frame.start_address().as_u64();
             pmm.free_frame(frame.start_address());
+            #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+            crate::memory::quota_lifecycle::event(lifecycle_id, "frame-freed", physical, pmm.free_page_count() as u64);
         }
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::event(lifecycle_id, "after-reclaim", 0, pmm.free_page_count() as u64);
         // All views have synchronously retired and all backing is now free.
         unsafe { core::mem::ManuallyDrop::drop(&mut self.quota) };
         #[cfg(all(
@@ -1403,6 +1415,12 @@ impl CapabilityBroker {
     /// Decrement the mapping reference count for `token`.
     /// Returns the backing frames when this was the last mapping, so the caller
     /// can free the physical memory via the PMM.
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    pub(crate) fn lifecycle_resource(&self, token: CapabilityToken) -> u64 {
+        self.shared_regions.iter().find(|e| e.token == token)
+            .and_then(|e| e.quota.as_ref()).map_or(0, |r| r.lifecycle_id())
+    }
+
     pub(crate) fn decrement_map_count(
         &mut self,
         token: CapabilityToken,
@@ -1439,6 +1457,8 @@ impl CapabilityBroker {
         token: CapabilityToken,
     ) -> Option<ReclaimedShared> {
         if let Some(idx) = self.shared_regions.iter().position(|e| e.token == token) {
+            #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+            crate::memory::quota_lifecycle::event(self.lifecycle_resource(token), "before-revoke", self.shared_regions[idx].lifetime.views() as u64, 0);
             let releasable = self.shared_regions[idx].lifetime.retire();
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RETIRE, 0);
@@ -1458,6 +1478,8 @@ impl CapabilityBroker {
     pub fn revoke_all_for(&mut self, pid: usize) {
         for entry in self.shared_regions.iter_mut() {
             if entry.owner_pid == pid {
+                #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+                crate::memory::quota_lifecycle::event(entry.quota.as_ref().map_or(0, |r| r.lifecycle_id()), "before-revoke", entry.lifetime.views() as u64, 0);
                 entry.lifetime.retire();
                 #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
                 entry.trace(crate::memory::census_trace::SHM_RETIRE, 0);

@@ -1671,6 +1671,10 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         None
     };
 
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    if msg.label == crate::ipc::SpawnMsg::SPAWN_SESSION_INITIAL {
+        crate::memory::quota_lifecycle::accounting_checkpoint("before-authenticated-launch", &pmm);
+    }
     let spawn_parent = sched.current_process().pid;
     match crate::process::spawn::spawn_with_session_attachment(
         &path,
@@ -1687,6 +1691,10 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         Some(spawn_parent),
     ) {
         Ok(pid) => {
+            #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+            if msg.label == crate::ipc::SpawnMsg::SPAWN_SESSION_INITIAL {
+                crate::memory::quota_lifecycle::accounting_checkpoint("after-authenticated-launch", &pmm);
+            }
             #[cfg(feature = "native_session_race_test")]
             let n4_on_ap =
                 option_env!("SUNLIGHT_SESSION_N4_AP") == Some("1") && sched.online_cores > 1;
@@ -2917,6 +2925,8 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        if let Some(value) = crate::memory::quota_lifecycle::query(s) { return value; }
         #[cfg(all(debug_assertions, feature = "session_launch_test"))]
         if s == "[SL41] observe" {
             let sched = crate::sched::SCHEDULER.lock();
@@ -13061,6 +13071,17 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
     use crate::capability::{channel::Handle, CapabilityToken};
+    #[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
+    if matches!(frame.rdi, 42 | 43) {
+        let mut sched = crate::sched::SCHEDULER.lock();
+        let handle = Handle { token: CapabilityToken(frame.rsi), generation: frame.rdx };
+        let result = if frame.rdi == 42 { sched.fastlane_remote_revoke(handle) }
+            else { sched.fastlane_remote_reuse_release(handle) };
+        return match result {
+            Ok(()) => { frame.rsi = 0; 0 }
+            Err(e) => e as u64,
+        };
+    }
     #[cfg(all(debug_assertions, feature = "fastlane_hybrid_lifecycle_test"))]
     if frame.rdi==40 {
         return match crate::capability::hybrid_race::retire_current(frame.r10) {

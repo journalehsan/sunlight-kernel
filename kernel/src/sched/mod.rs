@@ -2895,6 +2895,8 @@ impl Scheduler {
             }
         }
 
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process(&self.processes[idx], "reap-ready");
         let leaked_fds = self.processes[idx].fd_table.take_all_handles();
         #[cfg(feature = "authenticated_cancel_test")]
         crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
@@ -3078,6 +3080,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process_vm(&self.processes[idx], "reaped", reaped_generation);
         #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
         t3r_fixture::retired(self, idx);
         #[cfg(feature = "production_grant_test")]
@@ -3289,11 +3293,15 @@ impl Scheduler {
         self.cancel_foreground(idx, 1);
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         self.doorbell_peer_exit(idx);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process(&self.processes[idx], "before-termination");
         self.processes[idx].exit_code = code;
         #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
         self.processes[idx].measurement.abort();
         self.processes[idx].clear_futex_wait();
         self.processes[idx].state = ProcessState::Finished;
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process(&self.processes[idx], "termination-committed");
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
         if self.processes[idx].native_thread {
@@ -3363,11 +3371,15 @@ impl Scheduler {
         self.cancel_foreground(idx, 1);
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         self.doorbell_peer_exit(idx);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process(&self.processes[idx], "before-termination");
         self.processes[idx].exit_code = code;
         #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
         self.processes[idx].measurement.abort();
         self.processes[idx].clear_futex_wait();
         self.processes[idx].state = ProcessState::Finished;
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        crate::memory::quota_lifecycle::process(&self.processes[idx], "termination-committed");
         self.processes[idx].slice_credit = None;
         self.processes[idx].exit_cleanup_pending = true;
         if self.processes[idx].native_thread {
@@ -4477,6 +4489,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         return idle_top;
     }
 
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    crate::memory::quota_lifecycle::process(&sched.processes[cur], "before-termination");
     sched.cancel_foreground(cur, 1);
     #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
     sched.doorbell_peer_exit(cur);
@@ -4512,6 +4526,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         process.owning_core = u8::MAX;
         process.queued_on_core = u8::MAX;
     }
+    #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+    crate::memory::quota_lifecycle::process(&sched.processes[cur], "termination-committed");
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
     sched.fastlane_mapping_sweep();
     #[cfg(feature = "authenticated_completion_exit_test")]
