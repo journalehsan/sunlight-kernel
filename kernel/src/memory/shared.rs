@@ -86,7 +86,17 @@ pub fn alloc_shared_region(
         },
     );
     let f = &caller.foreground;
-    let session = if f.session_broker == 0 && f.session == 0 && f.generation == 0 {
+    let session = if let Some(reference) = caller.account_membership {
+        if !caps.session_allocation_live(reference, crate::timekeeping::global_ticks()) {
+            return Err(SharedMemError::InvalidArgument);
+        }
+        Some(crate::memory::shared_quota::SessionIdentity::Account {
+            id: reference.id,
+            epoch: reference.epoch,
+        })
+    } else if !caller.system_allocation {
+        return Err(SharedMemError::InvalidArgument);
+    } else if f.session_broker == 0 && f.session == 0 && f.generation == 0 {
         None
     } else {
         Some(crate::memory::shared_quota::SessionIdentity::Pty {

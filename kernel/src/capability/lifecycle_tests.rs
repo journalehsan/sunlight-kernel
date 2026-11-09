@@ -19,6 +19,16 @@ fn process(pid: usize) -> Process {
     Process {
         pid,
         uid: 0,
+        system_allocation: false,
+        service_identity: 0,
+        trusted_display_service: false,
+        trusted_swap_admin_service: false,
+        trusted_zram_diagnostic: false,
+        trusted_pty_service: false,
+        trusted_kv_service: false,
+        trusted_account_broker: false,
+        trusted_wiseowl_braind: false,
+
         trusted_session_service: false,
         trusted_auth_broker: pid == 6,
         trusted_vfs_service: false,
@@ -855,3 +865,25 @@ fn uac_may_consume_its_own_pending_account_grant_on_the_same_request() {
 
 #[path = "production_tests.rs"]
 mod production_tests;
+
+#[test]
+fn authenticated_root_child_cannot_retain_system_service_policy() {
+    let mut p = process(6);
+    p.system_allocation = true;
+    p.service_identity = 123;
+    p.trusted_session_service = true;
+    p.trusted_display_service = true;
+    p.trusted_swap_admin_service = true;
+    p.trusted_zram_diagnostic = true;
+    p.trusted_pty_service = true;
+    p.trusted_kv_service = true;
+    p.trusted_account_broker = true;
+    p.trusted_wiseowl_braind = true;
+    p.restrict_account_member_roles();
+    assert_eq!(p.uid, 0);
+    assert!(!p.system_allocation);
+    assert_eq!(p.service_identity, 0);
+    assert!(!p.trusted_auth_broker && !p.trusted_session_service && !p.trusted_display_service
+        && !p.trusted_swap_admin_service && !p.trusted_zram_diagnostic && !p.trusted_pty_service
+        && !p.trusted_kv_service && !p.trusted_account_broker && !p.trusted_wiseowl_braind);
+}

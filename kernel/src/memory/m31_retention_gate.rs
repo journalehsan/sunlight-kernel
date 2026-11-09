@@ -104,6 +104,7 @@ pub fn run(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
 
     let mut caps = CapabilityBroker::new();
     let mut owner = unsafe { Process::new(0xF131, 0, "m31-owner", pmm, hhdm) };
+    owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let identity = owner.address_space.identity();
     emit(&alloc::format!(
         "phase=setup owner_pid={} vm_generation={} root={} baseline_free={} baseline_pt={} baseline_shm={} pre_repair={}",
@@ -337,6 +338,7 @@ pub fn run(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     // free path, does not reclaim empty tables), then tear the VM down and
     // prove each retained table identity is physically released exactly once.
     let mut teardown_owner = unsafe { Process::new(0xF132, 0, "m31-teardown", pmm, hhdm) };
+    teardown_owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let teardown_identity = teardown_owner.address_space.identity();
     let mut backing: Vec<u64> = Vec::new();
     const RETAIN_SPANS: usize = 4;

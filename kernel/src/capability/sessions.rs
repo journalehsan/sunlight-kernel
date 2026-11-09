@@ -39,6 +39,8 @@ pub(super) struct Session {
     deadline: u64,
     registration: GrantDelivery,
     state: State,
+    bootstrap_available: bool,
+    launch_revision: u64,
     requests: Vec<Request>,
 }
 
@@ -87,6 +89,9 @@ impl SessionTable {
         Ok(reference)
     }
 }
+
+mod launch;
+pub(crate) use launch::LaunchAttachment;
 
 impl CapabilityBroker {
     #[cfg(feature = "native_session_race_test")]
@@ -151,6 +156,8 @@ impl CapabilityBroker {
             deadline,
             registration: request,
             state: State::Suspended,
+            bootstrap_available: true,
+            launch_revision: 0,
             requests: Vec::new(),
         });
         Ok((reference, uid, gid))
@@ -218,6 +225,10 @@ impl CapabilityBroker {
             self.sessions.revoked = self.sessions.revoked.saturating_add(1);
             self.remove_session(index);
         } else {
+            self.sessions.rows[index].bootstrap_available = false;
+            if operation == SUSPEND {
+                self.sessions.rows[index].launch_revision = self.sessions.rows[index].launch_revision.saturating_add(1);
+            }
             self.sessions.rows[index].state = if operation == ACTIVATE {
                 State::Active
             } else {

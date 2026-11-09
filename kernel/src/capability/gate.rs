@@ -108,6 +108,7 @@ static STATE: spin::Mutex<State> = spin::Mutex::new(State {
 fn private(pid: usize, hhdm: VirtAddr) -> Process {
     let mut pmm = crate::PMM.lock();
     let mut process = unsafe { Process::new(pid, 0, "cap-probe", &mut pmm, hhdm) };
+    process.system_allocation = true; // Explicit trusted kernel fixture policy.
     let entry = crate::process::elf_loader::load_elf(ELF, &mut process, &mut pmm, hhdm)
         .expect("capability fixture ELF");
     crate::process::spawn::map_user_stack(&mut process, &mut pmm, hhdm).unwrap();
@@ -181,6 +182,7 @@ pub fn run(hhdm: VirtAddr) {
         // A failed mint happens before backing/PTE allocation, leaves no token
         // or owner view, and does not alter the global entropy stream.
         let mut process = unsafe { Process::new(0xF1FF, 0, "cap-fail", &mut pmm, hhdm) };
+    process.system_allocation = true; // Explicit trusted kernel fixture policy.
         let mut caps = CapabilityBroker::new();
         let free = pmm.free_page_count();
         for reservation in [false, true] {

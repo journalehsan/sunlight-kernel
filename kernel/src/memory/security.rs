@@ -201,6 +201,7 @@ pub fn run_boot_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, 
     let shm_free_before = pmm.free_page_count();
     let mut shm_owner =
         unsafe { crate::process::Process::new(0xB101, 0, "mm0-shm-owner", pmm, hhdm) };
+    shm_owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let mut shm_peer =
         unsafe { crate::process::Process::new(0xB102, 0, "mm0-shm-peer", pmm, hhdm) };
     let mut shm_caps = crate::capability::CapabilityBroker::new();
@@ -1762,6 +1763,7 @@ fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm
 
     let mut shm_owner =
         unsafe { crate::process::Process::new(0xB303, 0, "mm2a-shm-owner", pmm, hhdm) };
+    shm_owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let mut shm_peer =
         unsafe { crate::process::Process::new(0xB304, 0, "mm2a-shm-peer", pmm, hhdm) };
     let peer_collision_page = Page::<Size4KiB>::from_start_address(VirtAddr::new(
@@ -1966,6 +1968,7 @@ fn run_mm2a_injected_failure_tests(
 
     let mut shm_process =
         unsafe { crate::process::Process::new(0xB313, 0, "mm2a-shm-oom", pmm, hhdm) };
+    shm_process.system_allocation = true; // Explicit trusted kernel OOM fixture.
     let mut shm_caps = crate::capability::CapabilityBroker::new();
     let shm_free_before = pmm.free_page_count();
     pmm.fail_test_allocations_after(1);
@@ -2012,6 +2015,7 @@ fn run_mm2a_injected_failure_tests(
 
     let mut owner =
         unsafe { crate::process::Process::new(0xB314, 0, "mm2a-peer-owner", pmm, hhdm) };
+    owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let mut peer = unsafe { crate::process::Process::new(0xB315, 0, "mm2a-peer-oom", pmm, hhdm) };
     let mut peer_caps = crate::capability::CapabilityBroker::new();
     let (_, token) =

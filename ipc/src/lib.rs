@@ -2247,6 +2247,9 @@ pub mod SpawnMsg {
     pub const ERROR: u64 = 3;
     /// Spawn a native user shell from a one-time UAC session grant in caps[0].
     pub const SPAWN_AUTHENTICATED: u64 = 4;
+    /// SessionD owner launch: caps[0]=session id, caps[1]=epoch.
+    pub const SPAWN_SESSION_BOUND: u64 = 5;
+    pub const SPAWN_SESSION_INITIAL: u64 = 6;
 }
 
 #[repr(u64)]

@@ -129,6 +129,10 @@ pub struct Process {
     /// Only the Linux group owner holds its shared SEM_UNDO context.
     pub linux_sysv_semadj: Option<LinuxSysvSemAdj>,
     pub foreground: foreground::Foreground,
+    /// Kernel-validated Account membership; preserved by exec.
+    pub(crate) account_membership: Option<sunlight_ipc::account_session::SessionRef>,
+    /// Explicit kernel-admitted system resource policy; never derived from UID.
+    pub(crate) system_allocation: bool,
     pub ppid: usize, // parent pid
     pub name: [u8; 32],
     pub state: ProcessState,
@@ -505,6 +509,8 @@ impl Process {
             tty_read_wait: None,
             native_shared_owner: None,
             shared_quota_owner: None,
+            account_membership: None,
+            system_allocation: false,
             capabilities: Vec::new(),
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,
@@ -744,6 +750,8 @@ impl Process {
             tty_read_wait: None,
             native_shared_owner: None,
             shared_quota_owner: None,
+            account_membership: None,
+            system_allocation: false,
             capabilities,
             kernel_stack: Some(kernel_stack),
             kernel_stack_top,

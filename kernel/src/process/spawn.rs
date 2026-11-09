@@ -132,6 +132,7 @@ pub enum SpawnError {
     InvalidPath,
     UnsupportedPersonality,
     PidExhausted,
+    SessionRejected,
 }
 
 /// Execute an ELF binary into the current process (re-exec semantics).
@@ -735,6 +736,44 @@ pub fn spawn_from_path_with_restrictions(
     env: Option<super::env::EnvMap>,
     service_lookup_restrictions: Option<u64>,
 ) -> Result<usize, SpawnError> {
+    spawn_with_session_attachment(
+        path, _argv, pmm, sched, _caps, hhdm_offset, uid, gid, env,
+        service_lookup_restrictions, None, None,
+    )
+}
+
+#[cfg(all(debug_assertions, feature = "session_launch_test"))]
+fn rollback_launch_fault(
+    process: &mut Process,
+    attachment: Option<&crate::capability::sessions::LaunchAttachment>,
+    stage: u8,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm: VirtAddr,
+    free_before: usize,
+) -> bool {
+    if !attachment.is_some_and(|a| a.fails_at(stage)) { return false; }
+    unsafe { process.address_space.reclaim_user_space(pmm, hhdm, true); }
+    crate::serial_println!("[SL41] event=rollback stage={} pid={} incarnation={} free_before={} free_after={} published=0 runnable=0",
+        stage, process.pid, process.foreground.incarnation, free_before, pmm.free_page_count());
+    true
+}
+
+/// Session launch uses the existing scheduler/PMM/broker lock transaction.
+/// The opaque attachment is consumed before publication, never after enqueue.
+pub(crate) fn spawn_with_session_attachment(
+    path: &str,
+    _argv: &[&str],
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    _caps: &mut CapabilityBroker,
+    hhdm_offset: VirtAddr,
+    uid: u32,
+    gid: u32,
+    env: Option<super::env::EnvMap>,
+    service_lookup_restrictions: Option<u64>,
+    attachment: Option<crate::capability::sessions::LaunchAttachment>,
+    parent_pid: Option<usize>,
+) -> Result<usize, SpawnError> {
     sched
         .reserve_task_storage()
         .map_err(|_| SpawnError::NoMemory)?;
@@ -764,11 +803,18 @@ pub fn spawn_from_path_with_restrictions(
     } else {
         name_from_path(path)
     };
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    let free_before = pmm.free_page_count();
     let mut process = unsafe {
-        Process::try_new(pid, 1, proc_name, pmm, hhdm_offset).map_err(|_| SpawnError::NoMemory)?
+        Process::try_new(pid, parent_pid.unwrap_or(1), proc_name, pmm, hhdm_offset).map_err(|_| SpawnError::NoMemory)?
     };
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(&mut process, attachment.as_ref(), 1, pmm, hhdm_offset, free_before) {
+        return Err(SpawnError::SessionRejected);
+    }
     process.uid = uid;
     process.gid = gid;
+    process.system_allocation = attachment.is_none() && uid == 0;
     // Attach this shell to a TTY tab keyed by its shell_id (parsed from the
     // path above). Children spawned by the shell inherit this, so their fd0/fd1
     // route to the tab's kernel stdin/stdout rings (foreground input routing).
@@ -783,7 +829,14 @@ pub fn spawn_from_path_with_restrictions(
 
     let envp_strings = process.env.to_envp();
     let envp: alloc::vec::Vec<&[u8]> = envp_strings.iter().map(|s| s.as_bytes()).collect();
-    exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false)?;
+    if let Err(error) = exec_into_process(bytes, &mut process, pmm, hhdm_offset, &[], &envp, false) {
+        unsafe { process.address_space.reclaim_user_space(pmm, hhdm_offset, true); }
+        return Err(error);
+    }
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(&mut process, attachment.as_ref(), 2, pmm, hhdm_offset, free_before) {
+        return Err(SpawnError::SessionRejected);
+    }
     process.nice = initial_embedded_nice(path, uid);
     process.trusted_display_service = is_trusted_display_path(path);
     process.trusted_swap_admin_service = is_trusted_swap_admin_path(path);
@@ -810,6 +863,10 @@ pub fn spawn_from_path_with_restrictions(
     process.trusted_control_panel = is_trusted_control_panel_path(path);
     // The account broker may resolve caller roles and owns `account-broker:*`.
     process.trusted_account_broker = uid == 0 && is_trusted_account_broker_path(path);
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(&mut process, attachment.as_ref(), 3, pmm, hhdm_offset, free_before) {
+        return Err(SpawnError::SessionRejected);
+    }
     process.set_initial_args(
         if matches!(
             path,
@@ -824,6 +881,32 @@ pub fn spawn_from_path_with_restrictions(
         0,
     );
 
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if rollback_launch_fault(&mut process, attachment.as_ref(), 4, pmm, hhdm_offset, free_before) {
+        return Err(SpawnError::SessionRejected);
+    }
+    if let Some(attachment) = attachment {
+        // The caller retains the broker guard throughout construction. Thus
+        // revoke/expiry cannot interleave between validation and publication.
+        match _caps.commit_session_launch(attachment, crate::timekeeping::global_ticks()) {
+            Ok(reference) => {
+                process.account_membership = Some(reference);
+                process.restrict_account_member_roles();
+            },
+            Err(_) => {
+                unsafe {
+                    process.address_space.reclaim_user_space(pmm, hhdm_offset, true);
+                }
+                return Err(SpawnError::SessionRejected);
+            }
+        }
+    }
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if let Some(reference) = process.account_membership {
+        crate::serial_println!("[SL41] event=prepublication pid={} incarnation={} vm={} session={} epoch={} uid={}",
+            process.pid, process.foreground.incarnation, process.address_space.identity().generation,
+            reference.id, reference.epoch, process.uid);
+    }
     let actual_pid = process.pid;
     let idx = sched.add_process_after_reaping(process);
     sched.enqueue_ready(idx);
@@ -993,6 +1076,10 @@ pub fn embedded_bytes_for_path(path: &str) -> Result<&'static [u8], SpawnError> 
         "/test/exec-r2" => Ok(include_bytes!(concat!(env!("OUT_DIR"), "/exec-r2.elf"))),
         "/bin/capabilityctl" | "/usr/bin/capabilityctl" => Ok(crate::CAPABILITYCTL_ELF_BYTES),
         "/bin/runas" | "/usr/bin/runas" => Ok(crate::RUNAS_ELF_BYTES),
+        #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+        "/test/launch-bad-elf" => Ok(b"not-an-elf"),
+        #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+        "/bin/session-launch-probe" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
         #[cfg(feature = "native_session_race_test")]
         "/tmp/session-race-probe" | "/bin/session-racer" => Ok(include_bytes!("../../../target/x86_64-unknown-none/release/session-race-probe")),
         #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]

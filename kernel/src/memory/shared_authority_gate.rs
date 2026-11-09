@@ -12,7 +12,9 @@ pub fn run(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
         let data_before = class_frame_count(PhysicalMemoryClass::SharedMemory);
         let tables_before = class_frame_count(PhysicalMemoryClass::PageTable);
         let mut owner = unsafe { Process::new(0xF110, 0, "f11-owner", pmm, hhdm) };
+    owner.system_allocation = true; // Explicit trusted kernel fixture policy.
         let mut attacker = unsafe { Process::new(0xF111, 0, "f11-attacker", pmm, hhdm) };
+    attacker.system_allocation = true; // Explicit trusted kernel fixture policy.
         assert_ne!(
             owner.address_space.identity(),
             attacker.address_space.identity()

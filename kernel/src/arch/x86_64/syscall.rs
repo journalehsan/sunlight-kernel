@@ -1520,7 +1520,7 @@ fn ipc_call(frame: &mut SyscallFrame) -> u64 {
 fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let path = decode_path_from_words(&msg.words);
     let authenticated_session = msg.label == crate::ipc::SpawnMsg::SPAWN_AUTHENTICATED;
-    let (uid, gid, service_caps) = if authenticated_session {
+    let (mut uid, mut gid, mut service_caps) = if authenticated_session {
         // The grant is bound to the IPC caller and consumed here. In
         // particular, never accept caller-provided identity fields for a user
         // session. Phase 0.5 intentionally permits only the native shell.
@@ -1613,7 +1613,66 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
     let mut caps = crate::capability::CAP_BROKER.lock();
     let hhdm = crate::HHDM_REQ.response().expect("no hhdm").offset;
 
-    match crate::process::spawn::spawn_from_path_with_restrictions(
+    let attachment = if matches!(msg.label, crate::ipc::SpawnMsg::SPAWN_SESSION_BOUND | crate::ipc::SpawnMsg::SPAWN_SESSION_INITIAL) {
+        let caller = sched.current_process();
+        if !caller.trusted_session_service
+            || caller.is_exiting()
+            || msg.cap_count != 2
+        {
+            IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+            return 0;
+        }
+        let authorize = if msg.label == crate::ipc::SpawnMsg::SPAWN_SESSION_INITIAL {
+            crate::capability::CapabilityBroker::authorize_initial_session_launch
+        } else {
+            crate::capability::CapabilityBroker::authorize_session_launch
+        };
+        match authorize(&caps,
+            crate::capability::delivery::RecipientIdentity::of(caller),
+            ::sunlight_ipc::account_session::SessionRef {
+                id: msg.caps[0].0,
+                epoch: msg.caps[1].0,
+            },
+            sched.global_tick,
+        ) {
+            Ok((attachment, session_uid, session_gid)) => {
+                #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+                let attachment = if path == "/bin/session-launch-probe" {
+                    attachment.with_test_failure((msg.words[3] >> 56) as u8)
+                } else { attachment };
+                uid = session_uid;
+                gid = session_gid;
+                service_caps = Some(crate::ipc::ServiceCapability::UserSession.bit());
+                Some(attachment)
+            }
+            Err(_) => {
+                IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+                return 0;
+            }
+        }
+    } else if let Some(reference) = sched.current_process().account_membership {
+        match caps.authorize_inherited_session_launch(reference, sched.global_tick) {
+            Ok(attachment) => {
+                uid = sched.current_process().uid;
+                gid = sched.current_process().gid;
+                service_caps = sched.current_process().service_lookup_restrictions;
+                Some(attachment)
+            }
+            Err(_) => {
+                IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+                return 0;
+            }
+        }
+    } else {
+        if authenticated_session || !sched.current_process().system_allocation || uid != 0 {
+            IpcMsg::with_label(crate::ipc::SpawnMsg::ERROR).to_registers(frame);
+            return 0;
+        }
+        None
+    };
+
+    let spawn_parent = sched.current_process().pid;
+    match crate::process::spawn::spawn_with_session_attachment(
         &path,
         &[],
         &mut *pmm,
@@ -1624,6 +1683,8 @@ fn handle_spawn_call(frame: &mut SyscallFrame, msg: IpcMsg) -> u64 {
         gid,
         None,
         service_caps,
+        attachment,
+        Some(spawn_parent),
     ) {
         Ok(pid) => {
             #[cfg(feature = "native_session_race_test")]
@@ -2684,6 +2745,8 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     #[cfg(all(debug_assertions, feature = "thread_lifecycle_race_test"))]
     crate::sched::t2r_fixture::enter();
     let mut sched = crate::sched::SCHEDULER.lock();
+
+
     #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
     if sched.fastlane_vm_member() {
         return u64::MAX;
@@ -2785,6 +2848,8 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
         },
     );
 
+    thread.system_allocation = sched.current_process().system_allocation;
+    thread.account_membership = sched.current_process().account_membership;
     thread.native_thread = true;
     thread.capability_mode = sched.current_process().capability_mode;
     thread.native_shared_owner = shared_descriptors.then_some(shared_owner);
@@ -2813,6 +2878,11 @@ fn thread_spawn(frame: &mut SyscallFrame, shared_descriptors: bool) -> u64 {
     crate::sched::t3r_fixture::placement(&sched, &mut thread, arg);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
     crate::sched::t4a_fixture::placement(&sched, &mut thread, arg);
+    if thread.account_membership.is_some_and(|reference|
+        !crate::capability::CAP_BROKER.lock().session_allocation_live(
+            reference, crate::timekeeping::global_ticks())) {
+        return u64::MAX - 1;
+    }
     let published = sched.publish_thread(slot, thread, current_cpu);
     #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
     crate::sched::t4a_fixture::created(&sched, published, arg);
@@ -2847,6 +2917,21 @@ fn debug_log(ptr: u64, len: u64) -> u64 {
 
     // Print valid UTF-8 prefix
     if let Ok(s) = core::str::from_utf8(&bytes[..copy_len]) {
+        #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+        if s == "[SL41] observe" {
+            let sched = crate::sched::SCHEDULER.lock();
+            let p = sched.current_process();
+            let Some(reference) = p.account_membership else { return 0; };
+            let live = crate::capability::CAP_BROKER.lock().session_allocation_live(
+                reference, crate::timekeeping::global_ticks());
+            let owner = p.shared_quota_owner.unwrap_or(crate::memory::shared_quota::ProcessIdentity {
+                pid: p.pid, incarnation: p.foreground.incarnation });
+            crate::serial_println!("[SL41] event=userspace pid={} incarnation={} vm={} session={} epoch={} owner={} owner_incarnation={} live={}",
+                p.pid, p.foreground.incarnation, p.address_space.identity().generation,
+                reference.id, reference.epoch, owner.pid, owner.incarnation, u8::from(live));
+            return u64::from(live);
+        }
+
         #[cfg(all(debug_assertions, feature = "atomic_futex_test"))]
         if let Some(result) = crate::sched::t4a_fixture::query(s) {
             return result;
@@ -3087,6 +3172,8 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         return linux_errno(14);
     }
     let mut sched = crate::sched::SCHEDULER.lock();
+
+
     let Some(hhdm) = crate::HHDM_REQ
         .response()
         .map(|resp| VirtAddr::new(resp.offset))
@@ -3162,6 +3249,12 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
             cwd,
         },
     );
+    child.system_allocation = parent.system_allocation;
+    child.account_membership = parent.account_membership;
+    child.shared_quota_owner = Some(parent.shared_quota_owner.unwrap_or(
+        crate::memory::shared_quota::ProcessIdentity {
+            pid: parent.pid, incarnation: parent.foreground.incarnation,
+        }));
     child.linux_tgid = parent.linux_tgid;
     child.capability_mode = parent.capability_mode;
     child.service_lookup_restrictions = parent.service_lookup_restrictions;
@@ -3208,6 +3301,11 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
     if crate::process::thread_admission::checkpoint("publication").is_err() {
         return linux_errno(12);
     }
+    if child.account_membership.is_some_and(|reference|
+        !crate::capability::CAP_BROKER.lock().session_allocation_live(
+            reference, crate::timekeeping::global_ticks())) {
+        return linux_errno(1);
+    }
     // The prevalidated parent store is done before the child can be runnable.
     if flags & CLONE_PARENT_SETTID != 0
         && crate::memory::user::write_process_atomic_u32(parent, hhdm, parent_tid, tid as u32)
@@ -3216,6 +3314,14 @@ fn sys_linux_clone(frame: &SyscallFrame) -> u64 {
         return linux_errno(14);
     }
     let idx = sched.publish_thread(slot, child, crate::sched::current_cpu_id());
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    if let (Some(reference), Some(owner)) = (sched.processes[idx].account_membership, sched.processes[idx].shared_quota_owner) {
+        let p = &sched.processes[idx];
+        crate::serial_println!("[SL41] event=linux-thread pid={} incarnation={} vm={} session={} epoch={} owner={} owner_incarnation={}",
+            p.pid, p.foreground.incarnation, p.address_space.identity().generation,
+            reference.id, reference.epoch, owner.pid, owner.incarnation);
+    }
+
     crate::serial_println!(
         "[HELIOS-THREAD] clone tgid={} tid={} tls={:#x} stack={:#x}",
         sched.processes[idx].linux_tgid.unwrap_or(tid),
@@ -3721,7 +3827,10 @@ fn vfs_read_file(path: &str) -> Option<alloc::vec::Vec<u8>> {
 /// rdx = stdout fd, r10 = stdin fd, r8 = stderr fd (u64::MAX keeps TTY default)
 /// Returns the child pid, or -1 on error.
 fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
-    if crate::sched::with_scheduler(|s| s.current_process().trusted_service_manager) {
+    if crate::sched::with_scheduler(|s| {
+        s.current_process().trusted_service_manager
+            || (!s.current_process().system_allocation && s.current_process().account_membership.is_none())
+    }) {
         return u64::MAX;
     }
 
@@ -3866,6 +3975,12 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
     }
     let parent = sched.current_process();
     let ppid = parent.pid;
+    let inherited_membership = parent.account_membership;
+    let inherited_system_allocation = parent.system_allocation;
+    if inherited_membership.is_some_and(|reference| !crate::capability::CAP_BROKER.lock()
+        .session_allocation_live(reference, crate::timekeeping::global_ticks())) {
+        return u64::MAX;
+    }
     let uid = parent.uid;
     let gid = parent.gid;
     let env = replacement_env.unwrap_or_else(|| crate::process::env::EnvMap::inherit(&parent.env));
@@ -3916,6 +4031,8 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         return u64::MAX;
     };
     let proc_name = crate::process::spawn::name_from_path(path_str);
+    #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+    let child_free_before = pmm.free_page_count();
     let mut child =
         match unsafe { crate::process::Process::try_new(pid, ppid, proc_name, &mut pmm, hhdm) } {
             Ok(child) => child,
@@ -3923,6 +4040,7 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         };
     child.uid = uid;
     child.gid = gid;
+    child.system_allocation = inherited_system_allocation;
     child.env = env;
     child.cwd = parent_cwd;
     child.capabilities = capabilities;
@@ -4017,6 +4135,12 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
             trace.spawn_returned_ns = now_ns();
         }
         Err(e) => {
+            // Unknown personality and failure to allocate the replacement VM
+            // happen before exec_into_process takes ownership of this root.
+            // Reclamation is idempotent for errors that already retired it.
+            unsafe { child.address_space.reclaim_user_space(&mut pmm, hhdm, true); }
+            #[cfg(all(debug_assertions, feature = "session_launch_test"))]
+            crate::serial_println!("[SL41] event=child-image-rollback free_before={} free_after={}", child_free_before, pmm.free_page_count());
             crate::serial_println!("[SYSCALL] spawn: load failed: {:?}", e);
             trace.emit(path_str, path_str, None, "failed:elf_load");
             return u64::MAX;
@@ -4059,6 +4183,18 @@ fn sys_spawn(frame: &mut SyscallFrame) -> u64 {
         }
     }
 
+    // SCHEDULER fences registry retirement; recheck deadline after ELF setup.
+    if let Some(reference) = inherited_membership {
+        if !crate::capability::CAP_BROKER.lock().session_allocation_live(
+            reference, crate::timekeeping::global_ticks()) {
+            unsafe { child.address_space.reclaim_user_space(&mut pmm, hhdm, true); }
+            return u64::MAX;
+        }
+        child.account_membership = Some(reference);
+        child.restrict_account_member_roles();
+        // Authenticated descendants retain the parent's permitted lookup set.
+        child.service_lookup_restrictions = sched.current_process().service_lookup_restrictions;
+    }
     let child_pid = child.pid;
     // [LAUNCH-TRACE] Point 6: child_process_created (pid assigned)
     trace.child_created_ns = now_ns();

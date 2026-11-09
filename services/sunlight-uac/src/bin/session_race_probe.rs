@@ -11,6 +11,9 @@ mod authenticated_reply;
 mod account_exec;
 #[cfg(feature = "fastlane-channel-test")]
 mod channel_fixture;
+#[cfg(feature = "session-launch-test")]
+#[path = "session_race_probe/session_launch_fixture.rs"]
+mod session_launch_fixture;
 use sunlight_ipc::{accounts as api, CapabilityToken, IpcMsg};
 
 #[cfg(feature = "session-h4-test")]
@@ -349,6 +352,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     }
     let mut args = [""; 10];
     let count = unsafe { sunlight_libc::crt0::collect_utf8_args(argc, argv, &mut args, 64) };
+    #[cfg(feature = "session-launch-test")]
+    session_launch_fixture::run(&args[..count]);
+    #[allow(unreachable_code)]
+    let () = ();
     assert!(count >= 2, "case required");
     let case = args[1];
     #[cfg(feature = "fastlane-contract-test")]

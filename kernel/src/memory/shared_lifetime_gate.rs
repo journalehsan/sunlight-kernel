@@ -15,6 +15,7 @@ pub fn run(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     let mut previous_identity = None;
     for cycle in 0..32 {
         let mut owner = unsafe { Process::new(0xF101, 0, "f1-owner", pmm, hhdm) };
+    owner.system_allocation = true; // Explicit trusted kernel fixture policy.
         let mut peer = unsafe { Process::new(0xF102, 0, "f1-peer", pmm, hhdm) };
         let identity = owner.address_space.identity();
         if let Some(previous) = previous_identity {
@@ -178,6 +179,7 @@ pub fn remote_release(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     const NEW: u64 = 0xFA57_1A4E_0202;
     let baseline = pmm.free_page_count();
     let mut owner = unsafe { Process::new(0xF103, 0, "f1-remote", pmm, hhdm) };
+    owner.system_allocation = true; // Explicit trusted kernel fixture policy.
     let mut caps = CapabilityBroker::new();
     let (base, token) = alloc_shared_region(&mut owner, pmm, &mut caps, hhdm, 4096).unwrap();
     let identity = owner.address_space.identity();

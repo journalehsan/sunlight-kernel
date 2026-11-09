@@ -193,7 +193,7 @@ fn sync_account_session_authority(state: &ServiceState) {
     use sunlight_ipc::account_session::{transition, ACTIVATE, REVOKE, SUSPEND};
     if let Some(active) = state.active.as_ref() {
         let operation = match active.record.state {
-            SessionState::Running | SessionState::Degraded => ACTIVATE,
+            SessionState::StartingRequiredComponents | SessionState::Running | SessionState::Degraded => ACTIVATE,
             SessionState::Stopping | SessionState::Stopped | SessionState::Failed => REVOKE,
             _ => SUSPEND,
         };
@@ -488,6 +488,7 @@ fn schedule_optionals_on_shell_ready(state: &mut ServiceState, now: u64) {
 
 /// Tick deferred optional launches (at most one per call, after settle + stagger).
 fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("m53r41") { return; }
     let Some(active) = state.active.as_mut() else {
         return;
     };
@@ -496,6 +497,7 @@ fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
     }
     let uid = active.record.uid;
     let gid = active.record.gid;
+    let reference = account_session_reference(&active.record);
     if option_env!("SUNLIGHT_INJECT_PHASE") == Some("wiseowl_delegated_session_lifecycle_ipc_v1")
         && !state.delegated_console_fixture_launched
         && now
@@ -506,14 +508,14 @@ fn tick_deferred_optionals(state: &mut ServiceState, now: u64) {
                 .saturating_add(5_000)
     {
         state.delegated_console_fixture_launched = true;
-        let _ = config_ops::spawn_optional("/bin/wiseowl", "Wise Owl", uid, gid);
+        let _ = config_ops::spawn_optional("/bin/wiseowl", "Wise Owl", uid, gid, reference);
     }
     let gen = active.system_release_generation;
     let Some(frozen) = active.frozen.as_mut() else {
         return;
     };
     let before = frozen.next_optional_index;
-    if !try_launch_deferred_optional(frozen, uid, gid, now, &mut state.config_stats) {
+    if !try_launch_deferred_optional(frozen, reference, uid, gid, now, &mut state.config_stats) {
         return;
     }
     let (entry_id, success, app_reported) = {
@@ -546,11 +548,41 @@ fn spawn_shell(
         write_log("[SESSION-FOUNDATION] spawn not registered\n");
         return Err(SessionMsg::ERR_INVALID_STATE);
     };
-    let req = SpawnRequest::new("/bin/sunlight-vortex-shell", "sunlight-vortex-shell")
+    let shell_path = if option_env!("SUNLIGHT_INJECT_PHASE") == Some("m53r41") {
+        "/bin/session-launch-probe"
+    } else { "/bin/sunlight-vortex-shell" };
+    let req = SpawnRequest::new(shell_path, "sunlight-vortex-shell")
         .with_identity(session.record.uid, session.record.gid)
         .with_service_caps(ServiceCapability::UserSession.bit());
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
+    let reference = account_session_reference(&session.record);
+    msg.label = if session.record.state == SessionState::StartingRequiredComponents {
+        SpawnMsg::SPAWN_SESSION_INITIAL
+    } else {
+        SpawnMsg::SPAWN_SESSION_BOUND
+    };
+    msg.caps[0] = sunlight_ipc::CapabilityToken(reference.id);
+    msg.caps[1] = sunlight_ipc::CapabilityToken(reference.epoch);
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("m53r41")
+        && msg.label == SpawnMsg::SPAWN_SESSION_INITIAL {
+        let mut stale = msg;
+        stale.caps[1].0 = stale.caps[1].0.saturating_add(1);
+        match ipc_call_timeout(spawn_cap, stale, SPAWN_SHELL_TIMEOUT_MS) {
+            Ok(reply) if reply.label == SpawnMsg::ERROR => write_log("[SL41] event=stale-generation-denied\n"),
+            _ => return Err(SessionMsg::ERR_INVALID_STATE),
+        }
+        for stage in 1..=4 {
+            let mut failed = msg;
+            // The register ABI carries four words. The path terminates before
+            // byte 31; its last byte carries this debug-only fault stage.
+            failed.words[3] |= stage << 56;
+            match ipc_call_timeout(spawn_cap, failed, SPAWN_SHELL_TIMEOUT_MS) {
+                Ok(reply) if reply.label == SpawnMsg::ERROR => {}
+                _ => return Err(SessionMsg::ERR_INVALID_STATE),
+            }
+        }
+    }
     // Vortex shell is a multi-MiB ELF; on slower hypervisors (VMware) load can
     // take well over 100 ms. Keep this bounded but generous.
     let reply = match ipc_call_timeout(spawn_cap, msg, SPAWN_SHELL_TIMEOUT_MS) {
@@ -565,6 +597,13 @@ fn spawn_shell(
         return Err(SessionMsg::ERR_INVALID_STATE);
     }
     let pid = reply.words[0];
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("m53r41")
+        && msg.label == SpawnMsg::SPAWN_SESSION_INITIAL {
+        match ipc_call_timeout(spawn_cap, msg, SPAWN_SHELL_TIMEOUT_MS) {
+            Ok(reply) if reply.label == SpawnMsg::ERROR => write_log("[SL41] event=bootstrap-replay-denied\n"),
+            _ => return Err(SessionMsg::ERR_INVALID_STATE),
+        }
+    }
     let Some(info) = session_query_process(pid) else {
         return Err(SessionMsg::ERR_INVALID_STATE);
     };
@@ -589,6 +628,20 @@ fn begin_stop(session: &mut ActiveSession, now: u64) {
         account_session_reference(&session.record),
         sunlight_ipc::account_session::REVOKE,
     );
+    if option_env!("SUNLIGHT_INJECT_PHASE") == Some("m53r41") {
+        let reference = account_session_reference(&session.record);
+        if let Some(spawn) = nameserver_lookup("spawn") {
+            let mut msg = IpcMsg::empty();
+            SpawnRequest::new("/bin/session-launch-probe", "retired").pack_into(&mut msg);
+            msg.label = SpawnMsg::SPAWN_SESSION_BOUND;
+            msg.caps[0] = sunlight_ipc::CapabilityToken(reference.id);
+            msg.caps[1] = sunlight_ipc::CapabilityToken(reference.epoch);
+            if ipc_call_timeout(spawn, msg, SPAWN_SHELL_TIMEOUT_MS)
+                .is_ok_and(|reply| reply.label == SpawnMsg::ERROR) {
+                write_log("[SL41] event=retirement-fenced\n");
+            } else { write_log("[SL41] checkpoint=FAIL retirement accepted\n"); }
+        }
+    }
     session.record.state = SessionState::Stopping;
     session.shell_stop_deadline_ms = now.saturating_add(LOGOUT_GRACE_MS);
     if let Some(frozen) = session.frozen.as_mut() {

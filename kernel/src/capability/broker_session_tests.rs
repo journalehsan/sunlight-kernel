@@ -3,7 +3,7 @@
 use super::*;
 use sunlight_ipc::account_session::{SessionRef, ACTIVATE, REVOKE, SUSPEND};
 
-fn active(deadline: u64) -> (Scheduler, GrantScope, RecipientIdentity) {
+fn registered(deadline: u64, activate: bool) -> (Scheduler, GrantScope, RecipientIdentity) {
     let mut s = table();
     s.processes[1].trusted_tty_session_service = true;
     s.processes[2].trusted_session_service = true;
@@ -18,7 +18,7 @@ fn active(deadline: u64) -> (Scheduler, GrantScope, RecipientIdentity) {
         Ok(registered)
     );
     let reference = registered.0;
-    s.transition_account_session(reference, ACTIVATE).unwrap();
+    if activate { s.transition_account_session(reference, ACTIVATE).unwrap(); }
     let owner = RecipientIdentity::of(&s.processes[0]);
     s.processes.swap(0, 2);
     next_request(&mut s);
@@ -26,6 +26,10 @@ fn active(deadline: u64) -> (Scheduler, GrantScope, RecipientIdentity) {
     scope.session = reference.id;
     scope.session_generation = reference.epoch;
     (s, scope, owner)
+}
+
+fn active(deadline: u64) -> (Scheduler, GrantScope, RecipientIdentity) {
+    registered(deadline, true)
 }
 
 fn reference(scope: GrantScope) -> SessionRef {
@@ -350,4 +354,171 @@ fn session_capacity_failure_preserves_proof_and_allocation_failure_preserves_rec
     CAP_BROKER.lock().retire_sessions_for(owner.pid);
     CAP_BROKER.lock().retire_recipient_grants(7);
     assert_eq!(CAP_BROKER.lock().session_inventory(), (0, 0, 0));
+}
+
+#[test]
+fn launch_attachment_is_owner_and_generation_qualified() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let (_s, scope, owner) = active(100);
+    let mut broker = CAP_BROKER.lock();
+    let session = reference(scope);
+    let (permit, uid, gid) = broker.authorize_session_launch(owner, session, 1).unwrap();
+    assert_eq!((uid, gid), (0, 0));
+    assert_eq!(broker.commit_session_launch(permit, 1), Ok(session));
+    for foreign in [
+        RecipientIdentity {
+            pid: owner.pid + 1,
+            ..owner
+        },
+        RecipientIdentity {
+            incarnation: owner.incarnation + 1,
+            ..owner
+        },
+        RecipientIdentity {
+            vm_generation: owner.vm_generation + 1,
+            ..owner
+        },
+    ] {
+        assert!(broker
+            .authorize_session_launch(foreign, session, 1)
+            .is_err());
+    }
+    for forged in [
+        SessionRef {
+            id: session.id + 1,
+            ..session
+        },
+        SessionRef {
+            epoch: session.epoch + 1,
+            ..session
+        },
+    ] {
+        assert!(broker.authorize_session_launch(owner, forged, 1).is_err());
+    }
+    assert!(broker
+        .authorize_session_launch(owner, session, 100)
+        .is_err());
+    broker
+        .transition_account_session(owner, session, SUSPEND, 1)
+        .unwrap();
+    assert!(broker.authorize_session_launch(owner, session, 1).is_err());
+}
+
+#[test]
+fn retirement_fences_attachment_commit_and_new_quota_without_refunding_backing() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let (_s, scope, owner) = active(100);
+    let mut broker = CAP_BROKER.lock();
+    let session = reference(scope);
+    let (permit, _, _) = broker.authorize_session_launch(owner, session, 1).unwrap();
+    assert!(broker.session_allocation_live(session, 1));
+    use crate::memory::shared_quota::{self, ProcessIdentity, SessionIdentity};
+    let process = ProcessIdentity {
+        pid: 9876,
+        incarnation: 8765,
+    };
+    let key = Some(SessionIdentity::Account {
+        id: session.id,
+        epoch: session.epoch,
+    });
+    let receipt = shared_quota::reserve(process, key, 4096).unwrap();
+    broker
+        .transition_account_session(owner, session, REVOKE, 1)
+        .unwrap();
+    assert!(!broker.session_allocation_live(session, 1));
+    assert!(broker.authorize_session_launch(owner, session, 1).is_err());
+    assert!(broker.commit_session_launch(permit, 1).is_err());
+    assert_eq!(shared_quota::observation(process, key), (4096, 4096));
+    drop(receipt);
+    assert_eq!(shared_quota::observation(process, key), (0, 0));
+}
+
+#[test]
+fn attachment_commit_before_retirement_keeps_identity_but_fences_future_allocation() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let (_s, scope, owner) = active(100);
+    let mut broker = CAP_BROKER.lock();
+    let session = reference(scope);
+    let (permit, _, _) = broker.authorize_session_launch(owner, session, 1).unwrap();
+    let membership = broker.commit_session_launch(permit, 1).unwrap();
+    broker
+        .transition_account_session(owner, session, REVOKE, 1)
+        .unwrap();
+    assert_eq!(membership, session);
+    assert!(!broker.session_allocation_live(membership, 1));
+}
+
+#[test]
+fn concurrent_attachment_and_retirement_have_one_broker_order() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let (_s, scope, owner) = active(100);
+    let session = reference(scope);
+    let (permit, _, _) = CAP_BROKER
+        .lock()
+        .authorize_session_launch(owner, session, 1)
+        .unwrap();
+    let start = std::sync::Arc::new(std::sync::Barrier::new(3));
+    let launch_start = start.clone();
+    let launch = std::thread::spawn(move || {
+        launch_start.wait();
+        CAP_BROKER.lock().commit_session_launch(permit, 1)
+    });
+    let retire_start = start.clone();
+    let retire = std::thread::spawn(move || {
+        retire_start.wait();
+        CAP_BROKER
+            .lock()
+            .transition_account_session(owner, session, REVOKE, 1)
+    });
+    start.wait();
+    let result = launch.join().unwrap();
+    assert!(result == Ok(session) || result == Err(sunlight_ipc::accounts::Error::SessionChanged));
+    retire.join().unwrap().unwrap();
+    assert!(!CAP_BROKER.lock().session_allocation_live(session, 1));
+}
+
+#[test]
+fn initial_launch_is_one_use_and_requires_fresh_owner_authority() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    let (_s, scope, owner) = registered(100, false);
+    let session = reference(scope);
+    let mut b = CAP_BROKER.lock();
+    assert!(b.authorize_session_launch(owner, session, 1).is_err());
+    assert!(!b.session_allocation_live(session, 1));
+    for foreign in [RecipientIdentity { pid: owner.pid + 1, ..owner },
+        RecipientIdentity { incarnation: owner.incarnation + 1, ..owner },
+        RecipientIdentity { vm_generation: owner.vm_generation + 1, ..owner }] {
+        assert!(b.authorize_initial_session_launch(foreign, session, 1).is_err());
+    }
+    assert!(b.authorize_initial_session_launch(owner,
+        SessionRef { epoch: session.epoch + 1, ..session }, 1).is_err());
+    let (first, _, _) = b.authorize_initial_session_launch(owner, session, 1).unwrap();
+    let (second, _, _) = b.authorize_initial_session_launch(owner, session, 1).unwrap();
+    assert_eq!(b.commit_session_launch(first, 1), Ok(session));
+    assert!(b.commit_session_launch(second, 1).is_err());
+    assert!(b.session_allocation_live(session, 1));
+    assert!(b.authorize_initial_session_launch(owner, session, 1).is_err());
+}
+
+#[test]
+fn suspension_and_retirement_fence_bootstrap_and_old_active_permits() {
+    let _serial = TEST_LOCK.lock().unwrap();
+    for operation in [SUSPEND, REVOKE] {
+        let (_s, scope, owner) = registered(100, false);
+        let session = reference(scope);
+        let mut b = CAP_BROKER.lock();
+        let (permit, _, _) = b.authorize_initial_session_launch(owner, session, 1).unwrap();
+        b.transition_account_session(owner, session, operation, 1).unwrap();
+        assert!(b.commit_session_launch(permit, 1).is_err());
+        assert!(b.authorize_initial_session_launch(owner, session, 1).is_err());
+    }
+    let (_s, scope, owner) = active(100);
+    let session = reference(scope);
+    let mut b = CAP_BROKER.lock();
+    let (permit, _, _) = b.authorize_session_launch(owner, session, 1).unwrap();
+    b.transition_account_session(owner, session, SUSPEND, 1).unwrap();
+    b.transition_account_session(owner, session, ACTIVATE, 1).unwrap();
+    assert!(b.commit_session_launch(permit, 1).is_err());
+    let (permit, _, _) = b.authorize_session_launch(owner, session, 1).unwrap();
+    assert!(b.commit_session_launch(permit, 100).is_err());
 }

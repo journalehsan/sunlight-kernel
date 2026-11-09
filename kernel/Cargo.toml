@@ -679,6 +679,8 @@ sunlight-sensors = { path = "../sunlight-sensors" }
 lz4_flex = { version = "0.11", default-features = false }
 
 [features]
+# M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+session_launch_test = []
 # Isolated bounded thread admission and allocation fault controls; debug only.
 thread_admission_test = []
 thread_lifecycle_race_test = []

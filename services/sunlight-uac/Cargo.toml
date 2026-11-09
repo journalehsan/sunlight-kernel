@@ -673,6 +673,7 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+session-launch-test = ["session-race-test"]
 fastlane-contract-test = ["fastlane-mediated-accounting-test"]
 fastlane-mediated-accounting-test = ["fastlane-measurement-test"]
 fastlane-benchmark-test = ["fastlane-measurement-test"]

@@ -844,6 +844,7 @@ pub extern "C" fn _start() -> ! {
     {
         let mut pmm = PMM.lock();
         let mut init = unsafe { Process::new(1, 0, "init", &mut pmm, hhdm_offset) };
+        init.system_allocation = true;
         serial_println!(
             "[PROC] Loading init ELF ({} bytes)...",
             INIT_ELF_BYTES.len()
@@ -885,6 +886,7 @@ pub extern "C" fn _start() -> ! {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
         let mut vfs = unsafe { Process::new(3, 0, "vfs_server", &mut pmm, hhdm_offset) };
+        vfs.system_allocation = true;
         let entry =
             process::elf_loader::load_elf(VFS_SERVER_ELF_BYTES, &mut vfs, &mut pmm, hhdm_offset);
         if let Some(entry) = entry {
@@ -962,6 +964,7 @@ pub extern "C" fn _start() -> ! {
         let mut pmm = PMM.lock();
         // SAFETY: hhdm_offset was provided by Limine and initialized before user process creation.
         let mut tty = unsafe { Process::new(4, 0, "tty_server", &mut pmm, hhdm_offset) };
+        tty.system_allocation = true;
         tty.trusted_tty_session_service = true;
         let entry =
             process::elf_loader::load_elf(TTY_SERVER_ELF_BYTES, &mut tty, &mut pmm, hhdm_offset);

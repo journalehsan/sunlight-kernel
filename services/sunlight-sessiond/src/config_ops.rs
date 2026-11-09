@@ -542,6 +542,7 @@ pub fn schedule_optionals_after_shell_ready(frozen: &mut FrozenPlanRuntime, now:
 /// Returns true if a launch attempt was made (success or fail).
 pub fn try_launch_deferred_optional(
     frozen: &mut FrozenPlanRuntime,
+    reference: sunlight_ipc::account_session::SessionRef,
     uid: u32,
     gid: u32,
     now: u64,
@@ -566,14 +567,14 @@ pub fn try_launch_deferred_optional(
         }
         return false;
     }
-    let launched = launch_next_optional(frozen, uid, gid, now, stats);
+    let launched = launch_next_optional(frozen, reference, uid, gid, now, stats);
     if launched {
         frozen.next_optional_not_before_ms = now.saturating_add(OPTIONAL_STAGGER_MS);
     }
     launched
 }
 
-pub fn spawn_optional(path: &str, name: &str, uid: u32, gid: u32) -> Result<(u64, u64), u64> {
+pub fn spawn_optional(path: &str, name: &str, uid: u32, gid: u32, reference: sunlight_ipc::account_session::SessionRef) -> Result<(u64, u64), u64> {
     let Some(spawn_cap) = nameserver_lookup("spawn") else {
         return Err(SessionMsg::ERR_INVALID_STATE);
     };
@@ -582,6 +583,9 @@ pub fn spawn_optional(path: &str, name: &str, uid: u32, gid: u32) -> Result<(u64
         .with_service_caps(ServiceCapability::UserSession.bit());
     let mut msg = IpcMsg::empty();
     req.pack_into(&mut msg);
+    msg.label = SpawnMsg::SPAWN_SESSION_BOUND;
+    msg.caps[0] = sunlight_ipc::CapabilityToken(reference.id);
+    msg.caps[1] = sunlight_ipc::CapabilityToken(reference.epoch);
     let reply = match ipc_call_timeout(spawn_cap, msg, SPAWN_OPTIONAL_TIMEOUT_MS) {
         Ok(r) => r,
         Err(_) => return Err(SessionMsg::ERR_INVALID_STATE),
@@ -638,6 +642,7 @@ pub fn complete_policy_after_success(
 
 pub fn launch_next_optional(
     frozen: &mut FrozenPlanRuntime,
+    reference: sunlight_ipc::account_session::SessionRef,
     uid: u32,
     gid: u32,
     now: u64,
@@ -684,7 +689,7 @@ pub fn launch_next_optional(
     } else {
         "startup-app"
     };
-    match spawn_optional(path, name, uid, gid) {
+    match spawn_optional(path, name, uid, gid, reference) {
         Ok((pid, gen)) => {
             let opt = &mut frozen.optionals[idx];
             opt.process_id = Some(pid);

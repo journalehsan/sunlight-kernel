@@ -153,6 +153,7 @@ def command(out, label, cmd, env=None, deadline=300):
               'timeout_seconds': deadline, 'reason': reason, 'elapsed_seconds': time.monotonic()-start}
     (out / (label + '.json')).write_text(json.dumps(result, indent=2)+'\n')
     if proc.returncode or reason != 'exited':
+        print((out / (label + '.log')).read_text(errors='replace')[-4000:], flush=True)
         raise RuntimeError(label + ': ' + reason + ', exit=' + str(proc.returncode))
     return result
 
@@ -194,7 +195,7 @@ def main():
             scratch.mkdir()
             (scratch/'limine.conf').write_bytes((ROOT/'limine.conf').read_bytes())
             command(out, 'iso', ['bash','tools/make_hybrid_iso.sh',str(elf),str(iso),str(ROOT/'target/limine'),str(scratch)])
-            command(out, 'extract', ['xorriso','-osirrox','on','-indev',str(iso),'-extract','/boot/sunlight-kernel.elf',str(out/'iso-kernel.elf')])
+            command(out, 'extract', ['xorriso','-osirrox','on','-indev','stdio:'+str(iso),'-extract','/boot/sunlight-kernel.elf',str(out/'iso-kernel.elf')])
             if digest(elf) != digest(out/'iso-kernel.elf'):
                 raise RuntimeError('ISO ELF mismatch')
             summary['image'] = {'elf':str(elf),'iso':str(iso),'elf_sha256':digest(elf),
@@ -225,7 +226,7 @@ def main():
                     try:
                         while time.monotonic()-start < args.timeout:
                             raw = serial.read_text(errors='replace')
-                            if '[SHM-M53] event=complete ' in raw:
+                            if any(line.startswith('[SHM-M53] event=complete ') for line in raw.splitlines(keepends=True) if line.endswith('\n')):
                                 reason = 'terminal-receipt'; break
                             if any(s in raw for s in ('PANIC','panicked at','[FAULT]')):
                                 reason = 'guest-failure'; break

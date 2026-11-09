@@ -23,7 +23,6 @@ pub(crate) enum SessionIdentity {
         generation: u64,
     },
     // Restricted channels already authenticate their Account session.
-    #[cfg(any(test, all(debug_assertions, feature = "fastlane_mapping_test")))]
     Account { id: u64, epoch: u64 },
 }
 impl SessionIdentity {
@@ -34,7 +33,6 @@ impl SessionIdentity {
                 id,
                 generation,
             } => broker != 0 && id != 0 && generation != 0,
-            #[cfg(any(test, all(debug_assertions, feature = "fastlane_mapping_test")))]
             Self::Account { id, epoch } => id != 0 && epoch != 0,
         }
     }
@@ -208,11 +206,14 @@ pub(crate) fn account_observation() -> (usize, usize) {
     }
     (bytes, entries)
 }
-#[cfg(all(
-    debug_assertions,
-    any(
-        feature = "shared_quota_test",
-        all(feature = "fastlane_mapping_test", feature = "fastlane_census_trace")
+#[cfg(any(
+    test,
+    all(
+        debug_assertions,
+        any(
+            feature = "shared_quota_test",
+            all(feature = "fastlane_mapping_test", feature = "fastlane_census_trace")
+        )
     )
 ))]
 pub(crate) fn observation(

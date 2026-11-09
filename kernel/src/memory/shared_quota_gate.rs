@@ -5,7 +5,9 @@ use core::sync::atomic::Ordering;
 use x86_64::VirtAddr;
 
 fn process(pid: usize, pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) -> Process {
-    unsafe { Process::new(pid, 0, "quota-prerequisite", pmm, hhdm) }
+    let mut process = unsafe { Process::new(pid, 0, "quota-prerequisite", pmm, hhdm) };
+    process.system_allocation = true; // This is a trusted kernel prerequisite.
+    process
 }
 fn identity(p: &Process) -> ProcessIdentity {
     ProcessIdentity {
@@ -25,6 +27,13 @@ pub fn run(pmm: &mut PhysicalMemoryManager, hhdm: VirtAddr) {
     let baseline = pmm.free_page_count();
     let mut owner = process(0xF531, pmm, hhdm);
     let mut peer = process(0xF532, pmm, hhdm);
+    owner.system_allocation = false;
+    let free_before_denial = pmm.free_page_count();
+    let mut admission_caps = CapabilityBroker::new();
+    assert!(matches!(alloc_shared_region(&mut owner, pmm, &mut admission_caps, hhdm, 4096), Err(SharedMemError::InvalidArgument)));
+    assert_eq!(pmm.free_page_count(), free_before_denial);
+    owner.system_allocation = true;
+    crate::serial_println!("[SL41] event=missing-membership-denied backing=0");
     let who = identity(&owner);
     let session = Some(SessionIdentity::Pty {
         broker: who.incarnation,
