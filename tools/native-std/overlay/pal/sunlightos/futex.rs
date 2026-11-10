@@ -18,8 +18,13 @@ pub fn futex_wait(word: &Futex, expected: u32, timeout: Option<Duration>) -> boo
     result != 2
 }
 pub fn futex_wake(word: &Futex) -> bool {
-    unsafe { super::sl_std_futex(word.as_ptr(), 1, 1, 0) > 0 }
+    let result = unsafe { super::sl_std_futex(word.as_ptr(), 1, 1, 0) };
+    assert!(result >= 0, "native futex wake failed: {result}");
+    result > 0
 }
 pub fn futex_wake_all(word: &Futex) {
-    unsafe { super::sl_std_futex(word.as_ptr(), 1, u32::MAX, 0) };
+    let result = unsafe { super::sl_std_futex(word.as_ptr(), 1, u32::MAX, 0) };
+    // These std entry points cannot return an I/O error. Match wait's
+    // fail-fast policy rather than letting synchronization lose a wake.
+    assert!(result >= 0, "native futex wake_all failed: {result}");
 }
