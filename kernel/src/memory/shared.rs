@@ -453,7 +453,7 @@ pub fn free_shared_page(
             caps.shared_region_map_count(token).unwrap_or(0),
         );
         if let Some(backing) = released {
-            backing.reclaim(pmm);
+            backing.reclaim(pmm, caps);
         }
     }
 

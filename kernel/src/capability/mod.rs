@@ -331,23 +331,28 @@ pub struct ShmObject {
     pub size: usize, // requested/rounded size in bytes
 }
 
-/// Unmapped backing transferred under the PMM/broker locks. Dropping this
-/// result without reclamation deliberately retains its quota (and physical
-/// backing); accounting is refunded only after every frame is returned.
+/// Locator for broker-owned final backing. Dropping this locator leaves exact
+/// frames and quota in the retired broker entry. No ownership crosses the stack.
 #[must_use = "return unmapped backing to the PMM with reclaim"]
 pub(crate) struct ReclaimedShared {
-    pub(crate) frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
-    quota: core::mem::ManuallyDrop<Option<crate::memory::shared_quota::Reservation>>,
+    token: CapabilityToken,
 }
 impl ReclaimedShared {
     #[cfg(not(test))]
-    pub(crate) fn reclaim(mut self, pmm: &mut crate::memory::pmm::PhysicalMemoryManager) {
+    pub(crate) fn reclaim(self, pmm: &mut crate::memory::pmm::PhysicalMemoryManager, caps: &mut CapabilityBroker) {
+        let Some(index) = caps.shared_regions.iter().position(|e| e.token == self.token) else {
+            // A repeated locator cannot release or refund a removed object.
+            return;
+        };
+        let entry = &mut caps.shared_regions[index];
+        assert!(entry.lifetime.is_retired() && entry.lifetime.views() == 0);
+
         #[cfg(all(
             debug_assertions,
             feature = "fastlane_mapping_test",
             feature = "fastlane_census_trace"
         ))]
-        let trace = self.quota.as_ref().and_then(|r| r.restricted_trace()).map(
+        let trace = entry.quota.as_ref().and_then(|r| r.restricted_trace()).map(
             |(owner, session, bytes)| {
                 let before = crate::memory::shared_quota::observation(owner, Some(session));
                 (
@@ -355,29 +360,34 @@ impl ReclaimedShared {
                     session,
                     bytes,
                     before,
-                    self.frames.len(),
+                    entry.obj.frames.len(),
                     pmm.free_page_count(),
-                    self.frames[0].start_address().as_u64(),
+                    entry.obj.frames[0].start_address().as_u64(),
                 )
             },
         );
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
-        let lifecycle_id = self.quota.as_ref().map_or(0, |r| r.lifecycle_id());
+        let lifecycle_id = entry.quota.as_ref().map_or(0, |r| r.lifecycle_id());
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
-        if let Some(receipt) = self.quota.as_ref() { receipt.lifecycle_charged(); }
+        if let Some(receipt) = entry.quota.as_ref() { receipt.lifecycle_charged(); }
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
-        crate::memory::quota_lifecycle::event(lifecycle_id, "before-reclaim", self.frames.len() as u64, pmm.free_page_count() as u64);
-        for frame in self.frames.drain(..) {
+        crate::memory::quota_lifecycle::event(lifecycle_id, "before-reclaim", entry.obj.frames.len() as u64, pmm.free_page_count() as u64);
+        while let Some(frame) = entry.obj.frames.last().copied() {
             #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
             let physical = frame.start_address().as_u64();
             pmm.free_frame(frame.start_address());
+            // Pop only after release. A drain guard would discard unprocessed
+            // identities during unwinding. Fail-stop is still required if a
+            // panic occurs between the PMM call and this receipt update.
+            entry.obj.frames.pop();
             #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
             crate::memory::quota_lifecycle::event(lifecycle_id, "frame-freed", physical, pmm.free_page_count() as u64);
         }
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
         crate::memory::quota_lifecycle::event(lifecycle_id, "after-reclaim", 0, pmm.free_page_count() as u64);
         // All views have synchronously retired and all backing is now free.
-        unsafe { core::mem::ManuallyDrop::drop(&mut self.quota) };
+        drop(entry.quota.take());
+        caps.shared_regions.swap_remove(index);
         #[cfg(all(
             debug_assertions,
             feature = "fastlane_mapping_test",
@@ -1413,8 +1423,8 @@ impl CapabilityBroker {
     }
 
     /// Decrement the mapping reference count for `token`.
-    /// Returns the backing frames when this was the last mapping, so the caller
-    /// can free the physical memory via the PMM.
+    /// Returns a finalization locator at the last mapping. Exact backing and
+    /// quota stay in the broker until the caller completes PMM reclamation.
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     pub(crate) fn lifecycle_resource(&self, token: CapabilityToken) -> u64 {
         self.shared_regions.iter().find(|e| e.token == token)
@@ -1435,13 +1445,11 @@ impl CapabilityBroker {
             .release()
             .expect("SHM mapping count underflow")
         {
-            let entry = self.shared_regions.swap_remove(idx);
+            let entry = &mut self.shared_regions[idx];
+            entry.lifetime.retire();
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             entry.trace(crate::memory::census_trace::SHM_RELEASE, 0);
-            return Some(ReclaimedShared {
-                frames: entry.obj.frames,
-                quota: core::mem::ManuallyDrop::new(entry.quota),
-            });
+            return Some(ReclaimedShared { token });
         }
         #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
         self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RELEASE, 0);
@@ -1450,7 +1458,7 @@ impl CapabilityBroker {
 
     /// Fence new mappings; this is retirement, NOT active PTE revocation.
     /// Existing views keep the entry and frames pinned until verified unmap.
-    /// Only a zero-view object transfers its backing to the caller here.
+    /// Only a zero-view object returns a broker-owned finalization locator.
     #[must_use = "unmapped backing must be returned to the PMM by the caller"]
     pub(crate) fn revoke_shared(
         &mut self,
@@ -1463,11 +1471,7 @@ impl CapabilityBroker {
             #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
             self.shared_regions[idx].trace(crate::memory::census_trace::SHM_RETIRE, 0);
             if releasable {
-                let entry = self.shared_regions.swap_remove(idx);
-                return Some(ReclaimedShared {
-                    frames: entry.obj.frames,
-                    quota: core::mem::ManuallyDrop::new(entry.quota),
-                });
+                return Some(ReclaimedShared { token });
             }
         }
         None

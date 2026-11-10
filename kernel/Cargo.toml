@@ -735,6 +735,8 @@ mm2c_ledger_test = []
 # Focused policy-aware anonymous munmap/shootdown gate. Reuses the MM-2B test
 # mailbox transport without running the historical MM-2B replacement gate.
 mm2d_munmap_test = ["mm2b_smp_test"]
+kfp2a2_fault_test = ["mm2d_munmap_test"]
+kfp2a5_transaction_test = ["kfp2a2_fault_test", "mm2a_test_injection"]
 # Focused four-core present-anonymous mprotect and permission shootdown gate.
 mm2e_mprotect_test = ["mm2b_smp_test"]
 # Audit/lifetime prerequisite gate only. Does not expose FastLane syscalls.

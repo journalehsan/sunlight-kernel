@@ -10,6 +10,9 @@ pub mod m31_retention_gate;
 pub mod pmm;
 #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
 pub(crate) mod quota_lifecycle;
+pub(crate) mod retirement;
+#[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+pub(crate) mod transaction_gate;
 pub mod security;
 pub mod shared;
 #[cfg(any(feature = "fastlane_f11_audit", feature = "cap_issuance_test"))]

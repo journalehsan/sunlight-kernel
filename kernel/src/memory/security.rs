@@ -415,6 +415,9 @@ pub fn run_mm2d_munmap_gate(pmm: &mut crate::memory::pmm::PhysicalMemoryManager,
     let process = unsafe { crate::process::Process::new(0xB2D0, 0, "mm2d-munmap", pmm, hhdm) };
     let mut sched = crate::sched::Scheduler::new();
     sched.processes.push(process);
+    // Explicit trusted kernel fixture policy, matching the SHM lifecycle gates.
+    // Ordinary processes still require authenticated Account membership.
+    sched.current_process_mut().system_allocation = true;
     if crate::memory::zram::policy().is_none() {
         let (total_pages, _) = pmm.stats();
         let online = crate::sched::ONLINE_CORES.load(Ordering::Acquire).max(1) as u32;
@@ -1862,6 +1865,77 @@ fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm
                 hhdm,
             )
             .expect("MM-2A replacement setup");
+        #[cfg(all(debug_assertions, feature = "mm2d_munmap_test"))]
+        let mut capacity_owners: [(crate::process::Process, Option<crate::memory::retirement::Token>); 8] =
+            core::array::from_fn(|i| {
+                let process = crate::process::Process::new(0xB400 + i, 0, "kfp-capacity", pmm, hhdm);
+                let id = process.address_space.identity();
+                let token = crate::memory::retirement::OWNERS.lock()
+                    .reserve(id.pml4_phys, id.generation).expect("empty baseline journal");
+                (process, Some(token))
+            });
+        #[cfg(all(debug_assertions, feature = "mm2d_munmap_test"))]
+        {
+            let before = pmm.free_page_count();
+            assert_eq!(replacement_process.address_space.replace_mapping(
+                replacement_page,
+                ExpectedMapping::Present { frame: old_frame, flags: old_flags },
+                ReplacementMapping::Present {
+                    frame: PhysFrame::from_start_address_unchecked(new_frame), flags: new_flags,
+                },
+                OwnershipTransition::ReleaseOldFrame, pmm, hhdm,
+            ), Err(crate::process::address_space::MappingError::FrameAllocationFailed));
+            assert_eq!(replacement_process.address_space.lookup_entry(replacement_page, hhdm), Some((old_frame, old_flags)));
+            assert_eq!(pmm.free_page_count(), before);
+            crate::serial_println!("[KFP2A3-JE] zero-capacity PASS root={} vm={} va={} old={} new={} pte_unchanged=1 free_unchanged=1", replacement_process.address_space.identity().pml4_phys, replacement_process.address_space.identity().generation, replacement_page.start_address().as_u64(), old_frame.as_u64(), new_frame.as_u64());
+            #[cfg(feature = "mm2a_test_injection")]
+            {
+                // Real partial table creation with every journal slot occupied.
+                // No leaf is installed. The new table must remain root-owned
+                // until inactive teardown; this is not a remote-exit fixture.
+                let initial_free = pmm.free_page_count();
+                let mut partial = crate::process::Process::new(0xB490, 0, "kfp-table-oom", pmm, hhdm);
+                let leaf = pmm.alloc_frame().expect("table OOM leaf");
+                let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(0x0000_0010_0000_0000)).unwrap();
+                let before = pmm.free_page_count();
+                pmm.fail_test_allocations_after(1);
+                let result = partial.address_space.map_page(page, PhysFrame::from_start_address_unchecked(leaf), new_flags, pmm, hhdm);
+                pmm.clear_test_allocation_failure();
+                assert_eq!(result, Err(crate::process::address_space::MappingError::PageTableAllocationFailed));
+                assert_eq!(pmm.free_page_count(), before - 1);
+                assert_eq!(partial.address_space.lookup_entry(page, hhdm), None);
+                let id = partial.address_space.identity();
+                let root = &*((hhdm + id.pml4_phys).as_ptr::<x86_64::structures::paging::PageTable>());
+                assert!(root[page.p4_index()].flags().contains(PageTableFlags::PRESENT));
+                let table = root[page.p4_index()].addr();
+                #[cfg(feature = "kfp2a2_fault_test")]
+                {
+                    crate::memory::pmm::retirement_track(&[crate::memory::retirement::Entry {
+                        address: page.start_address().as_u64(),
+                        backing: crate::memory::retirement::Backing::Frame(table.as_u64()), released: false,
+                    }]);
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(table.as_u64());
+                    assert!(allocated && releases == 0 && reuses == 0);
+                }
+                crate::serial_println!("[KFP2A3-TABLE-JE] phase=attached root={} vm={} frame={} journal_full=1 leaf_absent=1", id.pml4_phys, id.generation, table.as_u64());
+                assert_eq!(crate::memory::tlb::active_cpu_mask(id), 0);
+                partial.address_space.reclaim_user_space(pmm, hhdm, true);
+                partial.address_space.reclaim_user_space(pmm, hhdm, true);
+                #[cfg(feature = "kfp2a2_fault_test")]
+                {
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(table.as_u64());
+                    assert!(!allocated && releases == 1 && reuses == 0);
+                    crate::serial_println!("[KFP2A3-TABLE-JE] phase=reclaimed root={} vm={} frame={} allocated={} releases={} reuses={}", id.pml4_phys, id.generation, table.as_u64(), allocated, releases, reuses);
+                }
+                pmm.free_frame(leaf);
+                assert_eq!(pmm.free_page_count(), initial_free);
+                crate::serial_println!("[KFP2A3-TABLE-JE] exhaustion and repeated inactive teardown PASS");
+            }
+            let token = capacity_owners[0].1.take().unwrap();
+            let mut owners = crate::memory::retirement::OWNERS.lock();
+            assert!(owners.finish(&token));
+            assert!(!owners.finish(&token));
+        }
         replacement_process
             .address_space
             .replace_mapping(
@@ -1879,6 +1953,18 @@ fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm
                 hhdm,
             )
             .expect("MM-2A explicit replacement");
+        #[cfg(all(debug_assertions, feature = "mm2d_munmap_test"))]
+        {
+            crate::serial_println!("[KFP2A3-JE] last-slot PASS root={} vm={} old={} new={} rollback_exact_once=1", replacement_process.address_space.identity().pml4_phys, replacement_process.address_space.identity().generation, old_frame.as_u64(), new_frame.as_u64());
+            for (process, token) in &mut capacity_owners {
+                if let Some(token) = token.take() {
+                    let mut owners = crate::memory::retirement::OWNERS.lock();
+                    assert!(owners.finish(&token));
+                    assert!(!owners.finish(&token));
+                }
+                process.address_space.reclaim_user_space(pmm, hhdm, true);
+            }
+        }
         assert_eq!(
             replacement_process
                 .address_space
@@ -1894,6 +1980,47 @@ fn run_mm2a_self_tests(pmm: &mut crate::memory::pmm::PhysicalMemoryManager, hhdm
             .reclaim_user_space(pmm, hhdm, true);
     }
     pmm.free_frame(new_frame);
+    #[cfg(all(debug_assertions, feature = "mm2d_munmap_test"))]
+    {
+        use crate::memory::shared_quota::{self, ProcessIdentity};
+        let mut caps = crate::capability::CapabilityBroker::new();
+        let owner = ProcessIdentity {
+            pid: replacement_process.pid,
+            incarnation: replacement_process.foreground.incarnation,
+        };
+        let physical = pmm.alloc_frame().expect("KFP final backing frame");
+        let quota = shared_quota::reserve(owner, None, 4096).expect("KFP final backing quota");
+        let token = caps.prepare_shared_region().unwrap().commit(
+            alloc::vec![unsafe { PhysFrame::from_start_address_unchecked(physical) }],
+            4096, owner.pid, Some(quota),
+        );
+        let first = caps.revoke_shared(token).unwrap();
+        drop(first);
+        assert_eq!(caps.shared_region_for_cleanup(token).unwrap().frames[0].start_address(), physical);
+        assert_eq!(shared_quota::observation(owner, None).0, 4096);
+        assert!(!caps.preflight_shared_mapping(token));
+        let repeated = caps.revoke_shared(token).unwrap();
+        let finalizer = caps.revoke_shared(token).unwrap();
+        let before = pmm.free_page_count();
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        unsafe { crate::memory::pmm::retirement_track(&[crate::memory::retirement::Entry {
+            address: 0, backing: crate::memory::retirement::Backing::Frame(physical.as_u64()), released: false,
+        }]); }
+        finalizer.reclaim(pmm, &mut caps);
+        assert_eq!(pmm.free_page_count(), before + 1);
+        assert_eq!(shared_quota::observation(owner, None).0, 0);
+        repeated.reclaim(pmm, &mut caps);
+        assert_eq!(pmm.free_page_count(), before + 1);
+        assert_eq!(shared_quota::observation(owner, None).0, 0);
+        assert_eq!(caps.shared_region_count(), 0);
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        unsafe {
+            let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(physical.as_u64());
+            assert!(!allocated && releases == 1 && reuses == 0);
+            crate::serial_println!("[KFP2A3-SHM] frame={} pid={} incarnation={} token={:?} allocated={} releases={} reuses={} quota_before=4096 quota_after=0 repeated_refund=0 views=0 scope=never-mapped-final-backing", physical.as_u64(), owner.pid, owner.incarnation, token, allocated, releases, reuses);
+        }
+        crate::serial_println!("[KFP2A3-SHM] dropped-locator and repeated-finalization PASS frame={} pid={} incarnation={} views=0", physical.as_u64(), owner.pid, owner.incarnation);
+    }
     assert_eq!(pmm.free_page_count(), free_before);
     #[cfg(feature = "mm2a_test_injection")]
     run_mm2a_injected_failure_tests(pmm, hhdm);
@@ -1937,6 +2064,30 @@ fn run_mm2a_injected_failure_tests(
             .reclaim_user_space(pmm, hhdm, true);
     }
     assert_eq!(pmm.free_page_count(), free_before);
+
+    // Allocate the user frame and one/two real lower tables, then reject the
+    // next table allocation. Both detached identities must be journal-owned
+    // before rollback unlinks any parent, and released after synchronization.
+    for successful_allocations in [2, 3] {
+        let partial = unsafe { crate::process::Process::new(0xB318, 0, "mm2a-partial-table", pmm, hhdm) };
+        let mut partial_sched = crate::sched::Scheduler::new();
+        partial_sched.processes.push(partial);
+        let before = pmm.free_page_count();
+        pmm.fail_test_allocations_after(successful_allocations);
+        let result = crate::process::mmap::sys_mmap(
+            0, 4096,
+            crate::process::mmap::PROT_READ | crate::process::mmap::PROT_WRITE,
+            crate::process::mmap::MAP_PRIVATE | crate::process::mmap::MAP_ANONYMOUS,
+            -1, 0, pmm, &mut partial_sched,
+        );
+        pmm.clear_test_allocation_failure();
+        assert_eq!(result, Err(crate::process::mmap::MmapError::NoMemory));
+        assert_eq!(partial_sched.processes[0].mmap_next, 0);
+        assert_eq!(pmm.free_page_count(), before);
+        unsafe { partial_sched.processes[0].address_space.reclaim_user_space(pmm, hhdm, true); }
+        assert_eq!(pmm.free_page_count(), free_before);
+    }
+    crate::serial_println!("[KFP2A3-TABLE] partial one/two-table allocation rollback PASS");
 
     // A first-page page-table allocation failure must also return normally,
     // free the already allocated user frame, and keep the cursor untouched.

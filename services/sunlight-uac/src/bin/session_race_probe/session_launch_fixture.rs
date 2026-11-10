@@ -142,6 +142,8 @@ pub fn run(args: &[&str]) -> ! {
     )
     .expect("component ready");
     assert_eq!(ready.label, sunlight_ipc::SessionMsg::REPLY);
+    #[cfg(feature = "kfp-security-runner")]
+    super::kfp_security_runner::run();
     #[cfg(feature = "quota-lifecycle-test")]
     super::quota_lifecycle_fixture::controller();
     #[cfg(feature = "quota-remote-test")]

@@ -250,6 +250,8 @@ impl PhysicalMemoryManager {
         class: PhysicalMemoryClass,
     ) -> Option<PhysAddr> {
         let frame = byte_idx * 8 + bit;
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        kfp_event(frame as u64 * FRAME_SIZE as u64, false);
         BITMAP[byte_idx] |= 1 << bit;
         FRAME_OWNER[frame] = pack_owner(owner_pid, class);
         FREE_FRAMES -= 1;
@@ -383,6 +385,8 @@ impl PhysicalMemoryManager {
     /// Free a previously allocated frame. Decrements the stored primary class.
     #[allow(dead_code)]
     pub fn free_frame(&mut self, addr: PhysAddr) {
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        unsafe { kfp_event(addr.as_u64(), true); }
         let frame = (addr.as_u64() / FRAME_SIZE as u64) as usize;
         if frame < MAX_FRAMES {
             unsafe {
@@ -576,5 +580,32 @@ pub fn kernel_reserved_span() -> KernelReservedSpan {
 impl Default for PhysicalMemoryManager {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Independent bitmap observation; caller must already hold PMM exclusion.
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+pub(crate) unsafe fn retirement_allocation(frame: u64) -> (bool, u32, u64, u64) {
+    let index = frame as usize / FRAME_SIZE;
+    assert!(index < MAX_FRAMES && frame & 4095 == 0);
+    {
+        let observation = KFP_TRACKED.iter().find(|e| e.0 == frame).expect("unregistered frame");
+        (BITMAP[index / 8] & (1 << (index % 8)) != 0, FRAME_OWNER[index], observation.1, observation.2)
+    }
+}
+
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+static mut KFP_TRACKED: [(u64,u64,u64); 32] = [(0,0,0);32];
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+unsafe fn kfp_event(frame: u64, release: bool) {
+    if let Some(entry) = KFP_TRACKED.iter_mut().find(|e| e.0 == frame) {
+        if release { entry.1 += 1; } else { entry.2 += 1; }
+    }
+}
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+pub(crate) unsafe fn retirement_track(entries: &[super::retirement::Entry]) {
+    KFP_TRACKED.fill((0,0,0));
+    for (slot, entry) in KFP_TRACKED.iter_mut().zip(entries) {
+        if let super::retirement::Backing::Frame(frame) = entry.backing { slot.0 = frame; }
     }
 }

@@ -1,6 +1,6 @@
 //! SCHEDULER -> CAP_BROKER. Fixed channel rows and one receipt per process.
 use super::{
-    channel::{Error, Handle, Terminal},
+    channel::{Error, Handle},
     channel_doorbell::identity,
     delivery::RecipientIdentity,
     CAP_BROKER,
@@ -54,22 +54,7 @@ impl Scheduler {
         caps.channels.expire(self.global_tick);
         let mut wakes = [None; super::channel::LIMIT];
         for (i, row) in caps.channels.rows.iter_mut().enumerate() {
-            if self.channel_process(row.creator).is_none()
-                || row
-                    .consumer
-                    .is_some_and(|c| self.channel_process(c).is_none())
-                || !self
-                    .channel_process(row.creator)
-                    .is_some_and(|p| p.uid == 0)
-                || row
-                    .consumer
-                    .is_some_and(|c| !self.channel_process(c).is_some_and(|p| p.uid == 0))
-                || !self
-                    .channel_process(row.issuer)
-                    .is_some_and(|p| p.trusted_auth_broker)
-            {
-                row.retire(Terminal::IdentityChanged);
-            }
+            row.retire_unavailable(|who, issuer| self.channel_participant_terminal(who, issuer));
             wakes[i] = row.bell_pending.take().map(|who| (row.handle, who));
         }
         drop(caps);

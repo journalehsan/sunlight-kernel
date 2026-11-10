@@ -233,6 +233,7 @@ pub(crate) fn account_observation() -> (usize, usize) {
         any(
             feature = "shared_quota_test",
             feature = "quota_lifecycle_test",
+            feature = "mm2d_munmap_test",
             all(feature = "fastlane_mapping_test", feature = "fastlane_census_trace")
         )
     )

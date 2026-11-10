@@ -98,6 +98,22 @@ pub(super) struct Channel {
     pub mapped: [[bool; 3]; 2],
 }
 impl Channel {
+    pub(super) fn retire_unavailable(
+        &mut self,
+        mut terminal: impl FnMut(RecipientIdentity, bool) -> Option<Terminal>,
+    ) {
+        for (participant, issuer) in [
+            (Some(self.creator), false),
+            (self.consumer, false),
+            (Some(self.issuer), true),
+        ] {
+            if let Some(reason) = participant.and_then(|who| terminal(who, issuer)) {
+                self.retire(reason);
+                return;
+            }
+        }
+    }
+
     pub(super) fn live(&self) -> bool {
         self.state != State::Retired
     }

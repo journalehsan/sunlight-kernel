@@ -1,7 +1,7 @@
 //! Mapping-only debug adapter. SCHEDULER -> PMM -> CAP_BROKER; no user pointers.
 //! Each page is a normal SHM object and uses the normal verified final-view path.
 use super::{
-    channel::{Error, Handle, State, Terminal},
+    channel::{Error, Handle, State},
     delivery::RecipientIdentity,
     CapabilityBroker, CapabilityToken, CAP_BROKER,
 };
@@ -49,22 +49,7 @@ impl Scheduler {
         caps.expire_sessions(self.global_tick);
         caps.channels.expire(self.global_tick);
         for row in &mut caps.channels.rows {
-            if self.channel_process(row.creator).is_none()
-                || row
-                    .consumer
-                    .is_some_and(|c| self.channel_process(c).is_none())
-                || !self
-                    .channel_process(row.issuer)
-                    .is_some_and(|p| p.trusted_auth_broker)
-                || !self
-                    .channel_process(row.creator)
-                    .is_some_and(|p| p.uid == 0)
-                || row
-                    .consumer
-                    .is_some_and(|c| !self.channel_process(c).is_some_and(|p| p.uid == 0))
-            {
-                row.retire(Terminal::IdentityChanged);
-            }
+            row.retire_unavailable(|who, issuer| self.channel_participant_terminal(who, issuer));
         }
         let hhdm = VirtAddr::new(
             crate::HHDM_REQ
@@ -83,7 +68,7 @@ impl Scheduler {
                     continue;
                 };
                 if let Some(backing) = caps.revoke_shared(token) {
-                    backing.reclaim(pmm);
+                    backing.reclaim(pmm, caps);
                 }
                 for p in &mut self.processes {
                     while p.mapped_shared.iter().any(|(t, _, _)| *t == token) {

@@ -196,7 +196,34 @@ pub fn invalidate_range(
     Ok(())
 }
 
+pub(crate) fn invalidate_retirement_range(
+    identity: AddressSpaceIdentity, start: u64, pages: u64,
+    retirement: &super::retirement::Token,
+) -> Result<(), InvalidationError> {
+    let bytes = pages.checked_mul(4096).and_then(|n| usize::try_from(n).ok())
+        .ok_or(InvalidationError::InvalidRange)?;
+    if pages == 0 || start & 4095 != 0 || crate::memory::user::UserRange::new(start, bytes).is_err() {
+        return Err(InvalidationError::InvalidRange);
+    }
+    let kind = if pages <= RANGE_FLUSH_PAGE_THRESHOLD { FlushKind::Range { start, pages } } else { FlushKind::Full };
+    invalidate_owned(identity, kind, Some(retirement));
+    Ok(())
+}
+
+/// Table withdrawal covers a hierarchy, so use the full address-space flush
+/// with the same exact-sequence ownership and failure protocol as leaf retire.
+pub(crate) fn invalidate_retirement_all(
+    identity: AddressSpaceIdentity,
+    retirement: &super::retirement::Token,
+) {
+    invalidate_owned(identity, FlushKind::Full, Some(retirement));
+}
+
 fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
+    invalidate_owned(identity, kind, None);
+}
+
+fn invalidate_owned(identity: AddressSpaceIdentity, kind: FlushKind, retirement: Option<&super::retirement::Token>) {
     assert!(identity.is_valid(), "shootdown target identity is invalid");
     let _serialized = SHOOTDOWN_SERIALIZER.lock();
     let sequence = NEXT_SEQUENCE
@@ -221,6 +248,9 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
     }
 
     let targets = active & !local_bit;
+    if let Some(owner) = retirement {
+        assert!(super::retirement::OWNERS.lock().bind(owner, sequence, targets));
+    }
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     super::quota_lifecycle::tlb(identity, kind.mailbox_fields().0, sequence, targets, "request");
     #[cfg(all(debug_assertions, feature = "fastlane_census_trace"))]
@@ -256,6 +286,9 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
         cpu_id,
     );
     if targets == 0 {
+        if let Some(owner) = retirement {
+            assert!(super::retirement::OWNERS.lock().complete(owner, sequence, 0));
+        }
         NO_REMOTE_TARGETS.fetch_add(1, Ordering::Relaxed);
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
         super::quota_lifecycle::tlb(identity, kind.mailbox_fields().0, sequence, targets, "complete");
@@ -311,17 +344,52 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
         }
     }
 
+    #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+    if let Some(owner) = retirement {
+        let mode = super::retirement::fault_mode();
+        if mode == 4 || mode == 5 {
+            KFP_ACK_TEST_SEQUENCE.store(sequence, Ordering::Release);
+        }
+        if mode == 1 {
+            crate::arch::x86_64::lapic::KFP_STUCK_ICR.store(true, Ordering::Release);
+        }
+        if mode == 2 {
+            quarantine_owner(owner, sequence, targets, super::retirement::Failure::FixedDelivery, None);
+            super::retirement::failure_receipt(owner);
+            panic!("KFP2A2 injected APIC NotSent after withdrawal sequence={sequence}; reclamation forbidden");
+        }
+        if mode == 3 { KFP_MISSING_ACK.store(sequence, Ordering::Release); }
+    }
+
     for target_cpu in 0..MAX_TRACKED_CPUS {
         if targets & (1u64 << target_cpu) == 0 {
             continue;
         }
         unsafe {
-            crate::arch::x86_64::lapic::send_fixed_ipi(target_cpu, SHOOTDOWN_VECTOR);
+            // Anonymous munmap has a persistent owner; other callers can still
+            // own obligations only on the stack. Neither permits resumption
+            // after failed synchronization; preserve the fail-stop boundary.
+            if let Err(error) = crate::arch::x86_64::lapic::send_fixed_ipi(target_cpu, SHOOTDOWN_VECTOR) {
+                if let Some(owner) = retirement {
+                    quarantine_owner(owner, sequence, targets, super::retirement::Failure::FixedDelivery, Some(target_cpu));
+                }
+                #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+                if let Some(owner) = retirement {
+                    crate::serial_println!("[KFP2A2] icr-exhausted reads={}", crate::arch::x86_64::lapic::KFP_ICR_READS.load(Ordering::Acquire));
+                    super::retirement::failure_receipt(owner);
+                }
+                panic!("TLB fixed IPI failed: cpu={target_cpu} sequence={sequence} outcome={error:?}; reclamation forbidden");
+            }
             // Syscalls and fault handlers currently run with IF=0. The NMI
             // doorbell consumes the same claimed mailbox so a target spinning
             // on SCHEDULER cannot deadlock the initiator; the fixed-vector IPI
             // remains the normal, dedicated, EOI-tracked delivery path.
-            crate::arch::x86_64::lapic::send_nmi(target_cpu);
+            if let Err(error) = crate::arch::x86_64::lapic::send_nmi(target_cpu) {
+                if let Some(owner) = retirement {
+                    quarantine_owner(owner, sequence, targets, super::retirement::Failure::NmiDelivery, Some(target_cpu));
+                }
+                panic!("TLB NMI failed: cpu={target_cpu} sequence={sequence} outcome={error:?}; reclamation forbidden");
+            }
         }
     }
 
@@ -335,10 +403,22 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
             }
         }
         if pending == 0 {
+            if let Some(owner) = retirement {
+                assert!(super::retirement::OWNERS.lock().complete(owner, sequence, targets));
+            }
             break;
         }
         spins += 1;
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        if retirement.is_some() && super::retirement::fault_mode() == 3 && spins == 100_000 {
+            quarantine_owner(retirement.unwrap(), sequence, targets, super::retirement::Failure::MissingAck, None);
+            super::retirement::failure_receipt(retirement.unwrap());
+            invariant_failure("injected missing ACK exhausted diagnostic budget");
+        }
         if spins >= SHOOTDOWN_TIMEOUT_SPINS {
+            if let Some(owner) = retirement {
+                quarantine_owner(owner, sequence, targets, super::retirement::Failure::MissingAck, None);
+            }
             invariant_failure("timed out waiting for TLB shootdown acknowledgement");
         }
         core::hint::spin_loop();
@@ -390,6 +470,15 @@ fn invalidate(identity: AddressSpaceIdentity, kind: FlushKind) {
             0,
         ],
     );
+}
+
+fn quarantine_owner(owner: &super::retirement::Token, sequence: u64, targets: u64,
+    failure: super::retirement::Failure, failed_cpu: Option<usize>) {
+    let mut received = 0;
+    for cpu in 0..MAX_TRACKED_CPUS {
+        if targets & (1u64 << cpu) != 0 && MAILBOXES[cpu].acknowledged(sequence) { received |= 1u64 << cpu; }
+    }
+    assert!(super::retirement::OWNERS.lock().quarantine(owner, sequence, received, failure, failed_cpu));
 }
 
 fn request_kind(request: MailboxRequest) -> FlushKind {
@@ -444,6 +533,31 @@ pub fn handle_shootdown_ipi() {
     );
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     super::quota_lifecycle::ack(request.sequence, cpu_id, current == Some(request.target));
+    #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+    if KFP_MISSING_ACK.load(Ordering::Acquire) == request.sequence { return; }
+    #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+    if KFP_ACK_TEST_SEQUENCE.load(Ordering::Acquire) == request.sequence {
+        match super::retirement::fault_mode() {
+            4 => {
+                // Bounded delay in the real claimed handler, after the actual
+                // flush and before publishing its actual completion.
+                for _ in 0..4096 { core::hint::spin_loop(); }
+                assert!(!mailbox.acknowledged(request.sequence));
+                KFP_ACK_TEST_OBSERVED[cpu_id].store(request.sequence, Ordering::Release);
+            }
+            5 => {
+                // Simulate an old operation writing its completion. The
+                // production waiter must still require exact sequence equality.
+                mailbox.acknowledge(request.sequence - 1);
+                assert!(!mailbox.acknowledged(request.sequence));
+                mailbox.acknowledge(request.sequence - 1);
+                assert!(!mailbox.acknowledged(request.sequence));
+                assert!(!mailbox.try_claim(request.sequence));
+                KFP_ACK_TEST_OBSERVED[cpu_id].store(request.sequence, Ordering::Release);
+            }
+            _ => {}
+        }
+    }
     mailbox.acknowledge(request.sequence);
     ACKNOWLEDGEMENTS.fetch_add(1, Ordering::Relaxed);
 }
@@ -498,7 +612,9 @@ fn test_broadcast(command: u64, identity: AddressSpaceIdentity, address: u64, ta
     for cpu_id in 0..MAX_TRACKED_CPUS {
         if targets & (1u64 << cpu_id) != 0 {
             unsafe {
-                crate::arch::x86_64::lapic::send_fixed_ipi(cpu_id, TEST_VECTOR);
+                if crate::arch::x86_64::lapic::send_fixed_ipi(cpu_id, TEST_VECTOR).is_err() {
+                    invariant_failure("MM-2B test IPI delivery failed");
+                }
             }
         }
     }
@@ -740,4 +856,31 @@ pub fn diagnostic_report() {
         NO_REMOTE_TARGETS.load(Ordering::Relaxed),
         INVARIANT_FAILURES.load(Ordering::Relaxed),
     );
+}
+
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+static KFP_MISSING_ACK: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+static KFP_ACK_TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+static KFP_ACK_TEST_OBSERVED: [AtomicU64; MAX_TRACKED_CPUS] =
+    [const { AtomicU64::new(0) }; MAX_TRACKED_CPUS];
+
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+pub(crate) fn ack_test_receipt(token: &super::retirement::Token) {
+    let r = super::retirement::OWNERS.lock().snapshot(token);
+    let mode = super::retirement::fault_mode();
+    if mode != 4 && mode != 5 { return; }
+    assert_eq!(r.state, super::retirement::State::Synchronized);
+    let mut observed = 0u64;
+    for cpu in 0..MAX_TRACKED_CPUS {
+        if r.targets & (1u64 << cpu) != 0 {
+            assert_eq!(KFP_ACK_TEST_OBSERVED[cpu].load(Ordering::Acquire), r.sequence);
+            assert!(MAILBOXES[cpu].acknowledged(r.sequence));
+            observed |= 1u64 << cpu;
+        }
+    }
+    crate::serial_println!("[KFP2A3-ACK] mode={} root={} vm={} sequence={} targets={} received={} observed={} state={:?}",
+        mode, r.root, r.vm, r.sequence, r.targets, r.received, observed, r.state);
 }

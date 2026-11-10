@@ -3617,6 +3617,8 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         let mut pmm = PMM.lock();
         memory::security::run_mm2d_munmap_gate(&mut pmm, hhdm_offset);
     }
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    memory::transaction_gate::run(&mut PMM.lock(), hhdm_offset);
     #[cfg(feature = "mm2e_mprotect_test")]
     {
         let mut pmm = PMM.lock();
@@ -4489,9 +4491,9 @@ fn run_security_hardening_tests(hhdm_offset: VirtAddr) {
         }
         // Clean up: remove the grant entirely and free the frame.
         let frames = caps.revoke_shared(token).expect("unmapped sectest backing");
-        assert_eq!(frames.frames.len(), 1);
-        assert_eq!(frames.frames[0].start_address(), phys);
-        frames.reclaim(&mut pmm);
+        assert_eq!(caps.shared_region_for_cleanup(token).unwrap().frames.len(), 1);
+        assert_eq!(caps.shared_region_for_cleanup(token).unwrap().frames[0].start_address(), phys);
+        frames.reclaim(&mut pmm, &mut caps);
     }
 
     serial_println!("[SEC]  Security hardening: PASSED");

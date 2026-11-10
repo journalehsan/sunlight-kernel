@@ -43,6 +43,29 @@ fn pair(b: &mut CapabilityBroker, s: SessionRef) -> Handle {
 }
 
 #[test]
+fn participant_sweeps_preserve_exact_retirement_and_first_outcome() {
+    for participant in [10, 11, 6] {
+        for reason in [Terminal::ProcessRetired, Terminal::IdentityChanged] {
+            let (mut broker, session) = setup();
+            let handle = pair(&mut broker, session);
+            let row = broker.channels.row_mut(handle).unwrap();
+            row.retire_unavailable(|who, issuer| {
+                assert_eq!(issuer, who == id(6));
+                (who == id(participant)).then_some(reason)
+            });
+            assert_eq!(row.state, State::Retired);
+            assert_eq!(row.terminal, Some(reason));
+            assert!(row.consumer_receipt.is_none());
+            row.retire_unavailable(|_, _| Some(Terminal::IdentityChanged));
+            assert_eq!(row.terminal, Some(reason));
+            broker.channels.retire_process(participant);
+            assert_eq!(broker.channels.row_mut(handle).unwrap().terminal, Some(reason));
+            assert_eq!(broker.channel_attach(handle, id(10), 0, 3), Err(Error::Terminal));
+        }
+    }
+}
+
+#[test]
 fn hybrid_reply_revocation_and_completion_share_channel_lifetime() {
     use crate::process::{IpcCallId, IpcCallOutcome, IpcReplyTarget};
     use super::super::channel_contract::{Phase, Service};

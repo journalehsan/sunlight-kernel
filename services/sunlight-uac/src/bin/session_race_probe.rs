@@ -14,6 +14,9 @@ mod channel_fixture;
 #[cfg(feature = "session-launch-test")]
 #[path = "session_race_probe/session_launch_fixture.rs"]
 mod session_launch_fixture;
+#[cfg(feature = "kfp-security-runner")]
+#[path = "session_race_probe/kfp_security_runner.rs"]
+mod kfp_security_runner;
 #[cfg(feature = "quota-lifecycle-test")]
 #[path = "session_race_probe/quota_lifecycle_fixture.rs"]
 mod quota_lifecycle_fixture;

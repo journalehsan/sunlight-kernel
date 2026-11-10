@@ -408,28 +408,13 @@ fn map_anonymous_kind(
         RegionBacking::AnonymousOwner(pid as u32),
     )
     .map_err(|_| MmapError::InvalidAddress)?;
-    let replacement_plan = if replace_fixed {
-        Some(
-            sched
-                .current_process()
-                .address_space
-                .preflight_replace(region)
-                .map_err(mapping_error)?,
-        )
-    } else {
-        None
-    };
-    let reservation = if replacement_plan.is_none() {
-        Some(
-            sched
-                .current_process()
-                .address_space
-                .preflight_region(region)
-                .map_err(mapping_error)?,
-        )
-    } else {
-        None
-    };
+    if replace_fixed {
+        let plan = sched.current_process().address_space.preflight_replace(region)
+            .map_err(mapping_error)?;
+        return map_fixed_transaction(map_addr, page_count, page_flags, plan, pid, pmm, sched, hhdm_offset);
+    }
+    let reservation = Some(sched.current_process().address_space.preflight_region(region)
+        .map_err(mapping_error)?);
 
     // Hint-less Linux mappings reserve their virtual range now and receive
     // zeroed frames on first access. Fixed mappings retain the eager path so
@@ -601,9 +586,7 @@ fn map_anonymous_kind(
         });
     }
 
-    if let Some(plan) = replacement_plan {
-        sched.current_process().address_space.commit_replace(plan);
-    } else if let Some(reservation) = reservation {
+    if let Some(reservation) = reservation {
         if let Err(error) = sched
             .current_process()
             .address_space
@@ -736,6 +719,153 @@ fn mapping_error(error: MappingError) -> MmapError {
     }
 }
 
+fn map_fixed_transaction(
+    start: u64,
+    count: u64,
+    flags: PageTableFlags,
+    plan: crate::process::region::ReplacePlan,
+    pid: usize,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    hhdm: VirtAddr,
+) -> Result<u64, MmapError> {
+    use crate::memory::retirement::{Backing, MappingPage, OWNERS};
+    let count = usize::try_from(count).map_err(|_| MmapError::NoMemory)?;
+    if count > 32 { return Err(MmapError::NoMemory); }
+    let mut pages = [MappingPage { address: 0, original: None, original_flags: 0, replacement: 0 }; 32];
+    let identity = sched.current_process().address_space.identity();
+    for (index, mapping) in pages[..count].iter_mut().enumerate() {
+        mapping.address = start + index as u64 * 4096;
+        let process = sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?;
+        let page = Page::from_start_address(VirtAddr::new(mapping.address)).map_err(|_| MmapError::InvalidAddress)?;
+        let expected = match process.address_space.lookup_region(mapping.address) {
+            Some(region) => expected_replaceable_leaf(&process.address_space, mapping.address, region, pmm, hhdm)?,
+            None if unsafe { process.address_space.is_occupied(page, hhdm) } => return Err(MmapError::Protected),
+            None => None,
+        };
+        match expected {
+            Some(ExpectedMapping::Present { frame, flags }) => {
+                mapping.original = Some(Backing::Frame(frame.as_u64()));
+                mapping.original_flags = flags.bits();
+            }
+            Some(ExpectedMapping::Swapped { block_id }) => mapping.original = Some(Backing::Swap(block_id)),
+            None => {}
+        }
+    }
+    let token = OWNERS.lock().reserve_mapping(identity.pml4_phys, identity.generation, &pages[..count], flags.bits())
+        .ok_or(MmapError::NoMemory)?;
+    let preparation = (|| {
+        crate::memory::swap::reserve_candidates(count).map_err(|_| MmapError::NoMemory)?;
+        for (index, mapping) in pages[..count].iter().enumerate() {
+            let page = Page::from_start_address(VirtAddr::new(mapping.address)).map_err(|_| MmapError::InvalidAddress)?;
+            unsafe { sched.process_mut_by_pid(pid).ok_or(MmapError::InternalInvariant)?
+                .address_space.prepare_transaction_tables(page, pmm, hhdm).map_err(mapping_error)?; }
+            let frame = pmm.alloc_frame_owned(pid as u32).ok_or(MmapError::NoMemory)?;
+            assert!(OWNERS.lock().prepare_mapping_frame(&token, index, frame.as_u64()));
+            if !crate::memory::security::sanitize_user_frame(frame, hhdm) { return Err(MmapError::NoMemory); }
+        }
+        Ok(())
+    })();
+    if let Err(error) = preparation {
+        cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+        return Err(error);
+    }
+    assert!(OWNERS.lock().begin_mapping(&token));
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    crate::memory::retirement::mapping_receipt(&token, "installing", true);
+    for index in 0..count {
+        #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+        if crate::memory::transaction_gate::fail_install(index) {
+            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+            return Err(MmapError::NoMemory);
+        }
+        let result = unsafe { sched.process_mut_by_pid(pid).expect("mapping owner process lost")
+            .address_space.write_transaction_page(&token, index, false, hhdm) };
+        if let Err(error) = result {
+            cancel_fixed_transaction(&token, pid, pmm, sched, hhdm);
+            return Err(mapping_error(error));
+        }
+        assert!(OWNERS.lock().mapping_installed(&token, index));
+    }
+    crate::memory::tlb::invalidate_retirement_all(identity, &token);
+    sched.current_process().address_space.commit_replace(plan);
+    assert!(OWNERS.lock().mapping_decide(&token, true));
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    crate::memory::retirement::mapping_receipt(&token, "committed", false);
+    for index in 0..count {
+        let mapping = OWNERS.lock().mapping_page(&token, index).expect("committed mapping descriptor lost");
+        crate::memory::swap::track_anon(pid, VirtAddr::new(mapping.address), PhysAddr::new(mapping.replacement));
+    }
+    resolve_fixed_transaction(&token, pmm, hhdm);
+    sched.cancel_futex_range(identity, start, start + count as u64 * 4096);
+    Ok(start)
+}
+
+fn cancel_fixed_transaction(
+    token: &crate::memory::retirement::Token,
+    pid: usize,
+    pmm: &mut PhysicalMemoryManager,
+    sched: &mut Scheduler,
+    hhdm: VirtAddr,
+) {
+    use crate::memory::retirement::OWNERS;
+    let installed = OWNERS.lock().cancel_mapping(token).expect("mapping cancellation state");
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    crate::memory::retirement::mapping_receipt(token, "cancelling", installed == 0);
+    for index in (0..installed).rev() {
+        #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+        if crate::memory::transaction_gate::fail_restore(index) {
+            OWNERS.lock().quarantine_mapping(token);
+            crate::memory::retirement::mapping_receipt(token, "quarantined", false);
+            panic!("MAP_FIXED injected restoration failure; transaction retained");
+        }
+        let restored = sched.process_mut_by_pid(pid).is_some_and(|process| unsafe {
+            process.address_space.write_transaction_page(token, index, true, hhdm).is_ok()
+        });
+        if !restored {
+            OWNERS.lock().quarantine_mapping(token);
+            #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+            crate::memory::retirement::mapping_receipt(token, "quarantined", false);
+            panic!("MAP_FIXED restoration failed; transaction retained");
+        }
+        assert!(OWNERS.lock().mapping_restored(token, index));
+    }
+    let identity = sched.process_mut_by_pid(pid).expect("mapping cancellation owner lost").address_space.identity();
+    crate::memory::tlb::invalidate_retirement_all(identity, token);
+    assert!(OWNERS.lock().mapping_decide(token, false));
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    crate::memory::retirement::mapping_receipt(token, "rolled-back", false);
+    resolve_fixed_transaction(token, pmm, hhdm);
+}
+
+fn resolve_fixed_transaction(
+    token: &crate::memory::retirement::Token,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm: VirtAddr,
+) {
+    use crate::memory::retirement::{Backing, OWNERS};
+    for index in 0..32 {
+        let resolution = OWNERS.lock().mapping_release(token, index);
+        let Some((entry, release)) = resolution else { continue };
+        if release {
+            match entry.backing {
+                Backing::Frame(frame) => {
+                    crate::memory::swap::untrack(PhysAddr::new(frame));
+                    pmm.free_frame(PhysAddr::new(frame));
+                }
+                Backing::Swap(block) => {
+                    crate::memory::zram::discard_block(block, pmm, hhdm)
+                        .expect("MAP_FIXED transaction lost swap backing");
+                }
+            }
+        }
+        assert!(OWNERS.lock().mapping_resolved(token, index, release));
+    }
+    #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+    crate::memory::retirement::mapping_receipt(token, "resolved", false);
+    assert!(OWNERS.lock().finish_mapping(token));
+}
+
 fn rollback_anonymous(
     installed: &mut Vec<InstalledAnonymousPage>,
     pid: usize,
@@ -747,7 +877,11 @@ fn rollback_anonymous(
         return;
     }
     crate::process::address_space::note_mmap_rollback();
-    while let Some(installed_page) = installed.pop() {
+    // Keep the exact descriptor until restoration and release succeed. A
+    // failed restore cannot be reported as an ordinary mmap allocation error:
+    // the old ledger may no longer describe the installed leaf, and popping
+    // here would erase both the old snapshot and the new-frame obligation.
+    while let Some(installed_page) = installed.last().copied() {
         let restored = sched.process_mut_by_pid(pid).is_some_and(|process| unsafe {
             match installed_page.replaced {
                 Some(expected) => process
@@ -779,9 +913,9 @@ fn rollback_anonymous(
                     .is_ok(),
             }
         });
-        if restored {
-            pmm.free_frame(installed_page.frame);
-        }
+        assert!(restored, "anonymous mapping rollback lost exact installed leaf");
+        pmm.free_frame(installed_page.frame);
+        installed.pop();
     }
 }
 
@@ -926,6 +1060,10 @@ pub fn sys_munmap(
     }
 
     let identity = sched.current_process().address_space.identity();
+    // Reserve once for the entire request, before its first destructive write.
+    // Capacity cannot fail after an earlier chunk has already been withdrawn.
+    let retirement = crate::memory::retirement::OWNERS.lock()
+        .reserve(identity.pml4_phys, identity.generation).ok_or(MmapError::NoMemory)?;
     let mut chunk_start = addr;
     while chunk_start < end {
         let remaining_pages = (end - chunk_start) / 4096;
@@ -951,6 +1089,40 @@ pub fn sys_munmap(
                     panic!("MM-2D munmap invariant failure: leaf changed after complete preflight")
                 }
             };
+            removed[removed_len] = RemovedPage {
+                address,
+                ownership: match expected {
+                    ExpectedMapping::Present { frame, .. } => RemovedOwnership::Present(frame),
+                    ExpectedMapping::Swapped { block_id } => RemovedOwnership::Swapped(block_id),
+                },
+            };
+            removed_len += 1;
+        }
+
+        if removed_len != 0 {
+            let mut entries = [crate::memory::retirement::Entry {
+                address: 0, backing: crate::memory::retirement::Backing::Frame(0), released: false,
+            }; MUNMAP_CHUNK_PAGES as usize];
+            for (slot, removed_page) in entries.iter_mut().zip(&removed[..removed_len]) {
+                slot.address = removed_page.address;
+                slot.backing = match removed_page.ownership {
+                    RemovedOwnership::Present(frame) => crate::memory::retirement::Backing::Frame(frame.as_u64()),
+                    RemovedOwnership::Swapped(block) => crate::memory::retirement::Backing::Swap(block),
+                    RemovedOwnership::Empty => munmap_invariant_failure("empty staged retirement"),
+                };
+            }
+            assert!(crate::memory::retirement::OWNERS.lock().stage(&retirement, &entries[..removed_len]));
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            unsafe { crate::memory::pmm::retirement_track(&entries[..removed_len]); }
+            // The journal already owns every obligation before any leaf changes.
+            for removed_page in &removed[..removed_len] {
+                let address = removed_page.address;
+                let region = sched.current_process().address_space.lookup_region(address)
+                    .unwrap_or_else(|| munmap_invariant_failure("staged region disappeared"));
+                let expected = expected_anonymous_leaf(&sched.current_process().address_space,
+                    address, region, pmm, hhdm_offset)
+                    .unwrap_or_else(|_| munmap_invariant_failure("staged leaf changed"))
+                    .unwrap_or_else(|| munmap_invariant_failure("staged leaf disappeared"));
             let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(address))
                 .unwrap_or_else(|_| munmap_invariant_failure("preflighted page lost alignment"));
             if unsafe {
@@ -963,20 +1135,21 @@ pub fn sys_munmap(
             {
                 munmap_invariant_failure("leaf changed after complete preflight");
             }
-            removed[removed_len] = RemovedPage {
-                address,
-                ownership: match expected {
-                    ExpectedMapping::Present { frame, .. } => RemovedOwnership::Present(frame),
-                    ExpectedMapping::Swapped { block_id } => RemovedOwnership::Swapped(block_id),
-                },
-            };
-            removed_len += 1;
-        }
+            }
+            assert!(crate::memory::retirement::OWNERS.lock().withdrawn(&retirement));
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            for entry in &entries[..removed_len] {
+                let page = Page::<Size4KiB>::from_start_address(VirtAddr::new(entry.address)).unwrap();
+                let absent = unsafe { sched.current_process().address_space.lookup_entry(page, hhdm_offset).is_none() };
+                crate::serial_println!("[KFP2A2] withdrawal va={} backing={:?} absent={}", entry.address, entry.backing, absent);
+                assert!(absent);
+            }
 
-        if removed_len != 0 {
-            if crate::memory::tlb::invalidate_range(identity, chunk_start, chunk_pages).is_err() {
+            if crate::memory::tlb::invalidate_retirement_range(identity, chunk_start, chunk_pages, &retirement).is_err() {
                 munmap_invariant_failure("validated chunk was rejected by shootdown");
             }
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            crate::memory::tlb::ack_test_receipt(&retirement);
 
             crate::memory::swap::untrack_range(
                 sched.current_memory_owner().pid,
@@ -986,7 +1159,7 @@ pub fn sys_munmap(
 
             // The synchronous acknowledgement above is the ownership-release
             // barrier: no CPU may retain a translation to any frame freed here.
-            for removed_page in &removed[..removed_len] {
+            for (release_index, removed_page) in removed[..removed_len].iter().enumerate() {
                 match removed_page.ownership {
                     RemovedOwnership::Present(frame) => {
                         pmm.free_frame(frame);
@@ -1003,6 +1176,7 @@ pub fn sys_munmap(
                         munmap_invariant_failure("empty bounded removal record");
                     }
                 }
+                assert!(crate::memory::retirement::OWNERS.lock().released(&retirement, release_index));
             }
             for removed_page in &removed[..removed_len] {
                 let page =
@@ -1017,9 +1191,11 @@ pub fn sys_munmap(
                         .reclaim_empty_tables_for_page(page, pmm, hhdm_offset);
                 }
             }
+            assert!(crate::memory::retirement::OWNERS.lock().next_chunk(&retirement));
         }
         chunk_start += chunk_pages * 4096;
     }
+    assert!(crate::memory::retirement::OWNERS.lock().finish(&retirement));
 
     sched.current_process().address_space.commit_unmap(plan);
     sched.cancel_futex_range(identity, addr, end);

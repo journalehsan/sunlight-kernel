@@ -8,6 +8,18 @@ use super::{
 use crate::{process::Process, sched::Scheduler};
 use sunlight_ipc::account_session::SessionRef;
 impl Scheduler {
+    pub(super) fn channel_participant_terminal(
+        &self,
+        who: RecipientIdentity,
+        issuer: bool,
+    ) -> Option<Terminal> {
+        match self.processes.iter().find(|process| RecipientIdentity::of(process) == who) {
+            Some(process) if process.is_exiting() => Some(Terminal::ProcessRetired),
+            Some(process) if if issuer { process.trusted_auth_broker } else { process.uid == 0 } => None,
+            _ => Some(Terminal::IdentityChanged),
+        }
+    }
+
     pub(super) fn channel_process(&self, who: RecipientIdentity) -> Option<&Process> {
         self.processes
             .iter()
@@ -55,22 +67,7 @@ impl Scheduler {
         // Successful exec additionally invokes retire_recipient_grants before
         // activating the new VM. Failed exec never reaches that hook.
         for row in &mut broker.channels.rows {
-            if self.channel_process(row.creator).is_none()
-                || row
-                    .consumer
-                    .is_some_and(|c| self.channel_process(c).is_none())
-                || !self
-                    .channel_process(row.creator)
-                    .is_some_and(|p| p.uid == 0)
-                || row
-                    .consumer
-                    .is_some_and(|c| !self.channel_process(c).is_some_and(|p| p.uid == 0))
-                || !self
-                    .channel_process(row.issuer)
-                    .is_some_and(|p| p.trusted_auth_broker)
-            {
-                row.retire(Terminal::IdentityChanged);
-            }
+            row.retire_unavailable(|who, issuer| self.channel_participant_terminal(who, issuer));
         }
         let result = if op <= 1 {
             let target = current.ipc_reply_target.ok_or(Error::Denied)?.call.pid;

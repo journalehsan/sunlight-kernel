@@ -1,5 +1,49 @@
 use super::*;
 
+#[test]
+fn dropped_final_backing_locator_preserves_broker_identities() {
+    let mut b = CapabilityBroker::new();
+    b.test_entropy(&[Some(771)]);
+    let token = b.mint_shared_page(PhysAddr::new(0x53000), 41).unwrap();
+    b.increment_map_count(token);
+    let locator = b.decrement_map_count(token).unwrap();
+    assert_eq!(locator.token, token);
+    drop(locator);
+    assert_eq!(b.shared_region_count(), 1);
+    assert_eq!(b.shared_region_map_count(token), Some(0));
+    assert!(!b.preflight_shared_mapping(token));
+    assert!(b.resolve_shared_region(token).is_none());
+    let backing = b.shared_region_for_cleanup(token).unwrap();
+    assert_eq!(backing.frames.len(), 1);
+    assert_eq!(backing.frames[0].start_address(), PhysAddr::new(0x53000));
+    for _ in 0..8 {
+        drop(b.revoke_shared(token).unwrap());
+        assert_eq!(b.shared_region_count(), 1);
+        assert_eq!(b.shared_region_for_cleanup(token).unwrap().frames.len(), 1);
+    }
+}
+
+#[test]
+fn revoked_zero_view_backing_survives_locator_unwinding_with_quota() {
+    use crate::memory::shared_quota::{self, ProcessIdentity};
+    let mut b = CapabilityBroker::new();
+    b.test_entropy(&[Some(773)]);
+    let owner = ProcessIdentity { pid: 0x2a300, incarnation: 73 };
+    let quota = shared_quota::reserve(owner, None, 4096).unwrap();
+    let frames = alloc::vec![unsafe { PhysFrame::from_start_address_unchecked(PhysAddr::new(0x54000)) }];
+    let token = b.prepare_shared_region().unwrap().commit(frames, 4096, owner.pid, Some(quota));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _locator = b.revoke_shared(token).unwrap();
+        panic!("test-only stack unwind");
+    }));
+    assert!(result.is_err());
+    assert_eq!(b.shared_regions.len(), 1);
+    assert!(b.shared_regions[0].quota.is_some());
+    assert!(b.shared_regions[0].lifetime.is_retired());
+    assert_eq!(b.shared_regions[0].obj.frames[0].start_address(), PhysAddr::new(0x54000));
+    assert!(b.resolve_shared_region(token).is_none());
+}
+
 fn vfs() -> VfsCapability {
     let mut allowed_prefix = String::new();
     allowed_prefix.push_str("/bin").unwrap();

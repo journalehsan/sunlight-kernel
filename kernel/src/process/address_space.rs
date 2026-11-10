@@ -820,6 +820,83 @@ impl AddressSpace {
         Ok(())
     }
 
+    pub(crate) unsafe fn prepare_transaction_tables(
+        &self,
+        page: Page<Size4KiB>,
+        pmm: &mut PhysicalMemoryManager,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        let mut table = &mut *((hhdm_offset + self.pml4_phys.as_u64()).as_mut_ptr::<PageTable>());
+        for index in [page.p4_index(), page.p3_index(), page.p2_index()] {
+            let entry = &mut table[index];
+            if entry.is_unused() {
+                let frame = pmm.alloc_frame_class(crate::memory::accounting::PhysicalMemoryClass::PageTable)
+                    .ok_or(MappingError::PageTableAllocationFailed)?;
+                let child = &mut *((hhdm_offset + frame.as_u64()).as_mut_ptr::<PageTable>());
+                child.zero();
+                core::sync::atomic::fence(Ordering::Release);
+                entry.set_addr(frame, PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE);
+                #[cfg(all(debug_assertions, feature = "kfp2a5_transaction_test"))]
+                crate::serial_println!("[MT-TABLE] root={} vm={} va={} frame={} parent={} owner=attached-graph", self.identity.pml4_phys, self.identity.generation, page.start_address().as_u64(), frame.as_u64(), entry as *mut PageTableEntry as u64 - hhdm_offset.as_u64());
+                table = child;
+            } else {
+                if !entry.flags().contains(PageTableFlags::PRESENT) || entry.flags().contains(PageTableFlags::HUGE_PAGE) {
+                    return Err(MappingError::UnsupportedReplacement);
+                }
+                table = &mut *((hhdm_offset + entry.addr().as_u64()).as_mut_ptr::<PageTable>());
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) unsafe fn write_transaction_page(
+        &mut self,
+        token: &crate::memory::retirement::Token,
+        index: usize,
+        restore: bool,
+        hhdm_offset: VirtAddr,
+    ) -> Result<(), MappingError> {
+        use crate::memory::retirement::{Backing, OWNERS};
+        let (mapping, flags) = OWNERS.lock().mapping_target(
+            token, self.identity.pml4_phys, self.identity.generation, index, restore,
+        ).ok_or(MappingError::InternalInvariant)?;
+        let page = Page::from_start_address(VirtAddr::new(mapping.address))
+            .map_err(|_| MappingError::InternalInvariant)?;
+        let entry = &mut *self.p1_entry_ptr(page, hhdm_offset).ok_or(MappingError::NotMapped)?;
+        let (expected, expected_flags, replacement, replacement_flags) = if restore {
+            (Some(Backing::Frame(mapping.replacement)), flags, mapping.original, mapping.original_flags)
+        } else {
+            (mapping.original, mapping.original_flags, Some(Backing::Frame(mapping.replacement)), flags)
+        };
+        let matches = match expected {
+            None => entry.is_unused(),
+            Some(Backing::Frame(frame)) => entry.flags().contains(PageTableFlags::PRESENT)
+                && entry.addr().as_u64() == frame
+                && (entry.flags().bits() & !(PageTableFlags::ACCESSED | PageTableFlags::DIRTY).bits())
+                    == (expected_flags & !(PageTableFlags::ACCESSED | PageTableFlags::DIRTY).bits()),
+            Some(Backing::Swap(block)) => !entry.is_unused()
+                && !entry.flags().contains(PageTableFlags::PRESENT)
+                && block.checked_add(1).and_then(|value| value.checked_mul(4096)) == Some(entry.addr().as_u64()),
+        };
+        if !matches { return Err(MappingError::UnsupportedReplacement); }
+        match replacement {
+            None => entry.set_unused(),
+            Some(Backing::Frame(frame)) => {
+                let flags = PageTableFlags::from_bits_truncate(replacement_flags);
+                if flags.contains(PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE)
+                    && !flags.contains(PageTableFlags::NO_EXECUTE)
+                { return Err(MappingError::PermissionRejected); }
+                entry.set_addr(PhysAddr::new(frame), flags);
+            }
+            Some(Backing::Swap(block)) => {
+                let address = block.checked_add(1).and_then(|value| value.checked_mul(4096))
+                    .ok_or(MappingError::Overflow)?;
+                entry.set_addr(PhysAddr::new(address), PageTableFlags::empty());
+            }
+        }
+        Ok(())
+    }
+
     /// Return whether a leaf is occupied by either a present mapping or a
     /// non-present marker such as a swapped page.
     pub unsafe fn is_occupied(&self, page: Page<Size4KiB>, hhdm_offset: VirtAddr) -> bool {
@@ -900,7 +977,9 @@ impl AddressSpace {
             return Err(MappingError::InternalInvariant);
         }
 
-        match replacement {
+        // Validate every fallible replacement field before reserving ownership.
+        // A rejected request must leave both the old leaf and journal unchanged.
+        let swapped_address = match replacement {
             ReplacementMapping::Present { frame, flags } => {
                 if flags.contains(PageTableFlags::USER_ACCESSIBLE)
                     && flags.contains(PageTableFlags::WRITABLE)
@@ -908,21 +987,87 @@ impl AddressSpace {
                 {
                     return Err(MappingError::PermissionRejected);
                 }
-                entry.set_frame(frame, flags);
+                if ownership == OwnershipTransition::ReleaseOldFrame
+                    && matches!(expected, ExpectedMapping::Present { frame: old, .. } if old == frame.start_address())
+                {
+                    return Err(MappingError::UnsupportedReplacement);
+                }
+                None
             }
-            ReplacementMapping::Swapped { block_id } => {
-                let encoded = block_id
+            ReplacementMapping::Swapped { block_id } => Some(PhysAddr::new(
+                block_id
                     .checked_add(1)
                     .and_then(|value| value.checked_shl(12))
-                    .ok_or(MappingError::Overflow)?;
-                entry.set_addr(PhysAddr::new(encoded), PageTableFlags::empty());
+                    .ok_or(MappingError::Overflow)?,
+            )),
+        };
+        // RetainOld is a separate caller-owned transaction (e.g. MAP_FIXED
+        // rollback). Only ReleaseOldFrame transfers physical ownership here.
+        let retirement = if ownership == OwnershipTransition::ReleaseOldFrame {
+            let ExpectedMapping::Present { frame, .. } = expected else {
+                return Err(MappingError::InternalInvariant);
+            };
+            let mut owners = crate::memory::retirement::OWNERS.lock();
+            let token = owners
+                .reserve(self.identity.pml4_phys, self.identity.generation)
+                .ok_or(MappingError::FrameAllocationFailed)?;
+            assert!(owners.stage(&token, &[crate::memory::retirement::Entry {
+                address: page.start_address().as_u64(),
+                backing: crate::memory::retirement::Backing::Frame(frame.as_u64()),
+                released: false,
+            }]));
+            drop(owners);
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            unsafe {
+                crate::memory::pmm::retirement_track(&[crate::memory::retirement::Entry {
+                    address: page.start_address().as_u64(),
+                    backing: crate::memory::retirement::Backing::Frame(frame.as_u64()),
+                    released: false,
+                }]);
+            }
+            Some(token)
+        } else {
+            None
+        };
+        match replacement {
+            ReplacementMapping::Present { frame, flags } => {
+                entry.set_frame(frame, flags);
+            }
+            ReplacementMapping::Swapped { .. } => {
+                entry.set_addr(swapped_address.expect("validated swap address"), PageTableFlags::empty());
             }
         }
-        crate::memory::tlb::invalidate_page(self.identity, page.start_address());
-        if ownership == OwnershipTransition::ReleaseOldFrame {
+        if let Some(token) = retirement {
+            assert!(crate::memory::retirement::OWNERS.lock().withdrawn(&token));
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            crate::serial_println!("[KFP2A3] replacement-withdrawal root={} vm={} va={} old={:?} new={:?}",
+                self.identity.pml4_phys, self.identity.generation, page.start_address().as_u64(), expected, replacement);
+            crate::memory::tlb::invalidate_retirement_range(
+                self.identity, page.start_address().as_u64(), 1, &token,
+            ).expect("replacement retirement range");
+            #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+            crate::memory::tlb::ack_test_receipt(&token);
             if let ExpectedMapping::Present { frame, .. } = expected {
+                #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+                {
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(frame.as_u64());
+                    assert!(allocated && releases == 0 && reuses == 0);
+                    crate::serial_println!("[KFP2A3-FRAME] phase=synchronized root={} vm={} va={} frame={} allocated={} releases={} reuses={}", self.identity.pml4_phys, self.identity.generation, page.start_address().as_u64(), frame.as_u64(), allocated, releases, reuses);
+                }
                 pmm.free_frame(frame);
+                #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+                {
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(frame.as_u64());
+                    assert!(!allocated && releases == 1 && reuses == 0);
+                    crate::serial_println!("[KFP2A3-FRAME] phase=released root={} vm={} va={} frame={} allocated={} releases={} reuses={}", self.identity.pml4_phys, self.identity.generation, page.start_address().as_u64(), frame.as_u64(), allocated, releases, reuses);
+                }
             }
+            let mut owners = crate::memory::retirement::OWNERS.lock();
+            assert!(owners.released(&token, 0));
+            assert!(owners.next_chunk(&token));
+            assert!(owners.finish(&token));
+        } else {
+            crate::memory::tlb::invalidate_page(self.identity, page.start_address());
         }
         INTENTIONAL_REPLACEMENTS.fetch_add(1, Ordering::Relaxed);
         Ok(())
@@ -1558,6 +1703,10 @@ impl AddressSpace {
         if self.is_reclaimed() {
             return stats;
         }
+        assert!(
+            !crate::memory::retirement::OWNERS.lock().owns_vm(self.identity.pml4_phys, self.identity.generation),
+            "cannot reclaim an address space with persistent retirement obligations"
+        );
         assert_eq!(
             crate::memory::tlb::active_cpu_mask(self.identity),
             0,
@@ -1923,20 +2072,46 @@ impl AddressSpace {
         page: Page<Size4KiB>,
         pmm: &mut PhysicalMemoryManager,
     ) {
-        let mut removed_any = false;
+        // Until reservation succeeds the parent links remain the authoritative
+        // owner. On exhaustion retain these empty tables in that graph: teardown
+        // can reclaim them without losing an identity or withdrawing a mapping.
+        let mut entries = [crate::memory::retirement::Entry {
+            address: page.start_address().as_u64(),
+            backing: crate::memory::retirement::Backing::Frame(0),
+            released: false,
+        }; 3];
+        let mut count = 0;
+        for (_, frame) in created.iter().rev().flatten() {
+            entries[count].backing = crate::memory::retirement::Backing::Frame(frame.as_u64());
+            count += 1;
+        }
+        if count == 0 {
+            return;
+        }
+        let token = {
+            let mut owners = crate::memory::retirement::OWNERS.lock();
+            let Some(token) = owners.reserve(identity.pml4_phys, identity.generation) else {
+                return;
+            };
+            assert!(owners.stage(&token, &entries[..count]));
+            token
+        };
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        unsafe {
+            crate::memory::pmm::retirement_track(&entries[..count]);
+        }
         for item in created.iter_mut().rev() {
             if let Some((entry, _)) = item {
                 unsafe {
                     (**entry).set_unused();
                 }
-                removed_any = true;
             }
         }
-        if removed_any {
-            crate::memory::tlb::invalidate_page(identity, page.start_address());
-        }
+        assert!(crate::memory::retirement::OWNERS.lock().withdrawn(&token));
+        crate::memory::tlb::invalidate_retirement_all(identity, &token);
+        let mut released = 0;
         for item in created.iter_mut().rev() {
-            if let Some((_, frame)) = item.take() {
+            if let Some((_, frame)) = *item {
                 #[cfg(all(
                     debug_assertions,
                     any(feature = "fastlane_census_trace", feature = "quota_lifecycle_test")
@@ -1954,9 +2129,27 @@ impl AddressSpace {
                         0,
                     ],
                 );
+                #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+                unsafe {
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(frame.as_u64());
+                    assert!(allocated && releases == 0 && reuses == 0);
+                    crate::serial_println!("[KFP2A3-TABLE] phase=synchronized root={} vm={} va={} frame={} allocated={} releases={} reuses={}", identity.pml4_phys, identity.generation, page.start_address().as_u64(), frame.as_u64(), allocated, releases, reuses);
+                }
                 pmm.free_frame(frame);
+                #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+                unsafe {
+                    let (allocated, _, releases, reuses) = crate::memory::pmm::retirement_allocation(frame.as_u64());
+                    assert!(!allocated && releases == 1 && reuses == 0);
+                    crate::serial_println!("[KFP2A3-TABLE] phase=released root={} vm={} va={} frame={} allocated={} releases={} reuses={}", identity.pml4_phys, identity.generation, page.start_address().as_u64(), frame.as_u64(), allocated, releases, reuses);
+                }
+                assert!(crate::memory::retirement::OWNERS.lock().released(&token, released));
+                released += 1;
+                *item = None;
             }
         }
+        let mut owners = crate::memory::retirement::OWNERS.lock();
+        assert!(owners.next_chunk(&token));
+        assert!(owners.finish(&token));
     }
 }
 

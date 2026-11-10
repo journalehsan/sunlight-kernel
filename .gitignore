@@ -18,3 +18,4 @@ kernel/src/ipc/mod.rs.backup
 
 # Durable local validation evidence; survives cargo clean.
 /.fastlane-evidence/
+/.kfp-2a*-evidence/

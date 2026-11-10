@@ -674,6 +674,7 @@ name = "runas"
 path = "src/bin/runas.rs"
 
 [features]
+kfp-security-runner = ["session-launch-test"]
 quota-lifecycle-test = ["session-launch-test"]
 quota-remote-test = ["fastlane-mapping-test"]
 restricted-retirement-test = ["quota-lifecycle-test", "fastlane-mapping-test"]

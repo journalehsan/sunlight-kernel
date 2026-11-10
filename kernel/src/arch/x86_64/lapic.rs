@@ -142,24 +142,60 @@ pub unsafe fn send_eoi() {
     lapic_write(LAPIC_EOI, 0);
 }
 
-fn wait_for_icr_idle() {
-    while unsafe { lapic_read(LAPIC_ICR_LOW) } & (1 << 12) != 0 {
+// A software iteration bound, independent of timer interrupts. This is not a
+// wall-clock deadline: MMIO and vCPU scheduling can delay an individual read.
+const ICR_IDLE_POLL_BUDGET: usize = 4096;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IcrDeliveryError {
+    /// No ICR write for this request occurred.
+    NotSent,
+    /// ICR LOW was written, but delivery did not become idle within budget.
+    DeliveryUncertain,
+}
+
+fn wait_for_icr_idle() -> bool {
+    for _ in 0..ICR_IDLE_POLL_BUDGET {
+        let status = unsafe { lapic_read(LAPIC_ICR_LOW) };
+        #[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+        let status = if KFP_STUCK_ICR.load(core::sync::atomic::Ordering::Acquire) {
+            KFP_ICR_READS.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+            status | (1 << 12)
+        } else { status };
+        if status & (1 << 12) == 0 {
+            return true;
+        }
         core::hint::spin_loop();
     }
+    false
+}
+
+/// Idle is controller delivery status, never a target execution receipt.
+/// Caller keeps IF clear; the ordinary NMI handler must not issue IPIs.
+unsafe fn send_icr(apic_id: u32, command: u32) -> Result<(), IcrDeliveryError> {
+    if !wait_for_icr_idle() {
+        return Err(IcrDeliveryError::NotSent);
+    }
+    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
+    lapic_write(LAPIC_ICR_LOW, command);
+    if !wait_for_icr_idle() {
+        return Err(IcrDeliveryError::DeliveryUncertain);
+    }
+    Ok(())
 }
 
 /// Send a fixed-delivery IPI to a validated online logical CPU.
 /// Translate to a unicast xAPIC hardware destination before touching the ICR.
-pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) {
+///
+/// # Safety
+/// Local xAPIC must be initialized and IF must remain clear throughout.
+pub unsafe fn send_fixed_ipi(cpu_id: usize, vector: u8) -> Result<(), IcrDeliveryError> {
     assert!(
         cpu_id < crate::sched::MAX_CORES,
         "IPI target is out of range"
     );
     let apic_id = super::cpu_identity::ipi_destination(cpu_id);
-    wait_for_icr_idle();
-    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
-    lapic_write(LAPIC_ICR_LOW, vector as u32);
-    wait_for_icr_idle();
+    send_icr(apic_id, vector as u32)
 }
 
 /// One nonblocking doorbell attempt. Call with local interrupts disabled so
@@ -237,16 +273,16 @@ pub unsafe fn send_fixed_ipi_bounded(cpu_id: usize, vector: u8) -> bool {
 
 /// Send an NMI doorbell to a CPU. MM-2B uses this only to make a published
 /// fixed-vector shootdown mailbox consumable while the target has IF cleared.
-pub unsafe fn send_nmi(cpu_id: usize) {
+///
+/// # Safety
+/// Local xAPIC must be initialized and IF must remain clear throughout.
+pub unsafe fn send_nmi(cpu_id: usize) -> Result<(), IcrDeliveryError> {
     assert!(
         cpu_id < crate::sched::MAX_CORES,
         "NMI target is out of range"
     );
     let apic_id = super::cpu_identity::ipi_destination(cpu_id);
-    wait_for_icr_idle();
-    lapic_write(LAPIC_ICR_HIGH, apic_id << 24);
-    lapic_write(LAPIC_ICR_LOW, 0b100 << 8);
-    wait_for_icr_idle();
+    send_icr(apic_id, 0b100 << 8)
 }
 
 /// Calibrate the LAPIC timer against the TSC and store the result.
@@ -343,3 +379,8 @@ pub unsafe fn arm_lapic_timer() {
     lapic_write(LAPIC_LVT_TIMER, 0x0002_0000 | TIMER_VECTOR);
     lapic_write(LAPIC_TIMER_INITIAL, initial_count);
 }
+
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+pub(crate) static KFP_STUCK_ICR: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+#[cfg(all(debug_assertions, feature = "kfp2a2_fault_test"))]
+pub(crate) static KFP_ICR_READS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
