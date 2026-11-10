@@ -1,0 +1,3 @@
+Both CPU suites: 41 PASS; historical 21: 11 PASS / 10 BUILD_FAIL; original 18: 8 PASS / 10 BUILD_FAIL.
+Unchanged dlfcn ELF identical on 2/4 CPUs: 84ca9219e296a1085b6ad25653de74f7708e183b4c145db6a8291889c0b174eb
+No unexpected faults/syscalls; both symbol tests exit=0, empty stdout/stderr, clean reaping.

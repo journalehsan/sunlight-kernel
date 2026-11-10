@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/std-prephase10-fp-build/x86_64-sunlightos/release/native-fp-probe --expect-exit 0 --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-10-fp-triage/prephase10-direct-2cpu

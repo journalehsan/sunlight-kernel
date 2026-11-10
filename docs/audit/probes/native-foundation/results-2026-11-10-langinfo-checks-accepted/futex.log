@@ -1,0 +1,11 @@
+$ docs/audit/probes/native-foundation/results-2026-11-10-langinfo-checks-accepted/futex-tests
+
+running 3 tests
+test wake_errors_fail_fast ... ok
+test wait_preserves_completion_contract ... ok
+test wake_preserves_count_and_abi ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+exit=0 elapsed=0.018

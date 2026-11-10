@@ -2038,3 +2038,435 @@ is implied.
 `build-dlfcn.log` files retain that exact first diagnostic. Later declarations,
 exports and native loader capability must be traced before selecting an
 implementation; a missing-header error alone does not establish native support.
+
+## Phase 10 — native dynamic-symbol-loader blocker (2026-11-10)
+
+**Decision C: stop at the genuine native loader capability blocker.** This
+probe requires successful main-program symbol resolution, although it does
+not request loading a shared-object file. A failure-only implementation would
+fail its assertions. No public header, dl* exports, fake handles, symbol-name
+special cases, host loader calls, or production loader changes were added.
+
+The unchanged `docs/audit/probes/dlfcn.c` has SHA-256
+`ff5e3d6930cf1a10bf72af7946e3d396eb56dc556291f5328f316113328598e6`.
+Its complete contract is:
+
+| Operation | Required observation |
+|---|---|
+| Feature selection | Defines `_GNU_SOURCE` before including `<dlfcn.h>` |
+| Flags | Uses only `RTLD_NOW`; no LAZY, GLOBAL, LOCAL, DEFAULT, NEXT or other flags appear |
+| Open | Exactly one `dlopen(0, RTLD_NOW)`: NULL pathname denotes the main program; NULL result immediately returns 1 |
+| Lookup | Exactly one `dlsym(h, "malloc")`; non-NULL result required; the function pointer is neither cast nor called |
+| Close | Exactly one `dlclose(h)` after lookup, including lookup failure; its return value is ignored |
+| Error lifecycle | No `dlerror()` calls, no errno access, no error-message or clearing assertion |
+| Final status | Returns the lookup-is-NULL boolean: 0 for success, 1 for lookup failure |
+| Streams | No output operations; expected stdout and stderr are both empty |
+
+There are no non-NULL pathname cases, alternate handles, repeated open/close,
+invalid-handle tests, or shared-object fixtures in this source. Those behaviors
+cannot be inferred from it. No handle lifetime, lookup scope, flag support or
+dlerror clearing behavior has been implemented or verified in this phase.
+
+The native runtime was rebuilt successfully with `bash tools/build_native_c.sh`.
+An ordinary unchanged-source build reproduces missing `<dlfcn.h>` at line 2.
+An **isolated diagnostic include directory**, never installed in the sysroot,
+then supplies C declarations and a diagnostic `RTLD_NOW` value of 2. This value
+is not a newly supported native ABI. The unchanged source compiles to an object;
+its only undefined dl* references are `dlopen`, `dlsym` and `dlclose`. Linking
+that same source with the normal native driver fails on **all three symbols**.
+`dlerror` is declared in the diagnostic header but unreferenced by the probe.
+The rebuilt canonical archive defines `malloc` and none of the four dl* names.
+No executable is produced, so there is no historical dlfcn ELF to validate or
+run identically on two CPU counts.
+
+Repository evidence explains why this is more than a C bridge:
+
+- `tools/native-c/cc.py` selects the freestanding native target, disables
+  PIC/PIE, uses `-nostdlib -static`, the canonical static archive and
+  `services/user-space.ld`, with garbage collection and no undefined symbols.
+  `tools/native-c/Cargo.toml` builds a `staticlib`. There is no native shared
+  library packaging path in these tools.
+- The linker script places the executable at 0x400000. Inspection of the
+  retained Phase 9 `dirent.elf` shows ET_EXEC, no INTERP or DYNAMIC program
+  header, no `.dynsym`, and no relocations. Its ordinary `.symtab` has address
+  zero and is not an allocated runtime symbol table. Archive symbol presence
+  alone supplies no way to find a symbol in a running process; section garbage
+  collection also gives no guarantee that an unreferenced `malloc` is retained.
+- `sunlight-elf/src/lib.rs::parse_elf_header` accepts ET_EXEC (2) and rejects
+  ET_DYN with `NotStaticExecutable`. The segment walker rejects PT_INTERP.
+  `has_dynamic_section` exists but has no callers: this audit does **not** claim
+  the production loader rejects every PT_DYNAMIC-bearing ET_EXEC.
+- `kernel/src/process/elf_loader.rs::load_elf` validates fixed-address PT_LOAD
+  plans, preflights PTE collisions, reserves regions, copies bytes, zeroes BSS
+  and commits final protections. It returns the entry address for process
+  startup. It neither publishes a runtime symbol namespace nor parses dynamic
+  symbols or applies ELF relocations. Spawn/startup callers do not provide a
+  running-process dlopen interface. No Rust/C native resolver was found.
+- Phase 8's public C mmap bridge supports private anonymous mappings and
+  rejects file descriptors/backing and W+X. Native executable VM mapping exists;
+  it is not a runtime shared-object loader. A future loader would need address
+  placement, symbol scope/retention, relocations and protection/lifetime handling;
+  this probe's immediate blocker is **main-program symbol resolution**, not a
+  missing on-disk `.so`. Legacy DOS relocation support and Linux/Helios host
+  observations do not establish this native capability.
+
+Reproduce from the repository root (the output directory must be new):
+
+```sh
+python3 tools/native-c/tests/audit_dlfcn.py --out docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-audit
+python3 -m py_compile tools/native-c/tests/audit_dlfcn.py
+git diff --check
+```
+
+The runner retains exact commands and exit codes for runtime build, original
+header failure, diagnostic-header object compilation/link failure, nm, readelf
+and ELF host regressions. Evidence is under the output directory above.
+`source.log` retains the original source and hash; `preservation.log` verifies
+**21,119 pre-existing tracked files unchanged during the audit**, before this
+documentation append. The initial worktree reported no modified/untracked
+files; all existing Phase 8/9 implementation and retained evidence bytes were
+preserved. No reset, cleanup or historical-source edit was performed.
+Python compilation and diff whitespace checks pass. `matrix-check.log` records
+an independent CSV count and retained line-2 diagnostic check for both CPU
+counts, confirming the baseline below.
+
+| Test domain | Phase 10 result |
+|---|---|
+| Canonical native runtime rebuild | PASS |
+| Unchanged source with original includes | Expected BUILD_FAIL: missing header |
+| Diagnostic-header native C compilation | PASS, object only |
+| Diagnostic-header native link | Expected BUILD_FAIL: three missing dl* exports |
+| Archive and retained native ELF inspection | PASS, static-only evidence recorded |
+| Existing sunlight-elf host regression tests | 11 PASS; doc tests 0; no failures |
+| Implemented dl* host/C ABI behavior tests | NOT_RUN: no implementation selected |
+| Historical dlfcn guest, 2 and 4 CPUs | NOT_RUN: no linked ELF; status/streams/reap/fault/syscall checks unavailable |
+| Full native-C suites and other guest regressions | NOT_RUN in Phase 10: stopped under decision C; retained Phase 9 results below |
+
+No guest acceptance counts change. The retained current matrices are
+`results-2026-11-10-dirent-final-{2,4}cpu/results.csv`: original APIs remain
+**7 PASS / 11 BUILD_FAIL**; historical guest execution remains **10 PASS /
+0 FAIL / 11 NOT_RUN** per CPU count; complete built suites remain **39 PASS**
+per CPU count. These are Phase 9 results, not fresh Phase 10 executions.
+Phase 8 hardware user-write faults and forced stale-TLB/cross-core tests remain
+**NOT_RUN**.
+
+**One verified next blocker:** the unchanged dlfcn source, after diagnostic
+header resolution, cannot link `dlopen`, `dlsym`, `dlclose`; truthful success
+requires a native main-program symbol resolver and real handle semantics that
+the current static startup loader does not supply. No later API is promoted
+past this blocker and no working dynamic loading is claimed.
+
+### Phase 10 continuation — main-program export lookup accepted (2026-11-10)
+
+This continuation supersedes the capability blocker above only after the exact
+unchanged historical source succeeded in **both isolated guests**. The earlier
+audit and its evidence remain historical observations. The source SHA-256 is
+still `ff5e3d6930cf1a10bf72af7946e3d396eb56dc556291f5328f316113328598e6`.
+
+The final native executable is ET_EXEC at fixed virtual addresses (load bias
+zero). `.symtab`, `.strtab` and section headers survive in the packaged ELF file,
+but the symbol/string tables are non-allocated and outside PT_LOAD. There is no
+`.dynsym`, PT_DYNAMIC, interpreter or relocation table in this executable.
+`guest.py` embeds the entire ELF with `include_bytes!`; the kernel validates and
+copies PT_LOAD bytes, not section headers or ordinary symbol tables, into the
+process. No file symbol table or loader namespace is exposed to C startup.
+The final `malloc` and `free` are GLOBAL, DEFAULT-visibility FUNC symbols in RX
+text. Their names and addresses therefore need a separate loaded index.
+
+`tools/native-c/user-space.ld`, selected only by `cc.py`, now emits that index
+inside `.rodata` in an R-only PT_LOAD. Each 32-byte record contains a 24-byte
+NUL-padded name and a linker-resolved absolute function address. The deliberate
+public export set is `malloc`, `free`, `calloc`, `realloc`; linker references
+retain their actual implementations through section garbage collection. Adding
+an export means adding a record to the linker script, not a branch in dlsym.
+The general resolver compares bounded names, validates aligned table bounds,
+nonzero size, record-size divisibility, a 4096-byte maximum, and requires the
+resolved address to lie between linker-defined text bounds. The current table
+has four records (128 bytes). This is an ET_EXEC-specific ABI; ET_DYN/PIE and
+nonzero load bias remain unsupported by the startup loader and this interface.
+Metadata has process lifetime and is never freed or made writable by dlclose.
+The shared Rust service linker script and production kernel loader are unchanged.
+
+The public header adds only RTLD_NOW and dlopen/dlsym/dlclose. NULL-path open
+with exactly RTLD_NOW acquires a real process-local main-namespace reference;
+all non-NULL paths and other flags fail with NULL. Handles identify that static
+namespace, with atomic bounded reference counting. Lookup requires a valid
+namespace handle with a live reference; missing/empty/NULL names return NULL.
+Invalid handles return NULL from lookup and -1 from close; a final close makes
+lookup fail. Repeated opens share the namespace handle, as tested. This is not
+per-acquisition stale-handle detection after reopening. C name pointers must be
+readable strings. No shared objects, arbitrary program-symbol discovery,
+RTLD_DEFAULT/NEXT, TLS/data symbols, dlerror, or error-message lifecycle are
+advertised. The probe has no dlerror contract, so no such export was added.
+
+Exact retained acceptance evidence:
+
+- `results-2026-11-10-dlfcn-accepted-{2,4}cpu/` contains full build commands,
+  ELF headers, per-case `results.csv`/`results.json`, serial output, fault logs,
+  and guest cleanup observations. Both suites completed **41/41 built cases**.
+- The unchanged `dlfcn.elf` is byte-identical on both CPU counts, SHA-256
+  `78e68ea43dc730d4e4d66533de77d1ea25e62153e42925a5eb7db7a8002a6268`.
+  Both executions returned 0, stdout/stderr length 0, `clean=1`, no retained
+  descriptors/owned frames/stack, and unchanged surrounding frame/table/handle
+  counts. Both `faults.log` files are empty (including unexpected syscall checks).
+- `dlfcn-contract.elf` resolves malloc and free, compares each pointer with the
+  directly linked C function, allocates, writes and frees memory through those
+  pointers, and checks calloc lookup, missing symbols, NULL names, invalid
+  handles, unsupported paths/flags, repeated opens and final/double close.
+  Both guests returned 0 with empty streams and clean reaping. Its ELF SHA-256
+  is `883bfb3c236f67025aae0df7e7e97892123b6badbbbcf05509994341bfb08d45`.
+- `results-2026-11-10-dlfcn-index-accepted/`: public C/C++ ABI compilation and
+  independent ELF inspection verify each index address equals the actual
+  linked symbol, each target lies in RX PT_LOAD, and all index bytes lie in
+  R-only PT_LOAD. This inspection does not implement a host runtime resolver.
+  An earlier index check caught a C++ void-pointer conversion in the fixture;
+  the corrected explicit cast produces the identical guest-tested ELF.
+- `results-2026-11-10-dlfcn-regressions/`: libc host tests **114 PASS**, two
+  existing native-syscall-only tests filtered; twelve existing C/C++ directory
+  ABI checks and canonical-export checks PASS. Existing ELF host tests:
+  **11 PASS**, zero doc tests. These host results are separate from acceptance.
+
+Counts after both guest successes: original 18 APIs **8 PASS / 10 BUILD_FAIL**
+(previously 7/11); historical 21 including foundation probes **11 PASS / 0 FAIL /
+10 NOT_RUN** per CPU count; complete native-C suites **41 PASS** per CPU count
+(previously 39, plus historical dlfcn and its focused contract). No other API is
+promoted. Phase 8 hardware user-write-fault and forced stale-TLB/cross-core
+hardware tests remain **NOT_RUN**. Existing Phase 8/9 code and evidence and the
+initial diagnostic audit are preserved; no commit or cleanup/reset was made.
+
+Reproduce with `python3 tools/native-c/tests/run_dlfcn.py --out <new-dir>` and
+`python3 tools/native-c/guest.py --suite --cpus 2 --out <new-dir>` (repeat for 4).
+
+Additional fresh regressions: native Rust-std overlay check and kernel check
+PASS (`dlfcn-regressions/native-std-check.log`, `kernel-check.log`); production
+Rust-std futex contract tests **3 PASS** (`futex.log`). The stdio runner in
+`results-2026-11-10-dlfcn-stdio-regressions/` reports **19 stdio, 90 VFS, 17
+kernel descriptor host tests PASS**, C adapter output checks, historical tmpfile
+adapter, native ELF checks and C++ headers PASS. A final rebuild after rustfmt
+changed compiler-generated ELF bytes; both full suites were repeated against
+that final runtime in the `dlfcn-accepted-*` directories cited above. Earlier
+`dlfcn-final-*` and index attempts are retained separately.
+
+The additional broad `bash tools/test_native_std_foundation.sh` regression
+**FAILED** (exit 1): its build and ISO stages succeeded, but the 2-CPU guest
+timed out after 240 seconds without an FP-probe verdict. Serial output reaches
+login, reports `/bin/sshl` spawn failure and built-in shell readiness, then key
+injection completion; it contains no `[NATIVE-STD]` verdict. This observation
+does not establish the underlying cause. The runner stopped before its 4-CPU
+case (**NOT_RUN**). Exact build/traceback and serial evidence are retained in
+`dlfcn-regressions/fp-foundation.log`, `fp-foundation-2cpu-serial.log` and
+`fp-foundation-command.log`. No FP foundation acceptance is claimed. The
+separate overlay/kernel checks and the final native-C guests passed as above.
+The broad build refreshed its stale probe Cargo.lock; only that incidental
+change was restored to its initial bytes.
+
+### Phase 10 follow-up — FP timeout triage (2026-11-10)
+
+The broad FP foundation gate remains **FAILED: setup/launch failure**, rather
+than an accepted FP run. Its original 2-CPU timeout is preserved; its 4-CPU case
+remains **NOT_RUN**. Separate successful executions below do not change those
+classifications. No timeout was increased and no session authorization was
+weakened.
+
+Read inputs were the preceding Phase 10 record and
+`results-2026-11-10-dlfcn-regressions/{fp-foundation-command.log,fp-foundation.log,fp-foundation-2cpu-serial.log}`.
+The original command was `bash tools/test_native_std_foundation.sh`, exit 1.
+The script builds the native FP ELF, sunlightd, sunshell, a kernel with
+`SUNLIGHT_INJECT_PHASE=native-std` and `key_inject,native_std_probe`, creates
+`target/native-std-foundation.iso`, then runs `tools/native_std_boot_gate.py`.
+That runner gives each guest **240 wall-clock seconds** and stops at the first
+failure. It uses a 2048-MiB diskless QEMU guest with virtio RNG; on this host
+`/dev/kvm` is absent, so this path uses QEMU's default TCG/CPU configuration.
+
+New evidence is in `results-2026-11-10-fp-triage/`. The retained ISO's SHA-256
+and FP ELF hash are in `fp-inputs.log`. Replays use the same ISO and original
+QEMU options, adding a local QMP socket solely for observability. Each run has
+its exact `command.log`, serial, QEMU output, timed events, final QMP status and
+registers, and a result receipt. A sandbox socket-denied attempt is retained
+under `replay-2cpu/`; it is not guest evidence. The authorized 100-second
+`replay-2cpu-observed/` reproduces the missing launch. The separate
+`replay-2cpu-original-budget/` repeats the **original 240-second limit**:
+
+| Wall-clock observation | Original-budget replay |
+|---|---|
+| Injection enabled | 18.767 s |
+| Root login succeeds | 37.475 s |
+| `/bin/sshl0` request fails before ELF loading | 37.476 s |
+| Injection completes | 70.917 s |
+| Guest reaches monotonic 60-second checkpoint | 78.496 s |
+| Deadline reached; QMP still reports running | 240.121 s, TIMEOUT |
+
+The diagnostic controller's completion and QEMU's exit 0 reflect deliberate
+termination after recording the timeout; they are not a passing gate verdict.
+The receipt's `verdict=TIMEOUT` and the original runner's exit 1 govern status.
+
+Neither replay contains an FP-probe start marker or a request to spawn
+`/bin/native-fp-probe`. Approximately 169 seconds of the full-budget replay
+follow injection completion without any workload launch. This is a setup
+failure followed by waiting for an unreachable verdict, not evidence that FP
+work consumed 240 seconds. The injector sends its command through the TTY shell;
+`services/tty_server/src/main.rs::spawn_tab` uses legacy
+`SPAWN_AUTHENTICATED`. In
+`kernel/src/arch/x86_64/syscall.rs::handle_spawn_call`, that request reaches the
+session-attachment authorization block before process creation. A legacy
+authenticated launch without an attached account session is refused there.
+The observed request/error pair has no subsequent shell ELF load. The TTY's
+"Built-in shell ready" message does not prove an executable foreground shell
+exists: `spawn_tab` failed and created no tab. No FP deadlock is observed.
+
+The pre-Phase-10 control is committed HEAD `97255204a`. Exact byte comparisons
+in `baseline-source-comparison.log` establish that its kernel entry/injection,
+spawn handler/loader, TTY server, userspace linker, FP Rust/assembly and broad
+gate scripts match the source used for this diagnosis. Phase 10's dlfcn module
+is gated on `native-c`, which the FP probe does not enable; its C-only linker
+script and C-suite registration are not used by the broad FP gate. Thus the
+demonstrated launch-path defect is independent of the Phase 10 C bridge.
+
+A selected-source `git archive HEAD` snapshot under
+`target/std-prephase10-source/` rebuilt the old FP probe offline in 43.887 s.
+`baseline-fp-build.log` retains the command and `baseline-fp-comparison.log`
+retains both ELF hashes. The independently built ELFs differ, so byte identity
+is not claimed. An initial full-snapshot extraction failed for lack of `/tmp`
+space (`baseline-snapshot.log`); only that newly created temporary snapshot
+was removed, then the selected-source extraction succeeded under `target/`.
+No pre-existing temporary directories or workspace evidence were removed.
+
+The existing isolated native guest runner can launch the exact FP ELF without
+the desktop login path. `direct-{2,4}cpu/` records the retained FP ELF
+`582d8cce13bbb46274bd0e1f1609ca322428e80e17c3f0d51ad03ffa3638e363`
+passing **both** x87/XMM/MXCSR isolation and native PDF/vector checks, status 0,
+empty stdout/stderr, clean reaping, eight borrower threads reaped and unchanged
+surrounding resource inventories. Both fault logs are empty. The separately
+rebuilt HEAD probe also passes on 2 CPUs in `prephase10-direct-2cpu/`, hash
+`5bc71b2f0eabaabd45a28d3f7da3d56136d7f2f346752721898bbde7bedd08e7`.
+These are bounded 90-second TCG/max guest runs, not broad desktop-gate passes.
+A clean-HEAD desktop ISO was not rebuilt/run; the control combines exact
+launcher-source comparison with an independently built baseline workload.
+No Phase-10-induced FP regression was demonstrated or patched.
+
+Reproduce the observed full-budget replay from the repository root with a new
+output directory; `replay-driver.log` contains the complete diagnostic script:
+
+```sh
+python3 - <new-output-dir> 2 240 < docs/audit/probes/native-foundation/results-2026-11-10-fp-triage/replay-driver.log
+python3 tools/native-c/guest.py tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe --expect-exit 0 --cpus 2 --out <new-dir>
+# Repeat the isolated workload command with --cpus 4 and another new directory.
+```
+
+### Phase 11 — initial C locale CODESET query accepted (2026-11-10)
+
+The established historical order in the accepted Phase 10 matrices selects
+`langinfo.c` immediately after the already accepted `getrandom.c`.
+The unchanged probe is:
+
+```c
+#define _GNU_SOURCE
+#include <langinfo.h>
+int main(void){return nl_langinfo(CODESET)==0;}
+```
+
+Its SHA-256 remains
+`4e3efb53a172666505159e95e1b7f557c2a093a62e706fafc5eae3ef44babb2d`.
+`results-2026-11-10-langinfo-audit/` retains its source, the previous diagnostic,
+a fresh missing-header failure, diagnostic-only header/object compilation,
+the object's actual unresolved symbol and the resulting native link failure:
+**`nl_langinfo` is missing**. The runtime export census and source inspection
+were completed before implementing the bridge; a missing header alone was not
+treated as a capability requirement. Diagnostic headers remain uninstalled.
+
+The native C runtime has byte-oriented strings and ASCII execution characters,
+but no locale selection, locale database or multibyte conversion API. This
+entry needs only an initial-locale codeset query; no kernel service or dynamic
+locale machinery is needed. `sunlight-libc/src/langinfo.rs` and the public
+`langinfo.h` now expose `nl_item` as C `int`, native `CODESET=1`, and
+`char *nl_langinfo(nl_item)`. The fixed initial C locale returns **`US-ASCII`**.
+Other item values return a non-NULL empty string. Storage has process lifetime,
+is read-only to callers, requires no allocation or lock, and leaves errno
+unchanged. This is a deliberately narrow native ABI: LANG/LC_* do not select a
+locale, no other langinfo items or locale objects are advertised, and the
+runtime does not claim Unicode conversion support from Rust/UI Unicode use.
+There is no process-wide locale mutation API in this implementation.
+
+`tools/native-c/tests/langinfo.c` independently checks the actual codeset
+contents, repeated-pointer/string lifetime, invalid items including signed
+integer boundaries, and errno preservation. Its C/C++ ABI fixture checks the
+item and function types under base/POSIX/GNU macros and both include orders.
+The suite adds this focused contract alongside the unchanged historical source.
+The runtime module is enabled for native C and host unit tests only; host tests
+do not interpose a host libc export.
+
+Acceptance evidence in `results-2026-11-10-langinfo-accepted-{2,4}cpu/` contains
+the full commands, ELF inspection, serial, per-case CSV/JSON, reaping/resource
+checks and empty fault logs. **Both full suites pass 43/43 built cases.**
+The unchanged `langinfo.elf` is byte-identical across CPU counts, SHA-256
+`29604d792b97d031837ff249e085c3fe4b7f8cf70ba20bfebce49a203e3b35c8`.
+Both executions return 0, produce empty streams, report `clean=1`, and retain
+no descriptors, owned frames or stack. The focused contract also passes on
+both CPU counts, identical ELF SHA-256
+`8b6c87c8e403722372ab490f5fdf438d64e009edc99503764adac4e9d2575138`.
+Surrounding physical-frame/table/handle inventories are unchanged.
+
+Fresh relevant regressions are separate from these guest results:
+
+- `results-2026-11-10-langinfo-host-accepted/`: twelve C/C++ ABI compilations, exactly
+  one canonical `nl_langinfo` export, unsupported locale exports absent,
+  unchanged historical link, no unresolved symbols/interpreter/dynamic segment.
+- `results-2026-11-10-langinfo-regressions-accepted/`: libc **116 host tests PASS**, two
+  existing native-syscall-only tests filtered; twelve existing directory C/C++
+  ABI checks and canonical-export checks PASS.
+- `results-2026-11-10-langinfo-checks-accepted/`: existing dlfcn C/C++ ABI and loaded
+  export-index inspection PASS; ELF **11 host tests PASS**; stdio **19**, VFS
+  **90** and descriptor **17** host tests PASS, including C adapter output,
+  historical tmpfile adapter, three native ELF checks and C++ headers.
+  Native Rust-std overlay and kernel checks PASS; production overlay futex
+  contract tests **3 PASS**. The earlier kernel check completed in 141.215
+  seconds, including its embedded application build prerequisites; exact final
+  check duration and command are recorded in the accepted `kernel-check.log`.
+- The first overlay-check invocation failed with exit 101 because `--locked`
+  refused the stale probe lock refresh (earlier
+  `results-2026-11-10-langinfo-checks/native-std-check.log`). That command also
+  named nonexistent bin `native-std-probe`, but the retained diagnostic stops
+  at lock validation. The corrected `--bin native-fp-probe --release`
+  invocation allows the incidental refresh and passes in earlier
+  `native-std-corrected.log` and final accepted `native-std.log`. Both attempts
+  remain retained. The probe Cargo.lock was restored to its verified initial
+  bytes after checking.
+
+The final formatting check moved the new module registration into rustfmt's
+required order. The full native-C suites and relevant host/ABI/regression
+checks were repeated against that final source in the `*-accepted*`
+directories above. Earlier `langinfo-final-*`, host and regression directories
+remain separate observations. Final formatting, Python compilation and diff
+whitespace checks pass.
+
+Counts change only after both guest successes: original 18 APIs **9 PASS /
+9 BUILD_FAIL** (previously 8/10); historical 21 including foundation probes
+**12 PASS / 0 FAIL / 9 NOT_RUN** per CPU count; full native-C suites **43 PASS**
+per CPU count. The broad FP gate remains **FAILED during setup on 2 CPUs**,
+with its broad 4-CPU case **NOT_RUN**. The separate isolated FP tests above are
+PASS. Phase 8 hardware user-write-fault and forced stale-TLB/cross-core tests
+remain **NOT_RUN**.
+
+**Next verified blocker:** unchanged `locale.c`, SHA-256
+`c2634d0aa8bcc412d9af689358b058bba1e9075c215cb4f051ebf465ae00f140`, calls
+`setlocale(LC_ALL,"C")`. `results-2026-11-10-langinfo-next-blocker/` retains the
+previous and fresh missing-`locale.h` diagnostics; a diagnostic-only declaration
+then compiles the unchanged object but fails to link **`setlocale`**. This is
+the next required C interface, not evidence for arbitrary locale loading. No
+later historical API is promoted and no locale header/selection bridge is
+installed in this phase.
+
+Reproduce with new output directories:
+
+```sh
+python3 tools/native-c/tests/run_langinfo.py --out <new-dir>
+python3 tools/native-c/tests/run_dirent.py --out <new-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-dir>
+```
+
+All incoming uncommitted Phase 10 work and retained evidence are preserved.
+An initial tracked/untracked file-hash inventory is retained under FP triage;
+the only edits to incoming source files add the new module and suite case, and
+the original audit text remains an exact prefix. No commit, reset or workspace
+cleanup was performed.

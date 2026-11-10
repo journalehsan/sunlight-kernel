@@ -1,0 +1,68 @@
+$ RUSTFLAGS='-C link-arg=-T/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld' cargo build --offline --manifest-path /home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/tools/native-std-probe/Cargo.toml --target /home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/tools/targets/x86_64-sunlightos.json --bin native-fp-probe --release -Z build-std=core,alloc -Z json-target-spec --target-dir /home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-fp-build
+     Locking 6 packages to latest compatible versions
+    Updating sun-img v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sun-img) -> v0.2.7061-alpha.2
+      Adding sunlight-cert v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-cert)
+    Updating sunlight-hayro-native-probe v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/tools/hayro-native-probe) -> v0.2.7061-alpha.2
+    Updating sunlight-ipc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/ipc) -> v0.2.7061-alpha.2
+    Updating sunlight-libc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-libc) -> v0.2.7061-alpha.2
+    Updating sunlight-ui v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-ui) -> v0.2.7061-alpha.2
+   Compiling compiler_builtins v0.1.160 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+   Compiling core v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core)
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling libm v0.2.16
+   Compiling autocfg v1.5.1
+   Compiling thiserror v2.0.21
+   Compiling num-traits v0.2.19
+   Compiling syn v3.0.9
+   Compiling bytemuck_derive v1.12.1
+   Compiling thiserror-impl v2.0.21
+   Compiling alloc v0.0.0 (/home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc)
+   Compiling arrayvec v0.7.8
+   Compiling smallvec v1.16.3
+   Compiling bytemuck v1.25.2
+   Compiling simd-adler32 v0.3.10
+   Compiling zune-core v0.4.12
+   Compiling linebender_resource_handle v0.1.1
+   Compiling lz4_flex v0.11.6
+   Compiling foldhash v0.2.0
+   Compiling log v0.4.34
+   Compiling sunlight-cert v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-cert)
+   Compiling unicode-segmentation v1.13.3
+   Compiling sunlight-ipc v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/ipc)
+   Compiling zune-inflate v0.2.54
+   Compiling zune-jpeg v0.4.21
+   Compiling hashbrown v0.17.1
+   Compiling hayro-syntax v0.8.0
+   Compiling zune-png v0.4.10
+   Compiling euclid v0.22.14
+   Compiling sun-img v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sun-img)
+   Compiling sunlight-libc v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-libc)
+   Compiling guillotiere v0.7.0
+   Compiling sunlight-ui v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-ui)
+   Compiling polycool v0.4.0
+   Compiling color v0.3.3
+   Compiling fearless_simd v0.7.0
+   Compiling kurbo v0.13.1
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+   Compiling peniko v0.6.1
+   Compiling vello_common v0.3.0
+   Compiling vello_cpu v0.3.0
+   Compiling sunlight-hayro-native-probe v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/tools/hayro-native-probe)
+   Compiling sunlight-native-std-probe v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/target/std-prephase10-source/tools/native-std-probe)
+    Finished `release` profile [optimized] target(s) in 43.83s
+
+exit=0 elapsed=43.887

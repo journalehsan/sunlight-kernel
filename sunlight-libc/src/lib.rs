@@ -31,6 +31,9 @@ pub mod crt0;
 /// Narrow native C directory streams over the existing VFS enumeration ABI.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod dirent;
+/// Main-program lookup through the native C linker export index.
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+pub mod dlfcn;
 /// Environment variable access via the SysV envp pointer.
 pub mod env;
 /// POSIX errno storage and `__errno_location()`.
@@ -40,6 +43,9 @@ pub mod fd;
 /// Shared file-manager copy/move operations (requires an application allocator).
 #[cfg(any(test, feature = "file-ops"))]
 pub mod file_ops;
+/// Codeset query for the native C runtime's fixed initial C locale.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod langinfo;
 /// Launch-trace argv parsing for GUI apps.
 pub mod launch_trace;
 /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).

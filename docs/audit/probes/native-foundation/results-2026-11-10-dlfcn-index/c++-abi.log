@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I sunlight-libc/include -x c++ -c tools/native-c/tests/dlfcn.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-index/c++.o
+tools/native-c/tests/dlfcn.c:13:20: error: cannot initialize a variable of type 'unsigned char *' with an rvalue of type 'void *'
+   13 |     unsigned char *p = allocate(64);
+      |                    ^   ~~~~~~~~~~~~
+1 error generated.
+
+exit=1

@@ -2538,6 +2538,9 @@ impl SessionAction {
 pub mod SessionMsg {
     /// Read-only active graphical identity; never returns a closed session.
     pub const SESSION_CURRENT_IDENTITY: u64 = 0xC121;
+    /// TTY-only login: words[0] is the tab id (0..255), caps[0] the
+    /// delivered one-use auth proof. Reply words[0] is the native shell pid.
+    pub const SESSION_CREATE_TTY: u64 = 0xC122;
     pub const SESSION_CREATE: u64 = 0xC100;
     pub const SESSION_GET: u64 = 0xC101;
     pub const SESSION_LIST: u64 = 0xC102;

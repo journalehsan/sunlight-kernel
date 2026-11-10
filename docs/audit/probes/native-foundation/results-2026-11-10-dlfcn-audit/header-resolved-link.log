@@ -1,0 +1,15 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c -I /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-audit/diagnostic-include -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-audit/dlfcn.elf
+ld.lld: error: undefined symbol: dlopen
+>>> referenced by dlfcn.c
+>>>               /tmp/dlfcn-ea06a9.o:(main)
+
+ld.lld: error: undefined symbol: dlsym
+>>> referenced by dlfcn.c
+>>>               /tmp/dlfcn-ea06a9.o:(main)
+
+ld.lld: error: undefined symbol: dlclose
+>>> referenced by dlfcn.c
+>>>               /tmp/dlfcn-ea06a9.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

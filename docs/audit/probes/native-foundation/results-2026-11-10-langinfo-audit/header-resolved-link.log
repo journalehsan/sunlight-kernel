@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/langinfo.c -I docs/audit/probes/native-foundation/results-2026-11-10-langinfo-audit/diagnostic-include -o docs/audit/probes/native-foundation/results-2026-11-10-langinfo-audit/diagnostic.elf
+ld.lld: error: undefined symbol: nl_langinfo
+>>> referenced by langinfo.c
+>>>               /tmp/langinfo-0b0198.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

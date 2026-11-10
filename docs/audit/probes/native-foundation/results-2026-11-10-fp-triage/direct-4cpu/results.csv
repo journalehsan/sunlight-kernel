@@ -1,0 +1,2 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+elf,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,582d8cce13bbb46274bd0e1f1609ca322428e80e17c3f0d51ad03ffa3638e363

@@ -1,0 +1,4 @@
+$ llvm-nm --undefined-only docs/audit/probes/native-foundation/results-2026-11-10-langinfo-next-blocker/locale.o
+                 U setlocale
+
+exit=0

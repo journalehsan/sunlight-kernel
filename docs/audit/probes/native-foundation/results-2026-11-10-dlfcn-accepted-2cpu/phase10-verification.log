@@ -1,0 +1,4 @@
+Final formatted runtime: both CPU suites 41 PASS; original 18 APIs 8 PASS / 10 BUILD_FAIL.
+Historical 21: 11 PASS / 10 BUILD_FAIL. Empty fault logs, zero status and streams, clean reaping.
+dlfcn 78e68ea43dc730d4e4d66533de77d1ea25e62153e42925a5eb7db7a8002a6268
+dlfcn-contract 883bfb3c236f67025aae0df7e7e97892123b6badbbbcf05509994341bfb08d45

@@ -1,0 +1,4 @@
+Case C: successful main-program symbol resolution required; native runtime resolver absent.
+No shared object requested by historical source. No implementation or successful ELF.
+Guest 2/4 CPU, dl* host/ABI behavior, and complete suite reruns: NOT_RUN (stop at capability blocker).
+Baseline counts unchanged. Phase 8 hardware write-fault and forced stale-TLB tests remain NOT_RUN.

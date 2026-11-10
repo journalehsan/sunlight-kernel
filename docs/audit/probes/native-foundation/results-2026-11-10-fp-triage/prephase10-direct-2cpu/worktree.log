@@ -1,0 +1,25 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M sunlight-libc/src/lib.rs
+ M tools/native-c/cc.py
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-audit/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-index-accepted/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-index-final/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-index/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-regressions/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-stdio-regressions/
+?? docs/audit/probes/native-foundation/results-2026-11-10-fp-triage/
+?? docs/audit/probes/native-foundation/results-2026-11-10-langinfo-audit/
+?? sunlight-libc/include/dlfcn.h
+?? sunlight-libc/src/dlfcn.rs
+?? tools/native-c/tests/audit_dlfcn.py
+?? tools/native-c/tests/dlfcn.c
+?? tools/native-c/tests/run_dlfcn.py
+?? tools/native-c/user-space.ld
+
+exit=0

@@ -1,0 +1,6 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -fno-builtin docs/audit/probes/stdio.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-stdio-regressions/original-stdio-native
+stdout:
+
+stderr:
+
+exit=0

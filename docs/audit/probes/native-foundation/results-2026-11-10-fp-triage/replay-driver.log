@@ -1,0 +1,43 @@
+import hashlib, json, pathlib, shlex, socket, subprocess, sys, time
+out = pathlib.Path(sys.argv[1]).resolve()
+cpus = int(sys.argv[2])
+limit = int(sys.argv[3])
+iso = pathlib.Path(sys.argv[4] if len(sys.argv)>4 else 'target/native-std-foundation.iso').resolve()
+out.mkdir(parents=True, exist_ok=False)
+(out/'.gitignore').write_text('*\n!*.log\n!*.json\n!.gitignore\n')
+serial = out/'serial.log'
+sockpath = '/tmp/fp-triage-'+str(cpus)+'.sock'
+cmd = ['qemu-system-x86_64','-cdrom',str(iso),'-serial','file:'+str(serial),'-display','none','-m','2048M','-smp',str(cpus),'-device','virtio-rng-pci,disable-modern=on','-no-reboot','-no-shutdown','-qmp','unix:'+sockpath+',server=on,wait=off']
+if pathlib.Path('/dev/kvm').exists(): cmd += ['-enable-kvm','-cpu','host']
+(out/'command.log').write_text(shlex.join(cmd)+'\nlimit='+str(limit)+'\niso_sha256='+hashlib.sha256(iso.read_bytes()).hexdigest()+'\n')
+start = time.monotonic()
+events=[]; seen=set(); verdict='TIMEOUT'
+with (out/'qemu.log').open('w') as err:
+ p=subprocess.Popen(cmd,stdout=err,stderr=err)
+ try:
+  while time.monotonic()-start < limit:
+   text=serial.read_text(errors='replace') if serial.exists() else ''
+   for line in text.splitlines():
+    if any(m in line for m in ('[NATIVE-STD]','Login success','Spawning /bin/sshl','Built-in shell ready','Key injection complete','TIME-CHECKPOINT','Key injection enabled')) and line not in seen:
+     seen.add(line); events.append({'elapsed':round(time.monotonic()-start,3),'line':line}); print(events[-1],flush=True)
+   if '[NATIVE-STD] native PDF parser and vector raster OK' in text and '[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK' in text: verdict='PASS';break
+   if any(m in text for m in ('FP isolation FAILED','FP spawn FAILED','FP probe panicked','parser/raster FAILED','KERNEL PANIC','[EXCEPTION]')): verdict='FAIL';break
+   if p.poll() is not None: verdict='QEMU_EXIT';break
+   time.sleep(.25)
+  s=socket.socket(socket.AF_UNIX);s.settimeout(3);s.connect(sockpath);f=s.makefile('rwb');f.readline()
+  def qmp(cmd,args=None):
+   f.write((json.dumps({'execute':cmd,'arguments':args or {}})+'\n').encode());f.flush()
+   while True:
+    r=json.loads(f.readline())
+    if 'return' in r or 'error' in r:return r
+  qmp('qmp_capabilities')
+  (out/'status.json').write_text(json.dumps(qmp('query-status'),indent=2))
+  (out/'registers.log').write_text(str(qmp('human-monitor-command',{'command-line':'info registers'})))
+  qmp('screendump',{'filename':str(out/'screen.ppm')})
+  s.close()
+ finally:
+  p.terminate()
+  try:p.wait(timeout=5)
+  except subprocess.TimeoutExpired:p.kill();p.wait()
+  (out/'result.json').write_text(json.dumps({'verdict':verdict,'elapsed':time.monotonic()-start,'qemu_exit':p.returncode,'events':events},indent=2))
+print(verdict,flush=True)

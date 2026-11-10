@@ -1,0 +1,10 @@
+HEAD=97255204ace04fa13b806dc12defd49ede8382a3
+kernel/src/arch/x86_64/syscall.rs identical to pre-Phase-10 HEAD
+kernel/src/process/spawn.rs identical to pre-Phase-10 HEAD
+kernel/src/main.rs identical to pre-Phase-10 HEAD
+services/tty_server/src/main.rs identical to pre-Phase-10 HEAD
+services/user-space.ld identical to pre-Phase-10 HEAD
+tools/native_std_boot_gate.py identical to pre-Phase-10 HEAD
+tools/test_native_std_foundation.sh identical to pre-Phase-10 HEAD
+tools/native-std-probe/src/fp.rs identical to pre-Phase-10 HEAD
+tools/native-std-probe/src/fp.S identical to pre-Phase-10 HEAD

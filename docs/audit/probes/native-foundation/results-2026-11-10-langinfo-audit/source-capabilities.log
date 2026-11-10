@@ -1,0 +1,4 @@
+$ rg -n 'locale|UTF|ascii|is_ascii|Number of bytes' sunlight-libc/src/string.rs sunlight-libc/src/stdio.rs sunlight-libc/src/std_runtime.rs tools/native-c/cc.py
+sunlight-libc/src/string.rs:39:/// Number of bytes before the first NUL in `s` (terminator not included).
+
+exit=0

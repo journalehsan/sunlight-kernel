@@ -1,0 +1,1 @@
+Checked 21986 initial tracked/untracked files. Every incoming file is byte-identical except the audit append and two additive registrations. Removing the additions reproduces both initial source hashes; the original audit is an exact byte prefix. Probe hashes and incoming dlfcn implementation/evidence are unchanged. Cargo.lock matches initial bytes. No reset or commit.

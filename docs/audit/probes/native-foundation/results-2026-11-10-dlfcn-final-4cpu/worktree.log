@@ -1,0 +1,16 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M sunlight-libc/src/lib.rs
+ M tools/native-c/cc.py
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-audit/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-regressions/
+?? sunlight-libc/include/dlfcn.h
+?? sunlight-libc/src/dlfcn.rs
+?? tools/native-c/tests/audit_dlfcn.py
+?? tools/native-c/tests/dlfcn.c
+?? tools/native-c/user-space.ld
+
+exit=0

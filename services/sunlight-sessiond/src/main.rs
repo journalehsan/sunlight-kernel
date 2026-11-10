@@ -142,6 +142,7 @@ struct ServiceState {
     system_release_generation: u32,
     wiseowl_consoles: Vec<WiseOwlConsoleRegistration, MAX_WISEOWL_CONSOLES_PER_SESSION>,
     delegated_console_fixture_launched: bool,
+    tty_sessions: Vec<(SessionProcessCredentials, PendingAccountSession), 8>,
 }
 
 impl ServiceState {
@@ -162,6 +163,7 @@ impl ServiceState {
             system_release_generation: load_system_release_generation(),
             wiseowl_consoles: Vec::new(),
             delegated_console_fixture_launched: false,
+            tty_sessions: Vec::new(),
         }
     }
 
@@ -812,6 +814,59 @@ fn decode_create(
         return Err(SessionMsg::ERR_INVALID_ARGUMENT);
     }
     Ok((msg.words[0], uid, gid, kind, username, username_len))
+}
+
+// TTY sessions use the same kernel authority and quota attachment as desktop
+// sessions, without graphical manifests or components. Keep authority until the
+// login shell exits; dropping the guard revokes descendants' launch authority.
+fn create_tty_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
+    if !validate_session_caller(msg.badge, SESSION_CALLER_TTY_SERVICE) {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    }
+    if msg.cap_count != 1 || msg.word_count != 1 || msg.words[0] > 255 {
+        return error(SessionMsg::ERR_INVALID_ARGUMENT);
+    }
+    if state.tty_sessions.is_full() {
+        return error(SessionMsg::ERR_LIMIT);
+    }
+    let Some(spawn_cap) = nameserver_lookup("spawn") else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    let Some((reference, _, _)) =
+        sunlight_ipc::account_session::register(msg.caps[0], msg.badge)
+    else {
+        return error(SessionMsg::ERR_UNAUTHORIZED);
+    };
+    let authority = PendingAccountSession(Some(reference));
+    let mut path = heapless::String::<32>::new();
+    use core::fmt::Write;
+    let _ = write!(&mut path, "/bin/sshl{}", msg.words[0]);
+    let request = SpawnRequest::new(path.as_str(), "sshl");
+    let mut launch = IpcMsg::empty();
+    request.pack_into(&mut launch);
+    launch.label = SpawnMsg::SPAWN_SESSION_INITIAL;
+    launch.word_count = 4;
+    launch.caps[0] = sunlight_ipc::CapabilityToken(reference.id);
+    launch.caps[1] = sunlight_ipc::CapabilityToken(reference.epoch);
+    let Ok(reply) = ipc_call_timeout(spawn_cap, launch, SPAWN_SHELL_TIMEOUT_MS) else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    if reply.label != SpawnMsg::REPLY {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    }
+    let Some(process) = session_query_process(reply.words[0]) else {
+        return error(SessionMsg::ERR_INVALID_STATE);
+    };
+    // Capacity was checked before consuming the proof, and this loop is serial.
+    let _ = state.tty_sessions.push((process, authority));
+    write_log("[SESSION] TTY shell launched with account session\n");
+    IpcMsg::with_label(SessionMsg::REPLY).word(0, process.pid)
+}
+
+fn supervise_tty_sessions(state: &mut ServiceState) {
+    state.tty_sessions.retain(|(process, _)| {
+        session_query_process(process.pid) == Some(*process)
+    });
 }
 
 fn create_session(state: &mut ServiceState, msg: IpcMsg) -> IpcMsg {
@@ -1637,20 +1692,21 @@ pub extern "C" fn _start() -> ! {
     let mut reply = IpcMsg::empty();
     loop {
         supervise(&mut state);
+        supervise_tty_sessions(&mut state);
         sync_account_session_authority(&state);
         sync_wiseowl_session_authority(&mut state);
         ipc_reply(reply);
         // With no session there are no children, deferred launches, readiness
         // or stop deadlines to supervise. Only a queued request can create one.
         // Keep bounded progress for EVERY active state, including Stopping.
-        let received = if state.active.is_none() {
+        let received = if state.active.is_none() && state.tty_sessions.is_empty() {
             ipc_recv_result(endpoint)
         } else {
             ipc_recv_timeout_result(endpoint, 50)
         };
         let message = match received {
             Ok(message) => message,
-            Err(IpcError::DeadlineExpired) if state.active.is_some() => {
+            Err(IpcError::DeadlineExpired) => {
                 reply = IpcMsg::empty();
                 continue;
             }
@@ -1663,6 +1719,7 @@ pub extern "C" fn _start() -> ! {
         };
         reply = match message.label {
             SessionMsg::SESSION_CREATE => create_session(&mut state, message),
+            SessionMsg::SESSION_CREATE_TTY => create_tty_session(&mut state, message),
             SessionMsg::SESSION_CURRENT_IDENTITY => match state.active.as_ref() {
                 Some(active)
                     if matches!(

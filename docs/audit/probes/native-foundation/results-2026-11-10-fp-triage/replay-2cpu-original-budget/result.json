@@ -1,0 +1,31 @@
+{
+  "verdict": "TIMEOUT",
+  "elapsed": 240.12101054901723,
+  "qemu_exit": 0,
+  "events": [
+    {
+      "elapsed": 18.767,
+      "line": "[KBD]  Key injection enabled (phase=native-std, 4763 scancodes)"
+    },
+    {
+      "elapsed": 37.475,
+      "line": "[TTY]  Login success: root (uid=0, gid=0)"
+    },
+    {
+      "elapsed": 37.476,
+      "line": "[TTY]  Spawning /bin/sshl FAILED"
+    },
+    {
+      "elapsed": 37.476,
+      "line": "[TTY]  Built-in shell ready"
+    },
+    {
+      "elapsed": 70.917,
+      "line": "[KBD]  Key injection complete"
+    },
+    {
+      "elapsed": 78.496,
+      "line": "[TIME-CHECKPOINT] elapsed_target_secs=60 cpu=0 monotonic_ns=60000000000 global_ticks=6000 realtime_utc_unix=1794338122 realtime_base_unix=1794338062 realtime_base_ticks=0 last_update_owner=boot-rtc"
+    }
+  ]
+}

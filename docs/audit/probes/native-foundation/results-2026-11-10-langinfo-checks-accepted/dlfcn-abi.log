@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_dlfcn.py --out docs/audit/probes/native-foundation/results-2026-11-10-langinfo-checks-accepted/dlfcn
+Public C/C++ ABI and linked export index: PASS; guest acceptance is separate
+
+exit=0 elapsed=0.666

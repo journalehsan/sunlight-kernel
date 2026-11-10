@@ -1,0 +1,3 @@
+$ rustfmt --check --config skip_children=true sunlight-libc/src/lib.rs sunlight-libc/src/langinfo.rs
+
+exit=0 elapsed=0.272

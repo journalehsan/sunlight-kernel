@@ -1,0 +1,4 @@
+5c0345ff1797146fe0e55a29c4e8ab8d501e6e29747fbdb28e7b58b4b34c0aab  target/native-std-foundation.iso
+91970af83fef29a5b3cd1a6011940d5e2fc5719a3c0d2efa1cc53bf9e482c9a7  tools/native_std_boot_gate.py
+e6f03c890fe680d8b5216b46c2d48dee21de7be1282e9aead777b32598fd5247  tools/test_native_std_foundation.sh
+582d8cce13bbb46274bd0e1f1609ca322428e80e17c3f0d51ad03ffa3638e363  tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe

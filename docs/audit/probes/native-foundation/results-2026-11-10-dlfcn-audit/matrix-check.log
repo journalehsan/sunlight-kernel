@@ -1,0 +1,2 @@
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/results.csv: historical 10 PASS / 11 BUILD_FAIL; guests 39 PASS / 11 NOT_RUN; dlfcn line-2 missing header confirmed
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/results.csv: historical 10 PASS / 11 BUILD_FAIL; guests 39 PASS / 11 NOT_RUN; dlfcn line-2 missing header confirmed

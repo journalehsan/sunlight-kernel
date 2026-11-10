@@ -1,0 +1,5 @@
+Final formatted source: 43/43 PASS on 2 and 4 CPUs; all corresponding ELFs byte-identical across CPU counts. Historical 12 PASS / 9 BUILD_FAIL; original APIs 9 PASS / 9 BUILD_FAIL. Fault logs empty.
+langinfo: 29604d792b97d031837ff249e085c3fe4b7f8cf70ba20bfebce49a203e3b35c8
+langinfo-contract: 8b6c87c8e403722372ab490f5fdf438d64e009edc99503764adac4e9d2575138
+Changed ELF hashes after registration formatting, 2cpu: []
+Changed ELF hashes after registration formatting, 4cpu: []

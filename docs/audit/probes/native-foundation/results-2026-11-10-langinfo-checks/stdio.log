@@ -1,0 +1,10 @@
+$ python3 tools/native-c/tests/run_stdio.py --out docs/audit/probes/native-foundation/results-2026-11-10-langinfo-checks/stdio
+stdio host tests: PASS (see host-tests.log for count)
+actual tmpfs/VFS and kernel descriptor host tests: PASS (see host-vfs.log, host-fd-vfs.log)
+stdio C host adapter: PASS (exit 0; exact stdout/stderr)
+historical tmpfile probe host adapter: PASS (exit 0)
+stdio/open-unlink native builds and ELF checks: PASS (3 probes)
+C++ headers: PASS
+guest execution: NOT_RUN (host-only runner; use tools/native-c/guest.py --suite)
+
+exit=0 elapsed=2.819

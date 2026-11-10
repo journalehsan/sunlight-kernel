@@ -1,0 +1,5 @@
+*
+!dlfcn/
+!stdio/
+!*.log
+!.gitignore

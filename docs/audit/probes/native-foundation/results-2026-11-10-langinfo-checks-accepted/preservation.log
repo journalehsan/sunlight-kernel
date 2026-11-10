@@ -1,0 +1,1 @@
+21986 initial tracked/untracked files checked. All incoming work and evidence byte-identical except the audit append and two additive registrations. Removing those registrations reproduces the initial source hashes; original audit remains an exact byte prefix. Probe lock and historical sources unchanged. No commit or reset.

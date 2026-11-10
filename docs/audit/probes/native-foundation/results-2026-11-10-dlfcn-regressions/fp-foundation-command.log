@@ -1,0 +1,3 @@
+$ bash tools/test_native_std_foundation.sh
+exit=1
+2 CPU: Native FP verdict timed out after 240 seconds; 4 CPU not attempted by runner.

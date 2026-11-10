@@ -1,0 +1,6 @@
+$ bash tools/build_native_std.sh check --manifest-path tools/native-std-probe/Cargo.toml --bin native-std-probe --locked
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+error: cannot update the lock file /home/ehsantor/Projects/sunlightos-kernel/tools/native-std-probe/Cargo.lock because --locked was passed to prevent this
+help: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.
+
+exit=101 elapsed=0.264

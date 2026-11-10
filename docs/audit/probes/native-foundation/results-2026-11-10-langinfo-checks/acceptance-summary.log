@@ -1,0 +1,56 @@
+{
+  "2": {
+    "built_pass": 43,
+    "historical_pass": 12,
+    "historical_build_fail": 9,
+    "langinfo": {
+      "probe": "langinfo",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "29604d792b97d031837ff249e085c3fe4b7f8cf70ba20bfebce49a203e3b35c8"
+    },
+    "contract": {
+      "probe": "langinfo-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8b6c87c8e403722372ab490f5fdf438d64e009edc99503764adac4e9d2575138"
+    }
+  },
+  "4": {
+    "built_pass": 43,
+    "historical_pass": 12,
+    "historical_build_fail": 9,
+    "langinfo": {
+      "probe": "langinfo",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "29604d792b97d031837ff249e085c3fe4b7f8cf70ba20bfebce49a203e3b35c8"
+    },
+    "contract": {
+      "probe": "langinfo-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8b6c87c8e403722372ab490f5fdf438d64e009edc99503764adac4e9d2575138"
+    }
+  }
+}

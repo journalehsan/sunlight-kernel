@@ -99,6 +99,8 @@ def main():
         random_index = next(i for i, source in enumerate(sources) if source[0] == 'getrandom')
         sources.insert(random_index, ('random-service-before', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources.insert(random_index + 2, ('random-service-after', random_fixture, 0, ('stats',), b'', None, b'', False))
+        sources += [('dlfcn-contract', ROOT / 'tools/native-c/tests/dlfcn.c', 0, (), b'', b'', b'', False)]
+        sources += [('langinfo-contract', ROOT / 'tools/native-c/tests/langinfo.c', 0, (), b'', b'', b'', False)]
         sources += [
             ('stdout', ROOT / 'tools/native-c/tests/stdout.c', 0, (), b'', b'[NATIVE-C] stdout OK\n', b'', False),
             ('stdio-full', ROOT / 'tools/native-c/tests/stdio.c', 0, (WORK,), b'Q\n', STDOUT, b'stdio: stderr 0007\n', False),

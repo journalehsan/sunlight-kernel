@@ -1,0 +1,12 @@
+# Real authenticated shell launch and command execution, independent of pid.
+[TTY]  Login success: root (uid=0, gid=0)
+[SESSION] TTY shell launched with account session
+[TTY]  Spawning /bin/sshl (pid=
+[TTY]  Built-in shell ready
+sunshell registered as 'sshl'
+[TTY]  cmd: whoami -> root
+[TTY]  cmd: id -> uid=0(root) gid=0(root)
+[TTY]  exit: id -> 0
+[TTY]  New authenticated shell tab OK
+[TTY]  sysfetch invoked
+[TTY]  hostnamectl invoked

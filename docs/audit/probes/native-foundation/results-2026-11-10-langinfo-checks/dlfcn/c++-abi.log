@@ -1,0 +1,3 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I sunlight-libc/include -x c++ -c tools/native-c/tests/dlfcn.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-langinfo-checks/dlfcn/c++.o
+
+exit=0

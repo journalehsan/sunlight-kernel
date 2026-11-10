@@ -1,0 +1,4 @@
+$ llvm-nm --undefined-only docs/audit/probes/native-foundation/results-2026-11-10-langinfo-audit/langinfo.o
+                 U nl_langinfo
+
+exit=0

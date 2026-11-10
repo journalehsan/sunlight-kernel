@@ -11,7 +11,7 @@ use sunlight_ipc::{
     monotonic_millis, nameserver_lookup, nameserver_register, process_is_alive, process_yield,
     sysinfo, tty_publish_winsize, tty_stdin_push, tty_stdout_pull, unpack_key_event,
     CapabilityToken, IpcMsg, KbdMsg, MouseMsg, PointerReport, SessionAction, SessionComponentState,
-    SessionKind, SessionMsg, SessionState, SgpMsg, ShellMsg, SpawnMsg, TerminalWinsize, TzMsg,
+    SessionKind, SessionMsg, SessionState, SgpMsg, ShellMsg, TerminalWinsize, TzMsg,
     SESSION_ENDPOINT, SESSION_PROTOCOL_VERSION,
 };
 use sunlight_libc::sun_exec;
@@ -1388,7 +1388,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
     let mut display_cap: Option<CapabilityToken> = None;
 
     let mut state = TtyState::Login;
-    let mut spawn_cap: Option<CapabilityToken> = None;
     let mut tabs = core::array::from_fn(|_| ShellTab::empty());
     let mut tab_count = 0usize;
     let mut active_tab = 0usize;
@@ -1520,22 +1519,11 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
 
                                     match session {
                                         SessionType::Tty => {
-                                            let cap = match nameserver_lookup("spawn") {
-                                                Some(c) => c,
-                                                None => {
-                                                    debug_log("[TTY]  spawn capability not found");
-                                                    state = TtyState::Shell;
-                                                    break 'kbd;
-                                                }
-                                            };
-                                            spawn_cap = Some(cap);
-
                                             if spawn_tab(
                                                 &mut tabs,
                                                 &mut tab_count,
                                                 &mut active_tab,
                                                 &mut next_shell_id,
-                                                cap,
                                                 session_grant,
                                             ) {
                                                 if let Some(tab) =
@@ -1556,6 +1544,15 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     );
                                                     logged_initial_spawn = true;
                                                 }
+                                            } else {
+                                                login.message = "TTY session failed. Please log in again.";
+                                                if has_fb {
+                                                    render_login_fb(
+                                                        &login, fb_addr, fb32_w, fb32_h,
+                                                        fb32_p, &mut mouse, &login_bg,
+                                                    );
+                                                }
+                                                break 'kbd;
                                             }
 
                                             state = TtyState::Shell;
@@ -1877,7 +1874,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                             &mut tab_count,
                                             &mut active_tab,
                                             &mut next_shell_id,
-                                            spawn_cap,
                                             &mut phase3_6_done,
                                         ) {
                                             needs_render = true;
@@ -2073,7 +2069,6 @@ pub extern "C" fn _start(fb_addr: u64, fb_width: u64, fb_height: u64, fb_pitch: 
                                                     &mut tab_count,
                                                     &mut active_tab,
                                                 );
-                                                spawn_cap = None;
                                                 logged_initial_spawn = false;
                                                 if has_fb
                                                     && vt_is_active(active_vt, VirtualTerminal::Tty)
@@ -2676,7 +2671,6 @@ fn spawn_tab(
     tab_count: &mut usize,
     active_tab: &mut usize,
     next_shell_id: &mut u64,
-    spawn_cap: CapabilityToken,
     session_grant: CapabilityToken,
 ) -> bool {
     if *tab_count >= MAX_TABS {
@@ -2685,22 +2679,20 @@ fn spawn_tab(
 
     let shell_id = *next_shell_id;
     *next_shell_id += 1;
-    let mut path = [0u8; 32];
-    let path_len = make_shell_path(shell_id, 0, 0, &mut path);
-    let (pw0, pw1, pw2, pw3) = pack_path(&path[..path_len]);
-    // UID/GID are deliberately not encoded in this request. The kernel takes
-    // identity exclusively from the one-time UAC grant in caps[0].
-    let spawn_msg = IpcMsg::with_label(SpawnMsg::SPAWN_AUTHENTICATED)
-        .word(0, pw0)
-        .word(1, pw1)
-        .word(2, pw2)
-        .word(3, pw3)
-        .with_cap(0, session_grant);
-    let spawn_reply = ipc_call(spawn_cap, spawn_msg);
-    if spawn_reply.label != SpawnMsg::REPLY {
-        debug_log("[TTY]  Spawning /bin/sshl FAILED");
+    let Some(sessiond) = nameserver_lookup(SESSION_ENDPOINT) else {
+        debug_log("[TTY]  sessiond not registered");
         return false;
-    }
+    };
+    let request = IpcMsg::with_label(SessionMsg::SESSION_CREATE_TTY)
+        .word(0, shell_id)
+        .with_cap(0, session_grant);
+    let spawn_reply = match ipc_call_timeout(sessiond, request, SESSION_CREATE_TIMEOUT_MS) {
+        Ok(reply) if reply.label == SessionMsg::REPLY => reply,
+        _ => {
+            debug_log("[TTY]  Spawning /bin/sshl FAILED (session handoff)");
+            return false;
+        }
+    };
 
     let index = *tab_count;
     tabs[index] = ShellTab::empty();
@@ -2778,12 +2770,10 @@ fn handle_ctrl_key(
     tab_count: &mut usize,
     active_tab: &mut usize,
     next_shell_id: &mut u64,
-    spawn_cap: Option<CapabilityToken>,
     phase3_6_done: &mut bool,
 ) -> bool {
     match ascii {
         b't' | b'T' => {
-            let _ = spawn_cap;
             let _ = spawn_tab_from_active_shell(
                 tabs,
                 tab_count,
@@ -3328,45 +3318,8 @@ fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
     ));
 }
 
-fn pack_bytes(bytes: &[u8]) -> u64 {
-    let mut out = 0u64;
-    let mut idx = 0;
-    while idx < bytes.len() && idx < 8 {
-        out |= (bytes[idx] as u64) << (idx * 8);
-        idx += 1;
-    }
-    out
-}
-
-fn make_shell_path(shell_id: u64, uid: u32, gid: u32, out: &mut [u8]) -> usize {
-    let prefix = b"/bin/sshl";
-    out[..prefix.len()].copy_from_slice(prefix);
-    let encoded = encode_shell_launch_id(shell_id, uid, gid);
-    prefix.len() + fmt_u64(&mut out[prefix.len()..], encoded)
-}
-
-fn encode_shell_launch_id(shell_id: u64, uid: u32, gid: u32) -> u64 {
-    (shell_id & 0xff) | ((uid as u64 & 0x0fff_ffff) << 8) | ((gid as u64 & 0x0fff_ffff) << 36)
-}
-
 fn make_shell_name(shell_id: u64, out: &mut [u8]) -> usize {
     let prefix = b"sshl";
     out[..prefix.len()].copy_from_slice(prefix);
     prefix.len() + fmt_u64(&mut out[prefix.len()..], shell_id)
-}
-
-/// Pack a path (up to 32 bytes) into four u64 words for IPC transport.
-fn pack_path(path: &[u8]) -> (u64, u64, u64, u64) {
-    let mut words = [0u64; 4];
-    let mut word_idx = 0;
-    while word_idx < 4 {
-        let start = word_idx * 8;
-        if start >= path.len() {
-            break;
-        }
-        let end = (start + 8).min(path.len());
-        words[word_idx] = pack_bytes(&path[start..end]);
-        word_idx += 1;
-    }
-    (words[0], words[1], words[2], words[3])
 }

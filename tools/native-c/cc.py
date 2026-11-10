@@ -23,7 +23,7 @@ if link and not (SYSROOT / "lib/libsunlight_native_c.a").is_file():
 command += args
 if link:
     command += ["-nostdlib", "-static", "-fuse-ld=lld",
-                "-Wl,-T," + str(ROOT / "services/user-space.ld"),
+                "-Wl,-T," + str(ROOT / "tools/native-c/user-space.ld"),
                 "-Wl,--gc-sections,--undefined=_start,--no-undefined,--fatal-warnings",
                 str(SYSROOT / "lib/libsunlight_native_c.a")]
 os.execvp(command[0], command)

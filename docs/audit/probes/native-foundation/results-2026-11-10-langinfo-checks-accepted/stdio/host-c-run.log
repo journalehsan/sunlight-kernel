@@ -1,0 +1,13 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-langinfo-checks-accepted/stdio/stdio-host /tmp/sunlight-stdio-o7434gdr/file
+stdin=b'Q\n'
+stdout:
+stdio: native -42 42 0x2a -1234567890 7 %
+stdio: puts
+!
+stdio: vprintf V
+stdio: file PASS; tmpfile PASS
+
+stderr:
+stdio: stderr 0007
+
+exit=0

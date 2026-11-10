@@ -134,6 +134,13 @@ case "$PHASE" in
         PASS_LABEL="Phase 3.8"
         NEED_DISK=false
         ;;
+    tty-login)
+        EXPECTED_FILE="tools/tests/tty_login.expected"
+        FINAL_MARKER="[TTY]  hostnamectl invoked"
+        PASS_LABEL="TTY account session login"
+        NEED_DISK=false
+        TIMEOUT=120
+        ;;
     phase3.9)
         EXPECTED_FILE="tools/tests/phase3_9.expected"
         FINAL_MARKER="[TTY]  hostnamectl invoked"
@@ -743,7 +750,7 @@ if [[ "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" ]]; then
     bash "$SCRIPT_DIR/build_yazi.sh" >>"$BUILD_LOG" 2>&1
 fi
 KERNEL_FEATURES=""
-if [[ "$PHASE" == shell-* || "$PHASE" == "helios-open-largefile-probe" || "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-thread-probe" || "$PHASE" == "helios-io-probe" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
+if [[ "$PHASE" == shell-* || "$PHASE" == "helios-open-largefile-probe" || "$PHASE" == "helios-proven-tier1" || "$PHASE" == "helios-thread-probe" || "$PHASE" == "helios-io-probe" || "$PHASE" == "helios-note-regression" || "$PHASE" == "helios-static-runtime" || "$PHASE" == "yazi-baseline" || "$PHASE" == "yazi-phase1" || "$PHASE" == "phase2b1" || "$PHASE" == "phase3.6" || "$PHASE" == "phase3.7" || "$PHASE" == "phase3.8" || "$PHASE" == "phase3.9" || "$PHASE" == "tty-login" || "$PHASE" == "phase3.75" || "$PHASE" == "phase3.875" || "$PHASE" == "wiseowl-identity-phase-a" || "$PHASE" == "phase6.5.1" || "$PHASE" == "phase6.5.3" || "$PHASE" == "phase6.5.utils" || "$PHASE" == "phase2b4" || "$PHASE" == "phase2b5" || "$PHASE" == "top" || "$PHASE" == "tzctl" || "$PHASE" == "session-foundation" || "$PHASE" == "session-configuration" || "$PHASE" == "welcome-wizard" || "$PHASE" == "wiseowl-phase4a" || "$PHASE" == "wiseowl-phase4b" || "$PHASE" == "wiseowl-foundation-v1" || "$PHASE" == "wiseowl-executor-v1" || "$PHASE" == "wiseowl-planner-v1" || "$PHASE" == "wiseowl-coordinator-v1" || "$PHASE" == "wiseowl-outcome-observer-v1" || "$PHASE" == "wiseowl-action-receipt-v1" || "$PHASE" == "wiseowl-graphical-console-v1" || "$PHASE" == "wiseowl-gui-conversation-v1" || "$PHASE" == "wiseowl-gui-bridge-foundation-v1" || "$PHASE" == "wiseowl-trusted-session-readiness-v1" || "$PHASE" == "wiseowl-delegated-session-lifecycle-ipc-v1" ]]; then
     KERNEL_FEATURES="--features key_inject"
 elif [[ "$PHASE" == "phase_sec" ]]; then
     KERNEL_FEATURES="--features mm2a_test_injection"
@@ -773,7 +780,7 @@ if [[ "$PHASE" == shell-* ]]; then
     EXTRA_ENV+=("SUNLIGHT_INJECT_PHASE=$PHASE")
 elif [[ "$PHASE" == "phase2b1" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase2b1)
-elif [[ "$PHASE" == "phase3.9" ]]; then
+elif [[ "$PHASE" == "phase3.9" || "$PHASE" == "tty-login" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=phase3.9)
 elif [[ "$PHASE" == "phase3.75" ]]; then
     EXTRA_ENV+=(SUNLIGHT_INJECT_PHASE=wiseowl3.75)
@@ -881,6 +888,11 @@ fi
 set +e
 QEMU_SMP="${SUNLIGHT_TEST_CPUS:-2}"
 QEMU_MEMORY_MB="${SUNLIGHT_TEST_MEMORY_MB:-1024}"
+# This image embeds the full desktop suite; leave room for two TTY shells
+# and external identity utilities in the login regression.
+if [[ "$PHASE" == "tty-login" && -z "${SUNLIGHT_TEST_MEMORY_MB:-}" ]]; then
+    QEMU_MEMORY_MB=2048
+fi
 if [[ "$PHASE" == "yazi-phase1" && -z "${SUNLIGHT_TEST_MEMORY_MB:-}" ]]; then
     QEMU_MEMORY_MB=4096
 fi
