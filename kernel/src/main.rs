@@ -18,6 +18,8 @@ mod hardware_inventory;
 mod ipc;
 mod launch_trace;
 mod memory;
+#[cfg(feature = "native_c_guest")]
+mod native_c_guest;
 mod panic;
 mod process;
 mod sched;
@@ -63,380 +65,395 @@ static SMBIOS_REQ: limine::request::SmbiosRequest = limine::request::SmbiosReque
 static STACK_SIZE_REQ: limine::request::StackSizeRequest =
     limine::request::StackSizeRequest::new(1024 * 1024);
 
+// Isolated native-C images carry only their supplied ELFs. Ordinary images
+// still embed exactly the same production binaries through the builtin macro.
+#[cfg(not(feature = "native_c_guest"))]
+macro_rules! embedded_service_bytes {
+    ($path:literal) => { include_bytes!($path) };
+}
+#[cfg(feature = "native_c_guest")]
+macro_rules! embedded_service_bytes {
+    ($path:literal) => { b"" as &[u8] };
+}
+#[cfg(not(feature = "native_c_guest"))]
+const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = sunlight_fs::INITRAMFS;
+#[cfg(feature = "native_c_guest")]
+const BOOT_INITRAMFS: &[sunlight_fs::RamEntry] = native_c_guest::INITRAMFS;
+
 // Embedded service binaries (must be built before kernel)
 static INIT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-init");
 static TIMER_SERVER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-timer-server");
 static SUNLIGHT_SWAPD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-swapd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-swapd");
 static SUNLIGHT_KBD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-kbd");
 static SUNLIGHT_MOUSE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-mouse");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-mouse");
 static SUNLIGHT_USB_MOUSE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-usb-mouse");
 static DEVICED_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/deviced");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/deviced");
 static VFS_SERVER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-vfs-server");
 static TTY_SERVER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tty-server");
 static PTY_SERVER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/pty_server");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/pty_server");
 static NET_SERVER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/net_server");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/net_server");
 static SUNLIGHTD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlightd");
 static TIMEZONE_SERVICE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/timezone_service");
-static TIMED_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/timed");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/timezone_service");
+static TIMED_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/timed");
 static TZUTILS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/tzutils");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/tzutils");
 // Random service (ChaCha20 CSPRNG) launched by sunlightd.
 static RAND_SERVICE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/rand_service");
-static SUNSHELL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/sshl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/rand_service");
+static SUNSHELL_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/sshl");
 // Phase 6.5 Step 3: busybox-style multi-call userland binaries. PATH entries
 // under /sunlight-utils and /sunlight-net-utils all exec one of these; the
 // applet is selected by argv[0].
 static SUNLIGHT_UTILS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-utils");
 static LSBLK_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/lsblk");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/lsblk");
 static STORAGECTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/storagectl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/storagectl");
 static SUNLIGHT_ECHO_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/echo");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/echo");
 static SUNLIGHT_CAT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/cat");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/cat");
 static SUNLIGHT_PWD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/pwd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/pwd");
 static SUNLIGHT_TRUE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/true");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/true");
 static SUNLIGHT_FALSE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/false");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/false");
 static SUNLIGHT_BASENAME_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/basename");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/basename");
 static SUNLIGHT_DIRNAME_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/dirname");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/dirname");
 static SUNLIGHT_HEAD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/head");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/head");
 static SUNLIGHT_CMP_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/cmp");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/cmp");
 static SUNLIGHT_CKSUM_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/cksum");
-static SUNLIGHT_WC_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/wc");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/cksum");
+static SUNLIGHT_WC_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/wc");
 static SUNLIGHT_CUT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/cut");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/cut");
 static SUNLIGHT_FOLD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/fold");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/fold");
 static SUNLIGHT_EXPAND_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/expand");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/expand");
 static SUNLIGHT_GREP_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/grep");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/grep");
 static SUNLIGHT_SORT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sort");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sort");
 static SUNLIGHT_UNIQ_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/uniq");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/uniq");
 static SUNLIGHT_COMM_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/comm");
-static SUNLIGHT_TR_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/tr");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/comm");
+static SUNLIGHT_TR_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/tr");
 static SUNLIGHT_PASTE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/paste");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/paste");
 static SUNLIGHT_JOIN_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/join");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/join");
 static SUNLIGHT_PRINTF_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/printf");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/printf");
 static SUNLIGHT_TEE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/tee");
-static SUNLIGHT_NL_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/nl");
-static SUNLIGHT_OD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/od");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/tee");
+static SUNLIGHT_NL_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/nl");
+static SUNLIGHT_OD_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/od");
 static SUNLIGHT_SPLIT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/split");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/split");
 static SUNLIGHT_FIND_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/find");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/find");
 static SUNLIGHT_XARGS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/xargs");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/xargs");
 static SUNLIGHT_NET_UTILS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-net-utils");
 static SUNLIGHT_TOP_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-top");
 static MEMORYCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/memoryctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/memoryctl");
 static SUNLIGHT_FETCH_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/fetch");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/fetch");
 static SUNLIGHTCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlightctl");
 static MEZZOCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/mezzoctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/mezzoctl");
 static SUNLIGHT_SESSIONCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessionctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessionctl");
 static DEVICECTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/devicectl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/devicectl");
 static SUNLIGHT_HWINFO_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-hwinfo");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-hwinfo");
 static NETWORKD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/networkd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/networkd");
 static NETWORKCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/networkctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/networkctl");
 static RESOLVED_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/resolved");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/resolved");
 static RESOLVECTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
-static POWERD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/powerd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/resolvectl");
+static POWERD_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/powerd");
 static POWERCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/powerctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/powerctl");
 static THERMALD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/thermald");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/thermald");
 static THERMALCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/thermalctl");
-static AUDIOD_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/audiod");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/thermalctl");
+static AUDIOD_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/audiod");
 static AUDIOCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/audioctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/audioctl");
 static SUNLIGHT_NICED_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/niced");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/niced");
 static NICECTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/nicectl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/nicectl");
 static SUNLIGHT_GCD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/gcd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/gcd");
 // Key-value storage daemon launched by sunlightd.
 static SUNLIGHT_KV_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kv");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-kv");
 // Key-value control CLI (talks to sunlight-kv via IPC).
 static SUNLIGHT_KVCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-kvctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-kvctl");
 // TLS service (certs via sunlight-kv) + its control CLI.
 static SUNLIGHT_ACCOUNT_BROKER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-account-broker");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-account-broker");
 static SUNLIGHT_TLS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tls");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tls");
 static SECRET_STORE_TEST_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/secret_store_test");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/secret_store_test");
 static CERTIFICATECTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/certificatectl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/certificatectl");
 // User Access Control: daemon spawned by sunlightd + its control client.
 static UAC_SERVICE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/uac_service");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/uac_service");
 static SUNLIGHT_SESSIOND_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-sessiond");
 #[cfg(feature = "dependency_test")]
-static D3_PARENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-parent");
+static D3_PARENT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d3-parent");
 #[cfg(feature = "dependency_test")]
-static D3_LEAF_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-leaf");
+static D3_LEAF_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d3-leaf");
 #[cfg(feature = "dependency_test")]
-static D3_CLIENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d3-client");
+static D3_CLIENT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d3-client");
 // Session Configuration Phase 1 optional-startup test fixtures.
 #[cfg(feature = "idle_test")]
-static D2_DEPENDENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d2-dependent");
+static D2_DEPENDENT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d2-dependent");
 #[cfg(feature = "idle_test")]
-static D2_FIXTURE_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d2-fixture");
+static D2_FIXTURE_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d2-fixture");
 #[cfg(feature = "idle_test")]
-static D2_DRIVER_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d2-driver");
+static D2_DRIVER_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d2-driver");
 #[cfg(feature = "demand_test")]
-static D1_FIXTURE_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-fixture");
+static D1_FIXTURE_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-fixture");
 #[cfg(feature = "demand_test")]
-static D1_TIMEOUT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-timeout");
+static D1_TIMEOUT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-timeout");
 #[cfg(feature = "demand_test")]
-static D1_CRASH_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-crash");
+static D1_CRASH_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-crash");
 #[cfg(feature = "demand_test")]
-static D1_DEPENDENT_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-dependent");
+static D1_DEPENDENT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-dependent");
 #[cfg(feature = "demand_test")]
-static D1_DRIVER_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-driver");
+static D1_DRIVER_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-driver");
 #[cfg(feature = "demand_test")]
-static D1_ACTIVATION_ONLY_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-activate-only");
+static D1_ACTIVATION_ONLY_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-activate-only");
 #[cfg(feature = "demand_test")]
-static D1_DENIED_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/d1-denied");
-static SU1_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su1");
-static SU2_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/su2");
-static MEZZO_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/mezzo");
+static D1_DENIED_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/d1-denied");
+static SU1_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/su1");
+static SU2_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/su2");
+static MEZZO_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/mezzo");
 static CAPABILITYCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
-static RUNAS_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/runas");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/capabilityctl");
+static RUNAS_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/runas");
 // Storage Manager (sunlight-sm) for controlled protected writes.
 static SUNLIGHT_SM_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-sm");
 // Solar HTTP server with SBSP scripting engine.
-static SOLAR_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/solar");
+static SOLAR_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/solar");
 // sunlight-sunsay: native Rust proof-of-life binary (std smoke test, Phase 1).
 static SUNLIGHT_SUNSAY_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-sunsay");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-sunsay");
 // sunlight-zoxide: directory jump utility (Phase 2 std validation).
 static SUNLIGHT_ZOXIDE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/z");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/z");
 // sunlight-dict: offline dictionary lookup (Phase 3 std validation).
 static SUNLIGHT_DICT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/dict");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/dict");
 // sunlight-hangman: interactive no_std smoke test for stdin/stdout/libc.
 static SUNLIGHT_HANGMAN_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/hangman");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/hangman");
 // cpufeat: x86-64-v2/v3 CPU feature detection and microarchitecture level reporting.
 static CPUFEAT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/cpufeat");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/cpufeat");
 // hello-linux: static musl Rust binary for Helios Linux-compat smoke test.
-static HELLO_LINUX_ELF_BYTES: &[u8] = include_bytes!("../../hello-linux/hello-linux.elf");
-static HELIOS_PROBE_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/linux-probe-all");
+static HELLO_LINUX_ELF_BYTES: &[u8] = embedded_service_bytes!("../../hello-linux/hello-linux.elf");
+static HELIOS_PROBE_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/helios-probes/linux-probe-all");
 #[cfg(feature = "sunjs_probe")]
 pub(crate) static SUNJS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunjs");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunjs");
 
 #[cfg(feature = "native_std_probe")]
 static NATIVE_FP_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe");
+    embedded_service_bytes!("../../tools/native-std-probe/target/x86_64-sunlightos/release/native-fp-probe");
 static HELIOS_THREAD_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/helios-probes/linux-thread-probe");
+    embedded_service_bytes!("../../target/helios-probes/linux-thread-probe");
 static HELIOS_FIONBIO_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/helios-probes/linux-fionbio-pipe-probe");
+    embedded_service_bytes!("../../target/helios-probes/linux-fionbio-pipe-probe");
 static HELIOS_RECVFROM_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/helios-probes/linux-recvfrom-probe");
+    embedded_service_bytes!("../../target/helios-probes/linux-recvfrom-probe");
 static HELIOS_OPEN_LARGEFILE_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/helios-probes/linux-open-largefile-probe");
+    embedded_service_bytes!("../../target/helios-probes/linux-open-largefile-probe");
 static HELIOS_PROBE_RUNTIME_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/helios-probes/linux-probe-runtime");
-static SBASE_ECHO_ELF_BYTES: &[u8] = include_bytes!("../../target/helios-probes/sbase-echo");
+    embedded_service_bytes!("../../target/helios-probes/linux-probe-runtime");
+static SBASE_ECHO_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/helios-probes/sbase-echo");
 // helios-note: std+libc Rust terminal note editor, runs via Helios Linux compat.
 static HELIOS_NOTE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
+    embedded_service_bytes!("../../target/x86_64-unknown-linux-musl/release/helios-note");
 // Yazi v26.9.1, built from the pinned upstream source as static ET_EXEC for
 // the current loader. The untouched upstream PIE is retained for baseline.
 static YAZI_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-linux-musl/release/yazi");
+    embedded_service_bytes!("../../target/x86_64-unknown-linux-musl/release/yazi");
 #[cfg(feature = "key_inject")]
 static YAZI_BASELINE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi");
+    embedded_service_bytes!("../../target/yazi-v26.9.1/yazi-x86_64-unknown-linux-musl/yazi");
 // GUI Phase 3+: Display compositor (window manager) for the Sunlight Graphics Protocol.
 static SUNLIGHT_DISPLAY_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-display");
 // Canonical first graphical demo (Eyes Tracker).
-static EYES_ELF_BYTES: &[u8] = include_bytes!("../../target/x86_64-unknown-none/release/eyes");
+static EYES_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/x86_64-unknown-none/release/eyes");
 static SUNLIGHT_RUNNER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-runner");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-runner");
 static SUN_EXEC_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sun-exec");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sun-exec");
 static SUN_OPEN_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sun-open");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sun-open");
 // First PTY-backed graphical terminal client.
 static SUNLIGHT_TERMINAL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-terminal");
 // Chronos: safe user-space DOS `.COM` compatibility runtime.
 static SUNLIGHT_CHRONOS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-chronos");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-chronos");
 // First graphical task monitor client.
 static SUNLIGHT_TASKS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-tasks");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-tasks");
 // SunLight-Bench: CPU/multi-core performance benchmarking suite.
 static SUNLIGHT_BENCH_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunbench");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunbench");
 #[cfg(feature = "scheduler_guest_bench")]
 static SCHEDULER_GUEST_BENCH_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/schedbench");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/schedbench");
 #[cfg(feature = "idle_wakeup_test")]
 static IDLE_WAKEUP_PROBE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/d38w-probe");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/d38w-probe");
 // Sunlight Calculator: lightweight graphical calculator.
 static SUNLIGHT_CALCULATOR_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/calculator");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/calculator");
 // Welcome Wizard (org.sunlight.wiseowl-welcome).
 static SUNLIGHT_WELCOME_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/welcome");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/welcome");
 // Developer widget gallery (DigitalNumber / SolarClock / WorldMap preview).
 static SUNLIGHT_WIDGET_GALLERY_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/widget-gallery");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/widget-gallery");
 // Silicon Echoes: 1993: native graphical narrative-game vertical slice.
 static SILICON_ECHOES_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/silicon-echoes");
 // Sunlight Files: native file manager.
 static SUNLIGHT_FILES_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-files");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-files");
 // Light Lens: lightweight graphical image viewer.
 static LIGHT_LENS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/light-lens");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/light-lens");
 // Melody Mina: native responsive music-player frontend (UI-only Phase 1).
 // Melody Mina is a UI client; its reusable playback engine remains linked in
 // the userspace application rather than leaking codec/audio logic here.
 static VOICE_RECORDER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/voice-recorder");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/voice-recorder");
 static MELODY_MINA_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/melody-mina");
 // Sunlight Edit: native graphical text editor.
 static SUNLIGHT_EDIT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-edit");
 // Sunlight Writer: professional document shell.
 static SUNLIGHT_WRITER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-writer");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-writer");
 // Sunlight Calendar: native graphical calendar application.
 static SUNLIGHT_CALENDAR_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-calendar");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-calendar");
 // Sunlight Reminders: native personal tasks and reminders application.
 static SUNLIGHT_REMINDERS_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-reminders");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-reminders");
 // Sunlight Devices: read-only graphical deviced inventory viewer.
 static SUNLIGHT_DEVICES_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-devices");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-devices");
 // Rappid Rabbit: native HTTP inspection application.
 static RAPPID_RABBIT_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/rappid-rabbit");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/rappid-rabbit");
 // Sunlight API Lab: native REST/API testing application.
 static SUNLIGHT_API_LAB_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-api-lab");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-api-lab");
 // Dialog host: shared native dialog service for GUI apps.
 static SUNLIGHT_DIALOGD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-dialogd");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-dialogd");
 // Vortex Shell: SunlightOS desktop surface (Phase 1 — wallpaper + desktop layer).
 static SUNLIGHT_VORTEX_SHELL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-vortex-shell");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-vortex-shell");
 // Control Panel: System Preferences GUI (Mouse + Monitor settings — Day 22/23).
 static SUNLIGHT_CONTROL_PANEL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/control-panel");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/control-panel");
 // Thumbnail daemon: decodes .simg sources and caches 128/256px thumbnails.
 static SUNLIGHT_THUMBD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-thumbd");
 #[cfg(all(feature = "document_service", not(feature = "native_document_service")))]
 static SUNLIGHT_DOCSERV_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docserv");
+    embedded_service_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docserv");
 #[cfg(feature = "native_document_service")]
 static SUNLIGHT_DOCSERV_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-docserv");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-docserv");
 // The viewer UI is packaged independently of the optional rendering service.
 #[cfg(not(feature = "native_document_viewer"))]
 static SUNLIGHT_DOCVIEW_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docview");
+    embedded_service_bytes!("../../target/x86_64-unknown-linux-musl/release/sunlight-docview");
 #[cfg(feature = "native_document_viewer")]
 static SUNLIGHT_DOCVIEW_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/sunlight-docview");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/sunlight-docview");
 #[cfg(feature = "document_postscript")]
-static DOCUMENT_GHOSTSCRIPT_ELF_BYTES: &[u8] = include_bytes!("../../target/docserv-gs");
+static DOCUMENT_GHOSTSCRIPT_ELF_BYTES: &[u8] = embedded_service_bytes!("../../target/docserv-gs");
 static SUNLIGHT_CLIPD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipd");
 static SUNLIGHT_CLIP_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clip");
 // Wise Owl Phase 1.1: short-term cognitive memory service + diagnostic CLI.
 static WISEOWL_MEMORYD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryd");
 static WISEOWL_MEMORYCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memoryctl");
 // Wise Owl Phase 2: durable long-term memory database + diagnostic CLI.
 static WISEOWL_MEMORYDB_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydb");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydb");
 static WISEOWL_MEMORYDBCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydbctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-memorydbctl");
 // Wise Owl Phase 3: document indexer + diagnostic CLI.
 static WISEOWL_INDEXD_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexd");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexd");
 static WISEOWL_INDEXCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexctl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl-indexctl");
 // Wise Owl Phase 4A: bounded cognitive brain service + diagnostic CLI.
 static WISEOWL_BRAIND_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/wiseowl-braind");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/wiseowl-braind");
 static WISEOWL_BRAINCTL_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-sunlightos/release/wiseowl-brainctl");
+    embedded_service_bytes!("../../target/x86_64-sunlightos/release/wiseowl-brainctl");
 // Wise Owl native graphical console.
 static WISEOWL_CONSOLE_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/wiseowl");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/wiseowl");
 static SUNLIGHT_CLIPMAN_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-clipman");
 static EMOJI_PICKER_ELF_BYTES: &[u8] =
-    include_bytes!("../../target/x86_64-unknown-none/release/sunlight-emoji-picker");
+    embedded_service_bytes!("../../target/x86_64-unknown-none/release/sunlight-emoji-picker");
 
 /// Virtual address in each user process at which the FAT32 share page is mapped.
 const FAT_SHARE_VADDR: u64 = sunlight_fat::FAT_SHARE_VADDR;
@@ -514,7 +531,7 @@ pub extern "C" fn _start() -> ! {
         splash.set_ram((total * 4 / 1024) as u32);
         // Physical memory accounting Phase 1: measure static INITRAMFS file data
         // embedded in the kernel image. No second copy is created at mount time.
-        let ramfs_bytes = sunlight_fs::initramfs_static_file_data_bytes(sunlight_fs::INITRAMFS);
+        let ramfs_bytes = sunlight_fs::initramfs_static_file_data_bytes(BOOT_INITRAMFS);
         memory::accounting::set_ramfs_static_file_bytes(ramfs_bytes);
         // Boot-image residency: static assets live inside the kernel image only.
         // retained_boot_image_bytes = 0 (measured): no separate retained copy.
@@ -807,6 +824,11 @@ pub extern "C" fn _start() -> ! {
     // 7b. Security hardening self-test (Bite 4, Task 0)
     #[cfg(feature = "production_grant_test")]
     capability::production_gate::run(hhdm_offset);
+
+    #[cfg(feature = "native_c_guest")]
+    if option_env!("SUNLIGHT_NATIVE_C_MANIFEST").is_some() {
+        native_c_guest::boot(hhdm_offset);
+    }
 
     run_security_hardening_tests(hhdm_offset);
 
@@ -2322,7 +2344,7 @@ fn init_kernel_vfs() {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 
     if vfs
-        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(sunlight_fs::INITRAMFS))
+        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(BOOT_INITRAMFS))
         .is_err()
     {
         serial_println!("[VFS] kernel ramfs mount FAILED");

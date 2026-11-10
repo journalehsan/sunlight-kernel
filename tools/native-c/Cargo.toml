@@ -1,0 +1,16 @@
+[package]
+name = "sunlight-native-c"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+sunlight-libc = { path = "../../sunlight-libc", features = ["native-c"] }
+
+[profile.release]
+panic = "abort"
+

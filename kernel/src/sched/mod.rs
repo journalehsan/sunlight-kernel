@@ -2911,6 +2911,8 @@ impl Scheduler {
         let lifecycle_who = crate::capability::delivery::RecipientIdentity::of(&self.processes[idx]);
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
         crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::CLEANUP_STARTED,0,self.processes[idx].state as u64,u64::from(self.processes[idx].exit_cleanup_pending));
+        #[cfg(feature = "native_c_guest")]
+        crate::native_c_guest::before_reap(&self.processes[idx]);
         let leaked_fds = self.processes[idx].fd_table.take_all_handles();
         #[cfg(feature = "authenticated_cancel_test")]
         crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
@@ -3094,6 +3096,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(feature = "native_c_guest")]
+        crate::native_c_guest::after_reap(&self.processes[idx], &reclaim);
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
         crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::CLEANUP_COMPLETED,0,self.processes[idx].state as u64,u64::from(self.processes[idx].exit_cleanup_pending) | (u64::from(self.processes[idx].kernel_stack.is_some())<<1));
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]

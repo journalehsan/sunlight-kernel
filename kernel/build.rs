@@ -11,6 +11,14 @@ struct EmbeddedBinary<'a> {
 }
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=SUNLIGHT_NATIVE_C_MANIFEST");
+    if env::var_os("CARGO_FEATURE_NATIVE_C_GUEST").is_some() {
+        let manifest = env::var("SUNLIGHT_NATIVE_C_MANIFEST")
+            .expect("native_c_guest requires tools/native-c/guest.py");
+        println!("cargo:rerun-if-changed={manifest}");
+        // guest.py explicitly builds the fixture's two support services.
+        return;
+    }
     if env::var_os("CARGO_FEATURE_NATIVE_DOORBELL_TEST").is_some() {
         let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("..");
         let input = root.join("tools/helios-probes/doorbell-probe.S");

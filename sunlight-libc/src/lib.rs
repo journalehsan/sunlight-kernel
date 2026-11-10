@@ -1,4 +1,8 @@
 #![no_std]
+#![cfg_attr(
+    all(feature = "native-std", target_os = "sunlightos"),
+    feature(c_variadic)
+)]
 
 //! Minimal userland libc for SunlightOS (the lucerna role in Luxos).
 //!
@@ -11,7 +15,11 @@
 
 // ── Core syscall layer ───────────────────────────────────────────────────────
 pub mod rand;
+/// Native C secure random adapter; distinct from the Rust-only local PRNG flag.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod random;
 pub mod sys;
+pub mod temp;
 
 // ── libc extension modules ───────────────────────────────────────────────────
 
@@ -42,18 +50,27 @@ pub mod secret_store;
 pub mod ssh_config;
 #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
 pub mod std_runtime;
+/// Minimal unbuffered native C streams and formatted output.
+#[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+pub mod stdio;
 /// Freestanding C string primitives (strlen, strnlen, strcmp, strncmp, strchr, strrchr).
 pub mod string;
 /// Canonical user-space app launch resolution and tracing.
 pub mod sun_exec;
 /// Global file-open resolver (extension MIME + default app associations).
 pub mod sun_open;
+/// Bounded C termination callbacks, separate from Rust's raw exit ABI.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod termination;
 /// Native thread spawning.
 pub mod thread;
 /// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
 pub mod tls;
+/// First native C descriptor operation; no general POSIX header contract.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod unistd;
 
 pub use rand::{getrandom, GRND_NONCRYPTO};
 pub use sys::{Errno, EAGAIN_RAW, ERR_RAW};
@@ -183,18 +200,17 @@ pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
 }
 
 pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
-    if buf.len() > sys::MAX_IO_COUNT {
+    unsafe { write_raw(fd, buf.as_ptr(), buf.len()) }
+}
+
+/// Shared Rust/C single-transfer boundary. The kernel copies from user memory;
+/// do not construct a Rust reference from an untrusted C buffer pointer.
+pub(crate) unsafe fn write_raw(fd: Fd, ptr: *const u8, len: usize) -> Result<usize, Errno> {
+    if len > sys::MAX_IO_COUNT {
         return Err(Errno::TooBig);
     }
-    let ret = unsafe {
-        sys::syscall3(
-            sys::SYS_WRITE,
-            fd.0 as u64,
-            buf.as_ptr() as u64,
-            buf.len() as u64,
-        )
-    };
-    sys::check_io_count(ret, buf.len())
+    let ret = unsafe { sys::syscall3(sys::SYS_WRITE, fd.0 as u64, ptr as u64, len as u64) };
+    sys::check_io_count(ret, len)
 }
 
 pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {

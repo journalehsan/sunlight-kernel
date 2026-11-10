@@ -716,6 +716,8 @@ recovery_test = ["dependency_test"]
 # The optional legacy MuPDF renderer requires a separate musl C/C++ toolchain.
 default = []
 native_std_probe = []
+# Isolated arbitrary native ELF acceptance fixture; never used in normal boots.
+native_c_guest = []
 # Optional isolated JavaScript CLI smoke fixture.
 sunjs_probe = []
 document_service = []

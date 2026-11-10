@@ -47,6 +47,9 @@ unsafe extern "C" fn sl_std_start(
     sl_std_init_tls();
     crate::env::init(envp);
     let status = main(argc, argv);
+    #[cfg(feature = "native-c")]
+    crate::termination::exit(status);
+    #[cfg(not(feature = "native-c"))]
     sl_std_exit(status)
 }
 
