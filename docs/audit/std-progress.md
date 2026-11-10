@@ -1778,3 +1778,263 @@ native protection syscall are implementation leads, not evidence that the C
 ABI already works. Define/verify that narrow C surface, retaining protection
 and overflow rules, then run that unchanged ELF on 2 and 4 CPUs. This phase
 does not implement it or claim acceptance from a missing-header failure.
+
+
+## Phase 8 — existing mmap ABI gap audit (2026-11-10)
+
+The unchanged historical `docs/audit/probes/mmap.c` was inspected first with
+its Phase 7 `build-mmap.log`: compilation stopped at missing `<sys/mman.h>`.
+Its exact request is `mmap(NULL, 1048576, PROT_READ|PROT_WRITE,
+MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)`, a last-byte write,
+`mprotect(p, 1048576, PROT_READ)`, then `munmap(p, 1048576)`.
+No historical probe was edited.
+
+Repository-wide search found genuine native protection support: dispatch 52
+in `kernel/src/arch/x86_64/syscall.rs`, `process::mmap::sys_mprotect`, expected
+PTE permission updates in `process/address_space.rs`, and TLB invalidation.
+There is **no missing VM operation blocker** for this probe. The existing
+`SYS_MPROTECT` constant also already existed. No kernel code was changed.
+
+The additions are the narrow C header and a target-gated `mprotect` C adapter
+calling syscall 52. Existing Rust mmap/munmap wrappers, request validation and
+target-gated exports are preserved. Static-archive symbol inspection confirms
+exactly one `mmap`, `munmap` and `mprotect`; no additional export registry is
+needed. The header declares signed LP64 `off_t`, `size_t` lengths and `int`
+flags/protections. `MAP_NATIVE_THREAD` remains absent from the public header.
+C/C++ header checks assert signatures, constant values, types, repeat inclusion
+and include order under base, POSIX and GNU feature settings.
+
+The C subset retains private anonymous mappings only, fd=-1, offset=0,
+no nonfixed address hints, readable protection requests and W^X. PROT_NONE,
+write-only, execute-only, RWX, unknown bits, shared/file mappings and nonzero
+offsets are not advertised as supported. New mprotect validation follows the
+same narrow protection subset, alignment and overflow rules. Success preserves
+errno; local invalid requests return EINVAL; native VM errors remain generic
+EIO. The adapter never reports a synthetic protection-change success.
+
+Bounds ordering was reviewed before guest validation. In
+`kernel/src/process/mmap.rs`, `checked_page_layout` and `UserRange` precede
+`preflight_replace`/`map_fixed_transaction`; munmap checks the full range before
+ledger preflight, retirement staging and leaf removal; mprotect checks the
+full range, ledger coverage/policy, present PTE ownership and complete ledger
+plan before its first permission update. The bounds fixture bypasses libc
+using raw native syscalls 50/51/52 and submits both size overflow and a span
+crossing the user-address limit from an existing valid page. Every request
+fails while the original sentinel and writability remain intact.
+
+Fresh evidence lives under `docs/audit/probes/native-foundation/`:
+
+| Check | Result | Evidence directory/file |
+|---|---|---|
+| production libc host unit tests | **107 PASS**, 2 existing native-credential tests filtered on Linux | `results-2026-11-10-mman-host/libc.log` |
+| twelve C11/C++17 ABI/header combinations | **PASS** | `results-2026-11-10-mman-host/c*.log` |
+| unique canonical exports, unchanged-source native ELF and disassembly | **PASS**, no undefined symbols or host personality | `results-2026-11-10-mman-host/historical-*.log`, `native-symbols.log` |
+| full 2-CPU guest suite | **35 PASS / 0 guest FAIL** | `results-2026-11-10-mman-2cpu/results.csv`, `serial.log` |
+| full 4-CPU guest suite | **35 PASS / 0 guest FAIL** | `results-2026-11-10-mman-4cpu/results.csv`, `serial.log` |
+
+Both guests execute the unchanged historical mmap ELF with SHA-256
+`c23f3a1c6707e51adff60725357631640512cf3b6ca84fde8d6da8a33c5899ef` and exit 0.
+The three additional fixtures are counted separately: `mman-subset`,
+`mman-fixed`, `mman-bounds`, all exit 0 on both CPU counts with clean reap,
+physical-frame and descriptor checks. The subset checks all 1 MiB for zero fill,
+last-byte writes, and a real RW-to-R-to-RW transition: independent syscall 88
+cannot copy its timespec to the read-only first page, then succeeds after RW
+restoration. This observes kernel writable-PTE enforcement; hardware user-write
+faults and forced stale-TLB/cross-core interleavings are **NOT_RUN** here.
+The fixed fixture replaces the middle of three anonymous pages at the exact
+address, observes zeroed replacement contents and intact neighbors. This is
+fresh kernel execution of that MAP_FIXED case, not a claim of exhaustive fixed
+replacement transaction or failure coverage.
+
+Counts below were updated only after both guest runs passed:
+
+| Historical scope | Phase 7 | Phase 8 build and guest acceptance |
+|---|---|---|
+| 18 API probes (17 C + 1 C++) | 5 PASS / 13 BUILD_FAIL | **6 PASS / 12 BUILD_FAIL / 12 guest NOT_RUN** |
+| 21 executables including foundation | 8 PASS / 13 BUILD_FAIL | **9 PASS / 12 BUILD_FAIL / 12 guest NOT_RUN** |
+| 16 originally blocked APIs | 3 PASS / 13 BUILD_FAIL | **4 PASS / 12 BUILD_FAIL / 12 guest NOT_RUN** |
+
+The additional fixtures do not inflate historical counts. Earlier results are
+retained. `mman-host/historical-before.log` preserves the original diagnostic;
+`historical-unchanged.log`, `source-hashes.log` and `vm-audit.log` record source
+identity and reviewed VM paths. Formatting, Python compilation and source
+whitespace checks pass. Captured tool logs/CSV retain their original whitespace.
+
+
+## Phase 9 — native C directory enumeration bridge (2026-11-10)
+
+This entry was appended only after both final guest suites passed. Phase 8
+does not explicitly name a Phase 9 target. The target was selected from its
+retained current matrix, `results-2026-11-10-mman-2cpu/results.csv`: the first
+remaining historical BUILD_FAIL is **`docs/audit/probes/dirent.c`**. Its exact
+first actionable diagnostic in `build-dirent.log` is
+`dirent.c:2:10: fatal error: 'dirent.h' file not found`, reproduced in the
+4-CPU build log. The diagnostic is copied to `dirent-host/historical-before.log`
+below. Target and starting counts were reported before implementation: 18 APIs
+**6 PASS / 12 BUILD_FAIL**, 21 historical executables **9 guest PASS / 0 FAIL /
+12 NOT_RUN**, 16 originally blocked APIs **4 PASS / 12 BUILD_FAIL**; both
+complete Phase 8 suites **35 guest PASS**.
+
+The unchanged source defines `_GNU_SOURCE`, includes `<dirent.h>`, declares
+`DIR *d`, calls `opendir(".")`, requires a non-NULL result, tests
+`readdir(d) == 0`, calls `closedir(d)` and returns that boolean. It requires
+one genuine entry. It uses no entry fields, flags, directory descriptor,
+seek/rewind, inode, type constants, or mutation behavior. No historical source
+or expected status/output was changed. Source SHA-256 remains
+`b77440b252b906b6190de25a6ac0ffb686f88eaa292a146cd529783c5a376bb8`.
+
+Source tracing found an existing native capability, not a missing enumeration
+operation: `sunlight-libc/src/lib.rs` already provides the 80-byte `DirEntry`,
+`read_dir` (60), `read_dir_from` (148), `stat` (61) and `getcwd` (64).
+`kernel/src/arch/x86_64/syscall.rs::sys_readdir` checks real VFS read permission,
+enumerates `KERNEL_VFS`, skips the requested entry offset and copies actual
+records to userspace; `sys_stat_path` supplies directory type. The production
+native path is direct kernel VFS, not the userspace `vfs_server` service or a
+Helios/Linux adapter. VFS requires absolute paths without dot components;
+the existing getcwd wrapper supplies the actual process CWD for `"."`.
+Rust std's `tools/native-std/overlay/fs/sunlightos.rs::readdir` still returns
+unsupported; this phase does not claim to implement that separate interface.
+
+The missing C header/export slice is now implemented. `DIR` is opaque;
+`struct dirent` exposes only `char d_name[65]`, enough for the native 64-byte
+name plus NUL, and no invented inode/type metadata. `opendir` validates the
+bounded pathname, obtains CWD for `"."`, checks directory type and prefetches
+one actual record through syscall 148. Its heap allocation contains its own
+absolute path, offset and returned entry. `readdir` advances by native record
+offset, including beyond 64 entries, and distinguishes native errors from EOF.
+`closedir` frees that state; no descriptor was acquired. No synthetic dot
+entries or success results are inserted. Existing Rust helpers, production
+syscalls, VFS, loader and permission policy remain unchanged.
+
+The supported path subset is `"."` and canonical absolute paths. Other relative
+paths, dot components, repeated/trailing separators fail **ENOSYS**, rather than
+being misresolved. NULL path is EFAULT, empty path ENOENT, a path without NUL
+within 256 bytes E2BIG, a nondirectory ENOTDIR, failed allocation ENOMEM, and
+NULL stream EBADF. Native errors use the existing errno mapping; enumeration
+can return generic EIO where the kernel lacks a structured error. Malformed
+native records/counts and offset overflow fail EIO without advancing state.
+Success and EOF preserve errno. Callers must provide valid C storage and live
+streams and serialize operations on each stream. Directory descriptors,
+inode/type fields, seek, stable snapshots and concurrent directory mutation
+semantics are not supplied by this header. Each read rescans by entry offset;
+no large-directory performance claim is made.
+
+All evidence paths below are under `docs/audit/probes/native-foundation/`, with
+the common `results-2026-11-10-` prefix.
+
+| Check | Result | Evidence suffix |
+|---|---|---|
+| production libc host unit tests | **114 PASS / 0 FAIL / 2 filtered**; seven new directory tests | `dirent-host-final/libc.log` |
+| native C11/C++17 types, sizes, signatures, inclusion orders and base/POSIX/GNU macros | **12 PASS** | `dirent-host-final/c*.log` |
+| runtime, unique exports and unchanged-source native ELF | **PASS**, canonical startup, no unresolved symbols, interpreter, dynamic segment or W+X LOAD | `dirent-host-final/build-runtime.log`, `native-symbols.log`, `historical-*.log` |
+| exact validated ELF in single-case 2-CPU guest | **1 PASS**, exit 0, empty stdout/stderr, clean reap, zero faults/unknown syscalls | `dirent-original-2cpu/` |
+| same exact ELF in single-case 4-CPU guest | **1 PASS**, same status/streams/cleanup checks | `dirent-original-4cpu/` |
+| final complete 2-CPU suite | build **39 PASS / 11 BUILD_FAIL**; guest **39 PASS / 0 FAIL / 11 NOT_RUN** | `dirent-final-2cpu/results.csv`, `serial.log`, `faults.log` |
+| final complete 4-CPU suite | build **39 PASS / 11 BUILD_FAIL**; guest **39 PASS / 0 FAIL / 11 NOT_RUN** | `dirent-final-4cpu/results.csv`, `serial.log`, `faults.log` |
+| mmap, time, random, write/termination host/ABI regressions | **PASS**, twelve header checks for each; repeated libc runs remain 114 PASS / 2 filtered, not additional unique tests | `dirent-regressions/{mman,time,random,unistd}/` |
+| VFS, descriptor, stdio host regressions | **90 / 17 / 19 PASS** respectively, zero filtered; both stdio C adapters exit 0 with expected streams, three native builds/ELF checks and C++ header PASS | `dirent-stdio-regressions/` |
+
+The two filtered libc tests are the same pre-existing native credential tests
+excluded from Linux execution, not directory tests. Host execution of native
+ELFs is **NOT_RUN**; they run only under SunlightOS. Host/backend tests cover
+CWD and path bounds, native failures, real-name conversion/termination,
+EOF/errno, malformed records/counts, allocation failure, close and offset
+overflow. Native fixtures independently cover real names/EOF, two independent
+streams and 256 open/read/close cycles; missing/file/unsupported paths and real
+kernel EACCES; an empty directory, 71 actual entries including a 64-byte name,
+and opening `"."` followed by a CWD change before enumeration.
+
+The historical ELF SHA-256 is identical in the host validation, both single
+runs and both final suites:
+`ceea06c856e0735ce241dbfccd9e0f9dd25dca69fab45e38b3f921f24acd4eec`.
+Each final historical directory process and each focused directory fixture
+exits 0 with empty stdout/stderr. Every final built case passes the ordinary
+reaper, zero PID-owned frames/fds/stack, frame/handle/namespace restoration and
+fault/unknown-syscall gates. `dirent-host-final/final-matrix-check.log` records
+the separate counts, source identity, ELF identity and stream checks.
+
+Retained failed observations are not overwritten by final passes. An initial
+exploratory host compile returned **101** because a new test assertion required
+an explicit reference (`dangerous_implicit_autorefs`); corrected test expression
+and observation are recorded in `dirent-host/initial-host-observation.log`.
+The first complete guest attempts, `dirent-2cpu/` and `dirent-4cpu/`, each
+retained **39 guest FAIL / 11 build-blocked NOT_RUN** under the runner's global
+fault gate. There were 37 completed result records before `dirent-errors`
+reaped with exit **31**, then cleanup panicked with `Err(IsDir)`; `dirent-entries`
+was never reached. Historical exit 0 in those failed combined runs does not
+constitute acceptance. The actual failure was the new fixture attempting to
+remove a directory through native unlink, which deliberately rejects
+directories (`sunlight-fs/src/tmpfs.rs::unlink`). No rmdir capability was added
+or fabricated. Instead the opt-in guest INITRAMFS now contains two fixed test
+directories before all baseline snapshots: an initially empty writable
+directory and a mode-000 directory. Focused fixtures create and remove only
+ordinary files within those existing directories. This preserves every
+original probe, its assertions and the runner's fault/cleanup requirements.
+The final suites independently validate the corrected fixtures and final
+kernel test image; the earlier single runs used the preceding test image.
+
+Exact commands, run from the repository root (each output directory was new):
+
+```sh
+python3 tools/native-c/tests/run_dirent.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-host-final
+python3 tools/native-c/tests/run_stdio.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-stdio-regressions
+python3 tools/native-c/tests/run_mman.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-regressions/mman
+python3 tools/native-c/tests/run_time.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-regressions/time
+python3 tools/native-c/tests/run_random.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-regressions/random
+python3 tools/native-c/tests/run_unistd.py --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-regressions/unistd
+python3 tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-10-dirent-host-final/dirent.elf --expect-exit 0 --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-original-2cpu
+python3 tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-10-dirent-host-final/dirent.elf --expect-exit 0 --cpus 4 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-original-4cpu
+python3 tools/native-c/guest.py --suite --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu
+python3 tools/native-c/guest.py --suite --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 --out docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu
+rustfmt --edition 2021 --check kernel/src/native_c_guest.rs sunlight-libc/src/dirent.rs
+python3 -m py_compile tools/native-c/guest.py tools/native-c/tests/run_dirent.py
+git diff --check
+```
+
+The host/ABI runner records exact compiler, linker, runtime build, readelf, nm
+and disassembly commands in its individual logs. Every guest retains its
+invocation, runtime/support/kernel/ISO build commands, QEMU argv, immutable
+kernel snapshot hash, manifest, raw serial, decoded streams and results.
+The exploratory command preceding the recorded host runner was
+`cargo test -p sunlight-libc --lib --target x86_64-unknown-linux-gnu dirent:: -- --test-threads=1`.
+
+| Phase 9 changed file | Purpose |
+|---|---|
+| `sunlight-libc/include/dirent.h` | Narrow types, three declarations and explicit subset/lifetime contract |
+| `sunlight-libc/src/dirent.rs`, `sunlight-libc/src/lib.rs` | Native C bridge, seven injected-backend host tests, native-C/test-only registration |
+| `tools/native-c/tests/dirent-abi.c`, `dirent.c`, `run_dirent.py` | Header/ABI checks, three separate real guest contracts and host/native ELF validation |
+| `tools/native-c/guest.py` | Register the three directory fixtures after existing cases |
+| `kernel/src/native_c_guest.rs` | Two fixed directory fixtures, only in the opt-in guest gate |
+| `tools/native-c/README.md`, `docs/audit/std-progress.md` | Contract, evidence, counts and limitations |
+| `docs/audit/probes/native-foundation/results-2026-11-10-dirent*/` | Retained diagnostics, failures, host/build/ABI and native execution evidence |
+
+All 371 initial modified/untracked Phase 8 files were compared with starting
+hashes before documentation updates; existing source/evidence bytes were
+preserved, with only the directory registration added to guest.py. The Phase 8
+audit and README text remain intact before the appended Phase 9 sections.
+`dirent-host-final/phase8-preservation-before-docs.log` records the initial
+comparison. Changes remain uncommitted.
+
+| Historical scope | Phase 8 | Final Phase 9, on both CPU counts |
+|---|---|---|
+| 18 API probes (17 C + 1 C++) | 6 PASS / 12 BUILD_FAIL | **7 PASS / 11 BUILD_FAIL / 0 guest FAIL / 11 guest NOT_RUN** |
+| 21 executables including foundation | 9 PASS / 12 BUILD_FAIL | **10 PASS / 11 BUILD_FAIL / 0 guest FAIL / 11 guest NOT_RUN** |
+| 16 originally blocked APIs | 4 PASS / 12 BUILD_FAIL | **5 PASS / 11 BUILD_FAIL / 0 guest FAIL / 11 guest NOT_RUN** |
+
+The three new focused cases do not inflate historical API counts. Final
+complete-suite built executions rise from 35 to **39**: one newly buildable
+historical API and three focused cases. Unchanged historical mmap and all
+three mapping fixtures pass again on 2 and 4 CPUs. The original mmap/munmap
+paths, sys/mman.h, syscall-52 mprotect adapter and internal MAP_NATIVE_THREAD
+remain intact. Phase 8 hardware user-write faults and forced stale-TLB /
+cross-core interleavings remain **NOT_RUN**; this phase neither depends on
+those tests nor claims their verification. No CPython or full POSIX acceptance
+is implied.
+
+**Single next build blocker in retained matrix order: unchanged
+`docs/audit/probes/dlfcn.c`, line 2, missing `<dlfcn.h>`.** Both final suite
+`build-dlfcn.log` files retain that exact first diagnostic. Later declarations,
+exports and native loader capability must be traced before selecting an
+implementation; a missing-header error alone does not establish native support.

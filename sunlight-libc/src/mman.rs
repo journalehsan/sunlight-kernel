@@ -1,6 +1,6 @@
-//! POSIX memory management (`mmap`/`munmap`).
+//! POSIX memory management (`mmap`/`munmap`/`mprotect`).
 
-use crate::sys::{check, syscall2, syscall6, Errno, SYS_MMAP, SYS_MUNMAP};
+use crate::sys::{check, syscall2, syscall3, syscall6, Errno, SYS_MMAP, SYS_MPROTECT, SYS_MUNMAP};
 
 pub const PROT_NONE: u32 = 0x0;
 pub const PROT_READ: u32 = 0x1;
@@ -270,6 +270,35 @@ mod tests {
 )]
 pub unsafe extern "C" fn c_munmap(addr: *mut u8, length: usize) -> i32 {
     match munmap(addr, length) {
+        Ok(()) => 0,
+        Err(e) => {
+            crate::errno::set_from_errno(e);
+            -1
+        }
+    }
+}
+
+// Native syscall 52 performs full ledger/PTE preflight and permission shootdown.
+// Keep the C adapter narrow; do not emulate a protection change in userspace.
+#[cfg_attr(
+    any(target_os = "none", target_os = "sunlightos"),
+    export_name = "mprotect"
+)]
+pub unsafe extern "C" fn c_mprotect(addr: *mut u8, length: usize, prot: i32) -> i32 {
+    let result = if prot < 0
+        || prot as u32 & !SUPPORTED_PROT != 0
+        || prot as u32 & PROT_READ == 0
+        || prot as u32 & PROT_WRITE != 0 && prot as u32 & PROT_EXEC != 0
+        || addr.is_null()
+        || addr as usize & (PAGE_SIZE - 1) != 0
+        || length.checked_add(PAGE_SIZE - 1).is_none()
+    {
+        Err(Errno::Inval)
+    } else {
+        check(unsafe { syscall3(SYS_MPROTECT, addr as u64, length as u64, prot as u64) })
+            .map(|_| ())
+    };
+    match result {
         Ok(()) => 0,
         Err(e) => {
             crate::errno::set_from_errno(e);

@@ -1,0 +1,18 @@
+Repository-wide rg mprotect / MAP_FIXED / SYS_MMAP / SYS_MUNMAP review:
+Native dispatch: kernel/src/arch/x86_64/syscall.rs 50/51/52.
+Native sys_mprotect calls process::mmap::sys_mprotect, not an emulation.
+process/mmap.rs: sys_mprotect validates UserRange, normalized protection,
+full ledger coverage, anonymous policy, present PTE ownership and complete
+preflight_protect ledger plan before update_permissions_expected. It then
+invalidates changed ranges through memory::tlb and commits the ledger.
+map_anonymous_kind: checked_page_layout and UserRange precede preflight_replace
+and map_fixed_transaction (which performs replacement).
+sys_munmap: checked_page_layout and UserRange precede preflight_unmap,
+journal staging and remove_expected_mapping.
+No kernel VM implementation added or modified by this phase.
+Existing target-gated mmap/munmap exports remain unchanged. The native static
+archive retains them; no separate export registration mechanism is necessary.
+MAP_NATIVE_THREAD remains absent from the public C header.
+Hardware user-write fault/SMP stale-TLB injection: NOT_RUN by mman fixture;
+its permission check uses independent kernel writable-PTE validation via
+syscall 88 before and after restoring RW permissions.

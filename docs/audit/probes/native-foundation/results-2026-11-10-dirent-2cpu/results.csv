@@ -1,0 +1,51 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+entry,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,43da5fa70d81ea3021c26333d8e991d3fb747bb282c82b03fdb6ad281ad0f682
+write,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,96d5c0a95f291c4675bf478ad9d4e9d18b07819a6f3f4050dc1844041b5d88c4
+exit,True,PASS,FAIL,FAIL,23,23,guest contract or infrastructure failed,ba8a729f76f39e8ade4fbaddb8283ea05a95a4f62e1c4d4493536c9dffdd3289
+atexit,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,526806ff858f282afb8023c86feb34b7590d92b591d30a3c3ab7cc38d5088a3d
+clock,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,05e6cb0ae284ac492fd5689670d13927ccdd3fdbb94470c927688997fe78e67a
+dirent,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,ceea06c856e0735ce241dbfccd9e0f9dd25dca69fab45e38b3f921f24acd4eec
+dlfcn,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+random-service-before,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+getrandom,True,PASS,FAIL,FAIL,0,0,random-service counter verification failed,818c51eb4c4b45e30cd34bb108bbcc11784b355c46a4721edab5d082b07cbb7d
+random-service-after,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+langinfo,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+locale,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+math,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+mmap,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,da4d0aa7216ab3d6fa72aaf20c21aadfb2cd98cc3b7b4291b80e308b8e12a8a0
+poll_select,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+pthread,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+signal,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+socket,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdio,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,d9bf4f62bc982de00846e0da801dc7c52def3aaca957cab1dd455259aca13830
+string,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,bb2c38b443f37c8d8abc3615f5f58af4606330d256b743b7f277653e7e99c2cf
+termios,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+wchar,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+cpp-runtime,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdout,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,e88dc4709b95db10ee82b1a596746db466ad66cb5a2b4d70dcc79e5f751a0a3d
+stdio-full,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,a85305e0b609044a0544e23c9d910be7326efe22885a8925fbea73e5cb226643
+open-unlink,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,7a69dd6d9369ef6eaba8303d633343be8bbaba4c9111bb19876ea900674a2283
+exit-cleanup,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,cab706534cfd6978fda72198877681941a52e6cc7c8ac5fdd23e25f83dab2c45
+write-basic,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+write-zero,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+write-short,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+write-errors,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+atexit-order,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+atexit-register,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+atexit-capacity,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+atexit-exit,False,PASS,FAIL,FAIL,27,27,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+atexit-raw-exit,False,PASS,FAIL,FAIL,29,29,guest contract or infrastructure failed,565625effae4cb137f18dac798ed7b61b30e8b89a67e9cffb0d64b8df67d167c
+random-basic,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+random-zero,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+random-errors,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+random-guards,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,efb3f7714bd0c5e53324a59450964048d68b640c4acb16f2f16c2b127f1ce087
+time-clocks,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,51b0ddbb23d6ccfe789aea54f97306a0bcdc2c421fde984075474f1a1e2609e9
+time-errors,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,51b0ddbb23d6ccfe789aea54f97306a0bcdc2c421fde984075474f1a1e2609e9
+time-zero,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,51b0ddbb23d6ccfe789aea54f97306a0bcdc2c421fde984075474f1a1e2609e9
+time-sleep,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,51b0ddbb23d6ccfe789aea54f97306a0bcdc2c421fde984075474f1a1e2609e9
+mman-subset,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,013352a69ccb860efda95fd590aa4d53670137c5f6d98e437f10ee5d75d275e2
+mman-fixed,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,013352a69ccb860efda95fd590aa4d53670137c5f6d98e437f10ee5d75d275e2
+mman-bounds,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,013352a69ccb860efda95fd590aa4d53670137c5f6d98e437f10ee5d75d275e2
+dirent-root,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,a4848576ef4acc4b0c85b5106076c3794b7443955479440bcab8f0970d43d6d5
+dirent-errors,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,a4848576ef4acc4b0c85b5106076c3794b7443955479440bcab8f0970d43d6d5
+dirent-entries,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,a4848576ef4acc4b0c85b5106076c3794b7443955479440bcab8f0970d43d6d5

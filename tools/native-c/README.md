@@ -144,6 +144,25 @@ type/signature/include checks, canonical-export uniqueness, and strict native
 ELF validation of the unchanged original source. It never runs a native ELF
 on Linux.
 
+Phase 8 audits the existing mapping ABI. `<sys/mman.h>` supplies native LP64
+`off_t`, constants and declarations; the existing Rust mmap/munmap validation,
+syscalls and C exports remain intact. The new C `mprotect` adapter invokes
+existing native syscall 52, which updates real PTE permissions and performs TLB
+invalidation after full-range preflight. Native failures currently map to EIO;
+local request validation maps to EINVAL. `MAP_NATIVE_THREAD` stays internal.
+
+The unchanged historical `mmap.c` now builds and exits 0 on **2 and 4 CPUs**.
+Both full suites pass **35 built executions** (historical **9 PASS / 12
+BUILD_FAIL**, no guest failures). Three separate mapping fixtures verify the
+exact 1 MiB anonymous/private RW subset, zero fill, RW-to-R-to-RW changes using
+independent kernel writable-PTE checks, middle-page MAP_FIXED replacement with
+neighbor preservation, and overflow/user-boundary rejection without mutation.
+The fixed test establishes that case; it does not cover every replacement or
+failure interleaving. Hardware user-write fault and forced stale-TLB tests were
+not run. `tests/run_mman.py --out NEW` runs libc host tests, twelve C/C++ ABI
+checks, unique-export checks and strict native ELF validation of unchanged
+`mmap.c`. Native executables run only through the guest runner.
+
 Host logic, native C/C++ header and symbol checks (no guest execution):
 
 ```sh
@@ -153,3 +172,26 @@ python3 tools/native-c/tests/run_unistd.py --out target/native-c-unistd-check
 Two pre-existing secret-store tests issue native credential syscalls and are
 excluded from this Linux-host harness. Native syscall numbers must never be
 interpreted as Linux libc behavior.
+
+Phase 9 adds the narrow `<dirent.h>` bridge: opaque `DIR`, `opendir`, `readdir`,
+`closedir`, and `struct dirent` containing only `d_name[65]`. It uses native
+getcwd/stat/enumeration (64/61/148), with no Linux ABI or VFS service substitute.
+Only `"."` and canonical absolute paths are supported; other pathname forms
+fail ENOSYS. Each stream owns its path, offset and returned entry. Enumeration
+uses real native records, preserves errno on success/EOF, inserts no synthetic
+dot entries, and closes by freeing its userspace state. No directory descriptor,
+inode/type fields, seek, stable snapshot, or concurrent mutation contract is
+provided. Callers serialize each live stream; dangling pointers are invalid.
+
+The unchanged historical `dirent.c` passes on 2 and 4 CPUs. Both final full
+suites pass **39 built cases**; the historical matrix is **10 PASS / 11
+BUILD_FAIL / 11 guest NOT_RUN**. Three focused directory cases cover independent
+streams, EOF, errors and permission denial, 71 real entries including a 64-byte
+name, and opening `"."` before a CWD change. The opt-in guest image supplies
+fixed empty/writable and mode-000 directories before cleanup snapshots. Earlier
+failed attempts that tried to remove directories using native unlink remain
+retained; native directory removal is outside this phase. Run
+`tests/run_dirent.py --out NEW` for 114 libc host tests (2 native credential tests
+filtered), twelve C/C++ ABI checks and unchanged historical native ELF validation.
+Guest acceptance remains separate. Phase 8 hardware write-fault and forced
+stale-TLB tests remain NOT_RUN.

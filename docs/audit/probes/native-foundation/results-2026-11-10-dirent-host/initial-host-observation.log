@@ -1,0 +1,3 @@
+Exploratory focused cargo test returned exit 101 before tests ran.
+Compiler: dangerous_implicit_autorefs at dirent.rs:242, &(*first).d_name[..5].
+The new host assertion requires an explicit reference. No native guest run occurred.

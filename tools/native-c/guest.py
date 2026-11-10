@@ -126,6 +126,13 @@ def main():
         sources += [('time-' + mode, ROOT / 'tools/native-c/tests/time.c', 0, (mode,),
                      b'', None if mode in ('clocks', 'sleep') else b'', b'', False)
                     for mode in ('clocks', 'errors', 'zero', 'sleep')]
+        sources += [('mman-' + mode, ROOT / 'tools/native-c/tests/mman.c', 0, (mode,),
+                     b'', b'', b'', False) for mode in ('subset', 'fixed', 'bounds')]
+        sources += [('dirent-' + mode, ROOT / 'tools/native-c/tests/dirent.c', 0,
+                     (mode,) if mode == 'root' else
+                     (mode, '/tmp/native-c-dirent' if mode == 'entries' else WORK),
+                     b'', b'', b'', False)
+                    for mode in ('root', 'errors', 'entries')]
         for name, src, code, args, input, stdout, stderr, historical in sources:
             elf = out / (name + '.elf')
             compiler = ([sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']

@@ -1,0 +1,10 @@
+b77440b252b906b6190de25a6ac0ffb686f88eaa292a146cd529783c5a376bb8  docs/audit/probes/dirent.c
+#define _GNU_SOURCE
+#include <dirent.h>
+int main(void){DIR *d=opendir("."); if(!d) return 1; int bad=readdir(d)==0; closedir(d); return bad;}
+
+0ed89b83751ec28faaefdc76240659f7de78c4af73a6638dbc927bbd3aac4224  docs/audit/probes/mmap.c
+#define _GNU_SOURCE
+#include <sys/mman.h>
+int main(void){void *p=mmap(0,1048576,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0); if(p==MAP_FAILED)return 1; ((char*)p)[1048575]=1; return mprotect(p,1048576,PROT_READ)||munmap(p,1048576);}
+

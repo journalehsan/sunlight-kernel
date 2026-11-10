@@ -1,0 +1,1346 @@
+$ llvm-objdump -d /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-mman-host/mmap.elf
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-mman-host/mmap.elf:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400000 <main>:
+  400000: 55                           	pushq	%rbp
+  400001: 48 89 e5                     	movq	%rsp, %rbp
+  400004: 48 83 ec 20                  	subq	$0x20, %rsp
+  400008: 31 c0                        	xorl	%eax, %eax
+  40000a: 41 89 c1                     	movl	%eax, %r9d
+  40000d: be 00 00 10 00               	movl	$0x100000, %esi         # imm = 0x100000
+  400012: ba 03 00 00 00               	movl	$0x3, %edx
+  400017: b9 22 00 00 00               	movl	$0x22, %ecx
+  40001c: 41 b8 ff ff ff ff            	movl	$0xffffffff, %r8d       # imm = 0xFFFFFFFF
+  400022: 4c 89 cf                     	movq	%r9, %rdi
+  400025: e8 e6 01 00 00               	callq	0x400210 <mmap>
+  40002a: 48 89 45 f0                  	movq	%rax, -0x10(%rbp)
+  40002e: 48 c7 c0 ff ff ff ff         	movq	$-0x1, %rax
+  400035: 48 39 45 f0                  	cmpq	%rax, -0x10(%rbp)
+  400039: 75 09                        	jne	0x400044 <main+0x44>
+  40003b: c7 45 fc 01 00 00 00         	movl	$0x1, -0x4(%rbp)
+  400042: eb 4c                        	jmp	0x400090 <main+0x90>
+  400044: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  400048: c6 80 ff ff 0f 00 01         	movb	$0x1, 0xfffff(%rax)
+  40004f: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+  400053: be 00 00 10 00               	movl	$0x100000, %esi         # imm = 0x100000
+  400058: ba 01 00 00 00               	movl	$0x1, %edx
+  40005d: e8 5e 02 00 00               	callq	0x4002c0 <mprotect>
+  400062: 89 c1                        	movl	%eax, %ecx
+  400064: b0 01                        	movb	$0x1, %al
+  400066: 83 f9 00                     	cmpl	$0x0, %ecx
+  400069: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  40006c: 75 17                        	jne	0x400085 <main+0x85>
+  40006e: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+  400072: be 00 00 10 00               	movl	$0x100000, %esi         # imm = 0x100000
+  400077: e8 c4 02 00 00               	callq	0x400340 <munmap>
+  40007c: 83 f8 00                     	cmpl	$0x0, %eax
+  40007f: 0f 95 c0                     	setne	%al
+  400082: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  400085: 8a 45 ef                     	movb	-0x11(%rbp), %al
+  400088: 24 01                        	andb	$0x1, %al
+  40008a: 0f b6 c0                     	movzbl	%al, %eax
+  40008d: 89 45 fc                     	movl	%eax, -0x4(%rbp)
+  400090: 8b 45 fc                     	movl	-0x4(%rbp), %eax
+  400093: 48 83 c4 20                  	addq	$0x20, %rsp
+  400097: 5d                           	popq	%rbp
+  400098: c3                           	retq
+  400099: cc                           	int3
+  40009a: cc                           	int3
+  40009b: cc                           	int3
+
+000000000040009c <_start>:
+  40009c: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  4000a0: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  4000a5: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  4000aa: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  4000ae: e8 9d 03 00 00               	callq	0x400450 <sl_std_start>
+  4000b3: 0f 0b                        	ud2
+  4000b5: cc                           	int3
+  4000b6: cc                           	int3
+  4000b7: cc                           	int3
+  4000b8: cc                           	int3
+  4000b9: cc                           	int3
+  4000ba: cc                           	int3
+  4000bb: cc                           	int3
+  4000bc: cc                           	int3
+  4000bd: cc                           	int3
+  4000be: cc                           	int3
+  4000bf: cc                           	int3
+
+00000000004000c0 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap>:
+  4000c0: 41 56                        	pushq	%r14
+  4000c2: 53                           	pushq	%rbx
+  4000c3: 48 89 f8                     	movq	%rdi, %rax
+  4000c6: f6 c1 01                     	testb	$0x1, %cl
+  4000c9: 0f 84 e8 00 00 00            	je	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  4000cf: 48 85 d2                     	testq	%rdx, %rdx
+  4000d2: 0f 84 df 00 00 00            	je	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  4000d8: 8d 79 f8                     	leal	-0x8(%rcx), %edi
+  4000db: 83 ff f9                     	cmpl	$-0x7, %edi
+  4000de: 0f 82 d3 00 00 00            	jb	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  4000e4: 89 cf                        	movl	%ecx, %edi
+  4000e6: 83 e7 02                     	andl	$0x2, %edi
+  4000e9: d1 ef                        	shrl	%edi
+  4000eb: 83 f9 04                     	cmpl	$0x4, %ecx
+  4000ee: 41 0f 93 c2                  	setae	%r10b
+  4000f2: 41 20 fa                     	andb	%dil, %r10b
+  4000f5: 44 89 c7                     	movl	%r8d, %edi
+  4000f8: 81 e7 ef ff ff bf            	andl	$0xbfffffef, %edi       # imm = 0xBFFFFFEF
+  4000fe: 83 ff 22                     	cmpl	$0x22, %edi
+  400101: 40 0f 95 c7                  	setne	%dil
+  400105: 44 08 d7                     	orb	%r10b, %dil
+  400108: 0f 85 a9 00 00 00            	jne	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  40010e: 41 83 f9 ff                  	cmpl	$-0x1, %r9d
+  400112: 40 0f 95 c7                  	setne	%dil
+  400116: 48 83 7c 24 18 00            	cmpq	$0x0, 0x18(%rsp)
+  40011c: 41 0f 95 c1                  	setne	%r9b
+  400120: 41 08 f9                     	orb	%dil, %r9b
+  400123: 0f 85 8e 00 00 00            	jne	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  400129: 41 81 f8 00 00 00 40         	cmpl	$0x40000000, %r8d       # imm = 0x40000000
+  400130: 40 0f 93 c7                  	setae	%dil
+  400134: 45 89 c1                     	movl	%r8d, %r9d
+  400137: 41 83 e1 10                  	andl	$0x10, %r9d
+  40013b: 41 c1 e9 04                  	shrl	$0x4, %r9d
+  40013f: 44 84 cf                     	testb	%r9b, %dil
+  400142: 75 73                        	jne	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  400144: 41 f6 c0 10                  	testb	$0x10, %r8b
+  400148: 75 1b                        	jne	0x400165 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xa5>
+  40014a: 48 85 f6                     	testq	%rsi, %rsi
+  40014d: 40 0f 95 c6                  	setne	%sil
+  400151: 48 81 fa 01 f0 ff ff         	cmpq	$-0xfff, %rdx           # imm = 0xF001
+  400158: 40 0f 93 c7                  	setae	%dil
+  40015c: 40 08 f7                     	orb	%sil, %dil
+  40015f: 75 56                        	jne	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  400161: 31 f6                        	xorl	%esi, %esi
+  400163: eb 18                        	jmp	0x40017d <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xbd>
+  400165: 48 81 fa 00 f0 ff ff         	cmpq	$-0x1000, %rdx          # imm = 0xF000
+  40016c: 77 49                        	ja	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  40016e: 48 85 f6                     	testq	%rsi, %rsi
+  400171: 74 44                        	je	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  400173: 89 f7                        	movl	%esi, %edi
+  400175: 81 e7 ff 0f 00 00            	andl	$0xfff, %edi            # imm = 0xFFF
+  40017b: 75 3a                        	jne	0x4001b7 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xf7>
+  40017d: 48 89 c3                     	movq	%rax, %rbx
+  400180: 89 c9                        	movl	%ecx, %ecx
+  400182: 45 89 c2                     	movl	%r8d, %r10d
+  400185: b8 32 00 00 00               	movl	$0x32, %eax
+  40018a: 48 89 f7                     	movq	%rsi, %rdi
+  40018d: 49 89 d6                     	movq	%rdx, %r14
+  400190: 48 89 d6                     	movq	%rdx, %rsi
+  400193: 48 89 ca                     	movq	%rcx, %rdx
+  400196: 49 c7 c0 ff ff ff ff         	movq	$-0x1, %r8
+  40019d: 45 31 c9                     	xorl	%r9d, %r9d
+  4001a0: 0f 05                        	syscall
+  4001a2: 48 83 f8 f2                  	cmpq	$-0xe, %rax
+  4001a6: 76 1b                        	jbe	0x4001c3 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0x103>
+  4001a8: 0f b6 88 0d 20 40 00         	movzbl	0x40200d(%rax), %ecx
+  4001af: 48 89 d8                     	movq	%rbx, %rax
+  4001b2: 88 4b 01                     	movb	%cl, 0x1(%rbx)
+  4001b5: eb 04                        	jmp	0x4001bb <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xfb>
+  4001b7: c6 40 01 02                  	movb	$0x2, 0x1(%rax)
+  4001bb: b1 01                        	movb	$0x1, %cl
+  4001bd: 88 08                        	movb	%cl, (%rax)
+  4001bf: 5b                           	popq	%rbx
+  4001c0: 41 5e                        	popq	%r14
+  4001c2: c3                           	retq
+  4001c3: a9 ff 0f 00 00               	testl	$0xfff, %eax            # imm = 0xFFF
+  4001c8: 0f 95 c2                     	setne	%dl
+  4001cb: 48 c7 c6 00 f0 ff ff         	movq	$-0x1000, %rsi          # imm = 0xF000
+  4001d2: 4c 29 f6                     	subq	%r14, %rsi
+  4001d5: 48 81 ce ff 0f 00 00         	orq	$0xfff, %rsi            # imm = 0xFFF
+  4001dc: 48 89 c1                     	movq	%rax, %rcx
+  4001df: 48 ff c8                     	decq	%rax
+  4001e2: 48 39 f0                     	cmpq	%rsi, %rax
+  4001e5: 0f 93 c0                     	setae	%al
+  4001e8: 08 d0                        	orb	%dl, %al
+  4001ea: 48 89 d8                     	movq	%rbx, %rax
+  4001ed: 74 06                        	je	0x4001f5 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0x135>
+  4001ef: c6 40 01 00                  	movb	$0x0, 0x1(%rax)
+  4001f3: eb c6                        	jmp	0x4001bb <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap+0xfb>
+  4001f5: 48 89 48 08                  	movq	%rcx, 0x8(%rax)
+  4001f9: 31 c9                        	xorl	%ecx, %ecx
+  4001fb: 88 08                        	movb	%cl, (%rax)
+  4001fd: 5b                           	popq	%rbx
+  4001fe: 41 5e                        	popq	%r14
+  400200: c3                           	retq
+  400201: cc                           	int3
+  400202: cc                           	int3
+  400203: cc                           	int3
+  400204: cc                           	int3
+  400205: cc                           	int3
+  400206: cc                           	int3
+  400207: cc                           	int3
+  400208: cc                           	int3
+  400209: cc                           	int3
+  40020a: cc                           	int3
+  40020b: cc                           	int3
+  40020c: cc                           	int3
+  40020d: cc                           	int3
+  40020e: cc                           	int3
+  40020f: cc                           	int3
+
+0000000000400210 <mmap>:
+  400210: 48 83 ec 18                  	subq	$0x18, %rsp
+  400214: 44 89 c0                     	movl	%r8d, %eax
+  400217: 41 89 c8                     	movl	%ecx, %r8d
+  40021a: 89 d1                        	movl	%edx, %ecx
+  40021c: 48 89 f2                     	movq	%rsi, %rdx
+  40021f: 48 89 fe                     	movq	%rdi, %rsi
+  400222: 44 89 c7                     	movl	%r8d, %edi
+  400225: 09 cf                        	orl	%ecx, %edi
+  400227: 40 0f 99 c7                  	setns	%dil
+  40022b: 4d 85 c9                     	testq	%r9, %r9
+  40022e: 41 0f 99 c2                  	setns	%r10b
+  400232: 44 84 d7                     	testb	%r10b, %dil
+  400235: 75 32                        	jne	0x400269 <mmap+0x59>
+  400237: 66 c7 44 24 08 01 02         	movw	$0x201, 0x8(%rsp)       # imm = 0x201
+  40023e: b8 16 00 00 00               	movl	$0x16, %eax
+  400243: 0f b6 0d d2 2d 00 00         	movzbl	0x2dd2(%rip), %ecx      # 0x40301c <_RNvNtCscFyynnsXNQC_13sunlight_libc5errno9TLS_READY.0.llvm.9623404900550516755>
+  40024a: 84 c9                        	testb	%cl, %cl
+  40024c: 74 4a                        	je	0x400298 <mmap+0x88>
+  40024e: 64 48 8b 0c 25 00 00 00 00   	movq	%fs:0x0, %rcx
+  400257: 48 83 c1 08                  	addq	$0x8, %rcx
+  40025b: 89 01                        	movl	%eax, (%rcx)
+  40025d: 48 c7 c0 ff ff ff ff         	movq	$-0x1, %rax
+  400264: 48 83 c4 18                  	addq	$0x18, %rsp
+  400268: c3                           	retq
+  400269: 4c 89 0c 24                  	movq	%r9, (%rsp)
+  40026d: 48 8d 7c 24 08               	leaq	0x8(%rsp), %rdi
+  400272: 41 89 c1                     	movl	%eax, %r9d
+  400275: e8 46 fe ff ff               	callq	0x4000c0 <_RNvNtCscFyynnsXNQC_13sunlight_libc4mman4mmap>
+  40027a: 80 7c 24 08 01               	cmpb	$0x1, 0x8(%rsp)
+  40027f: 75 2a                        	jne	0x4002ab <mmap+0x9b>
+  400281: 0f b6 44 24 09               	movzbl	0x9(%rsp), %eax
+  400286: 8b 04 85 10 20 40 00         	movl	0x402010(,%rax,4), %eax
+  40028d: 0f b6 0d 88 2d 00 00         	movzbl	0x2d88(%rip), %ecx      # 0x40301c <_RNvNtCscFyynnsXNQC_13sunlight_libc5errno9TLS_READY.0.llvm.9623404900550516755>
+  400294: 84 c9                        	testb	%cl, %cl
+  400296: 75 b6                        	jne	0x40024e <mmap+0x3e>
+  400298: b9 18 30 40 00               	movl	$0x403018, %ecx         # imm = 0x403018
+  40029d: 89 01                        	movl	%eax, (%rcx)
+  40029f: 48 c7 c0 ff ff ff ff         	movq	$-0x1, %rax
+  4002a6: 48 83 c4 18                  	addq	$0x18, %rsp
+  4002aa: c3                           	retq
+  4002ab: 48 8b 44 24 10               	movq	0x10(%rsp), %rax
+  4002b0: 48 83 c4 18                  	addq	$0x18, %rsp
+  4002b4: c3                           	retq
+  4002b5: cc                           	int3
+  4002b6: cc                           	int3
+  4002b7: cc                           	int3
+  4002b8: cc                           	int3
+  4002b9: cc                           	int3
+  4002ba: cc                           	int3
+  4002bb: cc                           	int3
+  4002bc: cc                           	int3
+  4002bd: cc                           	int3
+  4002be: cc                           	int3
+  4002bf: cc                           	int3
+
+00000000004002c0 <mprotect>:
+  4002c0: 89 d1                        	movl	%edx, %ecx
+  4002c2: 83 e1 f9                     	andl	$-0x7, %ecx
+  4002c5: b8 16 00 00 00               	movl	$0x16, %eax
+  4002ca: 83 f9 01                     	cmpl	$0x1, %ecx
+  4002cd: 75 47                        	jne	0x400316 <mprotect+0x56>
+  4002cf: 83 fa 04                     	cmpl	$0x4, %edx
+  4002d2: 0f 93 c1                     	setae	%cl
+  4002d5: 48 81 fe 00 f0 ff ff         	cmpq	$-0x1000, %rsi          # imm = 0xF000
+  4002dc: 77 38                        	ja	0x400316 <mprotect+0x56>
+  4002de: 41 89 f8                     	movl	%edi, %r8d
+  4002e1: 41 81 e0 ff 0f 00 00         	andl	$0xfff, %r8d            # imm = 0xFFF
+  4002e8: 75 2c                        	jne	0x400316 <mprotect+0x56>
+  4002ea: 48 85 ff                     	testq	%rdi, %rdi
+  4002ed: 74 27                        	je	0x400316 <mprotect+0x56>
+  4002ef: 41 89 d0                     	movl	%edx, %r8d
+  4002f2: 41 83 e0 02                  	andl	$0x2, %r8d
+  4002f6: 41 d1 e8                     	shrl	%r8d
+  4002f9: 44 20 c1                     	andb	%r8b, %cl
+  4002fc: 75 18                        	jne	0x400316 <mprotect+0x56>
+  4002fe: 89 d2                        	movl	%edx, %edx
+  400300: b8 34 00 00 00               	movl	$0x34, %eax
+  400305: 0f 05                        	syscall
+  400307: 31 c9                        	xorl	%ecx, %ecx
+  400309: 48 83 f8 f3                  	cmpq	$-0xd, %rax
+  40030d: 72 2d                        	jb	0x40033c <mprotect+0x7c>
+  40030f: 8b 04 85 74 20 40 00         	movl	0x402074(,%rax,4), %eax
+  400316: 0f b6 0d ff 2c 00 00         	movzbl	0x2cff(%rip), %ecx      # 0x40301c <_RNvNtCscFyynnsXNQC_13sunlight_libc5errno9TLS_READY.0.llvm.9623404900550516755>
+  40031d: 84 c9                        	testb	%cl, %cl
+  40031f: 74 0f                        	je	0x400330 <mprotect+0x70>
+  400321: 64 48 8b 0c 25 00 00 00 00   	movq	%fs:0x0, %rcx
+  40032a: 48 83 c1 08                  	addq	$0x8, %rcx
+  40032e: eb 05                        	jmp	0x400335 <mprotect+0x75>
+  400330: b9 18 30 40 00               	movl	$0x403018, %ecx         # imm = 0x403018
+  400335: 89 01                        	movl	%eax, (%rcx)
+  400337: b9 ff ff ff ff               	movl	$0xffffffff, %ecx       # imm = 0xFFFFFFFF
+  40033c: 89 c8                        	movl	%ecx, %eax
+  40033e: c3                           	retq
+  40033f: cc                           	int3
+
+0000000000400340 <munmap>:
+  400340: 48 8d 8e ff 0f 00 00         	leaq	0xfff(%rsi), %rcx
+  400347: b8 16 00 00 00               	movl	$0x16, %eax
+  40034c: 48 81 f9 00 10 00 00         	cmpq	$0x1000, %rcx           # imm = 0x1000
+  400353: 72 25                        	jb	0x40037a <munmap+0x3a>
+  400355: 48 85 ff                     	testq	%rdi, %rdi
+  400358: 74 20                        	je	0x40037a <munmap+0x3a>
+  40035a: 89 f9                        	movl	%edi, %ecx
+  40035c: 81 e1 ff 0f 00 00            	andl	$0xfff, %ecx            # imm = 0xFFF
+  400362: 75 16                        	jne	0x40037a <munmap+0x3a>
+  400364: b8 33 00 00 00               	movl	$0x33, %eax
+  400369: 0f 05                        	syscall
+  40036b: 31 c9                        	xorl	%ecx, %ecx
+  40036d: 48 83 f8 f3                  	cmpq	$-0xd, %rax
+  400371: 72 2d                        	jb	0x4003a0 <munmap+0x60>
+  400373: 8b 04 85 74 20 40 00         	movl	0x402074(,%rax,4), %eax
+  40037a: 0f b6 0d 9b 2c 00 00         	movzbl	0x2c9b(%rip), %ecx      # 0x40301c <_RNvNtCscFyynnsXNQC_13sunlight_libc5errno9TLS_READY.0.llvm.9623404900550516755>
+  400381: 84 c9                        	testb	%cl, %cl
+  400383: 74 0f                        	je	0x400394 <munmap+0x54>
+  400385: 64 48 8b 0c 25 00 00 00 00   	movq	%fs:0x0, %rcx
+  40038e: 48 83 c1 08                  	addq	$0x8, %rcx
+  400392: eb 05                        	jmp	0x400399 <munmap+0x59>
+  400394: b9 18 30 40 00               	movl	$0x403018, %ecx         # imm = 0x403018
+  400399: 89 01                        	movl	%eax, (%rcx)
+  40039b: b9 ff ff ff ff               	movl	$0xffffffff, %ecx       # imm = 0xFFFFFFFF
+  4003a0: 89 c8                        	movl	%ecx, %eax
+  4003a2: c3                           	retq
+  4003a3: cc                           	int3
+  4003a4: cc                           	int3
+  4003a5: cc                           	int3
+  4003a6: cc                           	int3
+  4003a7: cc                           	int3
+  4003a8: cc                           	int3
+  4003a9: cc                           	int3
+  4003aa: cc                           	int3
+  4003ab: cc                           	int3
+  4003ac: cc                           	int3
+  4003ad: cc                           	int3
+  4003ae: cc                           	int3
+  4003af: cc                           	int3
+
+00000000004003b0 <sl_std_exit>:
+  4003b0: 48 63 ff                     	movslq	%edi, %rdi
+  4003b3: b8 9d 00 00 00               	movl	$0x9d, %eax
+  4003b8: 0f 05                        	syscall
+  4003ba: 66 0f 1f 44 00 00            	nopw	(%rax,%rax)
+  4003c0: f3 90                        	pause
+  4003c2: eb fc                        	jmp	0x4003c0 <sl_std_exit+0x10>
+  4003c4: cc                           	int3
+  4003c5: cc                           	int3
+  4003c6: cc                           	int3
+  4003c7: cc                           	int3
+  4003c8: cc                           	int3
+  4003c9: cc                           	int3
+  4003ca: cc                           	int3
+  4003cb: cc                           	int3
+  4003cc: cc                           	int3
+  4003cd: cc                           	int3
+  4003ce: cc                           	int3
+  4003cf: cc                           	int3
+
+00000000004003d0 <sl_std_init_tls>:
+  4003d0: b8 32 00 00 00               	movl	$0x32, %eax
+  4003d5: be 00 10 00 00               	movl	$0x1000, %esi           # imm = 0x1000
+  4003da: ba 03 00 00 00               	movl	$0x3, %edx
+  4003df: 41 ba 22 00 00 00            	movl	$0x22, %r10d
+  4003e5: 31 ff                        	xorl	%edi, %edi
+  4003e7: 49 c7 c0 ff ff ff ff         	movq	$-0x1, %r8
+  4003ee: 45 31 c9                     	xorl	%r9d, %r9d
+  4003f1: 0f 05                        	syscall
+  4003f3: 48 83 f8 f2                  	cmpq	$-0xe, %rax
+  4003f7: 77 3a                        	ja	0x400433 <sl_std_init_tls+0x63>
+  4003f9: 48 89 c7                     	movq	%rax, %rdi
+  4003fc: f7 c7 ff 0f 00 00            	testl	$0xfff, %edi            # imm = 0xFFF
+  400402: 0f 95 c0                     	setne	%al
+  400405: 48 89 f9                     	movq	%rdi, %rcx
+  400408: 48 81 c1 00 10 00 00         	addq	$0x1000, %rcx           # imm = 0x1000
+  40040f: 48 81 f9 01 10 00 00         	cmpq	$0x1001, %rcx           # imm = 0x1001
+  400416: 0f 92 c1                     	setb	%cl
+  400419: 08 c1                        	orb	%al, %cl
+  40041b: 75 16                        	jne	0x400433 <sl_std_init_tls+0x63>
+  40041d: 48 89 3f                     	movq	%rdi, (%rdi)
+  400420: c7 47 08 00 00 00 00         	movl	$0x0, 0x8(%rdi)
+  400427: b8 65 00 00 00               	movl	$0x65, %eax
+  40042c: 0f 05                        	syscall
+  40042e: 48 85 c0                     	testq	%rax, %rax
+  400431: 74 11                        	je	0x400444 <sl_std_init_tls+0x74>
+  400433: b8 14 00 00 00               	movl	$0x14, %eax
+  400438: bf 65 00 00 00               	movl	$0x65, %edi
+  40043d: 0f 05                        	syscall
+  40043f: 90                           	nop
+  400440: f3 90                        	pause
+  400442: eb fc                        	jmp	0x400440 <sl_std_init_tls+0x70>
+  400444: c6 05 d1 2b 00 00 01         	movb	$0x1, 0x2bd1(%rip)      # 0x40301c <_RNvNtCscFyynnsXNQC_13sunlight_libc5errno9TLS_READY.0.llvm.9623404900550516755>
+  40044b: c3                           	retq
+  40044c: cc                           	int3
+  40044d: cc                           	int3
+  40044e: cc                           	int3
+  40044f: cc                           	int3
+
+0000000000400450 <sl_std_start>:
+  400450: 41 57                        	pushq	%r15
+  400452: 41 56                        	pushq	%r14
+  400454: 53                           	pushq	%rbx
+  400455: 48 89 d3                     	movq	%rdx, %rbx
+  400458: 49 89 f6                     	movq	%rsi, %r14
+  40045b: 49 89 ff                     	movq	%rdi, %r15
+  40045e: 48 89 3d 9b 2b 00 00         	movq	%rdi, 0x2b9b(%rip)      # 0x403000 <_RNvNtCscFyynnsXNQC_13sunlight_libc11std_runtime10START_ARGC.0>
+  400465: 48 89 35 9c 2b 00 00         	movq	%rsi, 0x2b9c(%rip)      # 0x403008 <_RNvNtCscFyynnsXNQC_13sunlight_libc11std_runtime10START_ARGV.0>
+  40046c: 48 89 15 9d 2b 00 00         	movq	%rdx, 0x2b9d(%rip)      # 0x403010 <_RNvNtCscFyynnsXNQC_13sunlight_libc11std_runtime10START_ENVP.0>
+  400473: e8 58 ff ff ff               	callq	0x4003d0 <sl_std_init_tls>
+  400478: 48 89 1d b1 2c 00 00         	movq	%rbx, 0x2cb1(%rip)      # 0x403130 <_RNvNtCscFyynnsXNQC_13sunlight_libc3env4ENVP.0.llvm.9354986311272843791>
+  40047f: 4c 89 ff                     	movq	%r15, %rdi
+  400482: 4c 89 f6                     	movq	%r14, %rsi
+  400485: e8 76 fb ff ff               	callq	0x400000 <main>
+  40048a: 89 c7                        	movl	%eax, %edi
+  40048c: e8 9f 00 00 00               	callq	0x400530 <exit>
+  400491: cc                           	int3
+  400492: cc                           	int3
+  400493: cc                           	int3
+  400494: cc                           	int3
+  400495: cc                           	int3
+  400496: cc                           	int3
+  400497: cc                           	int3
+  400498: cc                           	int3
+  400499: cc                           	int3
+  40049a: cc                           	int3
+  40049b: cc                           	int3
+  40049c: cc                           	int3
+  40049d: cc                           	int3
+  40049e: cc                           	int3
+  40049f: cc                           	int3
+
+00000000004004a0 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791>:
+  4004a0: 53                           	pushq	%rbx
+  4004a1: b3 01                        	movb	$0x1, %bl
+  4004a3: 31 c0                        	xorl	%eax, %eax
+  4004a5: f0                           	lock
+  4004a6: 0f b0 1d 7b 2c 00 00         	cmpxchgb	%bl, 0x2c7b(%rip)       # 0x403128 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x108>
+  4004ad: 74 14                        	je	0x4004c3 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x23>
+  4004af: 90                           	nop
+  4004b0: b8 15 00 00 00               	movl	$0x15, %eax
+  4004b5: 0f 05                        	syscall
+  4004b7: 31 c0                        	xorl	%eax, %eax
+  4004b9: f0                           	lock
+  4004ba: 0f b0 1d 67 2c 00 00         	cmpxchgb	%bl, 0x2c67(%rip)       # 0x403128 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x108>
+  4004c1: 75 ed                        	jne	0x4004b0 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x10>
+  4004c3: 48 8b 05 56 2c 00 00         	movq	0x2c56(%rip), %rax      # 0x403120 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x100>
+  4004ca: 48 85 c0                     	testq	%rax, %rax
+  4004cd: 74 41                        	je	0x400510 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x70>
+  4004cf: 48 8d 78 ff                  	leaq	-0x1(%rax), %rdi
+  4004d3: 48 89 3d 46 2c 00 00         	movq	%rdi, 0x2c46(%rip)      # 0x403120 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x100>
+  4004da: 48 83 f8 21                  	cmpq	$0x21, %rax
+  4004de: 73 39                        	jae	0x400519 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x79>
+  4004e0: 48 8b 0c c5 18 30 40 00      	movq	0x403018(,%rax,8), %rcx
+  4004e8: 48 c7 04 c5 18 30 40 00 00 00 00 00  	movq	$0x0, 0x403018(,%rax,8)
+  4004f4: c6 05 2d 2c 00 00 00         	movb	$0x0, 0x2c2d(%rip)      # 0x403128 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x108>
+  4004fb: 48 85 c9                     	testq	%rcx, %rcx
+  4004fe: 74 17                        	je	0x400517 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x77>
+  400500: ff d1                        	callq	*%rcx
+  400502: 31 c0                        	xorl	%eax, %eax
+  400504: f0                           	lock
+  400505: 0f b0 1d 1c 2c 00 00         	cmpxchgb	%bl, 0x2c1c(%rip)       # 0x403128 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x108>
+  40050c: 75 a2                        	jne	0x4004b0 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x10>
+  40050e: eb b3                        	jmp	0x4004c3 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791+0x23>
+  400510: c6 05 11 2c 00 00 00         	movb	$0x0, 0x2c11(%rip)      # 0x403128 <_RNvNtCscFyynnsXNQC_13sunlight_libc11termination9CALLBACKS+0x108>
+  400517: 5b                           	popq	%rbx
+  400518: c3                           	retq
+  400519: be 20 00 00 00               	movl	$0x20, %esi
+  40051e: ba f8 20 40 00               	movl	$0x4020f8, %edx         # imm = 0x4020F8
+  400523: e8 2c 00 00 00               	callq	0x400554 <_RNvNtCsg6my6oZXuye_4core9panicking18panic_bounds_check>
+  400528: cc                           	int3
+  400529: cc                           	int3
+  40052a: cc                           	int3
+  40052b: cc                           	int3
+  40052c: cc                           	int3
+  40052d: cc                           	int3
+  40052e: cc                           	int3
+  40052f: cc                           	int3
+
+0000000000400530 <exit>:
+  400530: 53                           	pushq	%rbx
+  400531: 89 fb                        	movl	%edi, %ebx
+  400533: e8 68 ff ff ff               	callq	0x4004a0 <_RNvMs_NtCscFyynnsXNQC_13sunlight_libc11terminationNtB4_8Registry3run.llvm.9354986311272843791>
+  400538: 48 63 fb                     	movslq	%ebx, %rdi
+  40053b: b8 9d 00 00 00               	movl	$0x9d, %eax
+  400540: 0f 05                        	syscall
+  400542: 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00    	nopw	%cs:(%rax,%rax)
+  400550: f3 90                        	pause
+  400552: eb fc                        	jmp	0x400550 <exit+0x20>
+
+0000000000400554 <_RNvNtCsg6my6oZXuye_4core9panicking18panic_bounds_check>:
+  400554: 48 83 ec 38                  	subq	$0x38, %rsp
+  400558: 48 8d 44 24 08               	leaq	0x8(%rsp), %rax
+  40055d: 48 89 38                     	movq	%rdi, (%rax)
+  400560: 48 8d 4c 24 10               	leaq	0x10(%rsp), %rcx
+  400565: 48 89 31                     	movq	%rsi, (%rcx)
+  400568: 48 8d 74 24 18               	leaq	0x18(%rsp), %rsi
+  40056d: 48 89 0e                     	movq	%rcx, (%rsi)
+  400570: 48 c7 46 08 10 0b 40 00      	movq	$0x400b10, 0x8(%rsi)    # imm = 0x400B10
+  400578: 48 89 46 10                  	movq	%rax, 0x10(%rsi)
+  40057c: 48 c7 46 18 10 0b 40 00      	movq	$0x400b10, 0x18(%rsi)   # imm = 0x400B10
+  400584: bf bf 20 40 00               	movl	$0x4020bf, %edi         # imm = 0x4020BF
+  400589: e8 02 00 00 00               	callq	0x400590 <_RNvNtCsg6my6oZXuye_4core9panicking9panic_fmt>
+  40058e: cc                           	int3
+  40058f: cc                           	int3
+
+0000000000400590 <_RNvNtCsg6my6oZXuye_4core9panicking9panic_fmt>:
+  400590: 48 83 ec 28                  	subq	$0x28, %rsp
+  400594: 48 89 3c 24                  	movq	%rdi, (%rsp)
+  400598: 48 89 74 24 08               	movq	%rsi, 0x8(%rsp)
+  40059d: 48 89 e0                     	movq	%rsp, %rax
+  4005a0: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+  4005a5: 48 89 54 24 18               	movq	%rdx, 0x18(%rsp)
+  4005aa: 66 c7 44 24 20 01 00         	movw	$0x1, 0x20(%rsp)
+  4005b1: 48 8d 7c 24 10               	leaq	0x10(%rsp), %rdi
+  4005b6: e8 05 00 00 00               	callq	0x4005c0 <_RNvCs5NZBvkRymjj_7___rustc17rust_begin_unwind>
+  4005bb: cc                           	int3
+  4005bc: cc                           	int3
+  4005bd: cc                           	int3
+  4005be: cc                           	int3
+  4005bf: cc                           	int3
+
+00000000004005c0 <_RNvCs5NZBvkRymjj_7___rustc17rust_begin_unwind>:
+  4005c0: 50                           	pushq	%rax
+  4005c1: bf 65 00 00 00               	movl	$0x65, %edi
+  4005c6: e8 e5 fd ff ff               	callq	0x4003b0 <sl_std_exit>
+  4005cb: cc                           	int3
+  4005cc: cc                           	int3
+  4005cd: cc                           	int3
+  4005ce: cc                           	int3
+  4005cf: cc                           	int3
+
+00000000004005d0 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral>:
+  4005d0: 55                           	pushq	%rbp
+  4005d1: 41 57                        	pushq	%r15
+  4005d3: 41 56                        	pushq	%r14
+  4005d5: 41 55                        	pushq	%r13
+  4005d7: 41 54                        	pushq	%r12
+  4005d9: 53                           	pushq	%rbx
+  4005da: 48 83 ec 38                  	subq	$0x38, %rsp
+  4005de: 4d 89 cc                     	movq	%r9, %r12
+  4005e1: 4c 89 44 24 18               	movq	%r8, 0x18(%rsp)
+  4005e6: 48 89 cb                     	movq	%rcx, %rbx
+  4005e9: 49 89 d5                     	movq	%rdx, %r13
+  4005ec: 49 89 ff                     	movq	%rdi, %r15
+  4005ef: 8b 6f 10                     	movl	0x10(%rdi), %ebp
+  4005f2: 89 e8                        	movl	%ebp, %eax
+  4005f4: 25 00 00 20 00               	andl	$0x200000, %eax         # imm = 0x200000
+  4005f9: 83 f8 01                     	cmpl	$0x1, %eax
+  4005fc: b9 00 00 00 00               	movl	$0x0, %ecx
+  400601: 19 c9                        	sbbl	%ecx, %ecx
+  400603: 83 c9 2b                     	orl	$0x2b, %ecx
+  400606: c1 e8 15                     	shrl	$0x15, %eax
+  400609: 85 f6                        	testl	%esi, %esi
+  40060b: ba 2d 00 00 00               	movl	$0x2d, %edx
+  400610: 0f 45 d1                     	cmovnel	%ecx, %edx
+  400613: 89 54 24 04                  	movl	%edx, 0x4(%rsp)
+  400617: 41 be 01 00 00 00            	movl	$0x1, %r14d
+  40061d: 4c 0f 45 f0                  	cmovneq	%rax, %r14
+  400621: 4d 01 ce                     	addq	%r9, %r14
+  400624: f7 c5 00 00 80 00            	testl	$0x800000, %ebp         # imm = 0x800000
+  40062a: 75 60                        	jne	0x40068c <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0xbc>
+  40062c: 48 c7 44 24 08 00 00 00 00   	movq	$0x0, 0x8(%rsp)
+  400635: 45 0f b7 6f 14               	movzwl	0x14(%r15), %r13d
+  40063a: 4d 39 ee                     	cmpq	%r13, %r14
+  40063d: 0f 82 e4 02 00 00            	jb	0x400927 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x357>
+  400643: 49 89 d8                     	movq	%rbx, %r8
+  400646: 49 8b 1f                     	movq	(%r15), %rbx
+  400649: 4d 8b 7f 08                  	movq	0x8(%r15), %r15
+  40064d: 48 89 df                     	movq	%rbx, %rdi
+  400650: 4c 89 fe                     	movq	%r15, %rsi
+  400653: 8b 54 24 04                  	movl	0x4(%rsp), %edx
+  400657: 48 8b 4c 24 08               	movq	0x8(%rsp), %rcx
+  40065c: e8 4f 04 00 00               	callq	0x400ab0 <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix>
+  400661: 89 c1                        	movl	%eax, %ecx
+  400663: b0 01                        	movb	$0x1, %al
+  400665: 84 c9                        	testb	%cl, %cl
+  400667: 0f 85 29 04 00 00            	jne	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  40066d: 49 8b 47 18                  	movq	0x18(%r15), %rax
+  400671: 48 89 df                     	movq	%rbx, %rdi
+  400674: 48 8b 74 24 18               	movq	0x18(%rsp), %rsi
+  400679: 4c 89 e2                     	movq	%r12, %rdx
+  40067c: 48 83 c4 38                  	addq	$0x38, %rsp
+  400680: 5b                           	popq	%rbx
+  400681: 41 5c                        	popq	%r12
+  400683: 41 5d                        	popq	%r13
+  400685: 41 5e                        	popq	%r14
+  400687: 41 5f                        	popq	%r15
+  400689: 5d                           	popq	%rbp
+  40068a: ff e0                        	jmpq	*%rax
+  40068c: 48 83 fb 20                  	cmpq	$0x20, %rbx
+  400690: 73 14                        	jae	0x4006a6 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0xd6>
+  400692: 48 85 db                     	testq	%rbx, %rbx
+  400695: 74 1f                        	je	0x4006b6 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0xe6>
+  400697: 48 83 fb 04                  	cmpq	$0x4, %rbx
+  40069b: 73 20                        	jae	0x4006bd <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0xed>
+  40069d: 31 c9                        	xorl	%ecx, %ecx
+  40069f: 31 c0                        	xorl	%eax, %eax
+  4006a1: e9 55 02 00 00               	jmp	0x4008fb <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x32b>
+  4006a6: 4c 89 ef                     	movq	%r13, %rdi
+  4006a9: 48 89 de                     	movq	%rbx, %rsi
+  4006ac: e8 6f 05 00 00               	callq	0x400c20 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars>
+  4006b1: e9 5b 02 00 00               	jmp	0x400911 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x341>
+  4006b6: 31 c0                        	xorl	%eax, %eax
+  4006b8: e9 54 02 00 00               	jmp	0x400911 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x341>
+  4006bd: 89 d9                        	movl	%ebx, %ecx
+  4006bf: 83 e1 1c                     	andl	$0x1c, %ecx
+  4006c2: 41 0f b7 45 00               	movzwl	(%r13), %eax
+  4006c7: 66 0f 6e c0                  	movd	%eax, %xmm0
+  4006cb: 41 0f b7 45 02               	movzwl	0x2(%r13), %eax
+  4006d0: 66 0f 6e c8                  	movd	%eax, %xmm1
+  4006d4: 66 0f 6f 15 14 1b 00 00      	movdqa	0x1b14(%rip), %xmm2     # 0x4021f0 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xe0>
+  4006dc: 66 0f 64 c2                  	pcmpgtb	%xmm2, %xmm0
+  4006e0: 66 0f 60 c0                  	punpcklbw	%xmm0, %xmm0    # xmm0 = xmm0[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  4006e4: f2 0f 70 c0 d4               	pshuflw	$0xd4, %xmm0, %xmm0     # xmm0 = xmm0[0,1,1,3,4,5,6,7]
+  4006e9: 66 0f 70 c0 d4               	pshufd	$0xd4, %xmm0, %xmm0     # xmm0 = xmm0[0,1,1,3]
+  4006ee: 66 0f 6f 1d 0a 1b 00 00      	movdqa	0x1b0a(%rip), %xmm3     # 0x402200 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xf0>
+  4006f6: 66 0f db c3                  	pand	%xmm3, %xmm0
+  4006fa: 66 0f 64 ca                  	pcmpgtb	%xmm2, %xmm1
+  4006fe: 66 0f 60 c9                  	punpcklbw	%xmm1, %xmm1    # xmm1 = xmm1[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400702: f2 0f 70 c9 d4               	pshuflw	$0xd4, %xmm1, %xmm1     # xmm1 = xmm1[0,1,1,3,4,5,6,7]
+  400707: 66 0f 70 c9 d4               	pshufd	$0xd4, %xmm1, %xmm1     # xmm1 = xmm1[0,1,1,3]
+  40070c: 66 0f db cb                  	pand	%xmm3, %xmm1
+  400710: 48 83 f9 04                  	cmpq	$0x4, %rcx
+  400714: 0f 84 cd 01 00 00            	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  40071a: 41 0f b7 45 04               	movzwl	0x4(%r13), %eax
+  40071f: 66 0f 6e e0                  	movd	%eax, %xmm4
+  400723: 41 0f b7 45 06               	movzwl	0x6(%r13), %eax
+  400728: 66 0f 6e e8                  	movd	%eax, %xmm5
+  40072c: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  400730: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400734: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400739: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  40073e: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400742: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  400746: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  40074a: f2 0f 70 ed d4               	pshuflw	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3,4,5,6,7]
+  40074f: 66 0f 70 ed d4               	pshufd	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3]
+  400754: 66 0f db eb                  	pand	%xmm3, %xmm5
+  400758: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  40075c: 66 0f d4 cd                  	paddq	%xmm5, %xmm1
+  400760: 83 f9 08                     	cmpl	$0x8, %ecx
+  400763: 0f 84 7e 01 00 00            	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  400769: 41 0f b7 45 08               	movzwl	0x8(%r13), %eax
+  40076e: 66 0f 6e e0                  	movd	%eax, %xmm4
+  400772: 41 0f b7 45 0a               	movzwl	0xa(%r13), %eax
+  400777: 66 0f 6e e8                  	movd	%eax, %xmm5
+  40077b: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  40077f: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400783: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400788: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  40078d: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400791: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  400795: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400799: f2 0f 70 ed d4               	pshuflw	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3,4,5,6,7]
+  40079e: 66 0f 70 ed d4               	pshufd	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3]
+  4007a3: 66 0f db eb                  	pand	%xmm3, %xmm5
+  4007a7: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  4007ab: 66 0f d4 cd                  	paddq	%xmm5, %xmm1
+  4007af: 83 f9 0c                     	cmpl	$0xc, %ecx
+  4007b2: 0f 84 2f 01 00 00            	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  4007b8: 41 0f b7 45 0c               	movzwl	0xc(%r13), %eax
+  4007bd: 66 0f 6e e0                  	movd	%eax, %xmm4
+  4007c1: 41 0f b7 45 0e               	movzwl	0xe(%r13), %eax
+  4007c6: 66 0f 6e e8                  	movd	%eax, %xmm5
+  4007ca: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  4007ce: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  4007d2: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  4007d7: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  4007dc: 66 0f db e3                  	pand	%xmm3, %xmm4
+  4007e0: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  4007e4: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  4007e8: f2 0f 70 ed d4               	pshuflw	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3,4,5,6,7]
+  4007ed: 66 0f 70 ed d4               	pshufd	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3]
+  4007f2: 66 0f db eb                  	pand	%xmm3, %xmm5
+  4007f6: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  4007fa: 66 0f d4 cd                  	paddq	%xmm5, %xmm1
+  4007fe: 83 f9 10                     	cmpl	$0x10, %ecx
+  400801: 0f 84 e0 00 00 00            	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  400807: 41 0f b7 45 10               	movzwl	0x10(%r13), %eax
+  40080c: 66 0f 6e e0                  	movd	%eax, %xmm4
+  400810: 41 0f b7 45 12               	movzwl	0x12(%r13), %eax
+  400815: 66 0f 6e e8                  	movd	%eax, %xmm5
+  400819: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  40081d: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400821: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400826: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  40082b: 66 0f db e3                  	pand	%xmm3, %xmm4
+  40082f: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  400833: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400837: f2 0f 70 ed d4               	pshuflw	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3,4,5,6,7]
+  40083c: 66 0f 70 ed d4               	pshufd	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3]
+  400841: 66 0f db eb                  	pand	%xmm3, %xmm5
+  400845: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  400849: 66 0f d4 cd                  	paddq	%xmm5, %xmm1
+  40084d: 83 f9 14                     	cmpl	$0x14, %ecx
+  400850: 0f 84 91 00 00 00            	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  400856: 41 0f b7 45 14               	movzwl	0x14(%r13), %eax
+  40085b: 66 0f 6e e0                  	movd	%eax, %xmm4
+  40085f: 41 0f b7 45 16               	movzwl	0x16(%r13), %eax
+  400864: 66 0f 6e e8                  	movd	%eax, %xmm5
+  400868: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  40086c: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400870: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400875: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  40087a: 66 0f db e3                  	pand	%xmm3, %xmm4
+  40087e: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  400882: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400886: f2 0f 70 ed d4               	pshuflw	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3,4,5,6,7]
+  40088b: 66 0f 70 ed d4               	pshufd	$0xd4, %xmm5, %xmm5     # xmm5 = xmm5[0,1,1,3]
+  400890: 66 0f db eb                  	pand	%xmm3, %xmm5
+  400894: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  400898: 66 0f d4 cd                  	paddq	%xmm5, %xmm1
+  40089c: 83 f9 18                     	cmpl	$0x18, %ecx
+  40089f: 74 46                        	je	0x4008e7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x317>
+  4008a1: 41 0f b7 45 18               	movzwl	0x18(%r13), %eax
+  4008a6: 66 0f 6e e0                  	movd	%eax, %xmm4
+  4008aa: 41 0f b7 45 1a               	movzwl	0x1a(%r13), %eax
+  4008af: 66 0f 6e e8                  	movd	%eax, %xmm5
+  4008b3: 66 0f 64 e2                  	pcmpgtb	%xmm2, %xmm4
+  4008b7: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  4008bb: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  4008c0: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  4008c5: 66 0f db e3                  	pand	%xmm3, %xmm4
+  4008c9: 66 0f 64 ea                  	pcmpgtb	%xmm2, %xmm5
+  4008cd: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  4008d1: f2 0f 70 d5 d4               	pshuflw	$0xd4, %xmm5, %xmm2     # xmm2 = xmm5[0,1,1,3,4,5,6,7]
+  4008d6: 66 0f 70 d2 d4               	pshufd	$0xd4, %xmm2, %xmm2     # xmm2 = xmm2[0,1,1,3]
+  4008db: 66 0f db d3                  	pand	%xmm3, %xmm2
+  4008df: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  4008e3: 66 0f d4 ca                  	paddq	%xmm2, %xmm1
+  4008e7: 66 0f d4 c1                  	paddq	%xmm1, %xmm0
+  4008eb: 66 0f 70 c8 ee               	pshufd	$0xee, %xmm0, %xmm1     # xmm1 = xmm0[2,3,2,3]
+  4008f0: 66 0f d4 c8                  	paddq	%xmm0, %xmm1
+  4008f4: 66 48 0f 7e c8               	movq	%xmm1, %rax
+  4008f9: eb 11                        	jmp	0x40090c <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x33c>
+  4008fb: 31 d2                        	xorl	%edx, %edx
+  4008fd: 41 80 7c 0d 00 c0            	cmpb	$-0x40, (%r13,%rcx)
+  400903: 0f 9d c2                     	setge	%dl
+  400906: 48 01 d0                     	addq	%rdx, %rax
+  400909: 48 ff c1                     	incq	%rcx
+  40090c: 48 39 cb                     	cmpq	%rcx, %rbx
+  40090f: 75 ea                        	jne	0x4008fb <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x32b>
+  400911: 4c 89 6c 24 08               	movq	%r13, 0x8(%rsp)
+  400916: 49 01 c6                     	addq	%rax, %r14
+  400919: 45 0f b7 6f 14               	movzwl	0x14(%r15), %r13d
+  40091e: 4d 39 ee                     	cmpq	%r13, %r14
+  400921: 0f 83 1c fd ff ff            	jae	0x400643 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x73>
+  400927: f7 c5 00 00 00 01            	testl	$0x1000000, %ebp        # imm = 0x1000000
+  40092d: 75 2a                        	jne	0x400959 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x389>
+  40092f: 44 89 e9                     	movl	%r13d, %ecx
+  400932: 44 29 f1                     	subl	%r14d, %ecx
+  400935: 89 e8                        	movl	%ebp, %eax
+  400937: c1 e8 1d                     	shrl	$0x1d, %eax
+  40093a: 83 e0 03                     	andl	$0x3, %eax
+  40093d: 4c 89 64 24 28               	movq	%r12, 0x28(%rsp)
+  400942: 48 89 5c 24 30               	movq	%rbx, 0x30(%rsp)
+  400947: 89 4c 24 10                  	movl	%ecx, 0x10(%rsp)
+  40094b: ff 24 c5 10 22 40 00         	jmpq	*0x402210(,%rax,8)
+  400952: 89 c8                        	movl	%ecx, %eax
+  400954: e9 8f 00 00 00               	jmp	0x4009e8 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x418>
+  400959: 49 8b 47 10                  	movq	0x10(%r15), %rax
+  40095d: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+  400962: 25 00 00 e0 9f               	andl	$0x9fe00000, %eax       # imm = 0x9FE00000
+  400967: 0d 30 00 00 20               	orl	$0x20000030, %eax       # imm = 0x20000030
+  40096c: 41 89 47 10                  	movl	%eax, 0x10(%r15)
+  400970: 49 8b 2f                     	movq	(%r15), %rbp
+  400973: 49 89 d8                     	movq	%rbx, %r8
+  400976: 49 8b 5f 08                  	movq	0x8(%r15), %rbx
+  40097a: 48 89 ef                     	movq	%rbp, %rdi
+  40097d: 48 89 de                     	movq	%rbx, %rsi
+  400980: 8b 54 24 04                  	movl	0x4(%rsp), %edx
+  400984: 48 8b 4c 24 08               	movq	0x8(%rsp), %rcx
+  400989: e8 22 01 00 00               	callq	0x400ab0 <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix>
+  40098e: 89 c1                        	movl	%eax, %ecx
+  400990: b0 01                        	movb	$0x1, %al
+  400992: 84 c9                        	testb	%cl, %cl
+  400994: 0f 85 fc 00 00 00            	jne	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  40099a: 45 29 f5                     	subl	%r14d, %r13d
+  40099d: 41 ff c5                     	incl	%r13d
+  4009a0: 66 41 ff cd                  	decw	%r13w
+  4009a4: 74 11                        	je	0x4009b7 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x3e7>
+  4009a6: 48 89 ef                     	movq	%rbp, %rdi
+  4009a9: be 30 00 00 00               	movl	$0x30, %esi
+  4009ae: ff 53 20                     	callq	*0x20(%rbx)
+  4009b1: 84 c0                        	testb	%al, %al
+  4009b3: 74 eb                        	je	0x4009a0 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x3d0>
+  4009b5: eb 5c                        	jmp	0x400a13 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x443>
+  4009b7: 48 89 ef                     	movq	%rbp, %rdi
+  4009ba: 48 8b 74 24 18               	movq	0x18(%rsp), %rsi
+  4009bf: 4c 89 e2                     	movq	%r12, %rdx
+  4009c2: ff 53 18                     	callq	*0x18(%rbx)
+  4009c5: 84 c0                        	testb	%al, %al
+  4009c7: b0 01                        	movb	$0x1, %al
+  4009c9: 0f 85 c7 00 00 00            	jne	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  4009cf: 48 8b 44 24 10               	movq	0x10(%rsp), %rax
+  4009d4: 49 89 47 10                  	movq	%rax, 0x10(%r15)
+  4009d8: 31 c0                        	xorl	%eax, %eax
+  4009da: e9 b7 00 00 00               	jmp	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  4009df: 31 c0                        	xorl	%eax, %eax
+  4009e1: eb 05                        	jmp	0x4009e8 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x418>
+  4009e3: 0f b7 c1                     	movzwl	%cx, %eax
+  4009e6: d1 e8                        	shrl	%eax
+  4009e8: 81 e5 ff ff 1f 00            	andl	$0x1fffff, %ebp         # imm = 0x1FFFFF
+  4009ee: 49 8b 1f                     	movq	(%r15), %rbx
+  4009f1: 4d 8b 7f 08                  	movq	0x8(%r15), %r15
+  4009f5: 48 89 44 24 20               	movq	%rax, 0x20(%rsp)
+  4009fa: 44 8d 60 01                  	leal	0x1(%rax), %r12d
+  4009fe: 66 90                        	nop
+  400a00: 48 89 df                     	movq	%rbx, %rdi
+  400a03: 66 41 ff cc                  	decw	%r12w
+  400a07: 74 0e                        	je	0x400a17 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x447>
+  400a09: 89 ee                        	movl	%ebp, %esi
+  400a0b: 41 ff 57 20                  	callq	*0x20(%r15)
+  400a0f: 84 c0                        	testb	%al, %al
+  400a11: 74 ed                        	je	0x400a00 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x430>
+  400a13: b0 01                        	movb	$0x1, %al
+  400a15: eb 7f                        	jmp	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  400a17: 4c 89 fe                     	movq	%r15, %rsi
+  400a1a: 8b 54 24 04                  	movl	0x4(%rsp), %edx
+  400a1e: 48 8b 4c 24 08               	movq	0x8(%rsp), %rcx
+  400a23: 4c 8b 44 24 30               	movq	0x30(%rsp), %r8
+  400a28: e8 83 00 00 00               	callq	0x400ab0 <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix>
+  400a2d: 89 c1                        	movl	%eax, %ecx
+  400a2f: b0 01                        	movb	$0x1, %al
+  400a31: 84 c9                        	testb	%cl, %cl
+  400a33: 75 61                        	jne	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  400a35: 48 89 df                     	movq	%rbx, %rdi
+  400a38: 48 8b 74 24 18               	movq	0x18(%rsp), %rsi
+  400a3d: 48 8b 54 24 28               	movq	0x28(%rsp), %rdx
+  400a42: 41 ff 57 18                  	callq	*0x18(%r15)
+  400a46: 89 c1                        	movl	%eax, %ecx
+  400a48: b0 01                        	movb	$0x1, %al
+  400a4a: 84 c9                        	testb	%cl, %cl
+  400a4c: 75 48                        	jne	0x400a96 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4c6>
+  400a4e: 44 8b 64 24 10               	movl	0x10(%rsp), %r12d
+  400a53: 48 8b 44 24 20               	movq	0x20(%rsp), %rax
+  400a58: 41 29 c4                     	subl	%eax, %r12d
+  400a5b: 44 01 f0                     	addl	%r14d, %eax
+  400a5e: 44 29 e8                     	subl	%r13d, %eax
+  400a61: 49 89 c5                     	movq	%rax, %r13
+  400a64: 66 41 be ff ff               	movw	$0xffff, %r14w          # imm = 0xFFFF
+  400a69: 0f 1f 80 00 00 00 00         	nopl	(%rax)
+  400a70: 43 8d 04 2e                  	leal	(%r14,%r13), %eax
+  400a74: 66 83 f8 ff                  	cmpw	$-0x1, %ax
+  400a78: 74 12                        	je	0x400a8c <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4bc>
+  400a7a: 48 89 df                     	movq	%rbx, %rdi
+  400a7d: 89 ee                        	movl	%ebp, %esi
+  400a7f: 41 ff 57 20                  	callq	*0x20(%r15)
+  400a83: 41 ff c6                     	incl	%r14d
+  400a86: 84 c0                        	testb	%al, %al
+  400a88: 74 e6                        	je	0x400a70 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4a0>
+  400a8a: eb 03                        	jmp	0x400a8f <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral+0x4bf>
+  400a8c: 45 89 e6                     	movl	%r12d, %r14d
+  400a8f: 66 45 39 e6                  	cmpw	%r12w, %r14w
+  400a93: 0f 92 c0                     	setb	%al
+  400a96: 48 83 c4 38                  	addq	$0x38, %rsp
+  400a9a: 5b                           	popq	%rbx
+  400a9b: 41 5c                        	popq	%r12
+  400a9d: 41 5d                        	popq	%r13
+  400a9f: 41 5e                        	popq	%r14
+  400aa1: 41 5f                        	popq	%r15
+  400aa3: 5d                           	popq	%rbp
+  400aa4: c3                           	retq
+  400aa5: cc                           	int3
+  400aa6: cc                           	int3
+  400aa7: cc                           	int3
+  400aa8: cc                           	int3
+  400aa9: cc                           	int3
+  400aaa: cc                           	int3
+  400aab: cc                           	int3
+  400aac: cc                           	int3
+  400aad: cc                           	int3
+  400aae: cc                           	int3
+  400aaf: cc                           	int3
+
+0000000000400ab0 <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix>:
+  400ab0: 41 57                        	pushq	%r15
+  400ab2: 41 56                        	pushq	%r14
+  400ab4: 41 54                        	pushq	%r12
+  400ab6: 53                           	pushq	%rbx
+  400ab7: 50                           	pushq	%rax
+  400ab8: 4c 89 c3                     	movq	%r8, %rbx
+  400abb: 49 89 ce                     	movq	%rcx, %r14
+  400abe: 49 89 f4                     	movq	%rsi, %r12
+  400ac1: 49 89 ff                     	movq	%rdi, %r15
+  400ac4: 83 fa ff                     	cmpl	$-0x1, %edx
+  400ac7: 74 12                        	je	0x400adb <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix+0x2b>
+  400ac9: 4c 89 ff                     	movq	%r15, %rdi
+  400acc: 89 d6                        	movl	%edx, %esi
+  400ace: 41 ff 54 24 20               	callq	*0x20(%r12)
+  400ad3: 89 c1                        	movl	%eax, %ecx
+  400ad5: b0 01                        	movb	$0x1, %al
+  400ad7: 84 c9                        	testb	%cl, %cl
+  400ad9: 75 22                        	jne	0x400afd <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix+0x4d>
+  400adb: 4d 85 f6                     	testq	%r14, %r14
+  400ade: 74 1b                        	je	0x400afb <_RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix+0x4b>
+  400ae0: 49 8b 44 24 18               	movq	0x18(%r12), %rax
+  400ae5: 4c 89 ff                     	movq	%r15, %rdi
+  400ae8: 4c 89 f6                     	movq	%r14, %rsi
+  400aeb: 48 89 da                     	movq	%rbx, %rdx
+  400aee: 48 83 c4 08                  	addq	$0x8, %rsp
+  400af2: 5b                           	popq	%rbx
+  400af3: 41 5c                        	popq	%r12
+  400af5: 41 5e                        	popq	%r14
+  400af7: 41 5f                        	popq	%r15
+  400af9: ff e0                        	jmpq	*%rax
+  400afb: 31 c0                        	xorl	%eax, %eax
+  400afd: 48 83 c4 08                  	addq	$0x8, %rsp
+  400b01: 5b                           	popq	%rbx
+  400b02: 41 5c                        	popq	%r12
+  400b04: 41 5e                        	popq	%r14
+  400b06: 41 5f                        	popq	%r15
+  400b08: c3                           	retq
+  400b09: cc                           	int3
+  400b0a: cc                           	int3
+  400b0b: cc                           	int3
+  400b0c: cc                           	int3
+  400b0d: cc                           	int3
+  400b0e: cc                           	int3
+  400b0f: cc                           	int3
+
+0000000000400b10 <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt>:
+  400b10: 48 83 ec 18                  	subq	$0x18, %rsp
+  400b14: 48 8b 3f                     	movq	(%rdi), %rdi
+  400b17: b8 14 00 00 00               	movl	$0x14, %eax
+  400b1c: 48 89 fa                     	movq	%rdi, %rdx
+  400b1f: 48 81 ff e8 03 00 00         	cmpq	$0x3e8, %rdi            # imm = 0x3E8
+  400b26: 72 73                        	jb	0x400b9b <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt+0x8b>
+  400b28: 49 b8 4b 59 86 38 d6 c5 6d 34	movabsq	$0x346dc5d63886594b, %r8 # imm = 0x346DC5D63886594B
+  400b32: 48 89 f9                     	movq	%rdi, %rcx
+  400b35: 66 66 2e 0f 1f 84 00 00 00 00 00     	nopw	%cs:(%rax,%rax)
+  400b40: 49 89 c1                     	movq	%rax, %r9
+  400b43: 48 89 c8                     	movq	%rcx, %rax
+  400b46: 49 f7 e0                     	mulq	%r8
+  400b49: 48 c1 ea 0b                  	shrq	$0xb, %rdx
+  400b4d: 69 c2 10 27 00 00            	imull	$0x2710, %edx, %eax     # imm = 0x2710
+  400b53: 41 89 ca                     	movl	%ecx, %r10d
+  400b56: 41 29 c2                     	subl	%eax, %r10d
+  400b59: 41 69 c2 7b 14 00 00         	imull	$0x147b, %r10d, %eax    # imm = 0x147B
+  400b60: c1 e8 13                     	shrl	$0x13, %eax
+  400b63: 44 6b d8 64                  	imull	$0x64, %eax, %r11d
+  400b67: 45 29 da                     	subl	%r11d, %r10d
+  400b6a: 45 0f b7 d2                  	movzwl	%r10w, %r10d
+  400b6e: 0f b7 84 00 10 21 40 00      	movzwl	0x402110(%rax,%rax), %eax
+  400b76: 66 0f 6e c0                  	movd	%eax, %xmm0
+  400b7a: 66 43 0f c4 84 12 10 21 40 00 01     	pinsrw	$0x1, 0x402110(%r10,%r10), %xmm0
+  400b85: 66 42 0f 7e 04 0c            	movd	%xmm0, (%rsp,%r9)
+  400b8b: 49 8d 41 fc                  	leaq	-0x4(%r9), %rax
+  400b8f: 48 81 f9 7f 96 98 00         	cmpq	$0x98967f, %rcx         # imm = 0x98967F
+  400b96: 48 89 d1                     	movq	%rdx, %rcx
+  400b99: 77 a5                        	ja	0x400b40 <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt+0x30>
+  400b9b: 48 83 fa 09                  	cmpq	$0x9, %rdx
+  400b9f: 76 2f                        	jbe	0x400bd0 <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt+0xc0>
+  400ba1: 89 d1                        	movl	%edx, %ecx
+  400ba3: c1 e9 02                     	shrl	$0x2, %ecx
+  400ba6: 0f b7 c9                     	movzwl	%cx, %ecx
+  400ba9: 69 c9 7b 14 00 00            	imull	$0x147b, %ecx, %ecx     # imm = 0x147B
+  400baf: c1 e9 11                     	shrl	$0x11, %ecx
+  400bb2: 44 6b c1 64                  	imull	$0x64, %ecx, %r8d
+  400bb6: 44 29 c2                     	subl	%r8d, %edx
+  400bb9: 0f b7 d2                     	movzwl	%dx, %edx
+  400bbc: 0f b7 94 12 10 21 40 00      	movzwl	0x402110(%rdx,%rdx), %edx
+  400bc4: 66 89 54 04 02               	movw	%dx, 0x2(%rsp,%rax)
+  400bc9: 48 83 c0 fe                  	addq	$-0x2, %rax
+  400bcd: 48 89 ca                     	movq	%rcx, %rdx
+  400bd0: 48 85 ff                     	testq	%rdi, %rdi
+  400bd3: 74 05                        	je	0x400bda <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt+0xca>
+  400bd5: 48 85 d2                     	testq	%rdx, %rdx
+  400bd8: 74 0f                        	je	0x400be9 <_RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt+0xd9>
+  400bda: 0f b6 8c 12 11 21 40 00      	movzbl	0x402111(%rdx,%rdx), %ecx
+  400be2: 88 4c 04 03                  	movb	%cl, 0x3(%rsp,%rax)
+  400be6: 48 ff c8                     	decq	%rax
+  400be9: 41 b9 14 00 00 00            	movl	$0x14, %r9d
+  400bef: 49 29 c1                     	subq	%rax, %r9
+  400bf2: 4c 8d 04 04                  	leaq	(%rsp,%rax), %r8
+  400bf6: 49 83 c0 04                  	addq	$0x4, %r8
+  400bfa: ba 01 00 00 00               	movl	$0x1, %edx
+  400bff: 48 89 f7                     	movq	%rsi, %rdi
+  400c02: be 01 00 00 00               	movl	$0x1, %esi
+  400c07: 31 c9                        	xorl	%ecx, %ecx
+  400c09: e8 c2 f9 ff ff               	callq	0x4005d0 <_RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral>
+  400c0e: 48 83 c4 18                  	addq	$0x18, %rsp
+  400c12: c3                           	retq
+  400c13: cc                           	int3
+  400c14: cc                           	int3
+  400c15: cc                           	int3
+  400c16: cc                           	int3
+  400c17: cc                           	int3
+  400c18: cc                           	int3
+  400c19: cc                           	int3
+  400c1a: cc                           	int3
+  400c1b: cc                           	int3
+  400c1c: cc                           	int3
+  400c1d: cc                           	int3
+  400c1e: cc                           	int3
+  400c1f: cc                           	int3
+
+0000000000400c20 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars>:
+  400c20: 4c 8d 4f 07                  	leaq	0x7(%rdi), %r9
+  400c24: 49 83 e1 f8                  	andq	$-0x8, %r9
+  400c28: 4d 89 c8                     	movq	%r9, %r8
+  400c2b: 49 29 f8                     	subq	%rdi, %r8
+  400c2e: 48 89 f0                     	movq	%rsi, %rax
+  400c31: 4c 29 c0                     	subq	%r8, %rax
+  400c34: 73 14                        	jae	0x400c4a <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x2a>
+  400c36: 48 85 f6                     	testq	%rsi, %rsi
+  400c39: 74 3d                        	je	0x400c78 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x58>
+  400c3b: 48 83 fe 04                  	cmpq	$0x4, %rsi
+  400c3f: 73 3a                        	jae	0x400c7b <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x5b>
+  400c41: 31 c9                        	xorl	%ecx, %ecx
+  400c43: 31 c0                        	xorl	%eax, %eax
+  400c45: e9 79 05 00 00               	jmp	0x4011c3 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x5a3>
+  400c4a: 48 89 c1                     	movq	%rax, %rcx
+  400c4d: 48 c1 e9 03                  	shrq	$0x3, %rcx
+  400c51: 74 e3                        	je	0x400c36 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x16>
+  400c53: 89 c2                        	movl	%eax, %edx
+  400c55: 83 e2 07                     	andl	$0x7, %edx
+  400c58: 49 39 f9                     	cmpq	%rdi, %r9
+  400c5b: 75 07                        	jne	0x400c64 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x44>
+  400c5d: 31 f6                        	xorl	%esi, %esi
+  400c5f: e9 49 01 00 00               	jmp	0x400dad <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x18d>
+  400c64: 49 83 f8 04                  	cmpq	$0x4, %r8
+  400c68: 0f 83 97 00 00 00            	jae	0x400d05 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0xe5>
+  400c6e: 45 31 c9                     	xorl	%r9d, %r9d
+  400c71: 31 f6                        	xorl	%esi, %esi
+  400c73: e9 1e 01 00 00               	jmp	0x400d96 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x176>
+  400c78: 31 c0                        	xorl	%eax, %eax
+  400c7a: c3                           	retq
+  400c7b: 48 89 f1                     	movq	%rsi, %rcx
+  400c7e: 48 83 e1 fc                  	andq	$-0x4, %rcx
+  400c82: 66 0f ef c0                  	pxor	%xmm0, %xmm0
+  400c86: 31 c0                        	xorl	%eax, %eax
+  400c88: 66 0f 6f 0d 60 15 00 00      	movdqa	0x1560(%rip), %xmm1     # 0x4021f0 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xe0>
+  400c90: 66 0f 6f 1d 68 15 00 00      	movdqa	0x1568(%rip), %xmm3     # 0x402200 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xf0>
+  400c98: 66 0f ef d2                  	pxor	%xmm2, %xmm2
+  400c9c: 0f 1f 40 00                  	nopl	(%rax)
+  400ca0: 0f b7 14 07                  	movzwl	(%rdi,%rax), %edx
+  400ca4: 66 0f 6e e2                  	movd	%edx, %xmm4
+  400ca8: 0f b7 54 07 02               	movzwl	0x2(%rdi,%rax), %edx
+  400cad: 66 0f 6e ea                  	movd	%edx, %xmm5
+  400cb1: 66 0f 64 e1                  	pcmpgtb	%xmm1, %xmm4
+  400cb5: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400cb9: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400cbe: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  400cc3: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400cc7: 66 0f d4 d4                  	paddq	%xmm4, %xmm2
+  400ccb: 66 0f 64 e9                  	pcmpgtb	%xmm1, %xmm5
+  400ccf: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400cd3: f2 0f 70 e5 d4               	pshuflw	$0xd4, %xmm5, %xmm4     # xmm4 = xmm5[0,1,1,3,4,5,6,7]
+  400cd8: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  400cdd: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400ce1: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  400ce5: 48 83 c0 04                  	addq	$0x4, %rax
+  400ce9: 48 39 c1                     	cmpq	%rax, %rcx
+  400cec: 75 b2                        	jne	0x400ca0 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x80>
+  400cee: 66 0f d4 c2                  	paddq	%xmm2, %xmm0
+  400cf2: 66 0f 70 c8 ee               	pshufd	$0xee, %xmm0, %xmm1     # xmm1 = xmm0[2,3,2,3]
+  400cf7: 66 0f d4 c8                  	paddq	%xmm0, %xmm1
+  400cfb: 66 48 0f 7e c8               	movq	%xmm1, %rax
+  400d00: e9 cd 04 00 00               	jmp	0x4011d2 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x5b2>
+  400d05: 45 89 c1                     	movl	%r8d, %r9d
+  400d08: 41 83 e1 04                  	andl	$0x4, %r9d
+  400d0c: 66 0f ef c0                  	pxor	%xmm0, %xmm0
+  400d10: 31 f6                        	xorl	%esi, %esi
+  400d12: 66 0f 6f 0d d6 14 00 00      	movdqa	0x14d6(%rip), %xmm1     # 0x4021f0 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xe0>
+  400d1a: 66 0f 6f 1d de 14 00 00      	movdqa	0x14de(%rip), %xmm3     # 0x402200 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xf0>
+  400d22: 66 0f ef d2                  	pxor	%xmm2, %xmm2
+  400d26: 66 2e 0f 1f 84 00 00 00 00 00	nopw	%cs:(%rax,%rax)
+  400d30: 44 0f b7 14 37               	movzwl	(%rdi,%rsi), %r10d
+  400d35: 66 41 0f 6e e2               	movd	%r10d, %xmm4
+  400d3a: 44 0f b7 54 37 02            	movzwl	0x2(%rdi,%rsi), %r10d
+  400d40: 66 41 0f 6e ea               	movd	%r10d, %xmm5
+  400d45: 66 0f 64 e1                  	pcmpgtb	%xmm1, %xmm4
+  400d49: 66 0f 60 e4                  	punpcklbw	%xmm4, %xmm4    # xmm4 = xmm4[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400d4d: f2 0f 70 e4 d4               	pshuflw	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3,4,5,6,7]
+  400d52: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  400d57: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400d5b: 66 0f d4 d4                  	paddq	%xmm4, %xmm2
+  400d5f: 66 0f 64 e9                  	pcmpgtb	%xmm1, %xmm5
+  400d63: 66 0f 60 ed                  	punpcklbw	%xmm5, %xmm5    # xmm5 = xmm5[0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7]
+  400d67: f2 0f 70 e5 d4               	pshuflw	$0xd4, %xmm5, %xmm4     # xmm4 = xmm5[0,1,1,3,4,5,6,7]
+  400d6c: 66 0f 70 e4 d4               	pshufd	$0xd4, %xmm4, %xmm4     # xmm4 = xmm4[0,1,1,3]
+  400d71: 66 0f db e3                  	pand	%xmm3, %xmm4
+  400d75: 66 0f d4 c4                  	paddq	%xmm4, %xmm0
+  400d79: 48 83 c6 04                  	addq	$0x4, %rsi
+  400d7d: 49 39 f1                     	cmpq	%rsi, %r9
+  400d80: 75 ae                        	jne	0x400d30 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x110>
+  400d82: 66 0f d4 c2                  	paddq	%xmm2, %xmm0
+  400d86: 66 0f 70 c8 ee               	pshufd	$0xee, %xmm0, %xmm1     # xmm1 = xmm0[2,3,2,3]
+  400d8b: 66 0f d4 c8                  	paddq	%xmm0, %xmm1
+  400d8f: 66 48 0f 7e ce               	movq	%xmm1, %rsi
+  400d94: eb 12                        	jmp	0x400da8 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x188>
+  400d96: 45 31 d2                     	xorl	%r10d, %r10d
+  400d99: 42 80 3c 0f c0               	cmpb	$-0x40, (%rdi,%r9)
+  400d9e: 41 0f 9d c2                  	setge	%r10b
+  400da2: 4c 01 d6                     	addq	%r10, %rsi
+  400da5: 49 ff c1                     	incq	%r9
+  400da8: 4d 39 c8                     	cmpq	%r9, %r8
+  400dab: 75 e9                        	jne	0x400d96 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x176>
+  400dad: 4c 01 c7                     	addq	%r8, %rdi
+  400db0: 48 85 d2                     	testq	%rdx, %rdx
+  400db3: 0f 84 90 00 00 00            	je	0x400e49 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x229>
+  400db9: 49 b8 f8 ff ff ff ff ff ff 7f	movabsq	$0x7ffffffffffffff8, %r8 # imm = 0x7FFFFFFFFFFFFFF8
+  400dc3: 4c 21 c0                     	andq	%r8, %rax
+  400dc6: 45 31 d2                     	xorl	%r10d, %r10d
+  400dc9: 80 3c 07 c0                  	cmpb	$-0x40, (%rdi,%rax)
+  400dcd: 41 0f 9d c2                  	setge	%r10b
+  400dd1: 83 fa 01                     	cmpl	$0x1, %edx
+  400dd4: 74 76                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400dd6: 45 31 c0                     	xorl	%r8d, %r8d
+  400dd9: 80 7c 07 01 c0               	cmpb	$-0x40, 0x1(%rdi,%rax)
+  400dde: 41 0f 9d c0                  	setge	%r8b
+  400de2: 4d 01 c2                     	addq	%r8, %r10
+  400de5: 83 fa 02                     	cmpl	$0x2, %edx
+  400de8: 74 62                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400dea: 45 31 c0                     	xorl	%r8d, %r8d
+  400ded: 80 7c 07 02 c0               	cmpb	$-0x40, 0x2(%rdi,%rax)
+  400df2: 41 0f 9d c0                  	setge	%r8b
+  400df6: 4d 01 c2                     	addq	%r8, %r10
+  400df9: 83 fa 03                     	cmpl	$0x3, %edx
+  400dfc: 74 4e                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400dfe: 45 31 c0                     	xorl	%r8d, %r8d
+  400e01: 80 7c 07 03 c0               	cmpb	$-0x40, 0x3(%rdi,%rax)
+  400e06: 41 0f 9d c0                  	setge	%r8b
+  400e0a: 4d 01 c2                     	addq	%r8, %r10
+  400e0d: 83 fa 04                     	cmpl	$0x4, %edx
+  400e10: 74 3a                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400e12: 45 31 c0                     	xorl	%r8d, %r8d
+  400e15: 80 7c 07 04 c0               	cmpb	$-0x40, 0x4(%rdi,%rax)
+  400e1a: 41 0f 9d c0                  	setge	%r8b
+  400e1e: 4d 01 c2                     	addq	%r8, %r10
+  400e21: 83 fa 05                     	cmpl	$0x5, %edx
+  400e24: 74 26                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400e26: 45 31 c0                     	xorl	%r8d, %r8d
+  400e29: 80 7c 07 05 c0               	cmpb	$-0x40, 0x5(%rdi,%rax)
+  400e2e: 41 0f 9d c0                  	setge	%r8b
+  400e32: 4d 01 c2                     	addq	%r8, %r10
+  400e35: 83 fa 06                     	cmpl	$0x6, %edx
+  400e38: 74 12                        	je	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400e3a: 31 d2                        	xorl	%edx, %edx
+  400e3c: 80 7c 07 06 c0               	cmpb	$-0x40, 0x6(%rdi,%rax)
+  400e41: 0f 9d c2                     	setge	%dl
+  400e44: 49 01 d2                     	addq	%rdx, %r10
+  400e47: eb 03                        	jmp	0x400e4c <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x22c>
+  400e49: 45 31 d2                     	xorl	%r10d, %r10d
+  400e4c: 41 57                        	pushq	%r15
+  400e4e: 41 56                        	pushq	%r14
+  400e50: 41 54                        	pushq	%r12
+  400e52: 53                           	pushq	%rbx
+  400e53: 49 01 f2                     	addq	%rsi, %r10
+  400e56: 48 be ff 00 ff 00 ff 00 ff 00	movabsq	$0xff00ff00ff00ff, %rsi # imm = 0xFF00FF00FF00FF
+  400e60: 48 ba 01 00 01 00 01 00 01 00	movabsq	$0x1000100010001, %rdx  # imm = 0x1000100010001
+  400e6a: 66 0f 76 c0                  	pcmpeqd	%xmm0, %xmm0
+  400e6e: 66 0f 6f 0d 6a 13 00 00      	movdqa	0x136a(%rip), %xmm1     # 0x4021e0 <anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105+0xd0>
+  400e76: eb 3c                        	jmp	0x400eb4 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x294>
+  400e78: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  400e80: 45 31 d2                     	xorl	%r10d, %r10d
+  400e83: 4c 01 c7                     	addq	%r8, %rdi
+  400e86: 4c 29 c9                     	subq	%r9, %rcx
+  400e89: 45 89 cb                     	movl	%r9d, %r11d
+  400e8c: 41 83 e3 03                  	andl	$0x3, %r11d
+  400e90: 4c 89 d3                     	movq	%r10, %rbx
+  400e93: 48 21 f3                     	andq	%rsi, %rbx
+  400e96: 49 c1 ea 08                  	shrq	$0x8, %r10
+  400e9a: 49 21 f2                     	andq	%rsi, %r10
+  400e9d: 49 01 da                     	addq	%rbx, %r10
+  400ea0: 4c 0f af d2                  	imulq	%rdx, %r10
+  400ea4: 49 c1 ea 30                  	shrq	$0x30, %r10
+  400ea8: 49 01 c2                     	addq	%rax, %r10
+  400eab: 4d 85 db                     	testq	%r11, %r11
+  400eae: 0f 85 7c 02 00 00            	jne	0x401130 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x510>
+  400eb4: 4c 89 d0                     	movq	%r10, %rax
+  400eb7: 48 85 c9                     	testq	%rcx, %rcx
+  400eba: 0f 84 fb 02 00 00            	je	0x4011bb <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x59b>
+  400ec0: 49 89 f8                     	movq	%rdi, %r8
+  400ec3: 48 81 f9 c0 00 00 00         	cmpq	$0xc0, %rcx
+  400eca: 41 b9 c0 00 00 00            	movl	$0xc0, %r9d
+  400ed0: 4c 0f 42 c9                  	cmovbq	%rcx, %r9
+  400ed4: 42 8d 3c cd 00 00 00 00      	leal	(,%r9,8), %edi
+  400edc: 41 89 fb                     	movl	%edi, %r11d
+  400edf: 41 81 e3 e0 07 00 00         	andl	$0x7e0, %r11d           # imm = 0x7E0
+  400ee6: 74 98                        	je	0x400e80 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x260>
+  400ee8: 4c 8d 77 e0                  	leaq	-0x20(%rdi), %r14
+  400eec: 49 83 fe 60                  	cmpq	$0x60, %r14
+  400ef0: 73 0e                        	jae	0x400f00 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x2e0>
+  400ef2: 45 31 d2                     	xorl	%r10d, %r10d
+  400ef5: 4c 89 c3                     	movq	%r8, %rbx
+  400ef8: e9 cb 01 00 00               	jmp	0x4010c8 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x4a8>
+  400efd: 0f 1f 00                     	nopl	(%rax)
+  400f00: 49 c1 ee 05                  	shrq	$0x5, %r14
+  400f04: 49 ff c6                     	incq	%r14
+  400f07: 4d 89 f7                     	movq	%r14, %r15
+  400f0a: 49 83 e7 fc                  	andq	$-0x4, %r15
+  400f0e: 4c 89 fb                     	movq	%r15, %rbx
+  400f11: 48 c1 e3 05                  	shlq	$0x5, %rbx
+  400f15: 4c 01 c3                     	addq	%r8, %rbx
+  400f18: 4d 8d 50 40                  	leaq	0x40(%r8), %r10
+  400f1c: 66 0f ef e4                  	pxor	%xmm4, %xmm4
+  400f20: 4d 89 fc                     	movq	%r15, %r12
+  400f23: 66 0f ef f6                  	pxor	%xmm6, %xmm6
+  400f27: 66 0f 1f 84 00 00 00 00 00   	nopw	(%rax,%rax)
+  400f30: f3 41 0f 6f 52 c0            	movdqu	-0x40(%r10), %xmm2
+  400f36: f3 41 0f 6f 6a e0            	movdqu	-0x20(%r10), %xmm5
+  400f3c: 66 0f 6f da                  	movdqa	%xmm2, %xmm3
+  400f40: 66 0f 6c dd                  	punpcklqdq	%xmm5, %xmm3    # xmm3 = xmm3[0],xmm5[0]
+  400f44: 66 0f 6f fb                  	movdqa	%xmm3, %xmm7
+  400f48: 66 0f ef f8                  	pxor	%xmm0, %xmm7
+  400f4c: 66 0f 73 d7 07               	psrlq	$0x7, %xmm7
+  400f51: 66 0f 73 d3 06               	psrlq	$0x6, %xmm3
+  400f56: 66 0f eb df                  	por	%xmm7, %xmm3
+  400f5a: 66 0f db d9                  	pand	%xmm1, %xmm3
+  400f5e: 66 0f d4 dc                  	paddq	%xmm4, %xmm3
+  400f62: f3 41 0f 6f 62 d0            	movdqu	-0x30(%r10), %xmm4
+  400f68: f3 41 0f 6f 7a f0            	movdqu	-0x10(%r10), %xmm7
+  400f6e: 66 0f 6d d5                  	punpckhqdq	%xmm5, %xmm2    # xmm2 = xmm2[1],xmm5[1]
+  400f72: 66 0f 6f ec                  	movdqa	%xmm4, %xmm5
+  400f76: 66 0f 6c ef                  	punpcklqdq	%xmm7, %xmm5    # xmm5 = xmm5[0],xmm7[0]
+  400f7a: 66 0f 6d e7                  	punpckhqdq	%xmm7, %xmm4    # xmm4 = xmm4[1],xmm7[1]
+  400f7e: f3 45 0f 6f 52 30            	movdqu	0x30(%r10), %xmm10
+  400f84: f3 41 0f 6f 7a 20            	movdqu	0x20(%r10), %xmm7
+  400f8a: f3 45 0f 6f 0a               	movdqu	(%r10), %xmm9
+  400f8f: 66 45 0f 6f c1               	movdqa	%xmm9, %xmm8
+  400f94: 66 44 0f 6c c7               	punpcklqdq	%xmm7, %xmm8    # xmm8 = xmm8[0],xmm7[0]
+  400f99: 66 45 0f 6f d8               	movdqa	%xmm8, %xmm11
+  400f9e: 66 44 0f ef d8               	pxor	%xmm0, %xmm11
+  400fa3: 66 41 0f 73 d3 07            	psrlq	$0x7, %xmm11
+  400fa9: 66 41 0f 73 d0 06            	psrlq	$0x6, %xmm8
+  400faf: 66 45 0f eb c3               	por	%xmm11, %xmm8
+  400fb4: 66 44 0f db c1               	pand	%xmm1, %xmm8
+  400fb9: 66 44 0f d4 c6               	paddq	%xmm6, %xmm8
+  400fbe: f3 41 0f 6f 72 10            	movdqu	0x10(%r10), %xmm6
+  400fc4: 66 44 0f 6d cf               	punpckhqdq	%xmm7, %xmm9    # xmm9 = xmm9[1],xmm7[1]
+  400fc9: 66 0f 6f fe                  	movdqa	%xmm6, %xmm7
+  400fcd: 66 41 0f 6c fa               	punpcklqdq	%xmm10, %xmm7   # xmm7 = xmm7[0],xmm10[0]
+  400fd2: 66 41 0f 6d f2               	punpckhqdq	%xmm10, %xmm6   # xmm6 = xmm6[1],xmm10[1]
+  400fd7: 66 44 0f 6f d2               	movdqa	%xmm2, %xmm10
+  400fdc: 66 44 0f ef d0               	pxor	%xmm0, %xmm10
+  400fe1: 66 45 0f 6f d9               	movdqa	%xmm9, %xmm11
+  400fe6: 66 44 0f ef d8               	pxor	%xmm0, %xmm11
+  400feb: 66 41 0f 73 d2 07            	psrlq	$0x7, %xmm10
+  400ff1: 66 41 0f 73 d3 07            	psrlq	$0x7, %xmm11
+  400ff7: 66 0f 73 d2 06               	psrlq	$0x6, %xmm2
+  400ffc: 66 41 0f eb d2               	por	%xmm10, %xmm2
+  401001: 66 41 0f 73 d1 06            	psrlq	$0x6, %xmm9
+  401007: 66 45 0f eb cb               	por	%xmm11, %xmm9
+  40100c: 66 0f db d1                  	pand	%xmm1, %xmm2
+  401010: 66 44 0f db c9               	pand	%xmm1, %xmm9
+  401015: 66 44 0f 6f d5               	movdqa	%xmm5, %xmm10
+  40101a: 66 44 0f ef d0               	pxor	%xmm0, %xmm10
+  40101f: 66 44 0f 6f df               	movdqa	%xmm7, %xmm11
+  401024: 66 44 0f ef d8               	pxor	%xmm0, %xmm11
+  401029: 66 41 0f 73 d2 07            	psrlq	$0x7, %xmm10
+  40102f: 66 41 0f 73 d3 07            	psrlq	$0x7, %xmm11
+  401035: 66 0f 73 d5 06               	psrlq	$0x6, %xmm5
+  40103a: 66 41 0f eb ea               	por	%xmm10, %xmm5
+  40103f: 66 0f 73 d7 06               	psrlq	$0x6, %xmm7
+  401044: 66 41 0f eb fb               	por	%xmm11, %xmm7
+  401049: 66 0f db e9                  	pand	%xmm1, %xmm5
+  40104d: 66 0f d4 ea                  	paddq	%xmm2, %xmm5
+  401051: 66 0f d4 eb                  	paddq	%xmm3, %xmm5
+  401055: 66 0f db f9                  	pand	%xmm1, %xmm7
+  401059: 66 41 0f d4 f9               	paddq	%xmm9, %xmm7
+  40105e: 66 41 0f d4 f8               	paddq	%xmm8, %xmm7
+  401063: 66 0f 6f d4                  	movdqa	%xmm4, %xmm2
+  401067: 66 0f ef d0                  	pxor	%xmm0, %xmm2
+  40106b: 66 0f 6f de                  	movdqa	%xmm6, %xmm3
+  40106f: 66 0f ef d8                  	pxor	%xmm0, %xmm3
+  401073: 66 0f 73 d2 07               	psrlq	$0x7, %xmm2
+  401078: 66 0f 73 d3 07               	psrlq	$0x7, %xmm3
+  40107d: 66 0f 73 d4 06               	psrlq	$0x6, %xmm4
+  401082: 66 0f eb e2                  	por	%xmm2, %xmm4
+  401086: 66 0f 73 d6 06               	psrlq	$0x6, %xmm6
+  40108b: 66 0f eb f3                  	por	%xmm3, %xmm6
+  40108f: 66 0f db e1                  	pand	%xmm1, %xmm4
+  401093: 66 0f d4 e5                  	paddq	%xmm5, %xmm4
+  401097: 66 0f db f1                  	pand	%xmm1, %xmm6
+  40109b: 66 0f d4 f7                  	paddq	%xmm7, %xmm6
+  40109f: 49 83 ea 80                  	subq	$-0x80, %r10
+  4010a3: 49 83 c4 fc                  	addq	$-0x4, %r12
+  4010a7: 0f 85 83 fe ff ff            	jne	0x400f30 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x310>
+  4010ad: 66 0f d4 f4                  	paddq	%xmm4, %xmm6
+  4010b1: 66 0f 70 d6 ee               	pshufd	$0xee, %xmm6, %xmm2     # xmm2 = xmm6[2,3,2,3]
+  4010b6: 66 0f d4 d6                  	paddq	%xmm6, %xmm2
+  4010ba: 66 49 0f 7e d2               	movq	%xmm2, %r10
+  4010bf: 4d 39 fe                     	cmpq	%r15, %r14
+  4010c2: 0f 84 bb fd ff ff            	je	0x400e83 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x263>
+  4010c8: 4d 01 c3                     	addq	%r8, %r11
+  4010cb: 0f 1f 44 00 00               	nopl	(%rax,%rax)
+  4010d0: f3 0f 6f 13                  	movdqu	(%rbx), %xmm2
+  4010d4: f3 0f 6f 5b 10               	movdqu	0x10(%rbx), %xmm3
+  4010d9: 66 0f 6f e2                  	movdqa	%xmm2, %xmm4
+  4010dd: 66 0f ef e0                  	pxor	%xmm0, %xmm4
+  4010e1: 66 0f 6f eb                  	movdqa	%xmm3, %xmm5
+  4010e5: 66 0f ef e8                  	pxor	%xmm0, %xmm5
+  4010e9: 66 0f 73 d5 07               	psrlq	$0x7, %xmm5
+  4010ee: 66 0f 73 d4 07               	psrlq	$0x7, %xmm4
+  4010f3: 66 0f 73 d3 06               	psrlq	$0x6, %xmm3
+  4010f8: 66 0f eb dd                  	por	%xmm5, %xmm3
+  4010fc: 66 0f 73 d2 06               	psrlq	$0x6, %xmm2
+  401101: 66 0f eb d4                  	por	%xmm4, %xmm2
+  401105: 66 0f db d9                  	pand	%xmm1, %xmm3
+  401109: 66 0f db d1                  	pand	%xmm1, %xmm2
+  40110d: 66 0f d4 d3                  	paddq	%xmm3, %xmm2
+  401111: 66 0f 70 da ee               	pshufd	$0xee, %xmm2, %xmm3     # xmm3 = xmm2[2,3,2,3]
+  401116: 66 0f d4 da                  	paddq	%xmm2, %xmm3
+  40111a: 66 49 0f 7e de               	movq	%xmm3, %r14
+  40111f: 4d 01 f2                     	addq	%r14, %r10
+  401122: 48 83 c3 20                  	addq	$0x20, %rbx
+  401126: 4c 39 db                     	cmpq	%r11, %rbx
+  401129: 75 a5                        	jne	0x4010d0 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x4b0>
+  40112b: e9 53 fd ff ff               	jmp	0x400e83 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x263>
+  401130: 48 b9 01 01 01 01 01 01 01 01	movabsq	$0x101010101010101, %rcx # imm = 0x101010101010101
+  40113a: 41 81 e1 fc 00 00 00         	andl	$0xfc, %r9d
+  401141: 44 89 c8                     	movl	%r9d, %eax
+  401144: 49 8b 04 c0                  	movq	(%r8,%rax,8), %rax
+  401148: 48 89 c7                     	movq	%rax, %rdi
+  40114b: 48 f7 d7                     	notq	%rdi
+  40114e: 48 c1 ef 07                  	shrq	$0x7, %rdi
+  401152: 48 c1 e8 06                  	shrq	$0x6, %rax
+  401156: 48 09 f8                     	orq	%rdi, %rax
+  401159: 48 21 c8                     	andq	%rcx, %rax
+  40115c: 41 83 fb 01                  	cmpl	$0x1, %r11d
+  401160: 74 3e                        	je	0x4011a0 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x580>
+  401162: 4b 8b 7c c8 08               	movq	0x8(%r8,%r9,8), %rdi
+  401167: 48 89 fb                     	movq	%rdi, %rbx
+  40116a: 48 f7 d3                     	notq	%rbx
+  40116d: 48 c1 eb 07                  	shrq	$0x7, %rbx
+  401171: 48 c1 ef 06                  	shrq	$0x6, %rdi
+  401175: 48 09 df                     	orq	%rbx, %rdi
+  401178: 48 21 cf                     	andq	%rcx, %rdi
+  40117b: 48 01 f8                     	addq	%rdi, %rax
+  40117e: 41 83 fb 02                  	cmpl	$0x2, %r11d
+  401182: 74 1c                        	je	0x4011a0 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x580>
+  401184: 4b 8b 7c c8 10               	movq	0x10(%r8,%r9,8), %rdi
+  401189: 49 89 f8                     	movq	%rdi, %r8
+  40118c: 49 f7 d0                     	notq	%r8
+  40118f: 49 c1 e8 07                  	shrq	$0x7, %r8
+  401193: 48 c1 ef 06                  	shrq	$0x6, %rdi
+  401197: 4c 09 c7                     	orq	%r8, %rdi
+  40119a: 48 21 cf                     	andq	%rcx, %rdi
+  40119d: 48 01 f8                     	addq	%rdi, %rax
+  4011a0: 48 89 c1                     	movq	%rax, %rcx
+  4011a3: 48 21 f1                     	andq	%rsi, %rcx
+  4011a6: 48 c1 e8 08                  	shrq	$0x8, %rax
+  4011aa: 48 21 f0                     	andq	%rsi, %rax
+  4011ad: 48 01 c8                     	addq	%rcx, %rax
+  4011b0: 48 0f af c2                  	imulq	%rdx, %rax
+  4011b4: 48 c1 e8 30                  	shrq	$0x30, %rax
+  4011b8: 4c 01 d0                     	addq	%r10, %rax
+  4011bb: 5b                           	popq	%rbx
+  4011bc: 41 5c                        	popq	%r12
+  4011be: 41 5e                        	popq	%r14
+  4011c0: 41 5f                        	popq	%r15
+  4011c2: c3                           	retq
+  4011c3: 31 d2                        	xorl	%edx, %edx
+  4011c5: 80 3c 0f c0                  	cmpb	$-0x40, (%rdi,%rcx)
+  4011c9: 0f 9d c2                     	setge	%dl
+  4011cc: 48 01 d0                     	addq	%rdx, %rax
+  4011cf: 48 ff c1                     	incq	%rcx
+  4011d2: 48 39 ce                     	cmpq	%rcx, %rsi
+  4011d5: 75 ec                        	jne	0x4011c3 <_RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars+0x5a3>
+  4011d7: c3                           	retq
+
+exit=0

@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/wchar.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c:2:10: fatal error: 'wchar.h' file not found
+    2 | #include <wchar.h>
+      |          ^~~~~~~~~
+1 error generated.
+
+exit=1

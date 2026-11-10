@@ -1,0 +1,25 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/mman.rs
+ M tools/native-c/README.md
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dirent-host-final/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dirent-host/
+?? docs/audit/probes/native-foundation/results-2026-11-10-dirent-stdio-regressions/
+?? docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-mman-host/
+?? sunlight-libc/include/dirent.h
+?? sunlight-libc/include/sys/mman.h
+?? sunlight-libc/src/dirent.rs
+?? tools/native-c/tests/dirent-abi.c
+?? tools/native-c/tests/dirent.c
+?? tools/native-c/tests/mman-abi.c
+?? tools/native-c/tests/mman.c
+?? tools/native-c/tests/run_dirent.py
+?? tools/native-c/tests/run_mman.py
+
+exit=0

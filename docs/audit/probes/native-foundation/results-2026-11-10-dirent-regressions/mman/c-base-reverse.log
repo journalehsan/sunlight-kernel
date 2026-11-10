@@ -1,0 +1,3 @@
+$ clang --target=x86_64-unknown-none-elf -std=c11 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -DREVERSE_INCLUDES -x c -c tools/native-c/tests/mman-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-dirent-regressions/mman/c-base-reverse.o
+
+exit=0

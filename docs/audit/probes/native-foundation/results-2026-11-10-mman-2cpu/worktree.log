@@ -1,0 +1,11 @@
+$ git status --short
+ M sunlight-libc/src/mman.rs
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-mman-host/
+?? sunlight-libc/include/sys/mman.h
+?? tools/native-c/tests/mman-abi.c
+?? tools/native-c/tests/mman.c
+?? tools/native-c/tests/run_mman.py
+
+exit=0

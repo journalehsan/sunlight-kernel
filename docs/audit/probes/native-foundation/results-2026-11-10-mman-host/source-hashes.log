@@ -1,0 +1,8 @@
+a8c09a4aaf62ee4063c6d9d32eded979a2e3062c9413eaaa9474ba498b1d05a9  sunlight-libc/src/mman.rs
+08b597ed6c83804435a0641668c37800ce9cc876716f1b9489b54c94adbfbe96  kernel/src/process/mmap.rs
+3fab49655f9e5349eaf6bf01997061d104c327e2ad016dce9aafb78459f92b7e  kernel/src/process/address_space.rs
+4ac50128adb55349fb322244eda9276c1960f86d9c128247aa15f8bcb8abe26a  kernel/src/memory/user.rs
+5efeeb4cbae2a920c8b2ab46c23f033be2bcf4092b2848ce07bea120a2504d4b  kernel/src/arch/x86_64/syscall.rs
+36f1aeea0b1b3c26714da765f98889332d7a5c16d96780311fb71de3ace98cc5  sunlight-libc/include/sys/mman.h
+cecb92680f4af5f712294f0a73b48e617174ca795dc29a3b33bc860e67ad6f9c  tools/native-c/guest.py
+a6f5ddf1d469fa2477f977974eeedf767b0f754a82e5c327c95d904f20632e99  tools/native-c/tests/mman.c

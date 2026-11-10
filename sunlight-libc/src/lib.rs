@@ -28,6 +28,9 @@ pub mod temp;
 pub mod alloc;
 /// Program startup ABI documentation and raw argv helpers.
 pub mod crt0;
+/// Narrow native C directory streams over the existing VFS enumeration ABI.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod dirent;
 /// Environment variable access via the SysV envp pointer.
 pub mod env;
 /// POSIX errno storage and `__errno_location()`.

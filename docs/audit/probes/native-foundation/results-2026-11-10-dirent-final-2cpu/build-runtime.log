@@ -1,0 +1,19 @@
+$ bash tools/build_native_c.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+    Blocking waiting for file lock on package cache
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.03s
+
+exit=0

@@ -1,0 +1,6 @@
+2 CPUs: build 39 PASS / 11 FAIL; guest 39 PASS / 0 FAIL / 11 NOT_RUN; historical 10 PASS / 11 BUILD_FAIL / 11 NOT_RUN.
+original single ELF and full suite dirent identity, empty streams, cleanup/fault gates and mmap regressions: PASS.
+4 CPUs: build 39 PASS / 11 FAIL; guest 39 PASS / 0 FAIL / 11 NOT_RUN; historical 10 PASS / 11 BUILD_FAIL / 11 NOT_RUN.
+original single ELF and full suite dirent identity, empty streams, cleanup/fault gates and mmap regressions: PASS.
+Unchanged dirent source SHA-256: b77440b252b906b6190de25a6ac0ffb686f88eaa292a146cd529783c5a376bb8
+Validated and executed dirent ELF SHA-256: ceea06c856e0735ce241dbfccd9e0f9dd25dca69fab45e38b3f921f24acd4eec

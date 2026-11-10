@@ -20,6 +20,10 @@ include!(env!("SUNLIGHT_NATIVE_C_MANIFEST"));
 pub const INITRAMFS: &[sunlight_fs::RamEntry] = &[
     sunlight_fs::RamEntry::dir("/", 0, 0, sunlight_fs::vfs::mode::DIR_755),
     sunlight_fs::RamEntry::dir("/tmp", 0, 0, sunlight_fs::vfs::mode::DIR_1777),
+    // Stable directory fixtures: native unlink deliberately rejects directories.
+    // Keep their names present before every per-process cleanup snapshot.
+    sunlight_fs::RamEntry::dir("/tmp/native-c-dirent", 1000, 1000, 0o040700),
+    sunlight_fs::RamEntry::dir("/tmp/native-c-denied", 1000, 1000, 0o040000),
 ];
 
 const PID: usize = 100;

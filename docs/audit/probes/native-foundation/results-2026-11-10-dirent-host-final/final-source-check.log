@@ -1,0 +1,3 @@
+PASS: preserved all 371 initial file contents (append-only docs, added directory cases in guest.py).
+New source whitespace: PASS.
+Rust formatting, Python compilation and git diff --check: PASS.
