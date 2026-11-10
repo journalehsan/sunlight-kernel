@@ -430,7 +430,16 @@ pub fn free_shared_page(
         process.mapped_shared.remove(pos);
         // Decrement the mapping ref count; the broker returns the frames only
         // when this was the last live mapping, so the PMM is safe to reclaim them.
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        let lifecycle_id = caps.lifecycle_resource(token);
         let released = caps.decrement_map_count(token);
+        #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
+        super::quota_lifecycle::event(
+            lifecycle_id,
+            "reference-committed",
+            process.pid as u64,
+            caps.shared_region_map_count(token).unwrap_or(0) as u64,
+        );
         #[cfg(feature = "authenticated_exec_test")]
         crate::capability::exec_retirement_trace::unmap(
             process,

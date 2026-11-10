@@ -639,6 +639,14 @@ fn begin_stop(session: &mut ActiveSession, now: u64) {
             if ipc_call_timeout(spawn, msg, SPAWN_SHELL_TIMEOUT_MS)
                 .is_ok_and(|reply| reply.label == SpawnMsg::ERROR) {
                 write_log("[SL41] event=retirement-fenced\n");
+                if option_env!("SUNLIGHT_R55_ORDER").is_some() {
+                    let mut stale = msg;
+                    stale.caps[1].0 = stale.caps[1].0.checked_add(1).expect("fixture epoch exhausted");
+                    if ipc_call_timeout(spawn, stale, SPAWN_SHELL_TIMEOUT_MS)
+                        .is_ok_and(|reply| reply.label == SpawnMsg::ERROR) {
+                        write_log("[R55-SESSION] event=retired-stale-generation-denied\n");
+                    } else { write_log("[R55-SESSION] checkpoint=FAIL stale generation accepted\n"); }
+                }
             } else { write_log("[SL41] checkpoint=FAIL retirement accepted\n"); }
         }
     }

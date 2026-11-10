@@ -65,3 +65,76 @@ are recorded separately. No same-remote-frame reuse receipt is captured, so full
 remote TLB closure and historical causal resolution remain unqualified. The
 original combined FAIL is preserved; standalone M2 assessment receives its own
 interval because earlier intentional R5 invalid-opcode crashes are outside M2.
+
+## M5.3R5.2 deterministic exit/unmap qualification
+
+The focused continuation selects the original
+`concurrent/exit-unmap-with-backing` scenario. The native fixture places an
+independently authenticated owner and its mapped peer at shared-word release
+boundaries. Kernel Account snapshots record both ready identities. Fresh backing
+identities are used for exit-first and peer-unmap-first runs; bounded reaping
+confirms owner cleanup before the second release in the exit-first run.
+
+A passive `reference-committed` receipt follows the existing broker reference
+count decrement while the existing locks remain held. Its resource, process and
+remaining reference count identify the actual retirement winner. The existing
+`termination-committed` event identifies process exit independently. No production
+linearization point or synchronization rule changes. The new receipt is compiled
+only with debug assertions and `quota_lifecycle_test`; the existing release-build
+feature rejection remains in force. The user fixture is selected explicitly by
+`quota-lifecycle-test`, including for optimized guest service payloads.
+
+Evidence and final qualification status live in
+`.fastlane-evidence/m53r52-20261109T231507Z/REPORT.md` and
+`validation-summary.json`. This focused scenario does not qualify close/completion,
+cancellation/completion, attach/revoke, native private identity misuse, session
+retirement ordering, or same-frame reuse after remote TLB retirement. Production
+FastLane and restricted admission remain disabled.
+
+## M5.3R5.3 authenticated session retirement / owner cleanup
+
+The focused continuation qualifies both independent backing-owner cleanup orders
+around real SessionD retirement, with a surviving mapped peer. The existing
+registry/ledger separation, original payer, normal PTE/TLB/PMM retirement and
+post-retirement admission checks are unchanged. Details and authority limitations:
+`fastlane-m53r53-session-retirement.md`; qualification record:
+`.fastlane-evidence/m53r53-20261109T233500Z/REPORT.md`.
+
+The complete original `concurrent/session-termination-peer-retention` case remains
+UNQUALIFIED because its denied-attachment boundary is not proven by legacy bearer
+SHM. This focused subset does not advance production admission or the original
+28-case counts. No simultaneous lock-held contention or forced identity reuse is
+claimed. Final-source regressions must pass independently of the R52 archive.
+
+## M5.3R5.4 restricted retirement diagnostic
+
+An opt-in native diagnostic now exercises actual restricted proposal/consent,
+role attachment, protected peer mapping and normal reclamation around SessionD
+retirement. Its implementation and qualification boundary are documented in
+`fastlane-m53r54-restricted-retirement.md`. Restricted channels currently drain
+all views eagerly on session or participant retirement. This differs from the
+retained bearer backing used by R53. Diagnostic execution cannot qualify the
+required retained restricted lifetime or advance the original 28-case counts.
+See `.fastlane-evidence/m53r54-20261110T073847Z/REPORT.md` for actual native results.
+
+## M5.3R5.5 restricted lifetime clarification
+
+The contract in `fastlane-m53r55-restricted-lifetime.md` separates authentication,
+mapping and physical lifetimes. Restricted channels forcibly withdraw mappings;
+backing is reclaimable after the last actual view and its exact TLB invalidation
+retire, even if process cleanup is still pending. Legacy bearer peer retention
+remains a separate policy. The R54 retained-restricted expectation is a fixture
+mismatch; it is not a demonstrated live-mapping use-after-free.
+
+The new opt-in isolated-guest fixtures select one restricted ordering per real
+Account login. Cleanup-first uses a fully reaped dedicated peer and ordinary IPC
+coordination; retirement-first releases held cleanup after forced revocation.
+Post-retirement stale session/channel checks use real kernel validation. The R53
+strict default oracle remains intact; an explicitly selected extra-backing topology
+requires independent restricted lifetime proof before accounting for its 4 KiB.
+
+M5.3R5.5 remains PARTIAL because same-kernel distinct SessionRef turnover and an
+already pending retirement request held before commit are not established.
+Original scenario definitions and 15/3/10 counts remain unchanged. Exact-source
+results: `.fastlane-evidence/m53r55-20261110T080804Z/validation-summary.json`.
+Production FastLane and restricted admission remain disabled.

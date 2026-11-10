@@ -676,6 +676,7 @@ path = "src/bin/runas.rs"
 [features]
 quota-lifecycle-test = ["session-launch-test"]
 quota-remote-test = ["fastlane-mapping-test"]
+restricted-retirement-test = ["quota-lifecycle-test", "fastlane-mapping-test"]
 session-launch-test = ["session-race-test"]
 fastlane-contract-test = ["fastlane-mediated-accounting-test"]
 fastlane-mediated-accounting-test = ["fastlane-measurement-test"]

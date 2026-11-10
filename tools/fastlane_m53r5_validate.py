@@ -17,6 +17,8 @@ from fastlane_m53_quota_validate import stop, source_id
 
 
 from fastlane_m53r5_assess import assess
+from fastlane_m53r53_assess import assess as assess_session_orders, peer_reaped
+from fastlane_m53r52_assess import assess as assess_exit_unmap
 
 
 def main():
@@ -27,18 +29,27 @@ def main():
     p.add_argument('--image-manifest', type=Path)
     p.add_argument('--build-only', action='store_true')
     p.add_argument('--remote-witness', action='store_true')
+    p.add_argument('--restricted-retirement', action='store_true',
+                   help='measure restricted retirement; does not qualify retained mappings')
+    p.add_argument('--restricted-order', choices=('cleanup-first', 'retirement-first'))
     args = p.parse_args()
+    if args.restricted_order and not args.restricted_retirement:
+        p.error('--restricted-order requires --restricted-retirement')
     if args.remote_witness and 1 in args.cpus: p.error('remote witness requires SMP')
     out = args.evidence_root.resolve() / ('native-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'))
     out.mkdir(parents=True)
     result = {'status': 'RUNNING', 'source': sources(), 'checks': [], 'native': [],
               'production_fastlane': 'DISABLED', 'overall_verdict': 'PARTIAL', 'remote_witness': args.remote_witness,
+              'restricted_retirement': args.restricted_retirement, 'restricted_order': args.restricted_order,
               'head': subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()}
     result['build_identity'] = {'source': source_id(result['source']), 'run': uuid.uuid4().hex}
     def save():
         (out / 'validation-summary.json').write_text(json.dumps(result, indent=2) + '\n')
     def check(name, command, extra=None):
         env = {**os.environ, **(extra or {})}
+        if args.restricted_order:
+            env['SUNLIGHT_R55_ORDER'] = args.restricted_order
+            extra = {**(extra or {}), 'SUNLIGHT_R55_ORDER': args.restricted_order}
         with (out / (name + '.log')).open('x') as log:
             r = subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=600)
         result['checks'].append({'name': name, 'command': command, 'environment': extra,
@@ -53,7 +64,9 @@ def main():
             manifest = json.loads(args.image_manifest.read_text())
             if manifest['source'] != result['source'] or manifest['status'] != 'PASS':
                 raise RuntimeError('source-matched passing build required')
-            if manifest.get('remote_witness', False) != args.remote_witness:
+            if (manifest.get('remote_witness', False) != args.remote_witness
+                    or manifest.get('restricted_retirement', False) != args.restricted_retirement
+                    or manifest.get('restricted_order') != args.restricted_order):
                 raise RuntimeError('fixture configuration mismatch')
             result['build_identity'] = manifest['build_identity']
             result['embedded'] = manifest['embedded']
@@ -70,12 +83,14 @@ def main():
                 if package == 'sunlight-sessiond':
                     extra['SUNLIGHT_INJECT_PHASE'] = 'm53r41'
                 command = ['cargo', 'rustc', '--locked', '--offline', '--release', '-p', package, '--bin', services[package]]
-                if package == 'sunlight-uac' and args.remote_witness:
-                    command += ['--features', 'quota-lifecycle-test,quota-remote-test']
+                if package == 'sunlight-uac' and (args.remote_witness or args.restricted_retirement):
+                    command += ['--features', 'quota-lifecycle-test'
+                                + (',quota-remote-test' if args.remote_witness else '')
+                                + (',restricted-retirement-test' if args.restricted_retirement else '')]
                 command += ['--', '-C', 'metadata=' + result['build_identity']['run']]
                 check(package, command, extra)
             check('probe', ['cargo', 'rustc', '--locked', '--offline', '--release', '-p', 'sunlight-uac',
-                            '--bin', 'session-race-probe', '--features', 'quota-lifecycle-test' + (',quota-remote-test' if args.remote_witness else ''), '--', '-C', 'metadata=' + result['build_identity']['run']], {'RUSTFLAGS': SERVICE_FLAGS})
+                            '--bin', 'session-race-probe', '--features', 'quota-lifecycle-test' + (',quota-remote-test' if args.remote_witness else '') + (',restricted-retirement-test' if args.restricted_retirement else ''), '--', '-C', 'metadata=' + result['build_identity']['run']], {'RUSTFLAGS': SERVICE_FLAGS})
             archive = out / 'embedded'
             archive.mkdir()
             payload_names = list(services.values()) + ['session-race-probe', 'linux-thread-probe']
@@ -85,7 +100,7 @@ def main():
                 shutil.copy2(payload_path(name), archive / name)
             result['embedded'] = {name: digest(archive / name) for name in payload_names}
             check('kernel', ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel',
-                             '--bin', 'sunlight-kernel', '--features', 'key_inject,quota_lifecycle_test' + (',restricted_remote_test' if args.remote_witness else '')],
+                             '--bin', 'sunlight-kernel', '--features', 'key_inject,quota_lifecycle_test' + (',restricted_remote_test' if args.remote_witness else '') + (',fastlane_mapping_test,fastlane_census_trace' if args.restricted_retirement else '')],
                   {'SUNLIGHT_INJECT_PHASE': 'desktop_login', 'SUNLIGHT_R5_SOURCE': result['build_identity']['source'], 'SUNLIGHT_R5_RUN': result['build_identity']['run']})
             elf, iso = out / 'kernel.elf', out / 'fixture.iso'
             check('strip', ['objcopy', '--strip-debug', str(ROOT / 'target/x86_64-unknown-none/debug/sunlight-kernel'), str(elf)])
@@ -110,7 +125,7 @@ def main():
                 try:
                     while time.monotonic() - start < args.timeout:
                         raw = serial.read_text(errors='replace')
-                        if ('[SL41-USER] stage=complete' in raw and '[SL41] event=retirement-fenced\n' in raw and '[R51-SESSION-USER] event=complete ' in raw) or 'PANIC' in raw or 'panicked at' in raw or 'checkpoint=FAIL' in raw or proc.poll() is not None:
+                        if ('[SL41-USER] stage=complete' in raw and '[SL41] event=retirement-fenced\n' in raw and '[R51-SESSION-USER] event=complete ' in raw and peer_reaped(raw)) or 'PANIC' in raw or 'panicked at' in raw or 'checkpoint=FAIL' in raw or proc.poll() is not None:
                             break
                         time.sleep(.1)
                 finally:
@@ -134,14 +149,32 @@ def main():
                 row['assessment']['status'] = 'FAIL'
                 row['assessment']['errors'] += row['launch_regression']['errors']
             row['session_retirement'] = {'status': 'PASS' if '[R51-SESSION-USER] event=complete ' in serial.read_text(errors='replace') else 'NOT_RUN',
-                                         'scope': 'retired authority, owner exit before surviving peer, final reclaim; detailed receipts assessed separately'}
+                                         'scope': 'retired authority, both independent resource-owner cleanup orders, final surviving-peer reap'}
             if row['session_retirement']['status'] != 'PASS':
                 row['assessment']['status'] = 'FAIL'
                 row['assessment']['errors'].append('missing retirement survivor completion')
+            row['exit_unmap_regression'] = assess_exit_unmap(serial.read_text(errors='replace'))
+            if row['exit_unmap_regression']['status'] != 'PASS':
+                row['assessment']['status'] = 'FAIL'
+                row['assessment']['errors'] += row['exit_unmap_regression'].get('errors', ['missing exit/unmap orders'])
+            row['session_cleanup_orders'] = assess_session_orders(serial.read_text(errors='replace'), restricted_extra=args.restricted_retirement and args.restricted_order != 'cleanup-first')
+            if row['session_cleanup_orders']['status'] != 'PASS':
+                row['assessment']['status'] = 'FAIL'
+                row['assessment']['errors'] += row['session_cleanup_orders'].get('errors', ['missing session cleanup orders'])
+            if args.restricted_retirement:
+                from fastlane_m53r54_assess import assess as assess_restricted
+                if args.restricted_order:
+                    from fastlane_m53r55_assess import assess as assess_order
+                    row['restricted_retirement'] = assess_order(serial.read_text(errors='replace'), args.restricted_order)
+                else:
+                    row['restricted_retirement'] = assess_restricted(serial.read_text(errors='replace'))
+                if row['restricted_retirement']['diagnostic_status'] != 'PASS':
+                    row['assessment']['status'] = 'FAIL'
+                    row['assessment']['errors'] += row['restricted_retirement']['errors']
             result['native'].append(row)
             save()
             print(cpus, row['assessment'], flush=True)
-            if row['assessment']['status'] != 'PASS':
+            if row['assessment']['status'] != 'PASS' and not args.restricted_retirement:
                 raise RuntimeError('native failed; original attempt retained')
         result['status'] = 'PASS' if all(r['assessment']['status'] == 'PASS' for r in result['native']) else 'FAIL'
     except Exception as error:

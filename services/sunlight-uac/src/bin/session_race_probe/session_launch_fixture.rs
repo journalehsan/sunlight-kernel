@@ -61,7 +61,10 @@ extern "C" fn worker(_: *mut u8) -> *mut u8 {
 }
 pub fn run(args: &[&str]) -> ! {
     #[cfg(feature = "quota-lifecycle-test")]
-    if args.get(1).is_some_and(|s| s.starts_with("r5-")) {
+    if args
+        .get(1)
+        .is_some_and(|s| s.starts_with("r5-") || s.starts_with("r52-") || s.starts_with("r53-"))
+    {
         super::quota_lifecycle_fixture::actor(args);
     }
     observe("entry");
@@ -147,7 +150,8 @@ pub fn run(args: &[&str]) -> ! {
             b"/tmp/session-race-probe",
             &[b"session-race-probe", b"FL-M2"],
             None,
-        ).expect("authenticated remote mapping child");
+        )
+        .expect("authenticated remote mapping child");
         assert_eq!(super::reap(child), 0);
         sunlight_ipc::debug_log("[R5-REMOTE] event=controller-complete");
     }

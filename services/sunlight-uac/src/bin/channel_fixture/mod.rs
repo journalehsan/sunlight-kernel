@@ -12,6 +12,8 @@ pub(super) mod transfer;
 #[cfg(feature = "fastlane-shared-ring-test")]
 pub(super) mod shared_ring;
 use sunlight_ipc::{fastlane_authority as fl, CapabilityToken, EndpointId, IpcMsg};
+#[cfg(feature = "restricted-retirement-test")]
+pub(super) mod retirement;
 const HELLO: u64 = 0xF1C110;
 const CMD: u64 = 0xF1C111;
 const EXIT: u64 = 10;
