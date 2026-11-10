@@ -1508,3 +1508,273 @@ readiness claim and no CPython configure/build was attempted.
 clock and scheduler paths, then run that unchanged probe on 2 and 4 CPUs.**
 The retained final `build-clock.log` records the concrete missing-header error;
 the other thirteen unsupported original APIs remain independently build-blocked.
+
+## Native C foundation, Phase 7: native clocks and relative sleep — 2026-11-10
+
+Unchanged [`clock.c`](probes/clock.c) now compiles, links and passes in isolated
+native guests on **2 and 4 CPUs**. Each actual process exits **0** with **empty
+stdout and stderr**, clean reaping and no unexpected faults/unknown syscalls.
+Each suite passes **31/31 built executions**: the previous 26, the original
+clock probe, and four separate time contracts. The thirteen remaining blocked
+historical APIs are **BUILD_FAIL / guest NOT_RUN**, not guest failures.
+
+### Original failure and exact requirements
+
+The original source is exactly:
+
+```c
+#define _GNU_SOURCE
+#include <time.h>
+int main(void){struct timespec a,b,d={0,1000000}; return clock_gettime(CLOCK_REALTIME,&a)||clock_gettime(CLOCK_MONOTONIC,&b)||nanosleep(&d,0);}
+```
+
+It requires `<time.h>`, a complete `struct timespec` with seconds followed by
+nanoseconds, `CLOCK_REALTIME`, `CLOCK_MONOTONIC`, the two-argument `clock_gettime`
+declaration and the two-pointer `nanosleep` declaration. The positional request
+initializer means **0 seconds + 1,000,000 ns (1 ms)**. It supplies NULL remainder
+storage, short-circuits on any failure, and expects no output. `_GNU_SOURCE` is
+defined before inclusion; the implementation also verifies base and
+`_POSIX_C_SOURCE=200809L` inclusion. It does not call `clock`, `time`,
+`clock_getres`, `clock_nanosleep`, `sleep`, timezone/calendar or CPU-time APIs.
+`clock_t` and its units are not exercised by this probe.
+
+The original missing-header diagnostic is retained in
+`probes/results/native-clock-build.log` and the Phase 6 `build-clock.log`.
+This phase reproduced **`fatal error: 'time.h' file not found`** before edits.
+A temporary declaration-only header then exposed **undefined symbol `nanosleep`**;
+the existing `clock_gettime` export already linked. Both new diagnostics are in
+[`time-before/`](probes/native-foundation/results-2026-11-10-time-before/),
+without modifying the historical source. Its unchanged SHA-256 is
+`eee7fb2d2111f4799e69eedb698e836cf6c5546539843f1b92f5f88ebb7c0a2a`.
+
+### Verified production paths and ABI decisions
+
+```text
+C clock_gettime(clockid_t, struct timespec *)
+  sunlight-libc/src/time.rs::clock_gettime -> private KernelTimespec
+  native ClockGetTime syscall 88 (clock ID in rdi, private output in rsi)
+    0: kernel/src/arch/x86_64/rtc.rs::unix_time
+       validated boot CMOS UTC epoch + canonical tick advancement
+    1: kernel/src/timekeeping.rs::monotonic_ns
+       BSP-owned global ticks * NS_PER_TICK (100 Hz; 10,000,000 ns/tick)
+  validate signed seconds/nanoseconds -> publish C Timespec only on success
+
+C nanosleep(const struct timespec *, struct timespec *)
+  copy/validate request; checked relative duration -> checked monotonic deadline
+  existing native clock path above (ID 1); zero duration skips clock and wait
+  sunlight-libc/src/sys.rs::native_futex, shared with std_runtime::sl_std_futex
+    native syscall 155 WAIT: private AtomicU32=0, absolute deadline in r10
+    consume RESULT after registered completion (0=wake, 2=timeout)
+  kernel sys_native_futex -> BlockedOnIo + native_futex_deadline
+  scheduler expire_native_futex_timeouts -> complete_futex_wait(2) -> Ready
+  re-read monotonic time after each wake; retry until original deadline
+```
+
+Rust `Instant`/`SystemTime` already use `sl_std_clock` and the same libc reader.
+Rust `thread::sleep` already loops over that monotonic clock and native futex;
+this phase factors its existing WAIT/RESULT syscall transport into one shared
+helper, preserving Rust's return values. C performs checked conversions rather
+than Rust std's saturating timeout conversions, because `u64::MAX` means an
+indefinite native wait. There is no new clock state, busy-wait approximation,
+Linux-personality sleep call or Linux host time source in this implementation.
+
+`services/timer_server` accumulates kernel tick events and answers GET_TICKS;
+it offers no sleep operation. `services/timezone_service` applies local civil
+offsets to kernel UTC; it is not the authoritative epoch clock. Neither service
+is needed by syscall 88 or native futex deadlines, and neither was changed or
+added to the isolated fixture. Realtime has **one-second granularity**, with
+`tv_nsec == 0`; monotonic has **10 ms granularity**. The guests verify native
+source agreement/normalization, not external UTC accuracy. The existing RTC
+path reports unavailable time rather than inventing an epoch; a raw generic
+syscall error maps to EIO through libc.
+
+| C surface | Native x86-64 LP64 decision |
+| --- | --- |
+| `time_t`, `clock_t` | signed `long`, 8 bytes; `clock_t` is type-only, with no `clock()`/`CLOCKS_PER_SEC` claim |
+| `clockid_t` | signed `int`, 4 bytes; only IDs 0 and 1 supported |
+| `struct timespec` | `time_t tv_sec` at offset 0; signed `long tv_nsec` at offset 8; size 16, alignment 8 |
+| Rust boundary | existing `#[repr(C)] Timespec { i64, i64 }`; kernel wire `{ u64, u64 }` stays private |
+| declarations | `int clock_gettime(clockid_t, struct timespec *); int nanosleep(const struct timespec *, struct timespec *);` |
+| feature macros | declarations available in base/POSIX/GNU configurations; no POSIX version or option macros advertised |
+| success | return 0, preserve errno; clock output published only after full validation |
+| clock errors | unsupported ID or unrepresentable/unnormalized data: -1/EINVAL; NULL output: -1/EFAULT |
+| request errors | NULL: -1/EFAULT; negative seconds, nanoseconds outside `[0, 1000000000)`, duration/deadline overflow or indefinite sentinel: -1/EINVAL |
+| sleep completion | relative monotonic deadline, retry early wakes, zero request does no wait; request and remainder unchanged |
+| backend errors | existing structured errno mapping, including generic EIO and EAGAIN; no fabricated EINTR |
+
+Finite nanosecond conversion accepts at most **18,446,744,073 s + 709,551,614 ns**
+(`u64::MAX - 1`); a nonzero current time further reduces the largest acceptable
+duration. Checked addition rejects both wraparound and the `u64::MAX` sentinel.
+Host tests cover both endpoints, second/nanosecond boundaries, malformed kernel
+data, syscall errors and output canaries. Guest error tests independently check
+five invalid IDs, both NULL clock outputs, NULL sleep input, negative/oversized
+nanoseconds and conversion/deadline overflow, including errno and unchanged
+remainder. Successful sleep tests include req/rem aliasing.
+
+Non-NULL clock outputs and sleep requests must designate valid writable/readable
+storage, respectively. These userspace adapters cannot recover arbitrary mapping
+faults as EFAULT; no kernel copy syscall was added. Such invalid-mapping tests
+are **NOT_RUN**. Native futex offers wake/timeout, not a signal-interruption
+result. Completed sleeps leave `rem` untouched, as verified in both guests;
+**interrupted sleep / nonzero remainder is unsupported and NOT_RUN**. Successful
+completion must not be interpreted as proof of POSIX signal semantics.
+
+### Commands, build identity and guest evidence
+
+Exact top-level build/ABI and guest commands (repository root):
+
+```sh
+python3 tools/native-c/tests/run_time.py \
+  --out docs/audit/probes/native-foundation/results-2026-11-10-time-host-v2
+python3 tools/native-c/guest.py --suite --cpus 2 \
+  --out docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 \
+  --out docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu
+```
+
+The host runner and each suite explicitly run `bash tools/build_native_c.sh`,
+then build the original source with:
+
+```sh
+python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror \
+  docs/audit/probes/clock.c -o OUTPUT/clock.elf
+llvm-readelf -h -l OUTPUT/clock.elf
+llvm-nm --undefined-only OUTPUT/clock.elf
+llvm-objdump -d OUTPUT/clock.elf
+```
+
+Here `OUTPUT` is the exact evidence directory from the command above; expanded
+absolute compiler/ELF commands are in each `historical-*.log` / `build-clock.log`
+and `elf-clock.log`. Host validation asserts ELF64 little-endian native x86-64
+ET_EXEC, canonical `_start`, executable entry, valid LOAD bounds/alignment,
+W^X, non-executable stack, no interpreter/dynamic segment or unresolved symbol.
+The archive has exactly one canonical `clock_gettime`, `nanosleep`,
+`sl_std_clock`, `sl_std_futex` and each checked existing runtime export.
+
+The historical ELF SHA-256 is
+`b406cad38b9bece84a8acfa660052064bc067e380cc6d7834d66d2c62802180b`.
+Host-build, 2-CPU and 4-CPU copies are byte-identical; all **31/31** per-case
+ELF hashes match across the CPU runs. Identity and matrix checks are recorded
+in `time-regressions/matrix-check-final.log` (directory prefix
+`results-2026-11-10-` throughout this record). Final source hashes are retained
+in `time-regressions/final-source-hashes-v2.log`.
+
+Raw evidence:
+[`2-CPU serial.log`](probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/serial.log),
+[`4-CPU serial.log`](probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/serial.log).
+The first two records below identify each run; the remaining records occur in
+both:
+
+```text
+[NATIVE-C-RUNNER] cases=31 cpus=2 entropy=true
+[NATIVE-C-RUNNER] cases=31 cpus=4 entropy=true
+[NATIVE-C-START] case=4 name=clock pid=104 bytes=20552 owned_frames=516 uid=1000
+[NATIVE-C-REAP-END] case=4 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[NATIVE-C-RESULT] case=4 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[NATIVE-C-DONE] cases=31
+```
+
+| Guest contract / native-clock measurement | 2 CPUs | 4 CPUs |
+| --- | --- | --- |
+| unchanged `clock.c`, exit 0 / empty streams / clean reap | PASS | PASS |
+| time-clocks: normalized IDs, raw native 81/86 source agreement, 256 ordered reads | PASS | PASS |
+| time-errors: invalid IDs/pointers/ranges/overflow, errno/canaries | PASS | PASS |
+| time-zero: success/errno preservation, untouched rem and alias | PASS | PASS |
+| sleep 1 ns | 10 ms | 10 ms |
+| sleep 1 ms | 10 ms | 10 ms |
+| sleep 25 ms | 30 ms | 30 ms |
+| sleep 1 s + 1 ns | 1010 ms | 1010 ms |
+
+All sleep cases pass `requested <= native elapsed <= requested + 5 s` and leave
+request/remainder unchanged. These measurements use the same coarse native
+clock domain as the deadline; they establish neither physical sub-tick sleep
+accuracy nor a universal scheduling-latency bound. The 1 ns request is an
+accepted argument, not evidence of 1 ns resolution. Exact captured values are
+in each `time-sleep.stdout.txt`; `time-clocks.stdout.txt` retains the native
+epoch and monotonic readings. Each suite exits **0**, QEMU exits **33** through
+debug-exit, and `faults.log` is empty. The previous getrandom service counter
+delta remains **1 request / 16 bytes** in each `random-service.log`; Phase 6
+still uses the production rand service.
+
+### Host and build regressions
+
+```sh
+python3 tools/native-c/tests/run_stdio.py \
+  --out docs/audit/probes/native-foundation/results-2026-11-10-time-stdio
+bash tools/test-mem-string-proof.sh
+rustc --edition=2021 --test tools/native-std/tests/futex.rs \
+  -o docs/audit/probes/native-foundation/results-2026-11-10-time-regressions/futex-tests
+docs/audit/probes/native-foundation/results-2026-11-10-time-regressions/futex-tests
+bash tools/build_native_std.sh check \
+  --manifest-path tools/native-std-probe/Cargo.toml --release
+cargo check -p sunlight-kernel
+```
+
+| Verification domain | Final result | Evidence under `probes/native-foundation/results-2026-11-10-` |
+| --- | --- | --- |
+| host production libc | **107 PASS / 0 FAIL / 2 filtered**; includes twelve time tests, seven new | `time-host-v2/libc.log` |
+| native C11/C++17 ABI/build | **12 PASS** across base/POSIX/GNU and both include orders; unique exports; unchanged clock ELF validation PASS | `time-host-v2/` |
+| host actual filesystem / kernel descriptor-VFS logic | **90 + 17 PASS** | `time-stdio/host-vfs.log`, `host-fd-vfs.log` |
+| host stdio/temp and C adapters | **19 PASS**; both existing C adapters PASS; three native builds/ELF checks and C++ headers PASS | `time-stdio/` |
+| host memory/string | **24 PASS**, codegen/C ABI/C++ checks PASS | `time-regressions/memory-string.log` |
+| host Rust std futex adapter logic | **3 PASS** | `time-regressions/futex.log` |
+| native Rust std probe build check | **PASS**, exit 0 | `time-regressions/native-std-final.log` |
+| ordinary-feature kernel check | **PASS**, exit 0, 148.64 s | `time-regressions/kernel-check-final.log` |
+| native 2-CPU suite | **31 PASS / 0 guest FAIL**, historical **8 PASS / 13 BUILD_FAIL / 13 guest NOT_RUN** | `time-final-v2-2cpu/results.csv`, `serial.log` |
+| native 4-CPU suite | **31 PASS / 0 guest FAIL**, historical **8 PASS / 13 BUILD_FAIL / 13 guest NOT_RUN** | `time-final-v2-4cpu/results.csv`, `serial.log` |
+
+The host unit-test total is **260 PASS**. The two pre-existing secret-store
+tests that issue native credential syscalls are explicitly filtered on Linux
+and remain **host NOT_RUN**. No test was stopped or filter-rejected in this
+phase. Backend EAGAIN/EIO and early-wake behavior are verified by host injection;
+actual guest backend failure injection and deliberately forced early wakes are
+**NOT_RUN**. `time-host/` and `time-host-final/` retain earlier passing host runs; the
+final runner adds explicit ELF assertions and symbol/identity logs.
+The first format check required one line wrap in the shared syscall helper.
+After formatting, the ELF hash comparison against the earlier artifact failed:
+`.text`, `.rodata` and `.eh_frame` were identical, while `.symtab`/`.strtab`
+changed (`time-regressions/format-attempt.log`, `format-artifact-diff.log`).
+No guest failed. The final **v2 host and both full guest suites were rerun**
+against the formatted source; the final artifact identity above is verified
+independently of those earlier runs. The final format check passes.
+The native Rust std check's incidental probe lockfile refresh was restored to
+the original bytes; before/after/restored hashes are in
+`time-regressions/probe-lock-final.log`. Existing custom-target cfg, ChronosManifest,
+duplicate startup-target, standalone-harness and sunlight-net naming warnings
+remain visible. These are build/host checks, separate from the native C guests;
+no native Rust runtime guest success is inferred.
+
+### Changed files and remaining blocker
+
+* `sunlight-libc/include/time.h`: narrow types/constants/declarations and explicit limits.
+* `sunlight-libc/src/time.rs`: reuse clock reader, checked relative sleep, seven new production-module host tests.
+* `sunlight-libc/src/sys.rs`, `src/std_runtime.rs`: one shared existing native futex WAIT/RESULT transport.
+* `sunlight-libc/src/lib.rs`: time module documentation.
+* `tools/native-c/tests/time.c`, `time-abi.c`, `run_time.py`: four native guest modes, twelve C/C++ ABI checks, production host tests and strict original-ELF validation.
+* `tools/native-c/guest.py`: add four separate focused cases; historical source/status/streams and the 90-second deadline are unchanged.
+* `tools/native-c/README.md`, this audit, and retained evidence directories.
+
+No kernel, syscall numbering, service implementation, Rust std overlay,
+allocator, TLS, loader or historical probe changes were required. No CPython
+configure/build, broad POSIX time implementation, ordinary desktop guest,
+native Rust runtime guest, realtime stepping/accuracy test, or signal/EINTR
+test was attempted; these are **NOT_RUN**.
+
+| Original population | Phase 6 native build | Phase 7 native build | Phase 7 guest, each CPU count |
+| --- | --- | --- | --- |
+| 18 original APIs (17 C + one C++) | 4 PASS / 14 BUILD_FAIL | **5 PASS / 13 BUILD_FAIL** (C: 5/12; C++: 0/1) | **5 PASS / 0 FAIL / 13 NOT_RUN** |
+| 21 historical executables including three foundation probes | 7 PASS / 14 BUILD_FAIL | **8 PASS / 13 BUILD_FAIL** | **8 PASS / 0 FAIL / 13 NOT_RUN** |
+| 16 originally blocked APIs | 2 PASS / 14 BUILD_FAIL | **3 PASS / 13 BUILD_FAIL** | **3 PASS / 0 FAIL / 13 NOT_RUN** |
+
+The four new time contracts do not inflate historical counts. Earlier failures
+and Phase 6 counts remain intact.
+
+**Single Phase 8 blocker/target: unchanged `mmap.c` still fails at missing
+`<sys/mman.h>`**, independently reproduced in both final `build-mmap.log` files.
+Its actual requirements are a 1 MiB private anonymous RW mapping, writing its
+last byte, `mprotect(..., PROT_READ)`, then `munmap`, plus the corresponding
+constants, signatures and `MAP_FAILED`. The existing Rust mmap/munmap path and
+native protection syscall are implementation leads, not evidence that the C
+ABI already works. Define/verify that narrow C surface, retaining protection
+and overflow rules, then run that unchanged ELF on 2 and 4 CPUs. This phase
+does not implement it or claim acceptance from a missing-header failure.

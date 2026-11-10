@@ -1,0 +1,4 @@
+$ git rev-parse HEAD
+fe824e591dbc1bf0e80e685491beb6d2040f9e01
+
+exit=0

@@ -1,0 +1,8 @@
+unchanged clock.c sha256=eee7fb2d2111f4799e69eedb698e836cf6c5546539843f1b92f5f88ebb7c0a2a
+clock.elf sha256=7e9f9cd669b88ff19bbbb552f635c99d5c0cbf06085f91ddfb40a5a9efdb59cf
+host-build / 2cpu / 4cpu clock ELF identity=PASS
+31/31 per-case ELF hashes identical across CPU runs=PASS
+2cpu and 4cpu: clock exit=0 stdout=0 stderr=0 clean reap=PASS
+13 historical build failures remain guest NOT_RUN on each CPU count
+no fault/unknown-syscall records on either run=PASS
+final host-build / 2cpu / 4cpu clock ELF identity=PASS

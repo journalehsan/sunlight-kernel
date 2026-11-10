@@ -189,13 +189,7 @@ pub extern "C" fn sl_std_yield() {
 }
 #[no_mangle]
 pub unsafe extern "C" fn sl_std_futex(ptr: *const u32, op: u32, value: u32, deadline: u64) -> i32 {
-    let result = sys::syscall4(155, ptr as u64, op as u64, value as u64, deadline);
-    if op == 0 && result == 0 {
-        // The scheduler records the winning completion before making us
-        // runnable. A delayed resumption must not turn a wake into a timeout.
-        return sys::syscall4(155, ptr as u64, 2, 0, 0) as i32;
-    }
-    result as i32
+    sys::native_futex(ptr, op, value, deadline) as i32
 }
 
 // Handles use System's same reclaiming allocator, below std, avoiding cycles.

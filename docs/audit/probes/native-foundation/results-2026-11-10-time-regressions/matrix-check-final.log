@@ -1,0 +1,14 @@
+2cpu: 31/31 PASS; historical 8 PASS / 13 BUILD_FAIL / 0 guest FAIL / 13 guest NOT_RUN; clock exit=0 empty streams clean reap; no faults
+time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged
+time: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged
+time: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged
+time: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged
+4cpu: 31/31 PASS; historical 8 PASS / 13 BUILD_FAIL / 0 guest FAIL / 13 guest NOT_RUN; clock exit=0 empty streams clean reap; no faults
+time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged
+time: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged
+time: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged
+time: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged
+clock.elf sha256=b406cad38b9bece84a8acfa660052064bc067e380cc6d7834d66d2c62802180b
+final host / 2cpu / 4cpu ELF identity=PASS
+31/31 per-case ELF hashes identical across CPU counts=PASS
+unchanged clock.c sha256=eee7fb2d2111f4799e69eedb698e836cf6c5546539843f1b92f5f88ebb7c0a2a

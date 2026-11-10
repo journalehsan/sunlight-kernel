@@ -123,6 +123,9 @@ def main():
                     )]
         sources += [('random-' + mode, random_fixture, 0, (mode,), b'', b'', b'', False)
                     for mode in ('basic', 'zero', 'errors', 'guards')]
+        sources += [('time-' + mode, ROOT / 'tools/native-c/tests/time.c', 0, (mode,),
+                     b'', None if mode in ('clocks', 'sleep') else b'', b'', False)
+                    for mode in ('clocks', 'errors', 'zero', 'sleep')]
         for name, src, code, args, input, stdout, stderr, historical in sources:
             elf = out / (name + '.elf')
             compiler = ([sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']

@@ -1,0 +1,7 @@
+Initial rustfmt --edition 2021 --check sunlight-libc/src/time.rs sunlight-libc/src/sys.rs reported one required line wrap in sys.rs::native_futex (exit 1).
+Applied rustfmt to sys.rs, then final-format.log, final-runtime.log and final-clock-build.log all exit 0.
+Post-format ELF equality assertion against the pre-format ELF failed (comparison exit 1):
+pre-format sha256=7e9f9cd669b88ff19bbbb552f635c99d5c0cbf06085f91ddfb40a5a9efdb59cf
+post-format sha256=b406cad38b9bece84a8acfa660052064bc067e380cc6d7834d66d2c62802180b
+Section comparison retained separately in format-artifact-diff.log; .text/.rodata/.eh_frame identical, .symtab/.strtab differ.
+Final acceptance reruns the production host/ABI runner and full guest suites on both CPU counts against the post-format source. Original guest runs remain retained.

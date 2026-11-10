@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -Itarget/native-c-time-declarations -std=c11 -Wall -Wextra -Werror docs/audit/probes/clock.c -o docs/audit/probes/native-foundation/results-2026-11-10-time-before/clock.elf
+ld.lld: error: undefined symbol: nanosleep
+>>> referenced by clock.c
+>>>               /tmp/clock-1c20d6.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

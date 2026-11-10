@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/clock.c -o docs/audit/probes/native-foundation/results-2026-11-10-time-before/clock.elf
+docs/audit/probes/clock.c:2:10: fatal error: 'time.h' file not found
+    2 | #include <time.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

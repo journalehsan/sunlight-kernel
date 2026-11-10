@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/signal.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c:2:10: fatal error: 'signal.h' file not found
+    2 | #include <signal.h>
+      |          ^~~~~~~~~~
+1 error generated.
+
+exit=1

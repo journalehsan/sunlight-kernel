@@ -1,0 +1,8 @@
+rustfmt --edition 2021 --check sunlight-libc/src/time.rs sunlight-libc/src/sys.rs: PASS
+python3 -m py_compile tools/native-c/tests/run_time.py tools/native-c/guest.py: PASS
+git diff --check: PASS
+final ordinary kernel check: exit 0
+final native Rust std check: exit 0
+historical clock.c diff: EMPTY
+probe Cargo.lock diff after restoration: EMPTY
+final source hashes: final-source-hashes-v2.log

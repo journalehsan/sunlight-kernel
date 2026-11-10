@@ -117,6 +117,33 @@ counts, never random bytes or capability tokens. `tests/run_random.py --out NEW`
 runs production libc host unit tests and twelve C11/C++17 ABI/header checks;
 it builds the original probe but never executes native ELFs on Linux.
 
+Phase 7 adds the narrow `<time.h>` surface: signed LP64 `time_t`/`clock_t`,
+32-bit signed `clockid_t`, a 16-byte `struct timespec`, `CLOCK_REALTIME=0`,
+`CLOCK_MONOTONIC=1`, `clock_gettime` and relative `nanosleep`. Declarations are
+available with base, POSIX and GNU feature macros without advertising POSIX
+conformance. Realtime is native UTC epoch seconds with zero nanoseconds;
+monotonic time uses the canonical kernel 100 Hz timekeeper. Neither exposes
+sub-tick precision or a wall-clock accuracy guarantee.
+
+Sleep uses the same native futex transport as Rust std, with a checked absolute
+monotonic deadline and clock rechecks after wakes. Negative seconds, invalid
+nanoseconds, duration/deadline overflow and the indefinite-wait sentinel fail
+EINVAL; NULL request/output pointers fail EFAULT. Non-NULL input/output storage
+must be valid; arbitrary mapping faults are not recovered by these userspace
+adapters. Native waits have no signal-interruption/EINTR contract. The remainder
+is never accessed and stays unchanged on completed sleeps and failures. Zero
+sleep does not access a clock or wait. Success preserves errno.
+
+The suite now runs **31 built executions**: unchanged historical `clock.c` plus
+four separate clock/error/zero/sleep contracts join the previous 26 cases. The
+sleep fixture checks 1 ns, 1 ms, 25 ms and 1 s + 1 ns requests against monotonic
+time, allowing up to 5 seconds of scheduling lateness. Captured durations are
+in the native coarse clock domain; they do not measure physical timing accuracy.
+`tests/run_time.py --out NEW` runs production libc tests, twelve C/C++ layout,
+type/signature/include checks, canonical-export uniqueness, and strict native
+ELF validation of the unchanged original source. It never runs a native ELF
+on Linux.
+
 Host logic, native C/C++ header and symbol checks (no guest execution):
 
 ```sh

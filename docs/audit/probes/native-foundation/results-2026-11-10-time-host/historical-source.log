@@ -1,0 +1,4 @@
+eee7fb2d2111f4799e69eedb698e836cf6c5546539843f1b92f5f88ebb7c0a2a  docs/audit/probes/clock.c
+#define _GNU_SOURCE
+#include <time.h>
+int main(void){struct timespec a,b,d={0,1000000}; return clock_gettime(CLOCK_REALTIME,&a)||clock_gettime(CLOCK_MONOTONIC,&b)||nanosleep(&d,0);}

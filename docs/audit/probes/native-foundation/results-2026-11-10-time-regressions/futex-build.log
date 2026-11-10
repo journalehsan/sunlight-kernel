@@ -1,0 +1,3 @@
+$ rustc --edition=2021 --test tools/native-std/tests/futex.rs -o docs/audit/probes/native-foundation/results-2026-11-10-time-regressions/futex-tests
+
+exit=0

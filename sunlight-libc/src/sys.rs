@@ -49,6 +49,7 @@ pub const SYS_SWAPCTL: u64 = 85;
 pub const SYS_GET_ENTROPY: u64 = 87;
 pub const SYS_SECURE_ENTROPY_READY: u64 = 89;
 pub const SYS_CLOCK_GETTIME: u64 = 88;
+pub const SYS_NATIVE_FUTEX: u64 = 155;
 pub const SYS_MAP_TELEMETRY: u64 = 95;
 pub const SYS_GRANT_CAPABILITY: u64 = 100;
 pub const SYS_DEBUG_LOG: u64 = 99;
@@ -77,6 +78,23 @@ pub const ENOMEM_RAW: u64 = u64::MAX - 12;
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
 /// rather than assuming every future libc target has a 64-bit `usize`.
 pub const MAX_IO_COUNT: usize = isize::MAX as usize;
+
+/// Shared native wait/receipt transport for Rust std and C relative sleep.
+/// A completed registered WAIT returns zero first; consume its saved winning
+/// event before another wait can overwrite it (0=wake, 2=timeout).
+pub(crate) unsafe fn native_futex(ptr: *const u32, op: u32, value: u32, deadline: u64) -> u64 {
+    let result = syscall4(
+        SYS_NATIVE_FUTEX,
+        ptr as u64,
+        op as u64,
+        value as u64,
+        deadline,
+    );
+    if op == 0 && result == 0 {
+        return syscall4(SYS_NATIVE_FUTEX, ptr as u64, 2, 0, 0);
+    }
+    result
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Errno {

@@ -1,0 +1,3 @@
+$ rustfmt --edition 2021 --check sunlight-libc/src/time.rs sunlight-libc/src/sys.rs
+
+exit=0

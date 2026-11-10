@@ -64,7 +64,7 @@ pub mod sun_open;
 pub mod termination;
 /// Native thread spawning.
 pub mod thread;
-/// Minimal time support: `clock_gettime` backed by the kernel clock syscall.
+/// Native clocks and relative sleep using the shared kernel timekeeper/futex.
 pub mod time;
 /// Thread-Local Storage bootstrap: `Tcb` layout + `init_tls()`.
 pub mod tls;

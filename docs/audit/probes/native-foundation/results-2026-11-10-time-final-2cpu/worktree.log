@@ -1,0 +1,17 @@
+$ git status --short
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/std_runtime.rs
+ M sunlight-libc/src/sys.rs
+ M sunlight-libc/src/time.rs
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-10-time-before/
+?? docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-10-time-host/
+?? docs/audit/probes/native-foundation/results-2026-11-10-time-regressions/
+?? docs/audit/probes/native-foundation/results-2026-11-10-time-stdio/
+?? sunlight-libc/include/time.h
+?? tools/native-c/tests/run_time.py
+?? tools/native-c/tests/time-abi.c
+?? tools/native-c/tests/time.c
+
+exit=0
