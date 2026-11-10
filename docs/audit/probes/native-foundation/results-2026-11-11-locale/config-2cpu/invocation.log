@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/phase11/native-c-final-2cpu/locale-contract.elf --arg environment --locale-conf target/phase11/locale.conf --cpus 2 --expect-exit 0 --out target/phase11/config-2cpu

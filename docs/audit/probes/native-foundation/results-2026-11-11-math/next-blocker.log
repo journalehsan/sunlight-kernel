@@ -1,0 +1,13 @@
+sha256=4c3148d0a7c2c7823c5d17dcc1c3d793215305f05e4fa3c14a1523c1b297dc9d
+#define _GNU_SOURCE
+#include <poll.h>
+#include <sys/select.h>
+int main(void){struct timeval t={0,0}; return poll(0,0,0)!=0 || select(0,0,0,0,&t)!=0;}
+
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/poll_select.c -o docs/audit/probes/native-foundation/results-2026-11-11-math/poll_select.elf
+docs/audit/probes/poll_select.c:2:10: fatal error: 'poll.h' file not found
+    2 | #include <poll.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

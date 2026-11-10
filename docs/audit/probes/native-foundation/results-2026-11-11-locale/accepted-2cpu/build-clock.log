@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/accepted-2cpu/clock.elf
+
+exit=0

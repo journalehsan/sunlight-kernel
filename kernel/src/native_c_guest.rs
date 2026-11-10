@@ -14,12 +14,15 @@ struct Case {
     elf: &'static [u8],
     args: &'static [&'static [u8]],
     input: &'static [u8],
+    environment: &'static [&'static [u8]],
 }
 include!(env!("SUNLIGHT_NATIVE_C_MANIFEST"));
 
 pub const INITRAMFS: &[sunlight_fs::RamEntry] = &[
     sunlight_fs::RamEntry::dir("/", 0, 0, sunlight_fs::vfs::mode::DIR_755),
     sunlight_fs::RamEntry::dir("/tmp", 0, 0, sunlight_fs::vfs::mode::DIR_1777),
+    sunlight_fs::RamEntry::dir("/etc", 0, 0, sunlight_fs::vfs::mode::DIR_755),
+    sunlight_fs::RamEntry::file("/etc/locale.conf", 0, 0, 0o100444, LOCALE_CONF),
     // Stable directory fixtures: native unlink deliberately rejects directories.
     // Keep their names present before every per-process cleanup snapshot.
     sunlight_fs::RamEntry::dir("/tmp/native-c-dirent", 1000, 1000, 0o040700),
@@ -160,7 +163,7 @@ fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
         &mut pmm,
         hhdm,
         &argv,
-        &[b"TMPDIR=/tmp"],
+        case.environment,
         false,
     );
     if let Err(error) = result {

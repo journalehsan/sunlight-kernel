@@ -1,0 +1,2 @@
+libc host tests, 12 C/C++ ABI checks and unique native exports: PASS
+unchanged historical source: native compile/link PASS; host execution NOT_RUN

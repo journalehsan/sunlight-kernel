@@ -1,0 +1,6 @@
+$ rustc --edition=2021 --test tools/native-c/tests/stdio-host.rs -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/stdio/stdio-tests
+stdout:
+
+stderr:
+
+exit=0

@@ -1,0 +1,6 @@
+$ python3 tools/native-c/tests/run_unistd.py --out target/phase11/final-checks/unistd
+libc host logic: PASS (see libc.log; two native-credential tests skipped)
+native runtime, C11/C++17 feature macros/include orders and unique exports: PASS
+guest: NOT_RUN by this host/build runner; use guest.py --suite on 2 and 4 CPUs
+
+exit=0

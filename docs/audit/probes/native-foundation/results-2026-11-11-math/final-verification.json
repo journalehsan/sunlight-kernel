@@ -1,0 +1,17 @@
+{
+  "2cpu-48-pass": true,
+  "2cpu-7-build-fail": true,
+  "2cpu-no-faults": true,
+  "2cpu-math": true,
+  "2cpu-math-contract": true,
+  "2cpu-fp": true,
+  "4cpu-48-pass": true,
+  "4cpu-7-build-fail": true,
+  "4cpu-no-faults": true,
+  "4cpu-math": true,
+  "4cpu-math-contract": true,
+  "4cpu-fp": true,
+  "historical-source-unchanged": true,
+  "incoming-audit-prefix": true,
+  "whitespace": true
+}

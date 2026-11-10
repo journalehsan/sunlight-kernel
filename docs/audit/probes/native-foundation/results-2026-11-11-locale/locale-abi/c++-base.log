@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -x c++ -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/locale-abi/c++-base.o
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale-abi.c:11:10: fatal error: 'type_traits' file not found
+   11 | #include <type_traits>
+      |          ^~~~~~~~~~~~~
+1 error generated.
+
+exit=1

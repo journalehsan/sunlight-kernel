@@ -1,0 +1,4 @@
+c2634d0aa8bcc412d9af689358b058bba1e9075c215cb4f051ebf465ae00f140
+#define _GNU_SOURCE
+#include <locale.h>
+int main(void){return setlocale(LC_ALL,"C")==0;}

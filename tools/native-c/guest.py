@@ -41,6 +41,8 @@ def main():
     parser.add_argument('--expect-exit', type=int)
     parser.add_argument('--arg', action='append', default=[])
     parser.add_argument('--stdin-file', type=Path)
+    parser.add_argument('--locale-conf', type=Path, help='fixture contents for /etc/locale.conf')
+    parser.add_argument('--env', action='append', default=[], help='single-ELF startup KEY=VALUE')
     opts = parser.parse_args()
     out = (opts.out or ROOT / 'target/native-c-guest-runs' / uuid.uuid4().hex).resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -68,7 +70,7 @@ def main():
     command('qemu-version', ['qemu-system-x86_64', '--version'])
     cases, rows = [], []
 
-    def add(name, elf, expected=0, args=(), input=b'', stdout=None, stderr=None, historical=False):
+    def add(name, elf, expected=0, args=(), input=b'', stdout=None, stderr=None, historical=False, environment=(b'TMPDIR=/tmp',)):
         elf = elf.resolve()
         data = elf.read_bytes()
         # Keep personality rejection explicit rather than accidentally testing Helios.
@@ -77,7 +79,7 @@ def main():
                 int.from_bytes(data[18:20], 'little') != 62):
             raise ValueError(f'{elf}: expected a native x86-64 ET_EXEC from cc.py')
         cases.append(dict(name=name, elf=elf, expected=expected, args=list(args), input=input,
-                          stdout=stdout, stderr=stderr))
+                          stdout=stdout, stderr=stderr, environment=environment))
         rows.append(dict(probe=name, historical=historical, build='PASS', guest_run='NOT_RUN',
                          acceptance='FAIL', exit='', expected_exit=expected, detail='',
                          sha256=hashlib.sha256(data).hexdigest()))
@@ -100,6 +102,9 @@ def main():
         sources.insert(random_index, ('random-service-before', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources.insert(random_index + 2, ('random-service-after', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources += [('dlfcn-contract', ROOT / 'tools/native-c/tests/dlfcn.c', 0, (), b'', b'', b'', False)]
+        sources += [('math-contract', ROOT / 'tools/native-c/tests/math.c', 0, (), b'', b'', b'', False)]
+        sources += [('locale-contract', ROOT / 'tools/native-c/tests/locale.c', 0, (), b'', b'', b'', False),
+                    ('locale-environment', ROOT / 'tools/native-c/tests/locale.c', 0, ('environment',), b'', b'', b'', False)]
         sources += [('langinfo-contract', ROOT / 'tools/native-c/tests/langinfo.c', 0, (), b'', b'', b'', False)]
         sources += [
             ('stdout', ROOT / 'tools/native-c/tests/stdout.c', 0, (), b'', b'[NATIVE-C] stdout OK\n', b'', False),
@@ -146,10 +151,12 @@ def main():
                                  detail='BUILD_FAILED: no executable to run', sha256=''))
             else:
                 command('elf-' + name, ['llvm-readelf', '-h', '-l', elf])
-                add(name, elf, code, args, input, stdout, stderr, historical)
+                add(name, elf, code, args, input, stdout, stderr, historical,
+                    environment=(b'TMPDIR=/tmp', b'LANG=en_US.UTF-8') if name == 'locale-environment' else (b'TMPDIR=/tmp',))
     else:
         add('elf', opts.elf, opts.expect_exit, opts.arg,
-            opts.stdin_file.read_bytes() if opts.stdin_file else b'')
+            opts.stdin_file.read_bytes() if opts.stdin_file else b'',
+            environment=(b'TMPDIR=/tmp', *(entry.encode() for entry in opts.env)))
 
     support_target = ROOT / 'target/native-c-guest/support'
     kernel_target = ROOT / 'target/native-c-guest/kernel'
@@ -161,12 +168,13 @@ def main():
                                  '--target-dir', support_target], env=support_env):
         return 1
     manifest = out / 'manifest.rs'
-    manifest.write_text('static INIT_ELF: &[u8] = include_bytes!(' + json.dumps(str(support_target / 'x86_64-unknown-none/release/sunlight-init')) + ');\n' +
+    manifest.write_text('static LOCALE_CONF: &[u8] = ' + rust_bytes(opts.locale_conf.read_bytes() if opts.locale_conf else b'') + ';\n' +
+                        'static INIT_ELF: &[u8] = include_bytes!(' + json.dumps(str(support_target / 'x86_64-unknown-none/release/sunlight-init')) + ');\n' +
                         'static RAND_ELF: &[u8] = include_bytes!(' + json.dumps(str(support_target / 'x86_64-unknown-none/release/rand_service')) + ');\n' +
                         'static CASES: &[Case] = &[\n' + ''.join(
         'Case { name: ' + json.dumps(c['name']) + ', elf: include_bytes!(' + json.dumps(str(c['elf'])) +
         '), args: &[' + ','.join(rust_bytes(a.encode()) for a in c['args']) + '], input: ' +
-        rust_bytes(c['input']) + ' },\n' for c in cases) + '];\n')
+        rust_bytes(c['input']) + ', environment: &[' + ','.join(rust_bytes(e) for e in c['environment']) + '] },\n' for c in cases) + '];\n')
     env = dict(os.environ, SUNLIGHT_NATIVE_C_MANIFEST=str(manifest))
     for key in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_TARGET_DIR'):
         env.pop(key, None)

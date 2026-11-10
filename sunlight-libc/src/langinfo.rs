@@ -1,13 +1,10 @@
-//! Native C locale information. The C runtime currently has only its initial
-//! C locale: byte strings and ASCII execution characters, with no locale
-//! selection or multibyte conversion API. Rust/UI Unicode is independent.
-//! This subset exposes only CODESET; it does not inspect LANG/LC_* variables.
-
+//! Codeset metadata follows the active LC_CTYPE selection.
 use core::ffi::{c_char, c_int};
 
 /// Native nl_item value, shared with include/langinfo.h.
 pub const CODESET: c_int = 1;
 static C_CODESET: &[u8] = b"US-ASCII\0";
+static UTF8_CODESET: &[u8] = b"UTF-8\0";
 static EMPTY: &[u8] = b"\0";
 
 /// Return process-lifetime, read-only C locale metadata. As with the C API,
@@ -15,7 +12,15 @@ static EMPTY: &[u8] = b"\0";
 /// Unsupported items return an empty string and leave errno unchanged.
 #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
 pub extern "C" fn nl_langinfo(item: c_int) -> *mut c_char {
-    let value = if item == CODESET { C_CODESET } else { EMPTY };
+    let value = if item == CODESET {
+        if crate::locale::ctype_is_utf8() {
+            UTF8_CODESET
+        } else {
+            C_CODESET
+        }
+    } else {
+        EMPTY
+    };
     value.as_ptr().cast_mut().cast()
 }
 

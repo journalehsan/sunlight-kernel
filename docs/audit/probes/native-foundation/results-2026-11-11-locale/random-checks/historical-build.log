@@ -1,0 +1,3 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/random-checks/getrandom.elf
+
+exit=0

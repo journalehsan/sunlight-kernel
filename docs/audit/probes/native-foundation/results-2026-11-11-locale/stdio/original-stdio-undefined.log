@@ -1,0 +1,6 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase11/stdio/original-stdio-native
+stdout:
+
+stderr:
+
+exit=0

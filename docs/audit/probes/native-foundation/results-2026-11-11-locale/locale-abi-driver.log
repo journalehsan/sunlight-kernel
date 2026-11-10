@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_locale.py", line 34, in <module>
+    run(name, [compiler, '--target=x86_64-unknown-none-elf', '-std=' + standard,
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        '-Wall', '-Wextra', '-Werror', '-ffreestanding', '-nostdinc',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        '-isystem', resource + '/include', '-I', ROOT / 'sunlight-libc/include',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        *defines, *(['-DREVERSE_INCLUDES'] if reverse else []), '-x', language,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        '-c', ROOT / 'tools/native-c/tests/locale-abi.c', '-o', out / (name + '.o')])
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_locale.py", line 24, in run
+    assert result.returncode == 0, name
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: c++-base

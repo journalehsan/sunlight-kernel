@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -x c++ -fsyntax-only -
+stdin=b'#include <stdio.h>\n#include <errno.h>\n'
+stdout:
+
+stderr:
+
+exit=0

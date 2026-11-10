@@ -1,0 +1,5 @@
+$ llvm-nm --undefined-only target/phase11/math-next-blocker/math.o
+                 U fabs
+                 U sqrt
+
+exit=0

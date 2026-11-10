@@ -1,0 +1,161 @@
+$ llvm-readelf -h -l -s /home/ehsantor/Projects/sunlightos-kernel/target/phase11/locale-abi-final/locale.elf
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x400028
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          40992 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         4
+  Size of section headers:           64 (bytes)
+  Number of section headers:         8
+  Section header string table index: 6
+
+Elf file type is EXEC (Executable file)
+Entry point 0x400028
+There are 4 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x001000 0x0000000000400000 0x0000000000400000 0x004b38 0x004b38 R E 0x1000
+  LOAD           0x006000 0x0000000000405000 0x0000000000405000 0x001514 0x001514 R   0x1000
+  LOAD           0x008000 0x0000000000407000 0x0000000000407000 0x000000 0x00029a RW  0x1000
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x0
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text 
+   01     .rodata .eh_frame 
+   02     .bss 
+   03     
+   None   .symtab .shstrtab .strtab 
+
+Symbol table '.symtab' contains 116 entries:
+   Num:    Value          Size Type    Bind   Vis       Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT   UND 
+     1: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS locale.c
+     2: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_libc.76b14ca910816f-cgu.2
+     3: 0000000000407000     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc11std_runtime10START_ARGC.0
+     4: 0000000000407008     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc11std_runtime10START_ARGV.0
+     5: 0000000000407010     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc11std_runtime10START_ENVP.0
+     6: 0000000000400050   200 FUNC    LOCAL  DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc6locale8identify
+     7: 0000000000400120   753 FUNC    LOCAL  DEFAULT     1 _RNvXs_NtNtCsg6my6oZXuye_4core3str7patternNtB4_12CharSearcherNtB4_8Searcher10next_match
+     8: 0000000000407018   263 OBJECT  LOCAL  HIDDEN      4 _RNvNtCs2t0Q0k6W61_13sunlight_libc6locale6LOCALE.llvm.14199382867768450272
+     9: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_libc.76b14ca910816f-cgu.3
+    10: 0000000000401c10   654 FUNC    LOCAL  HIDDEN      1 _RINvMNtCsg6my6oZXuye_4core3stre12trim_matchesNvMNtNtB5_4char7methodsc13is_whitespaceECs2t0Q0k6W61_13sunlight_libc
+    11: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_libc.76b14ca910816f-cgu.4
+    12: 0000000000407298     1 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc9HEAP_LOCK
+    13: 0000000000407278    32 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc4HEAP
+    14: 0000000000407260     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc23ALLOCATED_BACKING_BYTES
+    15: 0000000000407250     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc20REQUESTED_USER_BYTES
+    16: 0000000000407248     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc16ALLOCATION_COUNT
+    17: 0000000000407238     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc10FREE_COUNT
+    18: 0000000000407240     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc13REALLOC_COUNT
+    19: 0000000000407268     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc23FAILED_ALLOCATION_COUNT
+    20: 0000000000407258     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc21LIVE_ALLOCATION_COUNT
+    21: 0000000000407270     8 OBJECT  LOCAL  DEFAULT     4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc26HIGH_WATER_ALLOCATED_BYTES
+    22: 00000000004023a0   378 FUNC    LOCAL  DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc16validated_header
+    23: 0000000000402520   113 FUNC    LOCAL  DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc17allocation_layout
+    24: 00000000004025a0   490 FUNC    LOCAL  HIDDEN      1 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc7release.llvm.3306473733020744336
+    25: 0000000000407299     1 OBJECT  LOCAL  HIDDEN      4 _RNvNtCs2t0Q0k6W61_13sunlight_libc5errno9TLS_READY.0.llvm.3306473733020744336
+    26: 0000000000407230     8 OBJECT  LOCAL  HIDDEN      4 _RNvNtCs2t0Q0k6W61_13sunlight_libc3env4ENVP.0.llvm.3306473733020744336
+    27: 0000000000402790   788 FUNC    LOCAL  HIDDEN      1 _RNvNtCs2t0Q0k6W61_13sunlight_libc5alloc8allocate.llvm.3306473733020744336
+    28: 0000000000402210   136 FUNC    LOCAL  HIDDEN      1 _RNvMs_NtCs2t0Q0k6W61_13sunlight_libc11terminationNtB4_8Registry3run.llvm.3306473733020744336
+    29: 0000000000407120   272 OBJECT  LOCAL  HIDDEN      4 _RNvNtCs2t0Q0k6W61_13sunlight_libc11termination9CALLBACKS.llvm.3306473733020744336
+    30: 0000000000405630    24 OBJECT  LOCAL  HIDDEN      2 anon.354faefa1f89aa4cd7bd279c4e1bf77d.1.llvm.3306473733020744336
+    31: 0000000000405167    75 OBJECT  LOCAL  HIDDEN      2 anon.354faefa1f89aa4cd7bd279c4e1bf77d.0.llvm.3306473733020744336
+    32: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_libc.76b14ca910816f-cgu.6
+    33: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_ipc.47f21457a8af23e2-cgu.0
+    34: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_ipc.47f21457a8af23e2-cgu.1
+    35: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_ipc.47f21457a8af23e2-cgu.2
+    36: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_ipc.47f21457a8af23e2-cgu.3
+    37: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.02
+    38: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.01
+    39: 00000000004059d8    76 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.17.llvm.1362322816072105889
+    40: 0000000000405a24   284 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.18.llvm.1362322816072105889
+    41: 00000000004056b0    92 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.14.llvm.1362322816072105889
+    42: 000000000040570c   212 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.15.llvm.1362322816072105889
+    43: 0000000000405b40   292 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.19.llvm.1362322816072105889
+    44: 00000000004057e0   504 OBJECT  LOCAL  HIDDEN      2 anon.5a961692e56fbaaedc9adc2e190a5bec.16.llvm.1362322816072105889
+    45: 0000000000403400   839 FUNC    LOCAL  HIDDEN      1 _RNvXs_NtNtCsg6my6oZXuye_4core3ops5rangeINtB4_5RangejENtNtB8_3fmt5Debug3fmtB8_
+    46: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS sunlight_native_c.fb0cd578346a6f8a-cgu.0
+    47: 0000000000403750    11 FUNC    LOCAL  HIDDEN      1 _RNvCs5NZBvkRymjj_7___rustc17rust_begin_unwind
+    48: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.03
+    49: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.04
+    50: 0000000000405c9a   200 OBJECT  LOCAL  HIDDEN      2 anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105
+    51: 0000000000405410    16 OBJECT  LOCAL  HIDDEN      2 anon.8f448c3c407b63c7aab40d64bd5e7a13.61.llvm.1468654908410483105
+    52: 00000000004053f0    16 OBJECT  LOCAL  HIDDEN      2 anon.8f448c3c407b63c7aab40d64bd5e7a13.63.llvm.1468654908410483105
+    53: 0000000000405d62     2 OBJECT  LOCAL  HIDDEN      2 anon.8f448c3c407b63c7aab40d64bd5e7a13.62.llvm.1468654908410483105
+    54: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.05
+    55: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.06
+    56: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.07
+    57: 0000000000406164   132 OBJECT  LOCAL  DEFAULT     2 _RNvNtNtNtCsg6my6oZXuye_4core7unicode12unicode_data15grapheme_extend17SHORT_OFFSET_RUNS
+    58: 0000000000405e64   767 OBJECT  LOCAL  DEFAULT     2 _RNvNtNtNtCsg6my6oZXuye_4core7unicode12unicode_data15grapheme_extend7OFFSETS
+    59: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.08
+    60: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.09
+    61: 0000000000404350    89 FUNC    LOCAL  DEFAULT     1 _RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix
+    62: 0000000000403c20   579 FUNC    LOCAL  HIDDEN      1 _RNvMNtNtCsg6my6oZXuye_4core4char7methodsc16escape_debug_ext.llvm.1417779132937417444
+    63: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.10
+    64: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.00
+    65: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.12
+    66: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.13
+    67: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.14
+    68: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS core.bb8eb2a521f74d3c-cgu.15
+    69: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.6
+    70: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.5
+    71: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.4
+    72: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.3
+    73: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.0
+    74: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.1
+    75: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.2
+    76: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS compiler_builtins.2198cee569058006-cgu.7
+    77: 0000000000400028     0 NOTYPE  GLOBAL DEFAULT     1 _start
+    78: 0000000000400000    38 FUNC    GLOBAL DEFAULT     1 main
+    79: 0000000000400420  5963 FUNC    GLOBAL DEFAULT     1 setlocale
+    80: 0000000000401bc0    65 FUNC    GLOBAL DEFAULT     1 sl_std_start
+    81: 0000000000403760   217 FUNC    GLOBAL DEFAULT     1 _RNvNtNtCsg6my6oZXuye_4core5slice5index16slice_index_fail
+    82: 00000000004030fa    58 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core9panicking18panic_bounds_check
+    83: 0000000000403a40   215 FUNC    GLOBAL DEFAULT     1 _RNvNtNtCsg6my6oZXuye_4core5slice6memchr14memchr_aligned
+    84: 0000000000402c00    28 FUNC    GLOBAL DEFAULT     1 strlen
+    85: 0000000000402070   252 FUNC    GLOBAL DEFAULT     1 memcpy
+    86: 0000000000402170   158 FUNC    GLOBAL DEFAULT     1 memset
+    87: 0000000000403840   503 FUNC    GLOBAL DEFAULT     1 _RNvNtNtCsg6my6oZXuye_4core3str8converts9from_utf8
+    88: 00000000004022a0   242 FUNC    GLOBAL DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc3env6getenv
+    89: 0000000000402c20   321 FUNC    GLOBAL DEFAULT     1 _RNvCs2t0Q0k6W61_13sunlight_libc4open
+    90: 0000000000402d70     6 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core3str16slice_error_fail
+    91: 0000000000401b70    20 FUNC    GLOBAL DEFAULT     1 sl_std_exit
+    92: 0000000000401b90    38 FUNC    GLOBAL DEFAULT     1 sl_std_init_tls
+    93: 0000000000401ea0   117 FUNC    GLOBAL DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc3tls8init_tls
+    94: 0000000000402ae0    36 FUNC    GLOBAL DEFAULT     1 exit
+    95: 0000000000406373   256 OBJECT  GLOBAL DEFAULT     2 _RNvNtNtNtCsg6my6oZXuye_4core7unicode12unicode_data11white_space14WHITESPACE_MAP
+    96: 0000000000401f20   321 FUNC    GLOBAL DEFAULT     1 _RNvNtCs2t0Q0k6W61_13sunlight_libc4mman4mmap
+    97: 0000000000402ab0    48 FUNC    GLOBAL DEFAULT     1 calloc
+    98: 00000000004064f8     0 NOTYPE  GLOBAL DEFAULT     2 __sl_exports_end
+    99: 0000000000406478     0 NOTYPE  GLOBAL DEFAULT     2 __sl_exports_start
+   100: 0000000000404b38     0 NOTYPE  GLOBAL DEFAULT     1 __sl_text_end
+   101: 0000000000400000     0 NOTYPE  GLOBAL DEFAULT     1 __sl_text_start
+   102: 0000000000402b10     5 FUNC    GLOBAL DEFAULT     1 free
+   103: 0000000000402b20    10 FUNC    GLOBAL DEFAULT     1 malloc
+   104: 0000000000402b30   207 FUNC    GLOBAL DEFAULT     1 realloc
+   105: 0000000000403140    14 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core9panicking5panic
+   106: 0000000000404450    19 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core6option13unwrap_failed
+   107: 0000000000404470   259 FUNC    GLOBAL DEFAULT     1 _RNvXsd_NtNtNtCsg6my6oZXuye_4core3fmt3num3impyNtB9_7Display3fmt
+   108: 0000000000403150    43 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core9panicking9panic_fmt
+   109: 0000000000403180   628 FUNC    GLOBAL DEFAULT     1 _RNvNtNtCsg6my6oZXuye_4core7unicode9printable12is_printable
+   110: 0000000000403b20   249 FUNC    GLOBAL DEFAULT     1 _RNvNtNtNtCsg6my6oZXuye_4core7unicode12unicode_data15grapheme_extend11lookup_slow
+   111: 0000000000402d80   890 FUNC    GLOBAL DEFAULT     1 _RNvNtCsg6my6oZXuye_4core3str19slice_error_fail_rt
+   112: 0000000000404470   259 FUNC    GLOBAL DEFAULT     1 _RNvXsi_NtNtNtCsg6my6oZXuye_4core3fmt3num3impjNtB9_7Display3fmt
+   113: 00000000004043b0   152 FUNC    GLOBAL DEFAULT     1 _RNvXsj_NtCsg6my6oZXuye_4core3fmtcNtB5_5Debug3fmt
+   114: 0000000000403e70  1237 FUNC    GLOBAL DEFAULT     1 _RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral
+   115: 0000000000404580  1464 FUNC    GLOBAL DEFAULT     1 _RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars
+
+exit=0

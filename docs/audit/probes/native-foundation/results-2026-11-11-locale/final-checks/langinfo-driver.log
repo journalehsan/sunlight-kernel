@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_langinfo.py --out target/phase11/final-checks/langinfo
+12 native C/C++ ABI checks, unique export and unchanged historical link: PASS
+
+exit=0

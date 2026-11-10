@@ -40,7 +40,8 @@ symbols = run('native-exports', ['llvm-nm', '-g', '--defined-only',
     ROOT / 'target/native-c/sysroot/lib/libsunlight_native_c.a'])
 counts = Counter(line.split()[-1] for line in symbols.decode().splitlines() if len(line.split()) == 3)
 assert counts['nl_langinfo'] == 1
-for unsupported in ('nl_langinfo_l', 'setlocale', 'newlocale', 'uselocale'):
+assert counts['setlocale'] == 1
+for unsupported in ('nl_langinfo_l', 'newlocale', 'uselocale'):
     assert not counts[unsupported], unsupported
 source = ROOT / 'docs/audit/probes/langinfo.c'
 (out / 'historical-source.log').write_text(hashlib.sha256(source.read_bytes()).hexdigest() + '\n' + source.read_text())

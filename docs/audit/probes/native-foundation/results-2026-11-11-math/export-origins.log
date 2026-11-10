@@ -1,0 +1,12 @@
+$ llvm-nm -A -g --defined-only target/native-c/sysroot/lib/libsunlight_native_c.a
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.0.rcgu.o: 0000000000000000 W exp
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.0.rcgu.o: 0000000000000000 W fabsf
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.1.rcgu.o: 0000000000000000 W sqrt
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.2.rcgu.o: 0000000000000000 W sin
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.4.rcgu.o: 0000000000000000 W cos
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.4.rcgu.o: 0000000000000000 W log
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.4.rcgu.o: 0000000000000000 W sqrtf
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.5.rcgu.o: 0000000000000000 W pow
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.5.rcgu.o: 0000000000000000 W tan
+target/native-c/sysroot/lib/libsunlight_native_c.a:compiler_builtins-210e7c74755ee8b6.compiler_builtins.2198cee569058006-cgu.7.rcgu.o: 0000000000000000 W fabs
+exit=0

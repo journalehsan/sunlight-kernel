@@ -1,0 +1,3 @@
+Restored tools/native-c/Cargo.lock from pre-refresh copy.
+Restored initially clean native-std-probe and fd-description lockfiles from HEAD.
+Incoming root workspace lockfile and version edits retained.

@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/native-c-final-2cpu/pthread.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/pthread.c:2:10: fatal error: 'pthread.h' file not found
+    2 | #include <pthread.h>
+      |          ^~~~~~~~~~~
+1 error generated.
+
+exit=1

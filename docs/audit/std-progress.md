@@ -2470,3 +2470,226 @@ An initial tracked/untracked file-hash inventory is retained under FP triage;
 the only edits to incoming source files add the new module and suite case, and
 the original audit text remains an exact prefix. No commit, reset or workspace
 cleanup was performed.
+
+### Phase 11 — sessiond FP gate and environment-aware C locale bridge (2026-11-11)
+
+Fresh evidence is retained below
+`docs/audit/probes/native-foundation/results-2026-11-11-locale/`.
+All guest runs use **2048 MiB RAM**. The existing hardware ISO
+`target/sunlightos.iso` was preserved; the FP script rebuilt its dedicated
+`target/native-std-foundation.iso` from current services and kernel.
+
+First, `bash tools/test_native_std_foundation.sh` completes successfully with
+the existing 240-second per-guest timeout. Both **2 and 4 CPUs PASS**:
+`[NATIVE-STD] x87/XMM/MXCSR preemption isolation OK` and
+`[NATIVE-STD] native PDF parser and vector raster OK` appear in each serial
+log. Sessiond starts, TTY login succeeds, and the native probe launches and
+exits 0. This verifies that the previous setup-level shell-launch failure is
+resolved on this rebuilt system. Earlier failed observations remain historical;
+this fresh gate establishes actual FP acceptance on both CPU counts.
+See `fp-foundation.log` and `native-std-fp-{2,4}cpu.log`.
+
+`sunlight-libc/src/locale.rs` and public `locale.h` now supply the native C ABI
+`char *setlocale(int, const char *)`, with six standard categories plus LC_ALL.
+The behavior is intentionally bounded and truthful:
+
+- Initial state is C. NULL queries without selecting the environment. Explicit
+  C and POSIX select canonical C; C.UTF-8 and en_US.UTF-8 are supported names.
+  Unknown names, invalid categories and malformed composites return NULL and
+  leave the previous selection unchanged, including all categories in LC_ALL.
+- Empty-string selection consults nonempty process LC_ALL, the requested
+  category, then LANG. If none supplies that category, `/etc/locale.conf` is
+  consulted in the same order, finally falling back to C. Environment values
+  take priority over file defaults. Unsupported selected values fail rather
+  than silently becoming C or an arbitrary locale.
+- The Arch-style file parser handles comments, blank lines, whitespace,
+  single/double quoted values and last assignment wins. It performs no shell
+  expansion. Missing config means no defaults; other open/read failures,
+  invalid UTF-8 and files of 4096 bytes or larger fail when config is needed.
+  Environment-complete selections skip the file. File descriptors are closed.
+  `/etc/locale.gen` is a generation recipe, not an activation database: it
+  cannot manufacture runtime support for additional names.
+- State is process-local and synchronized. Single-category queries return
+  static names. A mixed LC_ALL query returns a bounded, restorable composite;
+  callers must serialize its use with later setlocale calls. Returned storage
+  is not writable by the caller. Passing the previous composite back works.
+- `nl_langinfo(CODESET)` follows active LC_CTYPE: US-ASCII for C and UTF-8 for
+  either supported UTF-8 selection. No catalogs, collation, locale objects,
+  wide conversions, or arbitrary locale databases are advertised. Selecting
+  UTF-8 metadata does not itself implement those APIs.
+
+The unchanged historical `locale.c` remains SHA-256
+`c2634d0aa8bcc412d9af689358b058bba1e9075c215cb4f051ebf465ae00f140`.
+It calls only `setlocale(LC_ALL,"C")`; it does not detect the environment.
+Its final native ELF is byte-identical on 2 and 4 CPUs, SHA-256
+`46c010c2c4b0fd8af32228624b2ee01733e07ae9b4c7ff2c9fd5c9a1cfd6363f`,
+and exits 0 with empty output and clean reaping on both. The separate
+`locale-environment` fixture receives real startup `LANG=en_US.UTF-8`, selects
+with `""`, queries en_US.UTF-8 and checks CODESET=UTF-8. A separate config-only
+run provides no locale environment and reads `LANG="en_US.UTF-8"` from the
+actual guest `/etc/locale.conf`, checking the same selection and codeset.
+Both fixtures pass on both CPU counts. The opt-in native-C harness now accepts
+per-case environments and single-ELF `--env` / `--locale-conf` fixtures; it still
+uses production startup, exec, descriptor I/O and resource reaping.
+
+Final acceptance is in `final-{2,4}cpu/`: **46/46 executable cases PASS** per
+CPU count, with no guest failures. The eight remaining historical cases are
+BUILD_FAIL / guest NOT_RUN. Every executed case passes the existing output,
+reap, physical-frame, page-table and descriptor checks. Config-only executions
+are in `final-config-{2,4}cpu/`. Counts advance to original 18 APIs **10 PASS /
+8 BUILD_FAIL**, historical 21 including foundation probes **13 PASS / 0 FAIL /
+8 NOT_RUN**, and full native-C suites **46 PASS** per CPU count (previous 43,
+plus historical locale and two focused locale cases).
+
+Final checks in `final-checks/` pass: locale and langinfo C/C++ ABI matrices
+(12 each), unique canonical exports and unchanged historical links; directory,
+dlfcn, stdio, random, time, mmap and descriptor runners; libc **119 host tests**
+with the same two native-syscall-only tests filtered; ELF **11**, stdio **19**,
+VFS **90** and descriptor **17** host tests. Native Rust-std overlay and kernel
+checks pass; production overlay futex contract tests **3 PASS** (`futex.log`).
+Formatting, Python compilation and whitespace checks pass. The last formatting
+pass reordered module registration, so final guest and regression checks were
+repeated after that change. Earlier attempts remain retained separately,
+including initial fixture compilation failures from unavailable host C++
+`type_traits` and unsupported fixture `strcpy`/`strstr` calls; the corrected
+fixtures use freestanding type checks and existing native string primitives.
+The first runtime build refused stale native-C lock metadata under --locked;
+an offline refresh allowed validation. Incidental standalone lock changes are
+restored after checking; incoming workspace version changes are preserved.
+
+**Next verified blocker:** unchanged `math.c`, SHA-256
+`50b362bbac72b4a16a66aed9ece0a13e43bb8c87786d99ec57cf08a23c28feff`,
+fails because public **`math.h` is missing**. Unlike the preceding locale
+blocker, diagnostic-only declarations compile an object requiring `sqrt` and
+`fabs`, and **both already resolve in the native archive**: diagnostic link
+succeeds. No missing math runtime symbol is established. These declarations
+remain outside the installed headers, the diagnostic ELF was not promoted or
+executed, and historical math remains BUILD_FAIL. Exact commands and results
+are in `math-next-blocker/`.
+
+Phase 8 hardware user-write-fault and forced stale-TLB/cross-core tests remain
+**NOT_RUN**. No hardware acceptance is inferred from QEMU. No commit, reset or
+workspace cleanup was performed.
+
+Reproduce after the incoming workspace version bump by refreshing standalone
+native-C metadata offline, then running the focused and guest gates:
+
+```sh
+bash tools/build_native_std.sh build --manifest-path tools/native-c/Cargo.toml --target-dir target/native-c --release --offline
+python3 tools/native-c/tests/run_locale.py --out <new-abi-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-4cpu-dir>
+```
+
+
+### Phase 12 — native C math header and existing IEEE value exports (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-math/`.
+The Phase 11 record and all five `math-next-blocker/` diagnostic logs were
+read before implementation. The historical `math.c` remains unchanged,
+SHA-256 `50b362bbac72b4a16a66aed9ece0a13e43bb8c87786d99ec57cf08a23c28feff`.
+Its complete requirement inventory is `<math.h>`, `double sqrt(double)` and
+`double fabs(double)`, using volatile double 2.0 and tolerance 1e-12. It requires
+**no float/type macros, infinity/NaN constants, exception macros, rounding
+macros, trigonometric, logarithmic or exponential functions**. `_GNU_SOURCE`
+does not introduce additional requirements. Fresh object inspection confirms
+exactly the undefined symbols `sqrt` and `fabs`; the final installed-header
+compile/link succeeds without diagnostic-only declarations.
+
+`sunlight-libc/include/math.h` now declares `sqrt`, `sqrtf`, `fabs`, `fabsf`
+with C linkage in C++, matching the native SysV double/float ABI. It provides
+`float_t` (float) and `double_t` (double) for the native SSE2 evaluation model
+`FLT_EVAL_METHOD == 0`, and compiler constant expressions `HUGE_VAL`,
+`HUGE_VALF`, `HUGE_VALL`, `INFINITY` and `NAN`. The first three have double,
+float and long-double types respectively; INFINITY and NAN are float.
+Float/double infinity uses IEEE binary32/binary64 exponent-all-ones with zero
+fraction; NAN is a quiet NaN from `__builtin_nanf("")`. HUGE_VALL uses the
+compiler's native x86 extended long-double infinity, not a binary64 bit cast.
+No long-double arithmetic function is declared.
+
+No runtime implementation, dependency, syscall or alternate libm was added.
+The four canonical definitions already occur exactly once in the native
+archive, as weak C exports from compiler_builtins. Source inspection and native
+ELF disassembly confirm SSE2 `sqrtsd`/`sqrtss` and sign-bit-clearing absolute
+value implementations. `implementation-inspection.log` and `export-origins.log`
+retain provenance. Existing archive symbols such as sin/cos/tan/log/exp/pow
+are incidental compiler support: their C contracts were not validated here
+and they are not advertised by this header. Complete libm, long-double
+functions, classification macros, fenv.h/FE_* exception or rounding interfaces,
+math_errhandling, errno domain/range reporting and nondefault rounding modes
+remain outside this supported surface. No full C99/Annex F conformance is claimed.
+
+The separate `tools/native-c/tests/math.c` fixture calls all four exports
+through volatile function pointers. It checks exact nearest square roots of
+2, exact roots, preservation of both square-root zero signs, positive infinity,
+NaN results for negative finite/infinite inputs, NaN propagation, smallest
+subnormal and largest finite roots in both precisions, fabs negative-zero to
+positive-zero, finite magnitudes, negative infinities, and sign clearing with
+NaN payload/subnormal preservation. Tests use independent expected bit patterns
+and run with the production startup FP environment. `run_math.py` also compiles
+an optimized `-fno-builtin` fixture and retains its disassembly; this standalone
+artifact is not executed on the Linux host. Guest suite fixtures use the normal
+native C driver. Neither fixture replaces or changes the historical probe.
+
+| Test domain | Phase 12 result | Evidence |
+| --- | --- | --- |
+| Native math C11/C++17 ABI | **12 PASS**, base/POSIX/GNU, both include orders; exact signatures, typedefs, constant types, evaluation model | `abi-verified/` |
+| Canonical math exports and historical native ELF | **PASS**, one definition each, no unresolved symbols/interpreter/dynamic loader | `abi-verified/` |
+| Historical math, 2 CPUs / 2048 MiB | **PASS**, exit 0, empty stdout/stderr, clean reaping | `final-2cpu/` |
+| Historical math, 4 CPUs / 2048 MiB | **PASS**, exit 0, empty stdout/stderr, clean reaping | `final-4cpu/` |
+| Focused IEEE value fixture | **PASS on 2 and 4 CPUs**, exit 0, empty streams | both final guest directories |
+| Full native-C suite | **48/48 PASS per CPU count**, no guest failures | both final guest directories |
+| Production libc host tests | **119 PASS**, two native-credential-only tests filtered | `final-checks/dirent/libc.log` |
+| Host ELF / stdio / VFS / descriptor tests | **11 / 19 / 90 / 17 PASS** | `final-checks/` |
+| Locale, langinfo, directory, dlfcn, stdio, random, time, mmap, unistd regression runners | **all PASS**, including their ABI/export and historical link checks | `final-checks/summary.json` |
+| Kernel check / native Rust-std overlay check | **PASS / PASS** | `final-checks/{kernel,native-std}-driver.log` |
+| Production Rust-std futex contract | **3 PASS** | `futex.log` |
+| Full FP foundation gate, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, x87/XMM/MXCSR isolation and PDF parser/vector raster | `fp-foundation.log`, `native-std-fp-{2,4}cpu.log` |
+
+Both guest runs execute byte-identical historical math ELF SHA-256
+`0907e846994315f7c0a1487bbc4961222c5aaa98fecc5bd787bdb127af27dd9e`.
+All 48 executed cases pass status, stream and actual Reaped-state checks:
+zero PID-owned frames, descriptors and stack, and restored file-data,
+private-frame, page-table and VFS-handle snapshots. Both `faults.log` files
+are empty: no unexpected faults, exceptions, unknown or unhandled syscalls.
+Counts advance from 46 to **48 PASS** per native-C suite (historical math plus
+one separate contract); original 18 APIs are **11 PASS / 7 BUILD_FAIL**, and
+historical 21 including foundation probes are **14 PASS / 0 FAIL / 7 NOT_RUN**.
+Build failures remain guest NOT_RUN, not observed runtime failures.
+
+**Next verified blocker:** unchanged `poll_select.c`, SHA-256
+`4c3148d0a7c2c7823c5d17dcc1c3d793215305f05e4fa3c14a1523c1b297dc9d`,
+fails at missing **`<poll.h>`**. It also includes `<sys/select.h>` and calls
+`poll(0,0,0)` and `select(0,0,0,0,&t)` with zero timeval. Fresh strict compilation
+is retained in `next-blocker.log`; no linking or guest runtime acceptance is
+inferred for those APIs. The seven remaining historical build failures are
+poll_select, pthread, signal, socket, termios, wchar and cpp-runtime.
+
+Phase 8 hardware user-write-fault and forced stale-TLB/cross-core tests remain
+**NOT_RUN**. QEMU math and FP results do not establish hardware acceptance.
+
+Reproduce in fresh output directories:
+
+```sh
+bash tools/build_native_std.sh build --manifest-path tools/native-c/Cargo.toml --target-dir target/native-c --release --offline
+python3 tools/native-c/tests/run_math.py --out <new-math-abi-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-4cpu-dir>
+bash tools/test_native_std_foundation.sh
+```
+
+The full FP gate rebuilt its dedicated `target/native-std-foundation.iso` and
+completed under the existing 240-second per-guest deadline on both CPU counts.
+Both serial logs show successful account login, shell launch, both NATIVE-STD
+acceptance markers and native-fp-probe exit 0. The hardware ISO and user disk
+were not used for these guest runs.
+
+Initial math ABI setup hit the same incoming standalone `--locked` metadata
+mismatch documented in Phase 11 (`abi/build-runtime.log`). Refreshing native-C
+metadata offline allowed the canonical runtime build. All incidental standalone
+lockfile edits from validation were restored to their incoming contents after
+checks. `incoming.json` and `preservation.json` verify that incoming tracked
+edits are intact: audit/README text is preserved as a prefix, and the only new
+change to the incoming guest runner is the math fixture registration. Historical
+probe sources remain untouched. Python compilation and `git diff --check` pass.
+No commit, reset or workspace cleanup was performed.

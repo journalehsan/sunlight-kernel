@@ -195,3 +195,40 @@ retained; native directory removal is outside this phase. Run
 filtered), twelve C/C++ ABI checks and unchanged historical native ELF validation.
 Guest acceptance remains separate. Phase 8 hardware write-fault and forced
 stale-TLB tests remain NOT_RUN.
+
+The native `<locale.h>` subset supplies `setlocale` for the six standard
+categories and `LC_ALL`. Startup remains `C`; NULL queries, `""` selects process
+`LC_ALL` / category / `LANG`, then `/etc/locale.conf` in the same order, then
+`C`. Empty variables are ignored. System config supports blank lines, comments,
+quoted values and last-assignment wins; it is parsed as data, without shell
+expansion. Explicit `C`, `POSIX` (canonicalized to `C`), `C.UTF-8` and
+`en_US.UTF-8` are supported. Unknown names and invalid categories fail without
+mutation. Mixed-category `LC_ALL` queries return a restorable composite string.
+Returned storage must not be modified; subsequent calls can invalidate the
+composite buffer, and callers must serialize its use.
+
+`nl_langinfo(CODESET)` follows active `LC_CTYPE`: `US-ASCII` for C, `UTF-8`
+for the supported UTF-8 selections. This is a locale selection/metadata bridge;
+it adds no collation, catalogs, wide conversion or locale-object APIs.
+`/etc/locale.gen` is a generation recipe, not an activation file: listing a
+name there does not install an implementation. Config reads are bounded below
+4096 bytes, fail on unreadable/oversized/invalid UTF-8 files when needed, and
+are skipped when the environment supplies every requested category.
+
+Run `tests/run_locale.py --out <new-dir>` for C/C++ ABI and historical-link
+checks, and `guest.py --suite --cpus 2 --out <new-dir>` (repeat with 4) for
+execution. Guest runs always allocate 2048 MiB. Single-ELF fixtures accept
+`--env KEY=VALUE` and `--locale-conf <file>` to exercise production startup
+and file fallback independently.
+
+Phase 12 adds a bounded native `<math.h>` for the existing compiler-builtins
+exports `sqrt`, `sqrtf`, `fabs`, and `fabsf`, with SysV double/float signatures.
+It supplies native SSE2 `float_t`/`double_t`, infinity constants and quiet `NAN`.
+It advertises no errno/fenv, long-double functions, or complete C math library.
+Other compiler-builtins symbols may exist in the archive but are outside this
+header's supported API. The historical probe remains unchanged; `math-contract`
+separately checks export calls, exact square-root rounding at default startup,
+signed zeros, infinities, NaNs, subnormals and extreme finite inputs.
+Run `tests/run_math.py --out <new-dir>` for twelve C/C++ ABI checks, canonical
+export checks and historical ELF validation; run the full guest suite on both
+2 and 4 CPUs for execution and cleanup acceptance.

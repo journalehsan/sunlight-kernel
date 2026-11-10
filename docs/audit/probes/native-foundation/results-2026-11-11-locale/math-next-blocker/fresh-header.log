@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/math.c -o target/phase11/math-next-blocker/math.elf
+docs/audit/probes/math.c:2:10: fatal error: 'math.h' file not found
+    2 | #include <math.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

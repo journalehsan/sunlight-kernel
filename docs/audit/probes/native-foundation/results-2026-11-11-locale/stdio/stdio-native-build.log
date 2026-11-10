@@ -1,0 +1,6 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -fno-builtin tools/native-c/tests/stdio.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase11/stdio/stdio-native
+stdout:
+
+stderr:
+
+exit=0

@@ -1,0 +1,3 @@
+$ bash tools/test_native_std_foundation.sh
+exit=0
+2 and 4 CPUs; 2048 MiB per guest; existing 240-second timeout.

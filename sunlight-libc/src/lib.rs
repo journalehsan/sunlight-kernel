@@ -43,11 +43,14 @@ pub mod fd;
 /// Shared file-manager copy/move operations (requires an application allocator).
 #[cfg(any(test, feature = "file-ops"))]
 pub mod file_ops;
-/// Codeset query for the native C runtime's fixed initial C locale.
+/// Codeset query for the active native C LC_CTYPE selection.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod langinfo;
 /// Launch-trace argv parsing for GUI apps.
 pub mod launch_trace;
+/// Process locale selection and environment/configuration bridge.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod locale;
 /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
 pub mod mem;
 /// POSIX memory mapping wrappers (`mmap`, `munmap`).
