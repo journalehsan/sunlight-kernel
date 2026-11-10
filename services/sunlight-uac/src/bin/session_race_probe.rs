@@ -387,6 +387,10 @@ pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
     #[cfg(feature = "fastlane-benchmark-test")]
     if case == "FL-M60R" { channel_fixture::shared_ring::fair_benchmark::supervisor(); }
     #[cfg(feature = "fastlane-doorbell-test")]
+    if case == "FL-LC-R4" { channel_fixture::lifecycle_trace(true); }
+    #[cfg(feature = "fastlane-doorbell-test")]
+    if case == "FL-LC-R2" { channel_fixture::lifecycle_trace(false); }
+    #[cfg(feature = "fastlane-doorbell-test")]
     if case == "FL-M4" { channel_fixture::doorbell::supervisor(); }
     #[cfg(feature = "fastlane-repeated-test")]
     if case == "FL-M51" { channel_fixture::repeated::supervisor(); }

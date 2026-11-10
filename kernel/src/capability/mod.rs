@@ -1,3 +1,7 @@
+#[cfg(any(test, all(debug_assertions, feature = "fastlane_lifecycle_trace")))]
+mod lifecycle_receipts;
+#[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+pub(crate) mod lifecycle_trace;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_repeated_test")))]
 mod channel_repeated;
 #[cfg(any(test, all(debug_assertions, feature = "fastlane_channel_test")))]

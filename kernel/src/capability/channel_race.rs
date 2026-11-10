@@ -7,6 +7,45 @@ use super::{
 };
 use crate::sched::{Scheduler, SCHEDULER};
 use core::sync::atomic::{AtomicU64, Ordering::*};
+// Release observations are captured by the guard owner, independently of
+// finished(). This module exists only in explicitly enabled debug fixtures.
+static RELEASES: [[AtomicU64; 5]; 2] = [const { [const { AtomicU64::new(0) }; 5] }; 2];
+pub(crate) struct ObservedGuard {
+    guard: Option<spin::MutexGuard<'static, Scheduler>>,
+    actor: u64,
+    generation: u64,
+    cpu: u64,
+}
+impl ObservedGuard {
+    fn new(guard: spin::MutexGuard<'static, Scheduler>, actor: u64) -> Self {
+        Self { guard: Some(guard), actor, generation: GENERATION.load(Acquire),
+            cpu: crate::sched::current_cpu_id() as u64 }
+    }
+}
+impl core::ops::Deref for ObservedGuard {
+    type Target = Scheduler;
+    fn deref(&self) -> &Scheduler { self.guard.as_ref().unwrap() }
+}
+impl core::ops::DerefMut for ObservedGuard {
+    fn deref_mut(&mut self) -> &mut Scheduler { self.guard.as_mut().unwrap() }
+}
+impl Drop for ObservedGuard {
+    fn drop(&mut self) {
+        // The real spin guard performs its Release unlock first. No allocation,
+        // logging, blocking acquisition or handshake belongs in this path.
+        drop(self.guard.take());
+        if self.actor != 0 {
+            let receipt = &RELEASES[(self.actor - 1) as usize];
+            receipt[1].store(self.generation, Relaxed);
+            receipt[2].store(core::ptr::addr_of!(SCHEDULER) as u64, Relaxed);
+            receipt[3].store(self.cpu, Relaxed);
+            receipt[4].store(self.actor, Relaxed);
+            // This is an immediate post-unlock observation, not the mutex's
+            // internal unlock instruction. Consumers must retain that limit.
+            receipt[0].store(SEQ.fetch_add(1, Relaxed), Release);
+        }
+    }
+}
 static MODE: AtomicU64 = AtomicU64::new(0);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 static P: [AtomicU64; 3] = [const { AtomicU64::new(0) }; 3];
@@ -25,6 +64,7 @@ static OBSERVATIONS: AtomicU64 = AtomicU64::new(0);
 // first pre/post-yield RSP, checked resumes. Printed only after both actors end.
 static WAITS: [[AtomicU64; 17]; 8] = [const { [const { AtomicU64::new(0) }; 17] }; 8];
 static READY: AtomicU64 = AtomicU64::new(0);
+static READY_CPU: AtomicU64 = AtomicU64::new(u64::MAX);
 static SEQ: AtomicU64 = AtomicU64::new(1);
 fn event(event: &str, actor: u64, who: RecipientIdentity, result: u64) -> u64 {
     let seq = SEQ.fetch_add(1, Relaxed);
@@ -224,7 +264,7 @@ pub(super) fn arm(
     who: RecipientIdentity,
     mode: u64,
 ) -> Result<(), Error> {
-    if !(1..=4).contains(&mode) || FINISHED.load(Acquire) != 3 {
+    if !((1..=4).contains(&mode) || (cfg!(feature = "fastlane_lifecycle_trace") && mode == 6)) || FINISHED.load(Acquire) != 3 {
         return Err(Error::Denied);
     }
     let row = b
@@ -241,6 +281,7 @@ pub(super) fn arm(
     HELD.store(0, Relaxed);
     CONTENDED.store(0, Relaxed);
     READY.store(0, Relaxed);
+    READY_CPU.store(u64::MAX, Relaxed);
     OBSERVATIONS.store(0, Relaxed);
     PROBE.store(0, Relaxed);
     WINNER_RETURN.store(0, Relaxed);
@@ -248,6 +289,9 @@ pub(super) fn arm(
         for field in trace {
             field.store(0, Relaxed);
         }
+    }
+    for receipt in &RELEASES {
+        for field in receipt { field.store(0, Relaxed); }
     }
     FINISHED.store(0, Relaxed);
     for cpu in &CPUS {
@@ -257,7 +301,7 @@ pub(super) fn arm(
     event("armed", 0, who, 0);
     Ok(())
 }
-pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Scheduler>, u64) {
+pub(crate) fn acquire(op: u64, generation: u64) -> (ObservedGuard, u64) {
     let sched = SCHEDULER.lock();
     let who = RecipientIdentity::of(sched.current_process());
     let mode = MODE.load(Acquire);
@@ -269,7 +313,7 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
         } else {
             0
         }
-    } else if op == 3 && who == load(&P) {
+    } else if (op == 3 || (mode == 6 && op == 21 && generation == load(&C).pid as u64)) && who == load(&P) {
         1
     } else if op == 20 && who == load(&C) {
         2
@@ -279,9 +323,9 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
     if actor == 0
         || mode == 0
         || FINISHED.load(Acquire) & actor != 0
-        || op != 20 && generation != GENERATION.load(Relaxed)
+        || !matches!(op,20|21) && generation != GENERATION.load(Relaxed)
     {
-        return (sched, 0);
+        return (ObservedGuard::new(sched, 0), 0);
     }
     event(
         if op == 20 { "exit-syscall" } else { "entered" },
@@ -328,32 +372,50 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
     );
     let winner = if mode % 2 == 1 { 1 } else { 2 };
     if actor == winner {
-        // The contender is independently running before lock acquisition.
-        // No peer wait occurs while the lifecycle lock is owned.
+        // READY now certifies an IF-clear remote continuation which will not
+        // yield, take a blocking lock, or log before publishing its probe.
         wait(actor, "ready", who, stack_top, || READY.load(Acquire) != 0);
         let sched = SCHEDULER.lock();
         assert_eq!(RecipientIdentity::of(sched.current_process()), who);
+        assert!(!x86_64::instructions::interrupts::are_enabled());
+        assert_ne!(READY_CPU.load(Acquire), crate::sched::current_cpu_id() as u64);
+        let held_seq = event("lock-held", actor, who, 0);
         HELD.store(actor, Release);
-        event("lock-held", actor, who, 0);
-        (sched, actor)
+        // The remote path below depends only on these atomics and a failing
+        // nonblocking probe. In particular it does NOT call prepare_yield,
+        // which takes SCHEDULER. The finite budget is a failure bound, never
+        // evidence of contention. No terminal operation runs on timeout.
+        boundary_wait(|| CONTENDED.load(Acquire) != 0);
+        assert!(PROBE.load(Acquire) > held_seq);
+        (ObservedGuard::new(sched, actor), actor)
     } else {
+        assert!(!x86_64::instructions::interrupts::are_enabled());
+        READY_CPU.store(crate::sched::current_cpu_id() as u64, Relaxed);
         READY.store(actor, Release);
-        wait(actor, "held", who, stack_top, || HELD.load(Acquire) != 0);
+        // Once READY is visible, this CPU cannot migrate or enter scheduling
+        // before the witness. Do not add serial output or a yielding wait.
+        boundary_wait(|| HELD.load(Acquire) != 0);
         let contended = SCHEDULER.try_lock().is_none();
-        let seq = event(
+        let seq = SEQ.fetch_add(1, Relaxed);
+        if contended {
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            if mode == 6 {
+                super::lifecycle_trace::process(load(&C),super::lifecycle_trace::RETIREMENT_CONTENDER_PROBED,1,0,seq);
+            }
+            PROBE.store(seq, Release);
+            CONTENDED.store(actor, Release);
+        }
+        // Acknowledge before taking the serial lock: the holder's progress
+        // must not depend on serial output from this CPU.
+        crate::serial_println!("[FL-RACE] seq={} event={} generation={} mode={} actor={} pid={} inc={} vm={} result=0 cpu={}",
+            seq,
             if contended {
                 "lock-contended"
             } else {
                 "lock-missed"
             },
-            actor,
-            who,
-            0,
-        );
-        if contended {
-            PROBE.store(seq, Release);
-            CONTENDED.store(actor, Release);
-        }
+            GENERATION.load(Relaxed), mode, actor, who.pid, who.incarnation,
+            who.vm_generation, crate::sched::current_cpu_id());
         // Ordinary serialization decides the result; the winner never waits
         // for this observation. A missed contention window fails explicitly.
         let mut acquired = None;
@@ -366,8 +428,21 @@ pub(crate) fn acquire(op: u64, generation: u64) -> (spin::MutexGuard<'static, Sc
             RecipientIdentity::of(acquired.as_ref().unwrap().current_process()),
             who
         );
-        (acquired.unwrap(), actor)
+        (ObservedGuard::new(acquired.unwrap(), actor), actor)
     }
+}
+
+// Both uses have a finite instruction budget even if the timekeeper CPU is
+// unavailable. No scheduler, allocator, serial, broker, IRQ or wakeup dependency.
+// Budget exhaustion is COORDINATION_BLOCKED, not a contention witness.
+fn boundary_wait(mut ready: impl FnMut() -> bool) {
+    for _ in 0..100_000_000 {
+        if ready() {
+            return;
+        }
+        core::hint::spin_loop();
+    }
+    panic!("COORDINATION_BLOCKED: remote M1 acquisition boundary unavailable");
 }
 pub(crate) fn finished(actor: u64, result: u64) {
     if actor == 0 {
@@ -430,6 +505,11 @@ pub(super) fn observed(
             .any(|row| row.handle == h && row.creator == who)
     {
         return Err(Error::Denied);
+    }
+    for receipt in &RELEASES {
+        let seq = receipt[0].load(Acquire);
+        let v: [u64; 4] = core::array::from_fn(|i| receipt[i + 1].load(Relaxed));
+        crate::serial_println!("[FL-UNLOCK] seq={} generation={} lock={} cpu={} actor={} boundary=post_guard_drop", seq, v[0], v[1], v[2], v[3]);
     }
     Ok(qualified())
 }

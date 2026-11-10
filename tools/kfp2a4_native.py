@@ -31,7 +31,7 @@ def sources():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--suite', required=True, choices=('m2', 'm4', 'm5'))
+    parser.add_argument('--suite', required=True, choices=('m2', 'm4', 'm5', 'r2', 'r4'))
     parser.add_argument('--evidence-root', type=Path, default=ROOT / '.kfp-2a4-evidence/native')
     parser.add_argument('--timeout', type=int, default=180)
     parser.add_argument('--cpus', type=int, choices=(1, 2, 4, 12), default=2)
@@ -43,7 +43,8 @@ def main():
     result = {'suite': args.suite, 'status': 'RUNNING', 'stage': 'build',
               'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'source_sha256': sources(), 'checks': [], 'native': [],
-              'production_fastlane': 'DISABLED', 'cpus': args.cpus}
+              'production_fastlane': 'DISABLED', 'cpus': args.cpus,
+              'build_id': out.name, 'test_generation': int(datetime.now(timezone.utc).timestamp()*1000000)}
 
     def save():
         (out / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -81,10 +82,12 @@ def main():
             cmd = ['cargo', 'build', '--locked', '--offline', '--release', '-p', package]
             if package == 'sunlight-uac':
                 service_feature = {'m2': 'fastlane-mapping-test',
-                                   'm4': 'fastlane-doorbell-test',
+                                   'm4': 'fastlane-doorbell-test', 'r2': 'fastlane-doorbell-test', 'r4': 'fastlane-doorbell-test',
                                    'm5': 'fastlane-transfer-test'}[args.suite]
                 cmd += ['--features', 'kfp-security-runner,' + service_feature]
             extra = {'RUSTFLAGS': SERVICE_FLAGS, 'CARGO_INCREMENTAL': '0', 'KFP2A4_SUITE': args.suite}
+            if args.suite in ('r2','r4'):
+                extra.update(KFP2A6C_BUILD_ID=result['build_id'], KFP2A6C_GENERATION=str(result['test_generation']))
             if package == 'sunlight-sessiond':
                 extra['SUNLIGHT_INJECT_PHASE'] = 'm53r41'
             check(package, cmd, extra)
@@ -93,14 +96,15 @@ def main():
         archive.mkdir()
         for name in names:
             shutil.copy2(ROOT / 'target/x86_64-unknown-none/release' / name, archive / name)
-        fixture_feature = {'m2': 'fastlane_mapping_test', 'm4': 'fastlane_doorbell_test',
+        fixture_feature = {'m2': 'fastlane_mapping_test', 'm4': 'fastlane_doorbell_test', 'r2': 'fastlane_lifecycle_trace', 'r4': 'fastlane_lifecycle_trace',
                            'm5': 'fastlane_transfer_test'}[args.suite]
         if args.kernel_fixture:
             fixture_feature = 'fastlane_' + args.kernel_fixture + '_test'
         features = 'key_inject,session_launch_test,' + fixture_feature
         check('kernel', ['cargo', 'build', '--locked', '--offline', '-p', 'sunlight-kernel',
                          '--bin', 'sunlight-kernel', '--features', features],
-              {'SUNLIGHT_INJECT_PHASE': 'desktop_login', 'CARGO_INCREMENTAL': '0'})
+              {'SUNLIGHT_INJECT_PHASE': 'desktop_login', 'CARGO_INCREMENTAL': '0',
+               **({'KFP2A6C_BUILD_ID': result['build_id']} if args.suite in ('r2','r4') else {})})
         elf, iso = out / 'kernel.elf', out / 'fixture.iso'
         check('strip', ['objcopy', '--strip-debug', str(ROOT / 'target/x86_64-unknown-none/debug/sunlight-kernel'), str(elf)])
         scratch = out / 'iso-work'
@@ -119,6 +123,15 @@ def main():
                 offset = raw.find(data)
                 assert offset >= 0, ('payload not embedded', name)
                 result['embedded'][name] = {'sha256': digest(archive / name), 'offset': offset, 'bytes': len(data)}
+        if args.suite in ('r2','r4'):
+            # This ELF supplies /bin/session-launch-probe, /tmp/session-race-probe
+            # and /bin/session-racer. uac_service is the authority daemon.
+            for name in ['session-race-probe']:
+                payload=(archive/name).read_bytes()
+                assert result['build_id'].encode() in payload, ('missing lifecycle build ID',name)
+                assert str(result['test_generation']).encode() in payload, ('missing lifecycle generation',name)
+                assert ('FL-LC-'+args.suite.upper()).encode() in payload, ('missing lifecycle fixture',name)
+            result['lifecycle_payload_verified']=True
         result['image'] = {'elf': str(elf), 'iso': str(iso), 'elf_sha256': digest(elf),
                            'iso_sha256': digest(iso), 'features': features}
         integrity()
@@ -163,7 +176,10 @@ def main():
         result['stage'] = 'security-tests' if '[FL-' in raw else 'shell-prerequisite'
         failure = None if reason == 'complete' else {'type': reason, 'message': 'native driver incomplete'}
         identity = dict(source=True, elf=True, iso=True, services=True)
-        if args.suite == 'm2':
+        if args.suite in ('r2','r4'):
+            from kfp2a6c_assess import assess
+            row['assessment']=assess(raw,result['test_generation'],result['build_id'],operation=2 if args.suite=='r4' else 1)
+        elif args.suite == 'm2':
             from fastlane_mapping_validate import assess
             from fastlane_m3_validate import assess_words
             row['assessment'] = assess(raw, args.cpus, identity, failure)

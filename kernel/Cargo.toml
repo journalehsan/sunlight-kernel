@@ -769,6 +769,7 @@ fastlane_m31_retention_test = ["fastlane_census_trace"]
 fastlane_m31_prerepair = ["fastlane_m31_retention_test"]
 fastlane_channel_test = ["native_session_race_test"]
 # M5.1R2 bounded controls; never enabled by the normal fixture or production.
+fastlane_lifecycle_trace = ["fastlane_doorbell_test"]
 fastlane_coord_diag = ["fastlane_channel_test"]
 fastlane_coord_spin = ["fastlane_coord_diag"]
 fastlane_coord_same_cpu = ["fastlane_coord_diag"]

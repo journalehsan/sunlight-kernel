@@ -112,6 +112,12 @@ impl Scheduler {
                     .map(|s| (s, 0)),
                 // Exact-creator, non-authorizing coordination receipt.
                 23 => super::channel_race::observed(&broker, h, who).map(|v| (u64::from(v), 0)),
+                #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+                60 => super::lifecycle_trace::arm(&broker,h,who,arg,1).map(|_|(0,0)),
+                #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+                63 => super::lifecycle_trace::arm(&broker,h,who,arg,2).map(|_|(0,0)),
+                #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+                61 => super::lifecycle_trace::dump(&broker,h,who).map(|v|(v,0)),
                 7 => super::channel_race::arm(&broker, h, who, arg).map(|_| (0, 0)),
                 // Read-only bounded global inventory, available only in fixture images.
                 6 => Ok((

@@ -396,17 +396,31 @@ fn send_signal_generation(
     crate::capability::session_h4::signal_attempt(pid, signal as u64, generation);
     #[cfg(not(all(debug_assertions, feature = "fastlane_doorbell_test")))]
     let mut sched = crate::sched::SCHEDULER.lock();
-    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    let (mut sched, lifecycle_signal_actor) = crate::capability::channel_race::acquire(
+        if matches!(signal, Signal::SIGKILL) {21} else {0}, pid as u64);
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    let bell_signal_actor = 0;
+    #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test", not(feature = "fastlane_lifecycle_trace")))]
     let (mut sched, bell_signal_actor) = crate::capability::bell_race::acquire(
         if matches!(signal, Signal::SIGCONT) {98} else {0}, pid as u64);
     let Some(idx) = sched.process_index_by_pid(pid) else {
         return Err(());
     };
 
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    if lifecycle_signal_actor != 0 {
+        crate::capability::lifecycle_trace::retirement_contender(&sched.processes[idx],crate::capability::lifecycle_trace::RETIREMENT_CONTENDER_ACQUIRED);
+    }
     if matches!(
         sched.processes[idx].state,
         crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
     ) {
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        if lifecycle_signal_actor != 0 {
+            crate::capability::lifecycle_trace::retirement_contender(&sched.processes[idx],crate::capability::lifecycle_trace::RETIREMENT_CONTENDER_REJECTED);
+            crate::capability::channel_race::finished(lifecycle_signal_actor,1);
+        }
         return Err(());
     }
 
@@ -13091,6 +13105,21 @@ fn sys_svga_set_mode(frame: &mut SyscallFrame) -> u64 {
 /// Private debug-only authority experiment. Ordinary images have no selector.
 #[cfg(all(debug_assertions, feature = "fastlane_channel_test"))]
 fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
+    // Read-only receipt readiness: avoid introducing repeated sweeps merely to
+    // wait for the native pin-gated cleanup completion boundary.
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    if frame.rdi == 62 {
+        let sched = crate::sched::SCHEDULER.lock();
+        let who = crate::capability::delivery::RecipientIdentity::of(sched.current_process());
+        let broker = crate::capability::CAP_BROKER.lock();
+        let h = crate::capability::channel::Handle {
+            token: crate::capability::CapabilityToken(frame.rsi), generation: frame.rdx,
+        };
+        return match crate::capability::lifecycle_trace::ready(&broker, h, who) {
+            Ok(value) => { frame.rsi = value; 0 }
+            Err(error) => error as u64,
+        };
+    }
     use crate::capability::{channel::Handle, CapabilityToken};
     #[cfg(all(debug_assertions, feature = "restricted_remote_test"))]
     if matches!(frame.rdi, 42 | 43) {

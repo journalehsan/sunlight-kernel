@@ -54,7 +54,21 @@ impl Scheduler {
         caps.channels.expire(self.global_tick);
         let mut wakes = [None; super::channel::LIMIT];
         for (i, row) in caps.channels.rows.iter_mut().enumerate() {
-            row.retire_unavailable(|who, issuer| self.channel_participant_terminal(who, issuer));
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            let meta=(row.handle.generation,row.session,row.state as u64);
+            row.retire_unavailable(|who, issuer| {
+                #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+                {
+                    let exact=self.processes.iter().find(|p| RecipientIdentity::of(p)==who);
+                    super::lifecycle_trace::participant(meta,who,super::lifecycle_trace::SWEEP_OBSERVED,
+                        u64::from(exact.is_some_and(|p|p.is_exiting())),u64::from(meta.2!=4));
+                }
+                let reason=self.channel_participant_terminal(who,issuer);
+                #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+                super::lifecycle_trace::participant(meta,who,super::lifecycle_trace::IDENTITY_VALIDATED,
+                    reason.map_or(0,|r|r as u64),u64::from(self.processes.iter().any(|p|RecipientIdentity::of(p)==who)));
+                reason
+            });
             wakes[i] = row.bell_pending.take().map(|who| (row.handle, who));
         }
         drop(caps);

@@ -491,3 +491,71 @@ pub fn supervisor() -> ! {
     note("complete", 0);
     sunlight_libc::exit(0)
 }
+
+/// Dedicated R2/R4 payload: ordinary Account authorization, native self-exit,
+/// real sweep and waitpid/reaping. No lifecycle decision is made here.
+#[cfg(feature = "fastlane-doorbell-test")]
+pub fn lifecycle_trace(r4: bool) -> ! {
+    let build = option_env!("KFP2A6C_BUILD_ID").expect("dedicated lifecycle build ID");
+    let generation_text = option_env!("KFP2A6C_GENERATION").expect("test generation");
+    let generation: u64 = generation_text.parse().unwrap();
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[KFP-R2-PAYLOAD] build={} generation={}",
+        build,
+        generation_text
+    ));
+    assert_eq!(unsafe { sunlight_libc::sys::syscall1(0xf1c3, 0) }, 0);
+    let ep = sunlight_ipc::endpoint_create();
+    let public = sunlight_ipc::endpoint_bind(ep.0);
+    let actor = spawn(ep, public);
+    let h = pair(actor);
+    if !r4 {
+        assert_eq!(fl::operate(3, h, 0), Ok(0));
+    }
+    expect(actor, 3, h, 1, 0);
+    assert_eq!(fl::operate(if r4 { 63 } else { 60 }, h, generation), Ok(0));
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[KFP-R2] event=armed build={} generation={} channel={} creator={} exiting={}",
+        build,
+        generation,
+        h.generation,
+        sunlight_libc::getpid(),
+        actor.pid
+    ));
+    if r4 {
+        assert_eq!(fl::operate(7, h, 6), Ok(0));
+        expect(actor, RACE_EXIT, h, 0, 0);
+        assert!(
+            sunlight_libc::kill(actor.pid, 9).is_err(),
+            "native already-finished guard must reject losing SIGKILL"
+        );
+        assert_eq!(super::reap(actor.pid), 0, "self-exit result preserved");
+    } else {
+        stop(actor);
+    }
+    let status = fl::operate(5, h, 0).expect("exact creator status");
+    assert_eq!(status & 255, 4);
+    assert_eq!((status >> 8) & 255, 2, "ProcessRetired preserved");
+    // Authorized competing reason through the real revocation path; first wins.
+    assert_eq!(fl::operate(4, h, 0), Ok(0));
+    let start = sunlight_ipc::monotonic_millis();
+    while fl::operate(62, h, 0).expect("authenticated cleanup readiness") == 0 {
+        assert!(
+            sunlight_ipc::monotonic_millis().saturating_sub(start) < 5000,
+            "native cleanup receipt missing"
+        );
+        sunlight_ipc::process_yield();
+    }
+    assert!(fl::operate(61, h, 0).expect("source-bound lifecycle receipts") > 0);
+    assert!(sunlight_ipc::endpoint_destroy(ep));
+    if r4 {
+        sunlight_ipc::debug_log("[KFP-R4] event=native-close-versus-sigkill-complete");
+    }
+    sunlight_ipc::debug_log(&alloc::format!(
+        "[KFP-R2] event=complete build={} generation={} channel={}",
+        build,
+        generation,
+        h.generation
+    ));
+    sunlight_libc::exit(0)
+}

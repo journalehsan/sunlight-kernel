@@ -118,6 +118,8 @@ impl Channel {
         self.state != State::Retired
     }
     pub(super) fn retire(&mut self, reason: Terminal) {
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        super::lifecycle_trace::row(self, super::lifecycle_trace::TERMINAL_CANDIDATE, reason as u64, self.terminal.map_or(0, |t| t as u64));
         if self.live() {
             #[cfg(all(debug_assertions, feature = "fastlane_contract_test"))]
             self.contract_retire(reason);
@@ -132,8 +134,15 @@ impl Channel {
                 self.bell_pending = bell.revoke(super::channel_doorbell::key(self.handle), super::channel_doorbell::identity(self.creator)).expect("bound channel owner").wake;
             }
             self.terminal = Some(reason);
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            super::lifecycle_trace::row(self, super::lifecycle_trace::TERMINAL_COMMITTED, reason as u64, 0);
             self.consumer_receipt = None;
             self.state = State::Retired;
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            super::lifecycle_trace::row(self, super::lifecycle_trace::RETIREMENT_COMMITTED, reason as u64, 0);
+        } else {
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            super::lifecycle_trace::row(self, super::lifecycle_trace::TERMINAL_REJECTED, reason as u64, self.terminal.map_or(0, |t| t as u64));
         }
     }
     fn member(&self, who: RecipientIdentity) -> bool {
@@ -173,6 +182,8 @@ impl ChannelTable {
         })
     }
     pub fn retire_process(&mut self, pid: usize) {
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        super::lifecycle_trace::retire_process(pid);
         #[cfg(any(test, all(debug_assertions, feature = "fastlane_contract_test")))]
         self.policies.retire_process(pid);
         for row in &mut self.rows {

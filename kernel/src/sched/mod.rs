@@ -2740,6 +2740,10 @@ impl Scheduler {
     }
 
     fn close_owned_ipc_endpoints(&mut self, pid: usize) {
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        let lifecycle_who = self.processes.iter().find(|p|p.pid==pid).map(crate::capability::delivery::RecipientIdentity::of);
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        if let Some(who)=lifecycle_who {crate::capability::lifecycle_trace::process(who,crate::capability::lifecycle_trace::ENDPOINT_CLOSE_ENTERED,0,0,0);}
         #[cfg(feature = "native_session_race_test")]
         if let Some(p) = self.processes.iter().find(|p| p.pid == pid && (p.trusted_auth_broker || (cfg!(feature = "native_session_h4_test") && p.name_str() == "sunlight-sessiond"))) {
             crate::capability::session_h3_trace::record(10, pid as u64, p.foreground.incarnation, 1, p.address_space.identity().generation, 0);
@@ -2748,6 +2752,10 @@ impl Scheduler {
             let mut caps = crate::capability::CAP_BROKER.lock();
             let endpoint_ids = caps.endpoints_owned_by(pid);
             caps.revoke_endpoints_owned_by(pid);
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            if let Some(who)=lifecycle_who { for id in &endpoint_ids {
+                crate::capability::lifecycle_trace::process(who,crate::capability::lifecycle_trace::ENDPOINT_BROKER_REMOVED,0,0,*id as u64);
+            }}
             endpoint_ids
         };
         for endpoint_id in endpoint_ids {
@@ -2759,6 +2767,8 @@ impl Scheduler {
                 crate::capability::session_h3_trace::record(11, pid as u64, p.foreground.incarnation, endpoint_id as u64, 1, calls.len() as u64);
             }
             crate::ipc::finish_peer_closed_calls(endpoint_id, calls, self);
+            #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+            if let Some(who)=lifecycle_who {crate::capability::lifecycle_trace::process(who,crate::capability::lifecycle_trace::ENDPOINT_CLOSED,0,0,endpoint_id as u64);}
         }
     }
 
@@ -2897,6 +2907,10 @@ impl Scheduler {
 
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
         crate::memory::quota_lifecycle::process(&self.processes[idx], "reap-ready");
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        let lifecycle_who = crate::capability::delivery::RecipientIdentity::of(&self.processes[idx]);
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::CLEANUP_STARTED,0,self.processes[idx].state as u64,u64::from(self.processes[idx].exit_cleanup_pending));
         let leaked_fds = self.processes[idx].fd_table.take_all_handles();
         #[cfg(feature = "authenticated_cancel_test")]
         crate::capability::exec_retirement_trace::caller_reap(&self.processes[idx], "reap-ready", self.processes[idx].address_space.identity().generation);
@@ -3080,6 +3094,8 @@ impl Scheduler {
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::CLEANUP_COMPLETED,0,self.processes[idx].state as u64,u64::from(self.processes[idx].exit_cleanup_pending) | (u64::from(self.processes[idx].kernel_stack.is_some())<<1));
         #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
         crate::memory::quota_lifecycle::process_vm(&self.processes[idx], "reaped", reaped_generation);
         #[cfg(all(debug_assertions, feature = "thread_migration_test"))]
@@ -4458,6 +4474,10 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         return idle_top;
     }
 
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    let lifecycle_who = crate::capability::delivery::RecipientIdentity::of(&sched.processes[cur]);
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_GUARD_ACQUIRED,0,sched.processes[cur].state as u64,0);
     sched.pin_outgoing_stack(cpu_id, cur);
     #[cfg(feature = "scheduler_b_test")]
     if code == 0 {
@@ -4467,6 +4487,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         sched.processes[cur].state,
         crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
     ) {
+        #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+        crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_NESTED_REJECTED,0,sched.processes[cur].state as u64,0);
         // A remote kill can win just before this task's self-exit. Preserve
         // that terminal result, but still retire actual execution exactly once
         // before halting on the idle stack (not at a later timer callback).
@@ -4528,6 +4550,8 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     }
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     crate::memory::quota_lifecycle::process(&sched.processes[cur], "termination-committed");
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_STARTED,code as u64,sched.processes[cur].state as u64,u64::from(sched.processes[cur].exit_cleanup_pending));
     #[cfg(all(debug_assertions, feature = "fastlane_mapping_test"))]
     sched.fastlane_mapping_sweep();
     #[cfg(feature = "authenticated_completion_exit_test")]
@@ -4573,6 +4597,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     crate::capability::channel_race::finished(channel_exit_actor, 0);
     #[cfg(all(debug_assertions, feature = "fastlane_doorbell_test"))]
     crate::capability::bell_race::finished(bell_exit_actor, 0);
+    #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
+    {
+        drop(sched);
+        crate::capability::lifecycle_trace::process(lifecycle_who,crate::capability::lifecycle_trace::EXIT_GUARD_RELEASED,0,0,0);
+    }
     idle_top
 }
 

@@ -32,7 +32,7 @@ fn command(case: &str) {
 
 pub fn run() -> ! {
     let suite = option_env!("KFP2A4_SUITE").expect("explicit security suite required");
-    assert!(matches!(suite, "m2" | "m4" | "m5"));
+    assert!(matches!(suite, "m2" | "m4" | "m5" | "r2" | "r4"));
     sunlight_ipc::debug_log(&alloc::format!(
         "[KFP-SEC] event=controller-ready suite={} pid={}",
         suite,
@@ -43,6 +43,8 @@ pub fn run() -> ! {
             command("FL");
             command("FL-M2");
         }
+        "r4" => command("FL-LC-R4"),
+        "r2" => command("FL-LC-R2"),
         "m4" => command("FL-M4"),
         "m5" => command("FL-M5"),
         _ => unreachable!(),
