@@ -823,6 +823,11 @@ impl<D: BlockDevice> Vfs<D> {
         })
     }
 
+    /// Number of backend opens still owned by VFS clients, across all mounts.
+    pub fn open_handle_count(&self) -> usize {
+        self.mounts.iter().flatten().map(|mount| mount.open_handles).sum()
+    }
+
     /// A narrow runtime namespace keeps root, boot, state and service state
     /// policy outside the authority conveyed by an ordinary mount request.
     pub fn validate_runtime_target(&mut self, path: &str, source: u64) -> Result<(), FsError> {

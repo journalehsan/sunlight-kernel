@@ -1657,6 +1657,8 @@ login_timeout_seconds = 30
         mode::FILE_755,
         b"#!/sunlight/sunlight-net-utils\n",
     ),
+    RamEntry::file("/bin/mktemp", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
+    RamEntry::file("/sunlight-utils/mktemp", 0, 0, mode::FILE_755, b"#!/sunlight/sunlight-utils\n"),
     // Backward-compat applet paths kept for existing docs/scripts.
     RamEntry::dir("/sunlight-utils", 0, 0, mode::DIR_755),
     RamEntry::dir("/sunlight-net-utils", 0, 0, mode::DIR_755),

@@ -29,6 +29,9 @@ fn copy_path(bytes: &[u8]) -> Result<Vec<u8>, FsError> {
 /// A dynamic entry created at runtime (e.g., by mkdir or write).
 struct DynamicEntry {
     path: Vec<u8>,
+    // An unlinked inode remains charged and addressable by existing handles.
+    // Its directory name is absent; the last close removes the record.
+    linked: bool,
     data: TmpfsInode,
     uid: u32,
     gid: u32,
@@ -46,7 +49,7 @@ impl TmpfsDir {
     pub fn lookup(&self, path: &str) -> Option<u64> {
         self.entries
             .iter()
-            .find(|e| e.path == path.as_bytes())
+            .find(|e| e.linked && e.path == path.as_bytes())
             .map(|e| e.data.id)
     }
 }
@@ -102,7 +105,7 @@ impl Tmpfs {
             .dynamic
             .entries
             .iter()
-            .position(|e| core::str::from_utf8(&e.path).ok() == Some(path))
+            .position(|e| e.linked && core::str::from_utf8(&e.path).ok() == Some(path))
         {
             return Ok(self.entries.len() + idx);
         }
@@ -248,6 +251,7 @@ impl Tmpfs {
         let data = TmpfsInode::new(id, mode, limits)?;
         self.dynamic.entries.push(DynamicEntry {
             path,
+            linked: true,
             data,
             uid,
             gid,
@@ -326,7 +330,27 @@ impl Tmpfs {
         if idx < self.entries.len() {
             Some(self.entries[idx].path)
         } else {
-            core::str::from_utf8(&self.dynamic.entries[idx - self.entries.len()].path).ok()
+            let entry = &self.dynamic.entries[idx - self.entries.len()];
+            if entry.linked {
+                core::str::from_utf8(&entry.path).ok()
+            } else {
+                None
+            }
+        }
+    }
+
+    fn remove_dynamic_entry(&mut self, entry_idx: usize) {
+        debug_assert!(entry_idx >= self.entries.len());
+        debug_assert!(!self
+            .handles
+            .iter()
+            .flatten()
+            .any(|h| h.entry_idx == entry_idx));
+        self.dynamic.entries.remove(entry_idx - self.entries.len());
+        for open in self.handles.iter_mut().flatten() {
+            if open.entry_idx != usize::MAX && open.entry_idx > entry_idx {
+                open.entry_idx -= 1;
+            }
         }
     }
 
@@ -484,6 +508,7 @@ impl FileSystem for Tmpfs {
     }
 
     fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
+        let entry_idx = self.handle_entry_idx(handle)?;
         let (idx, generation) = split_local_handle(handle)?;
         let slot = self.handles.get_mut(idx).ok_or(FsError::BadHandle)?;
         if slot
@@ -494,6 +519,17 @@ impl FileSystem for Tmpfs {
             return Err(FsError::BadHandle);
         }
         *slot = None;
+        if entry_idx != usize::MAX
+            && entry_idx >= self.entries.len()
+            && !self.dynamic.entries[entry_idx - self.entries.len()].linked
+            && !self
+                .handles
+                .iter()
+                .flatten()
+                .any(|h| h.entry_idx == entry_idx)
+        {
+            self.remove_dynamic_entry(entry_idx);
+        }
         Ok(())
     }
 
@@ -527,7 +563,15 @@ impl FileSystem for Tmpfs {
             uid: self.entry_uid(idx),
             gid: self.entry_gid(idx),
             mode: self.entry_mode(idx),
-            nlinks: if ft == FileType::Directory { 2 } else { 1 },
+            nlinks: if ft == FileType::Directory {
+                2
+            } else if idx >= self.entries.len()
+                && !self.dynamic.entries[idx - self.entries.len()].linked
+            {
+                0
+            } else {
+                1
+            },
         })
     }
 
@@ -593,19 +637,17 @@ impl FileSystem for Tmpfs {
         if entry_idx == usize::MAX || entry_idx < self.entries.len() {
             return Err(FsError::ReadOnlyFilesystem);
         }
-        let dyn_idx = entry_idx - self.entries.len();
-        // Invalidate any open handles pointing at this entry or at entries
-        // that shifted past it.
-        for slot in self.handles.iter_mut() {
-            if let Some(open) = slot.as_mut() {
-                if open.entry_idx == entry_idx {
-                    *slot = None;
-                } else if open.entry_idx > entry_idx {
-                    open.entry_idx -= 1;
-                }
-            }
+        let entry = &mut self.dynamic.entries[entry_idx - self.entries.len()];
+        entry.linked = false;
+        entry.path.clear();
+        if !self
+            .handles
+            .iter()
+            .flatten()
+            .any(|h| h.entry_idx == entry_idx)
+        {
+            self.remove_dynamic_entry(entry_idx);
         }
-        self.dynamic.entries.remove(dyn_idx);
         Ok(())
     }
 

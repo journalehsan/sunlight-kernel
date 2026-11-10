@@ -6,6 +6,92 @@ fn bounded(bytes: usize, inodes: usize) -> Tmpfs {
 }
 
 #[test]
+fn open_unlink_retains_inode_until_last_close() {
+    let baseline = testutil::live_frames();
+    let mut fs = bounded(2 * PAGE_SIZE, 4);
+    let first = fs
+        .create_file_exclusive("/temp", 1000, 1000, 0o600)
+        .unwrap();
+    let second = fs.open("/temp").unwrap();
+    fs.unlink("/temp").unwrap();
+    assert_eq!(fs.open("/temp"), Err(FsError::NotFound));
+    assert_eq!(fs.lookup("/temp"), Err(FsError::NotFound));
+    assert_eq!(fs.stat("/temp"), Err(FsError::NotFound));
+    let mut count = 0;
+    fs.read_dir("/", &mut |_| {
+        count += 1;
+        true
+    })
+    .unwrap();
+    assert_eq!(count, 0);
+    assert_eq!(fs.write(first, 0, b"retained"), Ok(8));
+    let mut out = [0; 8];
+    assert_eq!(fs.read(second, 0, &mut out), Ok(8));
+    assert_eq!(&out, b"retained");
+    assert_eq!(fs.fstat_handle(first).unwrap().nlinks, 0);
+    assert_eq!(fs.usage(), (PAGE_SIZE, 2));
+    assert_eq!(testutil::live_frames(), baseline + 1);
+    // Recreating the name must produce an independent inode.
+    let replacement = fs
+        .create_file_exclusive("/temp", 1000, 1000, 0o600)
+        .unwrap();
+    fs.write(replacement, 0, b"new").unwrap();
+    fs.close(first).unwrap();
+    assert_eq!(fs.usage(), (2 * PAGE_SIZE, 3));
+    assert_eq!(fs.read(second, 0, &mut out), Ok(8));
+    assert_eq!(&out, b"retained");
+    fs.close(second).unwrap();
+    assert_eq!(fs.usage(), (PAGE_SIZE, 2));
+    assert_eq!(testutil::live_frames(), baseline + 1);
+    assert_eq!(fs.read(second, 0, &mut out), Err(FsError::BadHandle));
+    assert_eq!(fs.read(replacement, 0, &mut out), Ok(3));
+    assert_eq!(&out[..3], b"new");
+    fs.unlink("/temp").unwrap();
+    fs.close(replacement).unwrap();
+    assert_eq!(fs.usage(), (0, 1));
+    assert_eq!(testutil::live_frames(), baseline);
+}
+
+#[test]
+fn unlinked_quota_and_compaction_preserve_other_handles() {
+    let baseline = testutil::live_frames();
+    let mut fs = bounded(3 * PAGE_SIZE, 4);
+    let root = fs.open("/").unwrap();
+    let a = fs.create_file_exclusive("/a", 0, 0, 0o600).unwrap();
+    let b = fs.create_file_exclusive("/b", 0, 0, 0o600).unwrap();
+    let c = fs.create_file_exclusive("/c", 0, 0, 0o600).unwrap();
+    fs.unlink("/a").unwrap();
+    fs.unlink("/b").unwrap();
+    assert_eq!(
+        fs.create_file_exclusive("/d", 0, 0, 0o600),
+        Err(FsError::NoSpace)
+    );
+    fs.write(a, 0, b"a").unwrap();
+    fs.write(b, 0, b"b").unwrap();
+    fs.close(b).unwrap();
+    assert_eq!(
+        fs.fstat_handle(root).unwrap().file_type,
+        FileType::Directory
+    );
+    assert_eq!(fs.write(c, 0, b"c"), Ok(1));
+    let d = fs.create_file_exclusive("/d", 0, 0, 0o600).unwrap();
+    assert_eq!(fs.write(d, 0, b"d"), Ok(1));
+    assert_eq!(fs.usage(), (3 * PAGE_SIZE, 4));
+    fs.close(a).unwrap();
+    assert_eq!(
+        fs.fstat_handle(root).unwrap().file_type,
+        FileType::Directory
+    );
+    let mut out = [0];
+    assert_eq!(fs.read(c, 0, &mut out), Ok(1));
+    assert_eq!(&out, b"c");
+    assert_eq!(fs.read(d, 0, &mut out), Ok(1));
+    assert_eq!(&out, b"d");
+    drop(fs);
+    assert_eq!(testutil::live_frames(), baseline);
+}
+
+#[test]
 fn page_quota_failure_preserves_content_and_reclaims_on_truncate() {
     let mut fs = bounded(PAGE_SIZE, 3);
     let h = fs.create_file("/a", 0, 0, mode::FILE_644).unwrap();
@@ -21,6 +107,8 @@ fn page_quota_failure_preserves_content_and_reclaims_on_truncate() {
     assert_eq!(fs.usage(), (0, 2));
     fs.write(h, PAGE_SIZE - 1, b"z").unwrap();
     fs.unlink("/a").unwrap();
+    assert_eq!(fs.usage(), (PAGE_SIZE, 2));
+    fs.close(h).unwrap();
     assert_eq!(fs.usage(), (0, 1));
 }
 

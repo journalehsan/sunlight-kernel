@@ -90,3 +90,5 @@ edition = "2021"
 [workspace]
 [dependencies]
 spin = "0.9"
+sunlight-fs = { path = "../../../sunlight-fs" }
+sunlight-mm = { path = "../../../sunlight-mm", features = ["testutil"] }
