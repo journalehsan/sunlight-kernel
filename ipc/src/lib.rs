@@ -6,6 +6,7 @@ pub mod fastlane_operation;
 mod fastlane_operation_ipc;
 
 pub mod cpu_accounting;
+pub mod telemetry;
 pub mod display_metrics;
 pub mod display_modes;
 pub mod measurement_clock;

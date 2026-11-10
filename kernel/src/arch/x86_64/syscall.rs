@@ -3670,6 +3670,9 @@ extern "C" fn sys_exec(frame: &mut SyscallFrame) -> u64 {
         true,
     ) {
         Ok(entry) => {
+            // Cache the installed command for this PID, not its old launcher.
+            // Do this only after success: a failed exec retains its identity.
+            process.name = ::sunlight_ipc::telemetry::executable_name(path_str.as_bytes());
             let cloexec_handles = process.fd_table.take_cloexec_handles();
             for handle in cloexec_handles.into_iter().flatten() {
                 close_file_handle(handle);

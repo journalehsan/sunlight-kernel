@@ -8,8 +8,8 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use sunlight_ipc::cpu_accounting::CpuCounters;
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
-/// Version 4: append CPU counters and task group IDs; preserve v3 offsets.
-pub const TELEMETRY_VERSION: u32 = 4;
+/// Version 5: append process memory/identity metrics and sampling cost; preserve v4 offsets.
+pub const TELEMETRY_VERSION: u32 = 5;
 pub const MAX_PROCESSES: usize = 64;
 pub const MAX_CORES: usize = 64;
 
@@ -84,6 +84,8 @@ pub struct TelemetryPage {
     /// Version 4: independently measured CPU capacity, idle, and activity.
     pub cpu_counters: [CpuCounters; MAX_CORES],
     pub task_groups: [u32; MAX_PROCESSES],
+    pub process_metrics: [sunlight_ipc::telemetry::ProcessMetricsV5; MAX_PROCESSES],
+    pub sample_cost_ns: u64,
 }
 
 const ZERO_PROC: ProcessStat = ProcessStat {
@@ -117,6 +119,8 @@ static NET_TX_BYTES: AtomicU64 = AtomicU64::new(0);
 pub static mut TELEMETRY: TelemetryPage = TelemetryPage {
     cpu_counters: [CpuCounters::ZERO; MAX_CORES],
     task_groups: [0; MAX_PROCESSES],
+    process_metrics: [sunlight_ipc::telemetry::ProcessMetricsV5::ZERO; MAX_PROCESSES],
+    sample_cost_ns: 0,
     magic: TELEMETRY_MAGIC,
     version: TELEMETRY_VERSION,
     sequence: 0,
@@ -196,6 +200,8 @@ pub fn record_net_tx(bytes: u64) {
 
 #[derive(Clone)]
 pub struct ProcSnap {
+    pub app_id: [u8; 32],
+    pub uptime_secs: u32,
     pub tgid: u32,
     pub pid: u32,
     pub ppid: u32,
@@ -291,10 +297,19 @@ pub fn capture_telemetry_snapshot(
             // is the same pool (honest: no process-name attribution required).
             active_user_task_count = active_user_task_count.saturating_add(1);
         }
-        if proc_state == 7 || procs.len() >= MAX_PROCESSES {
+        if proc_state == 7 || is_finished_or_cleanup {
             continue;
         }
         procs.push(ProcSnap {
+            app_id: proc
+                .env
+                .get("SUNLIGHT_APP_ID")
+                .map(|s| sunlight_ipc::telemetry::executable_name(s.as_bytes()))
+                .filter(|id| *id != [0; 32])
+                .unwrap_or(proc.name),
+            uptime_secs: uptime_secs
+                .saturating_sub(proc.telemetry_started_secs)
+                .min(u32::MAX as u64) as u32,
             tgid: proc.linux_tgid.unwrap_or(proc.pid) as u32,
             pid: proc.pid as u32,
             ppid: proc.ppid as u32,
@@ -410,6 +425,59 @@ pub fn capture_telemetry_snapshot(
 /// Write snapshot to TELEMETRY page. Performs expensive page walks here (outside lock).
 /// SAFETY: caller must ensure no concurrent writers; typically called from timer after releasing SCHEDULER lock.
 pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
+    commit_telemetry_snapshot_inner(snap, None);
+}
+
+unsafe fn commit_telemetry_snapshot_inner(
+    snap: &TelemetrySnapshot,
+    held_pmm: Option<&PhysicalMemoryManager>,
+) {
+    let started = snap.sample_time_ns;
+    // One walk per address space. Aliases and Linux threads never multiply
+    // physical ownership. Include tasks beyond the visible row limit.
+    let mut spaces = alloc::collections::BTreeMap::new();
+    let mut owners = alloc::collections::BTreeMap::<u64, (usize, bool)>::new();
+    if let Some(resp) = crate::HHDM_REQ.response() {
+        let hhdm = x86_64::VirtAddr::new(resp.offset);
+        for ps in &snap.procs {
+            if ps.is_finished_or_cleanup || spaces.contains_key(&ps.pml4_phys.as_u64()) {
+                continue;
+            }
+            let aspace = crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
+            let mut frames = Vec::new();
+            let mapped = aspace.visit_user_frames(hhdm, |frame| frames.push(frame));
+            frames.sort_unstable();
+            frames.dedup();
+            let mut groups: Vec<u32> = snap
+                .procs
+                .iter()
+                .filter(|p| !p.is_finished_or_cleanup && p.pml4_phys == ps.pml4_phys)
+                .map(|p| p.tgid)
+                .collect();
+            groups.sort_unstable();
+            groups.dedup();
+            for frame in &frames {
+                owners.entry(*frame).or_default().0 += groups.len();
+            }
+            spaces.insert(ps.pml4_phys.as_u64(), (mapped, frames));
+        }
+    }
+    let mut shared_user_private = 0u64;
+    {
+        let guard = if held_pmm.is_none() {
+            Some(crate::PMM.lock())
+        } else {
+            None
+        };
+        let pmm = held_pmm.unwrap_or_else(|| guard.as_ref().unwrap());
+        for (frame, (count, user_private)) in &mut owners {
+            *user_private = pmm.class_of(x86_64::PhysAddr::new(*frame))
+                == Some(crate::memory::accounting::PhysicalMemoryClass::UserPrivate);
+            if *user_private && *count > 1 {
+                shared_user_private += 4096;
+            }
+        }
+    }
     let seq = TELEMETRY.sequence.wrapping_add(1);
     TELEMETRY.sequence = seq;
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
@@ -431,8 +499,6 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
     TELEMETRY.cpu_count = snap.cpu_count.max(1);
     TELEMETRY.gpu_count = snap.gpu_count;
 
-    let hhdm_opt = crate::HHDM_REQ.response();
-
     let mut count = 0usize;
     for ps in &snap.procs {
         if count >= MAX_PROCESSES {
@@ -446,25 +512,17 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
         entry.cpu_ticks = ps.cpu_ticks;
         TELEMETRY.task_groups[count] = ps.tgid;
 
-        entry.mem_pages = if ps.is_finished_or_cleanup {
-            0
-        } else {
-            match hhdm_opt {
-                Some(resp) => {
-                    let hhdm = x86_64::VirtAddr::new(resp.offset);
-                    let aspace =
-                        crate::process::address_space::AddressSpace::from_pml4(ps.pml4_phys);
-                    if aspace.is_reclaimed() {
-                        0
-                    } else {
-                        // Walk happens here, outside SCHEDULER lock.
-                        // Counts present mapped user pages (shared counted per map).
-                        unsafe { aspace.count_user_pages(hhdm) }.min(u32::MAX as usize) as u32
-                    }
-                }
-                None => 0,
-            }
-        };
+        let mut metrics = sunlight_ipc::telemetry::ProcessMetricsV5::ZERO;
+        metrics.app_id = ps.app_id;
+        metrics.threads = 1;
+        metrics.uptime_secs = ps.uptime_secs;
+        if let Some((mapped, frames)) = spaces.get(&ps.pml4_phys.as_u64()) {
+            metrics.mapped_bytes = (*mapped as u64).saturating_mul(4096);
+            (metrics.private_bytes, metrics.shared_bytes) =
+                sunlight_ipc::telemetry::unique_memory_bytes(frames, |frame| owners[&frame]);
+        }
+        entry.mem_pages = (metrics.mapped_bytes / 4096).min(u32::MAX as u64) as u32;
+        TELEMETRY.process_metrics[count] = metrics;
         entry._pad = [0; 3];
         entry.generation = ps.generation;
 
@@ -473,6 +531,7 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
 
     for i in count..MAX_PROCESSES {
         TELEMETRY.procs[i] = ZERO_PROC;
+        TELEMETRY.process_metrics[i] = sunlight_ipc::telemetry::ProcessMetricsV5::ZERO;
     }
     TELEMETRY.proc_count = count as u32;
 
@@ -498,8 +557,17 @@ pub unsafe fn commit_telemetry_snapshot(snap: &TelemetrySnapshot) {
     TELEMETRY.mem_acct_version =
         crate::memory::accounting::PhysicalMemoryAccountingSnapshotV1::VERSION;
     TELEMETRY.mem_acct = snap.mem_acct;
+    // UserPrivate frames shared through fork/COW move between disjoint buckets.
+    // Preserve the sum and therefore the allocator conservation equation.
+    let transfer = shared_user_private.min(TELEMETRY.mem_acct.task_private_unique_bytes);
+    TELEMETRY.mem_acct.task_private_unique_bytes -= transfer;
+    TELEMETRY.mem_acct.shared_memory_unique_bytes = TELEMETRY
+        .mem_acct
+        .shared_memory_unique_bytes
+        .saturating_add(transfer);
 
     core::sync::atomic::fence(core::sync::atomic::Ordering::Release);
+    TELEMETRY.sample_cost_ns = crate::arch::x86_64::interrupts::now_ns().saturating_sub(started);
     TELEMETRY.sequence = seq.wrapping_add(1);
 }
 
@@ -511,7 +579,7 @@ pub unsafe fn update_telemetry(
     _tick_count: u64,
 ) {
     let snap = capture_telemetry_snapshot(sched, pmm);
-    commit_telemetry_snapshot(&snap);
+    commit_telemetry_snapshot_inner(&snap, Some(pmm));
 }
 
 /// Opt-in, bounded five-second reports, outside scheduler/PMM locks. Rates
@@ -663,9 +731,11 @@ pub fn report_cpu_sample(snap: &TelemetrySnapshot) {
                 );
             }
             REPORTS += 1;
-            crate::serial_println!("[WAKE-AUDIT] cost at_ns={} report_ns={}",
+            crate::serial_println!(
+                "[WAKE-AUDIT] cost at_ns={} report_ns={}",
                 snap.sample_time_ns,
-                crate::arch::x86_64::interrupts::now_ns().saturating_sub(report_started));
+                crate::arch::x86_64::interrupts::now_ns().saturating_sub(report_started)
+            );
         }
         LAST = snap.sample_time_ns;
     }

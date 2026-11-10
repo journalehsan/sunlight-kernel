@@ -1978,38 +1978,53 @@ impl AddressSpace {
     /// SAFETY: `hhdm_offset` must be the correct HHDM base and the page tables
     /// must be quiescent (caller holds the scheduler lock).
     pub unsafe fn count_user_pages(&self, hhdm_offset: VirtAddr) -> usize {
+        self.visit_user_frames(hhdm_offset, |_| {})
+    }
+
+    pub unsafe fn visit_user_frames(
+        &self,
+        hhdm_offset: VirtAddr,
+        mut visit: impl FnMut(u64),
+    ) -> usize {
         if self.is_reclaimed() {
             return 0;
         }
         let mut total = 0usize;
         let pml4 = &*((hhdm_offset + self.pml4_phys.as_u64()).as_ptr::<PageTable>());
         for p4e in pml4.iter().take(256) {
-            if p4e.is_unused() {
+            if !p4e.flags().contains(PageTableFlags::PRESENT) {
                 continue;
             }
             let p3 = &*((hhdm_offset + p4e.addr().as_u64()).as_ptr::<PageTable>());
             for p3e in p3.iter() {
-                if p3e.is_unused() {
+                if !p3e.flags().contains(PageTableFlags::PRESENT) {
                     continue;
                 }
                 // 1 GiB huge page
                 if p3e.flags().contains(PageTableFlags::HUGE_PAGE) {
+                    for i in 0..512 * 512 {
+                        visit(p3e.addr().as_u64() + i * 4096);
+                    }
                     total += 512 * 512;
                     continue;
                 }
                 let p2 = &*((hhdm_offset + p3e.addr().as_u64()).as_ptr::<PageTable>());
                 for p2e in p2.iter() {
-                    if p2e.is_unused() {
+                    if !p2e.flags().contains(PageTableFlags::PRESENT) {
                         continue;
                     }
                     // 2 MiB huge page
                     if p2e.flags().contains(PageTableFlags::HUGE_PAGE) {
+                        for i in 0..512 {
+                            visit(p2e.addr().as_u64() + i * 4096);
+                        }
                         total += 512;
                         continue;
                     }
                     let p1 = &*((hhdm_offset + p2e.addr().as_u64()).as_ptr::<PageTable>());
                     for p1e in p1.iter() {
                         if !p1e.is_unused() && p1e.flags().contains(PageTableFlags::PRESENT) {
+                            visit(p1e.addr().as_u64());
                             total += 1;
                         }
                     }

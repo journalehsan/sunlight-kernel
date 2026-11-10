@@ -4,7 +4,7 @@ mod topology;
 pub use sunlight_ipc::cpu_accounting::CpuCounters;
 pub use topology::{CoreSnapshot, CpuTelemetry, TaskStats, TopologyInfo, MAX_CORES};
 
-use sunlight_ipc::{ipc_call, map_telemetry, nameserver_lookup, IpcMsg, TzMsg};
+use sunlight_ipc::map_telemetry;
 
 pub const TELEMETRY_MAGIC: u64 = 0x5355_4E4C_5449_4D45;
 pub const TELEMETRY_VERSION_MEM_ACCT: u32 = 3;
@@ -198,6 +198,8 @@ pub struct TelemetryPage {
     /// Version 4: independently measured CPU capacity, idle, and activity.
     pub cpu_counters: [CpuCounters; MAX_CORES],
     pub task_groups: [u32; MAX_PROCESSES],
+    pub process_metrics: [sunlight_ipc::telemetry::ProcessMetricsV5; MAX_PROCESSES],
+    pub sample_cost_ns: u64,
 }
 
 const _: () = assert!(core::mem::size_of::<TelemetryPage>() <= 16384);
@@ -219,6 +221,7 @@ impl Default for ProcessState {
 #[derive(Clone, Copy, Default)]
 pub struct ProcessSnapshot {
     /// Kernel thread group ID; native single-thread tasks use their PID.
+    pub metrics: sunlight_ipc::telemetry::ProcessMetricsV5,
     pub tgid: u32,
     /// Measured task delta before process-group aggregation and rounding.
     pub runtime_delta_ns: u64,
@@ -258,6 +261,22 @@ impl Default for TimeDiagnostics {
 }
 
 impl ProcessSnapshot {
+    pub fn record(&self) -> sunlight_ipc::telemetry::ProcessRecordV1 {
+        sunlight_ipc::telemetry::ProcessRecordV1 {
+            version: 1,
+            pid: self.pid,
+            ppid: self.ppid,
+            state: self.state as u32,
+            app_id: self.metrics.app_id,
+            name: self.name,
+            cpu_percent: self.cpu_bp as u32,
+            threads: self.metrics.threads,
+            private_bytes: self.metrics.private_bytes,
+            shared_bytes: self.metrics.shared_bytes,
+            mapped_bytes: self.metrics.mapped_bytes,
+            uptime: self.metrics.uptime_secs as u64,
+        }
+    }
     pub fn name_str(&self) -> &str {
         let len = self
             .name
@@ -270,6 +289,7 @@ impl ProcessSnapshot {
 
 #[derive(Clone, Copy)]
 pub struct SystemSnapshot {
+    pub sample_cost_ns: u64,
     pub sample_time_ns: u64,
     pub cpu_capacity_ns: u64,
     pub accounting_version: u32,
@@ -305,10 +325,22 @@ pub struct SystemSnapshot {
     pub mem_acct: MemoryAccountingSnapshot,
 }
 
+impl SystemSnapshot {
+    /// Capture/commit elapsed cost as a fraction of the one-second publisher's
+    /// machine capacity. This is a wall-cost estimate, not scheduled task time.
+    pub fn sampling_cpu_bp(&self) -> u16 {
+        sunlight_ipc::cpu_accounting::usage_bp(
+            self.sample_cost_ns,
+            1_000_000_000u64.saturating_mul(self.cpu_count.max(1) as u64),
+        )
+    }
+}
+
 impl Default for SystemSnapshot {
     fn default() -> Self {
         Self {
             sample_time_ns: 0,
+            sample_cost_ns: 0,
             cpu_capacity_ns: 0,
             accounting_version: 0,
             cpu_counters: [CpuCounters::ZERO; MAX_CORES],
@@ -338,6 +370,8 @@ impl Default for SystemSnapshot {
 }
 
 pub struct Telemetry {
+    interval_ns: u64,
+    paused: bool,
     page_ptr: *const TelemetryPage,
     last_seq: u32,
     last_sample_time_ns: u64,
@@ -348,6 +382,20 @@ pub struct Telemetry {
 }
 
 impl Telemetry {
+    /// Disconnected reader for clients that need an error-state window.
+    pub fn unavailable() -> Self {
+        Self {
+            interval_ns: 1_000_000_000,
+            paused: false,
+            page_ptr: core::ptr::null(),
+            last_seq: 0,
+            last_sample_time_ns: 0,
+            last_runtime_by_pid: [0; MAX_PROCESSES],
+            last_pids: [0; MAX_PROCESSES],
+            last_generations: [0; MAX_PROCESSES],
+            last_snapshot: SystemSnapshot::default(),
+        }
+    }
     pub fn init() -> Result<Self, &'static str> {
         let ptr = map_telemetry() as *const TelemetryPage;
         if ptr.is_null() {
@@ -359,7 +407,13 @@ impl Telemetry {
             return Err("TelemetryPage magic mismatch");
         }
 
+        let version = unsafe { vread(core::ptr::addr_of!((*ptr).version)) };
+        if !(3..=5).contains(&version) {
+            return Err("Unsupported telemetry schema");
+        }
         Ok(Self {
+            interval_ns: 1_000_000_000,
+            paused: false,
             page_ptr: ptr,
             last_seq: 0,
             last_sample_time_ns: 0,
@@ -370,7 +424,21 @@ impl Telemetry {
         })
     }
 
+    /// Sets the delta sampling window (minimum one second), default one second.
+    pub fn set_interval_ms(&mut self, millis: u64) {
+        self.interval_ns = millis.clamp(1000, 60_000) * 1_000_000;
+    }
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
+        // Resuming establishes fresh CPU baselines, excluding paused time.
+        if !paused {
+            self.last_sample_time_ns = 0;
+        }
+    }
     pub fn poll(&mut self) -> bool {
+        if self.paused || self.page_ptr.is_null() {
+            return false;
+        }
         // A preempted writer must not turn the reader into an unbounded spin.
         for _ in 0..3 {
             let seq1 = unsafe { vread(core::ptr::addr_of!((*self.page_ptr).sequence)) };
@@ -391,9 +459,13 @@ impl Telemetry {
                 continue;
             }
 
+            if self.last_sample_time_ns != 0
+                && snap.sample_time_ns.saturating_sub(self.last_sample_time_ns) < self.interval_ns
+            {
+                return false;
+            }
             self.compute_cpu_usage(&mut snap);
             aggregate_thread_groups(&mut snap);
-            self.fill_local_time(&mut snap);
 
             self.last_seq = seq2;
             self.last_snapshot = snap;
@@ -411,6 +483,9 @@ impl Telemetry {
         let page = unsafe { &*self.page_ptr };
         snap.sample_time_ns = unsafe { vread(core::ptr::addr_of!(page.sample_time_ns)) };
         snap.accounting_version = unsafe { vread(core::ptr::addr_of!(page.version)) };
+        if snap.accounting_version >= 5 {
+            snap.sample_cost_ns = unsafe { vread(core::ptr::addr_of!(page.sample_cost_ns)) };
+        }
         if snap.accounting_version >= 4 {
             snap.cpu_counters = unsafe { vread(core::ptr::addr_of!(page.cpu_counters)) };
         }
@@ -478,6 +553,11 @@ impl Telemetry {
             ts.tally(raw.state);
 
             snap.procs[i] = ProcessSnapshot {
+                metrics: if snap.accounting_version >= 5 {
+                    unsafe { vread(core::ptr::addr_of!(page.process_metrics[i])) }
+                } else {
+                    sunlight_ipc::telemetry::ProcessMetricsV5::ZERO
+                },
                 runtime_delta_ns: 0,
                 tgid: if snap.accounting_version >= 4 {
                     unsafe { vread(core::ptr::addr_of!(page.task_groups[i])) }
@@ -591,35 +671,6 @@ impl Telemetry {
         self.last_generations = next_generations;
         self.last_sample_time_ns = snap.sample_time_ns;
     }
-
-    fn fill_local_time(&self, snap: &mut SystemSnapshot) {
-        let Some(tz_cap) = nameserver_lookup("tz") else {
-            return;
-        };
-
-        let reply = ipc_call(tz_cap, IpcMsg::with_label(TzMsg::GET_LOCAL_TIME));
-        if reply.label != TzMsg::REPLY {
-            return;
-        }
-
-        let packed = reply.words[0];
-        let hour = ((packed >> 24) & 0xff) as u8;
-        let min = ((packed >> 16) & 0xff) as u8;
-        let sec = ((packed >> 8) & 0xff) as u8;
-
-        let mut out = [0u8; 16];
-        out[0] = b'0' + (hour / 10);
-        out[1] = b'0' + (hour % 10);
-        out[2] = b':';
-        out[3] = b'0' + (min / 10);
-        out[4] = b'0' + (min % 10);
-        out[5] = b':';
-        out[6] = b'0' + (sec / 10);
-        out[7] = b'0' + (sec % 10);
-
-        snap.local_time = out;
-        snap.local_time_len = 8;
-    }
 }
 
 #[inline(always)]
@@ -642,6 +693,10 @@ fn aggregate_thread_groups(snap: &mut SystemSnapshot) {
             );
             group.cpu_ticks = group.cpu_ticks.saturating_add(p.cpu_ticks);
             group.mem_kb = group.mem_kb.max(p.mem_kb);
+            group.metrics.private_bytes = group.metrics.private_bytes.max(p.metrics.private_bytes);
+            group.metrics.shared_bytes = group.metrics.shared_bytes.max(p.metrics.shared_bytes);
+            group.metrics.mapped_bytes = group.metrics.mapped_bytes.max(p.metrics.mapped_bytes);
+            group.metrics.threads = group.metrics.threads.saturating_add(p.metrics.threads);
             if p.state == ProcessState::Running {
                 group.state = ProcessState::Running;
             }
@@ -664,6 +719,8 @@ mod cpu_tests {
     const SECOND: u64 = 1_000_000_000;
     fn reader() -> Telemetry {
         Telemetry {
+            interval_ns: 1_000_000_000,
+            paused: false,
             page_ptr: core::ptr::null(),
             last_seq: 0,
             last_sample_time_ns: 0,
@@ -817,7 +874,8 @@ mod cpu_tests {
                 > core::mem::offset_of!(TelemetryPage, mem_acct)
         );
         assert_eq!(core::mem::offset_of!(TelemetryPage, cpu_counters), 6752);
-        assert_eq!(core::mem::size_of::<TelemetryPage>(), 12128);
+        assert_eq!(core::mem::offset_of!(TelemetryPage, process_metrics), 12128);
+        assert_eq!(core::mem::size_of::<TelemetryPage>(), 16232);
     }
 
     #[test]
@@ -852,5 +910,67 @@ mod cpu_tests {
         r.last_snapshot.sample_time_ns = 42;
         assert!(!r.poll());
         assert_eq!(r.snapshot().sample_time_ns, 42);
+    }
+    #[test]
+    fn interval_pause_resume_and_exit_replace_identity() {
+        let mut page: TelemetryPage = unsafe { core::mem::zeroed() };
+        page.version = 5;
+        page.cpu_count = 1;
+        page.sequence = 2;
+        page.sample_time_ns = SECOND;
+        page.proc_count = 1;
+        page.procs[0].pid = 42;
+        page.procs[0].generation = 1;
+        page.procs[0].name = sunlight_ipc::telemetry::executable_name(b"/bin/melody-mina");
+        let mut r = reader();
+        r.page_ptr = &page;
+        assert!(r.poll());
+        assert_eq!(r.snapshot().procs[0].name_str(), "melody-mina");
+        r.set_interval_ms(2000);
+        page.sequence = 4;
+        page.sample_time_ns = 2 * SECOND;
+        assert!(!r.poll());
+        page.sequence = 6;
+        page.sample_time_ns = 3 * SECOND;
+        assert!(r.poll());
+        r.set_paused(true);
+        page.sequence = 8;
+        page.sample_time_ns = 5 * SECOND;
+        assert!(!r.poll());
+        r.set_paused(false);
+        page.proc_count = 0;
+        assert!(r.poll());
+        assert_eq!(r.snapshot().proc_count, 0);
+        page.sequence = 10;
+        page.sample_time_ns = 7 * SECOND;
+        page.proc_count = 1;
+        page.procs[0].generation = 2;
+        page.procs[0].name = sunlight_ipc::telemetry::executable_name(b"/bin/pdf-viewer");
+        assert!(r.poll());
+        assert_eq!(r.snapshot().procs[0].name_str(), "pdf-viewer");
+        assert_eq!(r.snapshot().procs[0].cpu_bp, 0);
+    }
+    #[test]
+    fn v5_fields_and_record_are_preserved() {
+        let mut page: TelemetryPage = unsafe { core::mem::zeroed() };
+        page.version = 5;
+        page.proc_count = 1;
+        page.procs[0].pid = 9;
+        page.process_metrics[0] = sunlight_ipc::telemetry::ProcessMetricsV5 {
+            private_bytes: 4096,
+            shared_bytes: 8192,
+            mapped_bytes: 16384,
+            threads: 1,
+            uptime_secs: 15,
+            app_id: sunlight_ipc::telemetry::executable_name(b"viewer"),
+        };
+        let mut r = reader();
+        r.page_ptr = &page;
+        let p = r.read_page().procs[0].record();
+        assert_eq!((p.version, p.pid, p.threads, p.uptime), (1, 9, 1, 15));
+        assert_eq!(
+            (p.private_bytes, p.shared_bytes, p.mapped_bytes),
+            (4096, 8192, 16384)
+        );
     }
 }

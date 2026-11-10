@@ -135,6 +135,7 @@ pub struct Process {
     pub(crate) system_allocation: bool,
     pub ppid: usize, // parent pid
     pub name: [u8; 32],
+    pub telemetry_started_secs: u64,
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub owns_address_space: bool,
@@ -483,10 +484,7 @@ impl Process {
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
         let user_stack_top = USER_STACK_TOP;
 
-        let mut name_arr = [0u8; 32];
-        let nb = name.as_bytes();
-        let nlen = nb.len().min(31);
-        name_arr[..nlen].copy_from_slice(&nb[..nlen]);
+        let name_arr = sunlight_ipc::telemetry::executable_name(name.as_bytes());
 
         Ok(Self {
             pid,
@@ -494,6 +492,7 @@ impl Process {
             linux_sysv_semadj: None,
             ppid,
             name: name_arr,
+            telemetry_started_secs: crate::timekeeping::uptime_secs(),
             state: ProcessState::Ready,
             address_space,
             owns_address_space: true,
@@ -724,10 +723,7 @@ impl Process {
         let address_space = address_space::AddressSpace::from_shared(shared_address_space);
         let kernel_stack_top = core::ptr::addr_of!(kernel_stack[KERNEL_STACK_SIZE - 1]) as u64 + 1;
 
-        let mut name_arr = [0u8; 32];
-        let nb = name.as_bytes();
-        let nlen = nb.len().min(31);
-        name_arr[..nlen].copy_from_slice(&nb[..nlen]);
+        let name_arr = sunlight_ipc::telemetry::executable_name(name.as_bytes());
 
         Self {
             pid,
@@ -735,6 +731,7 @@ impl Process {
             linux_sysv_semadj: None,
             ppid,
             name: name_arr,
+            telemetry_started_secs: crate::timekeeping::uptime_secs(),
             state: ProcessState::Ready,
             address_space,
             owns_address_space: false,

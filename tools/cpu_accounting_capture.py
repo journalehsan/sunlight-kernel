@@ -58,8 +58,8 @@ def main():
                         raise RuntimeError(reply)
                 data = page_path.read_bytes()
                 magic, version, sequence = struct.unpack_from('<QII', data)
-                if magic != 0x53554E4C54494D45 or version != 4:
-                    raise RuntimeError('Expected telemetry ABI v4; check kernel/VM image pairing')
+                if magic != 0x53554E4C54494D45 or version not in (4, 5):
+                    raise RuntimeError('Expected telemetry ABI v4/v5; check kernel/VM image pairing')
                 if sequence & 1 or sequence != struct.unpack('<I', seq_path.read_bytes())[0]:
                     continue
                 now = struct.unpack_from('<Q', data, 80)[0]
