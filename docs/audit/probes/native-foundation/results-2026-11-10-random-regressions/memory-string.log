@@ -1,0 +1,32 @@
+$ bash tools/test-mem-string-proof.sh
+
+running 24 tests
+test mem::tests::c_abi_function_pointer_probe ... ok
+test mem::tests::guard_pages_prevent_memory_overreads ... ok
+test mem::tests::helpers_match_c_abi ... ok
+test mem::tests::host_libc_differential_memory_matrix ... ok
+test mem::tests::memchr_bounds_unsigned_values_and_canaries ... ok
+test mem::tests::memcmp_equal_and_differences ... ok
+test mem::tests::memcmp_unsigned_high_bytes ... ok
+test mem::tests::memcpy_length_zero_no_access ... ok
+test mem::tests::memcpy_lengths_and_alignment ... ok
+test mem::tests::memcpy_same_pointer_zero_and_one ... ok
+test mem::tests::memmove_no_overlap_and_same_pointer ... ok
+test mem::tests::memmove_one_byte_and_full_overlap ... ok
+test mem::tests::memmove_overlap_matrix ... ok
+test mem::tests::memset_values_and_canaries ... ok
+test mem::tests::zero_length_accepts_null_without_access ... ok
+test string::tests::c_abi_function_pointer_probe ... ok
+test string::tests::helpers_match_c_abi ... ok
+test string::tests::host_libc_differential_string_matrix ... ok
+test string::tests::strchr_and_strrchr_find_first_last_and_terminator ... ok
+test string::tests::strcmp_ordering_and_prefixes ... ok
+test string::tests::strcmp_unsigned_high_bytes ... ok
+test string::tests::strlen_basic ... ok
+test string::tests::strncmp_n_zero_and_bounds ... ok
+test string::tests::strnlen_bounds ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+exit=0 elapsed_seconds=1.03

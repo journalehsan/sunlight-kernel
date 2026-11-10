@@ -1,0 +1,3 @@
+$ rustc --edition=2021 --test tools/native-std/tests/futex.rs -o target/native-c-guest-futex-tests
+
+exit=0

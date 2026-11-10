@@ -1,0 +1,31 @@
+$ sha256sum sunlight-libc/src/stdio.rs sunlight-libc/src/stdio/format.rs sunlight-libc/src/temp.rs sunlight-libc/src/lib.rs sunlight-libc/src/sys.rs sunlight-libc/src/rand.rs sunlight-libc/include/stdio.h sunlight-fs/src/tmpfs.rs sunlight-fs/src/tmpfs/storage.rs sunlight-fs/src/tmpfs/quota_tests.rs sunlight-fs/src/vfs.rs sunlight-fs/src/ramfs.rs kernel/src/main.rs kernel/src/arch/x86_64/syscall.rs kernel/src/process/fd_table.rs kernel/src/sched/mod.rs tools/native-c/tests/stdio-host.rs tools/native-c/tests/stdio-tests.rs tools/native-c/tests/stdio.c tools/native-c/tests/open-unlink.c docs/audit/probes/stdio.c tools/native-c/tests/run_stdio.py tools/tests/fd-description/src/lib.rs tools/tests/fd-description/Cargo.toml tools/tests/fd-description/Cargo.lock
+stdout:
+7f7af1894ec8054211e7b703e836f1906b6c45f21e2af4ba2328d99116f96b09  sunlight-libc/src/stdio.rs
+76ce2a0259c22c59244495e956b309788162b57dd9232f9ee4f04fae9b7b7440  sunlight-libc/src/stdio/format.rs
+1abd817ca3456130a74d3144d6514a7ed68c99f6a48fa3b8583f023edb70b652  sunlight-libc/src/temp.rs
+89b037acc787330c2f9e1dcc89584816bf0cd015ae691ad8702e41820d0dbba9  sunlight-libc/src/lib.rs
+817b601caf7a2dfc13802d41f5d7a9bc41a7aa4bc84419a45017e4bfb8d4096c  sunlight-libc/src/sys.rs
+03ffa768dcfbe8b5ffa7fbf0aef45296a27fcf560d559d7edfd069d17b337574  sunlight-libc/src/rand.rs
+160d2b36a5fd5eb2dc8154e05ff4a2691236e7235b7c84b7be34fb7b96022211  sunlight-libc/include/stdio.h
+dda16d9efb8be261204b869b27dbebcb5c84c02080edfcbe1b78826923bf86b6  sunlight-fs/src/tmpfs.rs
+19aaffb39142f000f6c495cb9aeafea659e9b9aecfb7bab27e1d075cf9b4d1e3  sunlight-fs/src/tmpfs/storage.rs
+4e1a32f3334b220d18a398f77aa3673ab131034b69d6ed505a2aa55c9b6e30b8  sunlight-fs/src/tmpfs/quota_tests.rs
+83c0ea668f97a2462d6e7e09e1d688effc9e95e2b8e8d3f9f181ad01aed70554  sunlight-fs/src/vfs.rs
+d75e2990d0e4a1d2a5e00a4031b112c1daf6510b42d5656da6174a781b41c174  sunlight-fs/src/ramfs.rs
+b968a489d8108e8df2a9fe5efdcecbeac94d0823a72058ab102cf9a071fb323a  kernel/src/main.rs
+5efeeb4cbae2a920c8b2ab46c23f033be2bcf4092b2848ce07bea120a2504d4b  kernel/src/arch/x86_64/syscall.rs
+16f8b114f3aa54979512714cb6e326e24e275fbe1cd3197871f0756a3a32df7f  kernel/src/process/fd_table.rs
+581396c4f8015559f03dce318947352298543bcc1a3606446ac1edd5a50bf41c  kernel/src/sched/mod.rs
+44d628efe3b2ecf46985973b0bf629481a4b3c0e8060e708f0faf30eca8d8ae6  tools/native-c/tests/stdio-host.rs
+6f4d7477815f44418743430bff88a6bb4f263d54e42ee91ab1be9c551512cd47  tools/native-c/tests/stdio-tests.rs
+2862a4caa7c69ae1e7292c31e42c484a654643b737276b05d2c8d604e16ce52e  tools/native-c/tests/stdio.c
+9629ca945f0e5184645a407becf26d6ab11d7d2e26c6e2d698bb6d873193d51b  tools/native-c/tests/open-unlink.c
+105f4cab407f09f49dda4adda159982adebcd606c2553a395a41f779741321db  docs/audit/probes/stdio.c
+03da6f3d0a9d5351a8d31c6e1975d25276dffe221de3aaef731c0746ba18986e  tools/native-c/tests/run_stdio.py
+ace3beed2516055e1f2e75c94676225a59da560b74ced21b7369a019d5144ea6  tools/tests/fd-description/src/lib.rs
+dd887479b162309ae17731a4aab6a8504f7d28c77c1cc1492e0460866017ab48  tools/tests/fd-description/Cargo.toml
+f9a57289a73d8a47f9dff60ef96697be7d2f3002d9c35700370d07b7faac6180  tools/tests/fd-description/Cargo.lock
+
+stderr:
+
+exit=0

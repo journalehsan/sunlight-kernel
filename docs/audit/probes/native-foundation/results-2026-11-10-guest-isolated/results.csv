@@ -1,0 +1,26 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+entry,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,cb7e4ead66a86596c86d25351045ddc27ebca21d8f4821cb4e66d61305a3a8ff
+write,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,c265e2ed28cc5079774718cd5d4ce850cc8f113dd015d717f9e225f78d828ae2
+exit,True,PASS,FAIL,FAIL,23,23,guest contract or infrastructure failed,0ae83bf177043cc50919c1df3fdd17c916e0200f26423fcff0db3d9965faa308
+atexit,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+clock,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+dirent,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+dlfcn,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+getrandom,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+langinfo,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+locale,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+math,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+mmap,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+poll_select,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+pthread,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+signal,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+socket,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+stdio,True,PASS,FAIL,FAIL,1,0,guest contract or infrastructure failed,84c962058ff0560cee4863481a3f666e1b7e7729efe3a7f491e6057f98e192ec
+string,True,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,f5e5a29990b92f1194e10d2f9befbb51f112d49f1c8de523caa643f77291643b
+termios,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+wchar,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+cpp-runtime,True,FAIL,NOT_RUN,FAIL,,0,BUILD_FAILED: no executable to run,
+stdout,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,31b1281c52b33bb4cc23159e789673f8414838e22c6e12fe5cebfb671e5f4a32
+stdio-full,False,PASS,FAIL,FAIL,36,0,guest contract or infrastructure failed,858311edc55ebafa23196654be58c040ecc0918652aeea8c195f1c7bde29d4d0
+open-unlink,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,c16c111208639ea3153678b40f4331c17684e79b0557749b324b9e2a3455aab0
+exit-cleanup,False,PASS,FAIL,FAIL,51,0,guest contract or infrastructure failed,3d63f74cb6103ddee59469a2b1b5b3a3e0a9b9a9a60786377ffcd57e5d739483

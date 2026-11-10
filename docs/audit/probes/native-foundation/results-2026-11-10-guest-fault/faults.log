@@ -1,0 +1,2 @@
+[FAULT] #6 pid=100 rip=0x400024 rsp=0x7fffffffef50 err=0x0
+[INT] Invalid Opcode: InterruptStackFrame { instruction_pointer: VirtAddr(0x400024), code_segment: SegmentSelector { index: 5, rpl: Ring3 }, cpu_flags: RFlags(RESUME_FLAG | INTERRUPT_FLAG | ZERO_FLAG | PARITY_FLAG | 0x2), stack_pointer: VirtAddr(0x7fffffffef50), stack_segment: SegmentSelector { index: 4, rpl: Ring3 } }

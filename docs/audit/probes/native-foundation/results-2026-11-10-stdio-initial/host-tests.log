@@ -1,0 +1,21 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-initial/stdio-tests
+stdout:
+
+running 10 tests
+test tests::fgets_unsigned_character_and_short_format_write_failure ... ok
+test tests::modes_append_truncate_and_allocation_before_open ... ok
+test tests::seek_and_close_failures_are_reported_and_close_consumes_fd ... ok
+test tests::formatting_promotions_precision_limits_and_explicit_failures ... ok
+test tests::standard_descriptor_mapping_and_explicit_unsupported_tmpfile ... ok
+test tests::short_reads_eof_sticky_and_seek_clear ... ok
+test tests::zero_progress_and_again_are_errors_without_retry_loop ... ok
+test tests::zero_sizes_overflow_and_wrong_direction ... ok
+test tests::read_failure_is_distinct_from_eof_and_preserves_partial_items ... ok
+test tests::short_writes_and_partial_items_preserve_errors ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+stderr:
+
+exit=0

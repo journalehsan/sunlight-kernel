@@ -1,0 +1,169 @@
+$ git status --short
+ M .version_state.json
+ M Cargo.lock
+ M certificatectl/Cargo.toml
+ M chronos-core/Cargo.toml
+ M compat-linux/Cargo.toml
+ M cpu-utils/Cargo.toml
+ M drivers/Cargo.toml
+ M fastlane-doorbell/Cargo.toml
+ M fastlane-ring/Cargo.toml
+ M golden-fish/Cargo.toml
+ M helios-note/Cargo.toml
+ M hello-linux/Cargo.toml
+ M ipc/Cargo.toml
+ M ipc/src/lib.rs
+ M kernel/Cargo.toml
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/capability/channel.rs
+ M kernel/src/capability/channel_doorbell_native.rs
+ M kernel/src/capability/channel_native.rs
+ M kernel/src/capability/channel_race.rs
+ M kernel/src/capability/mod.rs
+ M kernel/src/process/address_space.rs
+ M kernel/src/process/mod.rs
+ M kernel/src/sched/mod.rs
+ M kernel/src/telemetry.rs
+ M melody-mina/Cargo.toml
+ M memoryctl/Cargo.toml
+ M mezzoctl/Cargo.toml
+ M rappid-rabbit/Cargo.toml
+ M services/eyes/Cargo.toml
+ M services/init/Cargo.toml
+ M services/install_sunlightos/Cargo.toml
+ M services/mezzo/Cargo.toml
+ M services/net_server/Cargo.toml
+ M services/pty_server/Cargo.toml
+ M services/rand_service/Cargo.toml
+ M services/secret_store_test/Cargo.toml
+ M services/solar/Cargo.toml
+ M services/sun-exec/Cargo.toml
+ M services/sun-open/Cargo.toml
+ M services/sunlight-audiod/Cargo.toml
+ M services/sunlight-clipd/Cargo.toml
+ M services/sunlight-control-panel/Cargo.toml
+ M services/sunlight-deviced/Cargo.toml
+ M services/sunlight-dialogd/Cargo.toml
+ M services/sunlight-display/Cargo.toml
+ M services/sunlight-gcd/Cargo.toml
+ M services/sunlight-kbd/Cargo.toml
+ M services/sunlight-mouse/Cargo.toml
+ M services/sunlight-networkd/Cargo.toml
+ M services/sunlight-niced/Cargo.toml
+ M services/sunlight-powerd/Cargo.toml
+ M services/sunlight-resolved/Cargo.toml
+ M services/sunlight-runner/Cargo.toml
+ M services/sunlight-sessionctl/Cargo.toml
+ M services/sunlight-sessiond/Cargo.toml
+ M services/sunlight-sm/Cargo.toml
+ M services/sunlight-startup-fixture/Cargo.toml
+ M services/sunlight-swapd/Cargo.toml
+ M services/sunlight-tasks/Cargo.toml
+ M services/sunlight-tasks/src/main.rs
+ M services/sunlight-terminal/Cargo.toml
+ M services/sunlight-thermald/Cargo.toml
+ M services/sunlight-thumbd/Cargo.toml
+ M services/sunlight-uac/Cargo.toml
+ M services/sunlight-uac/src/bin/channel_fixture/mod.rs
+ M services/sunlight-uac/src/bin/session_race_probe.rs
+ M services/sunlight-uac/src/bin/session_race_probe/kfp_security_runner.rs
+ M services/sunlight-usb-mouse/Cargo.toml
+ M services/sunlight-vortex-shell/Cargo.toml
+ M services/sunlightctl/Cargo.toml
+ M services/sunlightd/Cargo.toml
+ M services/timed/Cargo.toml
+ M services/timer_server/Cargo.toml
+ M services/timezone_service/Cargo.toml
+ M services/tty_server/Cargo.toml
+ M services/vfs_server/Cargo.toml
+ M std-proof/sunlight-dict/Cargo.toml
+ M std-proof/sunlight-sunsay/Cargo.toml
+ M std-proof/sunlight-zoxide/Cargo.toml
+ M sun-font/Cargo.toml
+ M sun-img/Cargo.toml
+ M sun-imgc/Cargo.toml
+ M sunlight-account-broker/Cargo.toml
+ M sunlight-api-lab/Cargo.toml
+ M sunlight-audio/Cargo.toml
+ M sunlight-bench/Cargo.toml
+ M sunlight-block/Cargo.toml
+ M sunlight-calculator/Cargo.toml
+ M sunlight-calendar/Cargo.toml
+ M sunlight-cert/Cargo.toml
+ M sunlight-chronos/Cargo.toml
+ M sunlight-clipman/Cargo.toml
+ M sunlight-devices/Cargo.toml
+ M sunlight-dialogs/Cargo.toml
+ M sunlight-docserv/Cargo.toml
+ M sunlight-docview/Cargo.toml
+ M sunlight-edit/Cargo.toml
+ M sunlight-elf/Cargo.toml
+ M sunlight-emoji-picker/Cargo.toml
+ M sunlight-fat/Cargo.toml
+ M sunlight-fetch/Cargo.toml
+ M sunlight-files/Cargo.toml
+ M sunlight-fs/Cargo.toml
+ M sunlight-hangman/Cargo.toml
+ M sunlight-http/Cargo.toml
+ M sunlight-js-cli/Cargo.toml
+ M sunlight-js/Cargo.toml
+ M sunlight-kv/Cargo.toml
+ M sunlight-kvctl/Cargo.toml
+ M sunlight-libc/Cargo.toml
+ M sunlight-light-lens/Cargo.toml
+ M sunlight-locale/Cargo.toml
+ M sunlight-media/Cargo.toml
+ M sunlight-mm/Cargo.toml
+ M sunlight-net-utils/Cargo.toml
+ M sunlight-net/Cargo.toml
+ M sunlight-reminders/Cargo.toml
+ M sunlight-sensors/Cargo.toml
+ M sunlight-shell-appstate/Cargo.toml
+ M sunlight-silicon-echoes/Cargo.toml
+ M sunlight-smbios/Cargo.toml
+ M sunlight-telemetry/Cargo.toml
+ M sunlight-telemetry/src/lib.rs
+ M sunlight-tls/Cargo.toml
+ M sunlight-top/Cargo.toml
+ M sunlight-tty/Cargo.toml
+ M sunlight-tz/Cargo.toml
+ M sunlight-ui/Cargo.toml
+ M sunlight-utils/Cargo.toml
+ M sunlight-virtio/Cargo.toml
+ M sunlight-voice-recorder/Cargo.toml
+ M sunlight-wallpaper/Cargo.toml
+ M sunlight-welcome/Cargo.toml
+ M sunlight-widget-gallery/Cargo.toml
+ M sunlight-writer/Cargo.toml
+ M sunshell/Cargo.toml
+ M tools/cpu_accounting_capture.py
+ M tools/hayro-native-probe/Cargo.toml
+ M tools/hayro-prototype/Cargo.toml
+ M tools/kfp2a4_native.py
+ M tools/native-std-probe/Cargo.lock
+ M tools/native-std-probe/Cargo.toml
+ M tools/native-std/overlay/pal/sunlightos/futex.rs
+ M tools/tests/fd-description/Cargo.toml
+ M wiseowl-brain/Cargo.toml
+ M wiseowl-console/Cargo.toml
+ M wiseowl-identity/Cargo.toml
+ M wiseowl-index/Cargo.toml
+ M wiseowl-memory/Cargo.toml
+ M wiseowl-memorydb/Cargo.toml
+?? docs/audit/
+?? docs/kernel/kfp-2a6-concurrency-lifetime-closure.md
+?? docs/kernel/kfp-2a6a-deterministic-m1-contention.md
+?? docs/kernel/kfp-2a6b-native-lifecycle-closure.md
+?? docs/kernel/kfp-2a6c-native-lifecycle-trace.md
+?? docs/kernel/kfp-2a6d-concurrent-cleanup-closure.md
+?? docs/telemetry/
+?? ipc/src/telemetry.rs
+?? kernel/src/capability/lifecycle_receipts.rs
+?? kernel/src/capability/lifecycle_trace.rs
+?? sunlight-libc/include/sunlight_runtime.h
+?? tools/build_native_c.sh
+?? tools/kfp2a6c_assess.py
+?? tools/native-c/
+?? tools/native-std/tests/
+
+exit=0

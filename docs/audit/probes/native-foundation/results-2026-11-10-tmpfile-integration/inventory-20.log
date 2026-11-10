@@ -1,0 +1,19 @@
+$ rg -n 'SYS_|test|PASS' tools/helios-probes/linux-thread-probe.S tools/tests/helios_thread_probe.expected
+tools/helios-probes/linux-thread-probe.S:23:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:26:    test %rcx, %rax
+tools/helios-probes/linux-thread-probe.S:47:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:64:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:71:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:120:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:152:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:160:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:172:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:177:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:202:    test %eax, %eax
+tools/helios-probes/linux-thread-probe.S:225:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:237:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:260:    test %rax, %rax
+tools/helios-probes/linux-thread-probe.S:342:msg_pass:   .ascii "THREAD_PROBE PASS\n"
+tools/tests/helios_thread_probe.expected:7:THREAD_PROBE PASS
+
+exit=0

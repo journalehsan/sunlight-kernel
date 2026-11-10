@@ -1,0 +1,6 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-tmpfile-final/original-stdio-native
+stdout:
+
+stderr:
+
+exit=0

@@ -1,0 +1,8 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-initial/stdio-host /tmp/sunlight-stdio-ia16d7dc/file
+stdin=b'Q\n'
+stdout:
+stdio: native -42 42 0x2a -1234567890 7 %
+
+stderr:
+
+exit=13

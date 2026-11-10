@@ -1,0 +1,98 @@
+$ llvm-objdump -d --disassemble-symbols=_start,sl_std_start,main /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/entry
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/entry:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400020 <main>:
+  400020: 55                           	pushq	%rbp
+  400021: 48 89 e5                     	movq	%rsp, %rbp
+  400024: 48 83 ec 18                  	subq	$0x18, %rsp
+  400028: 89 7d fc                     	movl	%edi, -0x4(%rbp)
+  40002b: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+  40002f: 31 c0                        	xorl	%eax, %eax
+  400031: 83 7d fc 00                  	cmpl	$0x0, -0x4(%rbp)
+  400035: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  400038: 7e 2e                        	jle	0x400068 <main+0x48>
+  40003a: 31 c0                        	xorl	%eax, %eax
+  40003c: 48 83 7d f0 00               	cmpq	$0x0, -0x10(%rbp)
+  400041: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  400044: 74 22                        	je	0x400068 <main+0x48>
+  400046: 48 8b 4d f0                  	movq	-0x10(%rbp), %rcx
+  40004a: 31 c0                        	xorl	%eax, %eax
+  40004c: 48 83 39 00                  	cmpq	$0x0, (%rcx)
+  400050: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  400053: 74 13                        	je	0x400068 <main+0x48>
+  400055: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  400059: 48 63 4d fc                  	movslq	-0x4(%rbp), %rcx
+  40005d: 48 83 3c c8 00               	cmpq	$0x0, (%rax,%rcx,8)
+  400062: 0f 94 c0                     	sete	%al
+  400065: 88 45 ef                     	movb	%al, -0x11(%rbp)
+  400068: 8a 55 ef                     	movb	-0x11(%rbp), %dl
+  40006b: b8 0b 00 00 00               	movl	$0xb, %eax
+  400070: 31 c9                        	xorl	%ecx, %ecx
+  400072: f6 c2 01                     	testb	$0x1, %dl
+  400075: 0f 45 c1                     	cmovnel	%ecx, %eax
+  400078: 48 83 c4 18                  	addq	$0x18, %rsp
+  40007c: 5d                           	popq	%rbp
+  40007d: c3                           	retq
+  40007e: cc                           	int3
+  40007f: cc                           	int3
+
+0000000000400080 <_start>:
+  400080: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  400084: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  400089: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  40008e: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  400092: e8 09 00 00 00               	callq	0x4000a0 <sl_std_start>
+  400097: 0f 0b                        	ud2
+  400099: cc                           	int3
+  40009a: cc                           	int3
+  40009b: cc                           	int3
+  40009c: cc                           	int3
+  40009d: cc                           	int3
+  40009e: cc                           	int3
+  40009f: cc                           	int3
+
+00000000004000a0 <sl_std_start>:
+  4000a0: 41 57                        	pushq	%r15
+  4000a2: 41 56                        	pushq	%r14
+  4000a4: 53                           	pushq	%rbx
+  4000a5: 49 89 d7                     	movq	%rdx, %r15
+  4000a8: 48 89 f3                     	movq	%rsi, %rbx
+  4000ab: 49 89 fe                     	movq	%rdi, %r14
+  4000ae: 48 89 3d 4b 0f 00 00         	movq	%rdi, 0xf4b(%rip)       # 0x401000 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0>
+  4000b5: 48 89 35 4c 0f 00 00         	movq	%rsi, 0xf4c(%rip)       # 0x401008 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0>
+  4000bc: 48 89 15 4d 0f 00 00         	movq	%rdx, 0xf4d(%rip)       # 0x401010 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0>
+  4000c3: e8 48 00 00 00               	callq	0x400110 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3tls8init_tls>
+  4000c8: 84 c0                        	testb	%al, %al
+  4000ca: 74 18                        	je	0x4000e4 <sl_std_start+0x44>
+  4000cc: b8 14 00 00 00               	movl	$0x14, %eax
+  4000d1: bf 65 00 00 00               	movl	$0x65, %edi
+  4000d6: 0f 05                        	syscall
+  4000d8: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  4000e0: f3 90                        	pause
+  4000e2: eb fc                        	jmp	0x4000e0 <sl_std_start+0x40>
+  4000e4: 4c 89 3d 2d 0f 00 00         	movq	%r15, 0xf2d(%rip)       # 0x401018 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.3067351516085633461>
+  4000eb: 4c 89 f7                     	movq	%r14, %rdi
+  4000ee: 48 89 de                     	movq	%rbx, %rsi
+  4000f1: e8 2a ff ff ff               	callq	0x400020 <main>
+  4000f6: 48 63 f8                     	movslq	%eax, %rdi
+  4000f9: b8 9d 00 00 00               	movl	$0x9d, %eax
+  4000fe: 0f 05                        	syscall
+  400100: f3 90                        	pause
+  400102: eb fc                        	jmp	0x400100 <sl_std_start+0x60>
+  400104: cc                           	int3
+  400105: cc                           	int3
+  400106: cc                           	int3
+  400107: cc                           	int3
+  400108: cc                           	int3
+  400109: cc                           	int3
+  40010a: cc                           	int3
+  40010b: cc                           	int3
+  40010c: cc                           	int3
+  40010d: cc                           	int3
+  40010e: cc                           	int3
+  40010f: cc                           	int3
+
+exit=0

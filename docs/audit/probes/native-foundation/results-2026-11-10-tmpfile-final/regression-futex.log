@@ -1,0 +1,14 @@
+$ bash -c 'rustc --edition=2021 --test tools/native-std/tests/futex.rs -o target/tmpfile-futex-tests && target/tmpfile-futex-tests'
+stdout:
+
+running 3 tests
+test wait_preserves_completion_contract ... ok
+test wake_preserves_count_and_abi ... ok
+test wake_errors_fail_fast ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+stderr:
+
+exit=0

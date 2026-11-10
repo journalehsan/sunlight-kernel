@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-tmpfile-integration/native-dlfcn -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c:2:10: fatal error: 'dlfcn.h' file not found
+    2 | #include <dlfcn.h>
+      |          ^~~~~~~~~
+1 error generated.
+
+exit=1

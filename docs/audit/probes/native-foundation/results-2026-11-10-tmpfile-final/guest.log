@@ -1,0 +1,5 @@
+guest=UNKNOWN
+No guest command issued. Existing native_std_boot_gate.py boots a fixed Rust payload; it has no arbitrary C ELF argument. Host adapters replace only descriptor/allocator/errno calls and do not validate SunlightOS kernel I/O.
+Native probe requires argv[1]=disposable writable path, stdin=Q\n, exit=0 and exact stdout/stderr from host-c-run.log.
+Historical stdio.c requires tmpfile; its host pass does not validate guest execution.
+open-unlink-native requires argv[1]=absent disposable path on tmpfs and exit=0.

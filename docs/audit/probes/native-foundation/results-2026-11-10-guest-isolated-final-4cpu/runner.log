@@ -1,0 +1,19 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu
+Building isolated native C guest (9 ELFs, 4 CPUs)
+Booting disposable TCG guest
+entry: PASS exit=0 expected=0
+write: PASS exit=0 expected=0
+guest write stderr: b'[NATIVE-C] write OK\n'
+exit: PASS exit=23 expected=23
+stdio: PASS exit=0 expected=0
+string: PASS exit=0 expected=0
+stdout: PASS exit=0 expected=0
+guest stdout stdout: b'[NATIVE-C] stdout OK\n'
+stdio-full: PASS exit=0 expected=0
+guest stdio-full stdout: b'stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\nstdio: file PASS; tmpfile PASS\n'
+guest stdio-full stderr: b'stdio: stderr 0007\n'
+open-unlink: PASS exit=0 expected=0
+exit-cleanup: PASS exit=0 expected=0
+Historical 21: PASS=5 FAIL=16 UNKNOWN=0 (build-blocked=16)
+
+exit=0

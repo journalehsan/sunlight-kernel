@@ -1,0 +1,8 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -x c++ -c tools/native-c/tests/unistd-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-unistd-host/c++-base.o
+In file included from tools/native-c/tests/unistd-abi.c:8:
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdlib.h:9:19: error: invalid parameter name: 'template' is a keyword
+    9 | int mkstemp(char *template);
+      |                   ^
+1 error generated.
+
+exit=1

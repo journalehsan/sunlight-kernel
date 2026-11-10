@@ -1,0 +1,3 @@
+$ rg -n 'dlopen|dlsym|pthread_create|setlocale|nl_langinfo|__cxa_throw|__cxa_atexit' sunlight-libc tools/native-std third_party
+
+exit=1

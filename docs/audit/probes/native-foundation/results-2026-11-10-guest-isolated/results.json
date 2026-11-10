@@ -1,0 +1,56 @@
+{
+  "entry": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "[NATIVE-C] write OK\n",
+    "pass_": false
+  },
+  "exit": {
+    "exit": 23,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdio": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "string": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdout": {
+    "exit": 0,
+    "stdout": "[NATIVE-C] stdout OK\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdio-full": {
+    "exit": 36,
+    "stdout": "stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\n",
+    "stderr": "stdio: stderr 0007\n",
+    "pass_": false
+  },
+  "open-unlink": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "exit-cleanup": {
+    "exit": 51,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  }
+}

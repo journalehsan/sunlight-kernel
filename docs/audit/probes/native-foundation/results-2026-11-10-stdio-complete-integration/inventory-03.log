@@ -1,0 +1,10 @@
+$ rustc -Vv
+rustc 1.98.0-nightly (8954863c8 2026-06-05)
+binary: rustc
+commit-hash: 8954863c81df429ebf96ea38a16c76f209995833
+commit-date: 2026-06-05
+host: x86_64-unknown-linux-gnu
+release: 1.98.0-nightly
+LLVM version: 22.1.6
+
+exit=0

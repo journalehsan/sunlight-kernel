@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-10-guest-regressions/fault.elf --expect-exit 132 --out docs/audit/probes/native-foundation/results-2026-11-10-guest-fault

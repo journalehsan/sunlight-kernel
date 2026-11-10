@@ -1,0 +1,109 @@
+$ cargo test -p sunlight-fs --lib --target x86_64-unknown-linux-gnu -- --test-threads=1
+stdout:
+
+running 89 tests
+test fstab::tests::duplicate_sources_and_targets_and_capacity ... ok
+test fstab::tests::legacy_and_comments ... ok
+test fstab::tests::stable_resolution_and_missing_optional_policy ... ok
+test fstab::tests::strict_fields_options_and_state_boundary ... ok
+test passwd::tests::lookup_by_uid_finds_root ... ok
+test passwd::tests::lookup_missing_returns_none ... ok
+test passwd::tests::parse_group_three_entries ... ok
+test passwd::tests::parse_passwd_two_users ... ok
+test passwd::tests::parse_shadow_two_entries ... ok
+test passwd::tests::skips_comment_and_empty_lines ... ok
+test path::tests::validates_absolute_paths ... ok
+test permission::tests::group_member_has_group_bits ... ok
+test permission::tests::owner_has_owner_bits ... ok
+test permission::tests::root_bypasses_all_checks ... ok
+test permission::tests::user_denied_root_only_file ... ok
+test permission::tests::user_reads_world_readable_file ... ok
+test policy::account_policy_tests::account_storage_is_exclusive_to_trusted_account_service ... ok
+test policy::tests::broker_log_has_one_writer_and_sm_has_only_shared_log ... ok
+test policy::tests::broker_mints_only_trusted_scoped_service_caps ... ok
+test policy::tests::disk_user_storage_is_uid_scoped ... ok
+test policy::tests::normal_user_write_policy ... ok
+test policy::tests::only_memorydb_can_write_its_volatile_boot_epoch_marker ... ok
+test policy::tests::root_can_write_root_and_user_home_trees ... ok
+test policy::tests::service_state_is_service_scoped ... ok
+test policy::tests::traversal_paths_are_rejected_before_prefix_policy ... ok
+test policy::tests::uac_only_gates_runtime_paths ... ok
+test tmpfs::quota_tests::failed_static_materialization_preserves_borrowed_payload ... ok
+test tmpfs::quota_tests::handle_exhaustion_does_not_create_an_inode ... ok
+test tmpfs::quota_tests::inode_quota_counts_directories_and_recovers_after_unlink ... ok
+test tmpfs::quota_tests::mount_root_limits_and_invalid_paths ... ok
+test tmpfs::quota_tests::open_unlink_retains_inode_until_last_close ... ok
+test tmpfs::quota_tests::page_quota_failure_preserves_content_and_reclaims_on_truncate ... ok
+test tmpfs::quota_tests::partial_frame_failure_rolls_back_pages_quota_and_length ... ok
+test tmpfs::quota_tests::quota_atomic_reservations_never_exceed_limits ... ok
+test tmpfs::quota_tests::rename_reclaims_replaced_pages_and_preserves_source_inode ... ok
+test tmpfs::quota_tests::reserve_is_charged_without_changing_visible_size ... ok
+test tmpfs::quota_tests::shrink_tail_hole_and_regrowth_are_zeroed ... ok
+test tmpfs::tests::chmod_rejects_immutable_static_entry ... ok
+test tmpfs::tests::chronos_command_stubs_are_present_in_initramfs ... ok
+test tmpfs::tests::chronos_dos_shell_bundle_is_present_in_initramfs ... ok
+test tmpfs::tests::close_rejects_stale_handle ... ok
+test tmpfs::tests::create_file_creates_and_opens_file ... ok
+test tmpfs::tests::document_tools_have_launcher_paths_in_initramfs ... ok
+test tmpfs::tests::exclusive_create_never_reopens_or_truncates_existing_file ... ok
+test tmpfs::tests::find_xargs_pipeline_utilities_have_path_visible_stubs ... ok
+test tmpfs::tests::folder_rename_moves_descendants_and_keeps_open_handles ... ok
+test tmpfs::tests::invalid_path_returns_invalid_path ... ok
+test tmpfs::tests::living_sunlight_is_available_in_default_music_libraries ... ok
+test tmpfs::tests::locale_foundation_files_present_in_initramfs ... ok
+test tmpfs::tests::melody_mina_command_stubs_are_present_in_initramfs ... ok
+test tmpfs::tests::melody_mina_user_music_track_is_present ... ok
+test tmpfs::tests::melody_mina_wav_fixture_is_present_in_system_media ... ok
+test tmpfs::tests::missing_file_returns_not_found ... ok
+test tmpfs::tests::mkdir_creates_directory ... ok
+test tmpfs::tests::mkdir_existing_returns_already_exists ... ok
+test tmpfs::tests::open_and_read_whole_file ... ok
+test tmpfs::tests::open_dir_succeeds_and_read_returns_isdir ... ok
+test tmpfs::tests::phase_2b5_utilities_have_path_visible_stubs ... ok
+test tmpfs::tests::read_dir_includes_dynamic_entries_and_rejects_files ... ok
+test tmpfs::tests::read_dir_lists_direct_children_only ... ok
+test tmpfs::tests::read_past_end_returns_zero ... ok
+test tmpfs::tests::read_respects_offset_and_buffer_size ... ok
+test tmpfs::tests::rename_dynamic_file_replaces_static_file_contents ... ok
+test tmpfs::tests::reused_slot_rejects_the_previous_handle_incarnation ... ok
+test tmpfs::tests::stat_dir_returns_directory_type ... ok
+test tmpfs::tests::stat_reports_file_size_and_permissions ... ok
+test tmpfs::tests::streamed_large_write_grows_in_place_without_losing_data ... ok
+test tmpfs::tests::sun_emoji_assets_and_license_are_present_in_initramfs ... ok
+test tmpfs::tests::too_many_open_files_is_reported ... ok
+test tmpfs::tests::truncate_keeps_the_handle_valid_and_discards_old_contents ... ok
+test tmpfs::tests::welcome_document_is_present_in_default_homes ... ok
+test tmpfs::tests::why_sunlightos_exists_document_is_present_in_default_homes ... ok
+test tmpfs::tests::write_extends_file ... ok
+test tmpfs::tests::write_overwrite_preserves_existing_suffix_and_zero_fills_holes ... ok
+test vfs::storage_tests::busy_close_sync_failure_retry_and_exact_remount ... ok
+test vfs::storage_tests::exhausted_mount_incarnations_retire_without_aliasing ... ok
+test vfs::storage_tests::rejects_invalid_system_occupied_and_duplicate_targets ... ok
+test vfs::tests::chooses_longest_matching_mount ... ok
+test vfs::tests::mounts_fat32_volume_at_directory ... ok
+test vfs::tests::no_replace_move_preserves_existing_target_and_source ... ok
+test vfs::tests::private_publish_create_if_absent_keeps_winning_file ... ok
+test vfs::tests::private_replace_rejects_bad_destination_without_touching_old_bytes ... ok
+test vfs::tests::ramfs_never_claims_file_or_directory_durability ... ok
+test vfs::tests::read_dir_lists_fat_mount ... ok
+test vfs::tests::rejects_bad_global_handle ... ok
+test vfs::tests::rejects_duplicate_mount ... ok
+test vfs::tests::reports_missing_file_from_resolved_mount ... ok
+test vfs::tests::routes_root_mount_open_read_stat ... ok
+test vfs::tests::state_disk_user_files_have_private_uid_metadata ... ok
+
+test result: ok. 89 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+stderr:
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Blocking waiting for file lock on build directory
+   Compiling sunlight-fs v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+    Finished `test` profile [optimized + debuginfo] target(s) in 8.40s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_fs-8537d91cc532c936)
+
+exit=0

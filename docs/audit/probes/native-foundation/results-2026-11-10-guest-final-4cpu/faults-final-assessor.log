@@ -1,0 +1,2 @@
+Current guest.py fatal-fault pattern rechecked against this actual guest transcript: no matches.
+KERNEL[ _]PANIC|\[EXCEPTION\]|\[FAULT\]|\[INT\] (?:Divide Error|Invalid Opcode|Double Fault|General Protection)|Unknown syscall|Unhandled syscall

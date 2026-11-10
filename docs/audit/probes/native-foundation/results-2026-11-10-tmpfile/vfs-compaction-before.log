@@ -1,0 +1,33 @@
+$ cargo test -p sunlight-fs --lib --target x86_64-unknown-linux-gnu unlinked_quota_and_compaction_preserve_other_handles -- --test-threads=1
+stdout:
+
+running 1 test
+test tmpfs::quota_tests::unlinked_quota_and_compaction_preserve_other_handles ... FAILED
+
+failures:
+
+---- tmpfs::quota_tests::unlinked_quota_and_compaction_preserve_other_handles stdout ----
+
+thread 'tmpfs::quota_tests::unlinked_quota_and_compaction_preserve_other_handles' (856710) panicked at sunlight-fs/src/tmpfs.rs:122:33:
+index out of bounds: the len is 2 but the index is 18446744073709551614
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tmpfs::quota_tests::unlinked_quota_and_compaction_preserve_other_handles
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 89 filtered out; finished in 0.00s
+
+
+stderr:
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-fs v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.72s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_fs-8537d91cc532c936)
+error: test failed, to rerun pass `-p sunlight-fs --lib`
+
+exit=101

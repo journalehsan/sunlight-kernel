@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-10-guest-services/exit.elf --out docs/audit/probes/native-foundation/results-2026-11-10-guest-raw-exit
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-raw-exit
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=23 expected=None
+
+exit=23
+expected_host_exit=23

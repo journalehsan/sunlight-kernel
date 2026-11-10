@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -isystem /usr/lib/clang/23/include -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -std=c++17 -ffreestanding -fno-builtin -E /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/cpp-runtime.i
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp:1:10: fatal error: 'iostream' file not found
+    1 | #include <iostream>
+      |          ^~~~~~~~~~
+1 error generated.
+
+exit=1

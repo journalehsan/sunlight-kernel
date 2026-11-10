@@ -1,0 +1,91 @@
+$ llvm-objdump -d --disassemble-symbols=_start,sl_std_start,main,sl_std_exit /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/exit
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/exit:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400020 <main>:
+  400020: 55                           	pushq	%rbp
+  400021: 48 89 e5                     	movq	%rsp, %rbp
+  400024: bf 17 00 00 00               	movl	$0x17, %edi
+  400029: e8 22 00 00 00               	callq	0x400050 <sl_std_exit>
+  40002e: cc                           	int3
+  40002f: cc                           	int3
+
+0000000000400030 <_start>:
+  400030: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  400034: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  400039: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  40003e: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  400042: e8 29 00 00 00               	callq	0x400070 <sl_std_start>
+  400047: 0f 0b                        	ud2
+  400049: cc                           	int3
+  40004a: cc                           	int3
+  40004b: cc                           	int3
+  40004c: cc                           	int3
+  40004d: cc                           	int3
+  40004e: cc                           	int3
+  40004f: cc                           	int3
+
+0000000000400050 <sl_std_exit>:
+  400050: 48 63 ff                     	movslq	%edi, %rdi
+  400053: b8 9d 00 00 00               	movl	$0x9d, %eax
+  400058: 0f 05                        	syscall
+  40005a: 66 0f 1f 44 00 00            	nopw	(%rax,%rax)
+  400060: f3 90                        	pause
+  400062: eb fc                        	jmp	0x400060 <sl_std_exit+0x10>
+  400064: cc                           	int3
+  400065: cc                           	int3
+  400066: cc                           	int3
+  400067: cc                           	int3
+  400068: cc                           	int3
+  400069: cc                           	int3
+  40006a: cc                           	int3
+  40006b: cc                           	int3
+  40006c: cc                           	int3
+  40006d: cc                           	int3
+  40006e: cc                           	int3
+  40006f: cc                           	int3
+
+0000000000400070 <sl_std_start>:
+  400070: 41 57                        	pushq	%r15
+  400072: 41 56                        	pushq	%r14
+  400074: 53                           	pushq	%rbx
+  400075: 49 89 d7                     	movq	%rdx, %r15
+  400078: 48 89 f3                     	movq	%rsi, %rbx
+  40007b: 49 89 fe                     	movq	%rdi, %r14
+  40007e: 48 89 3d 7b 0f 00 00         	movq	%rdi, 0xf7b(%rip)       # 0x401000 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0>
+  400085: 48 89 35 7c 0f 00 00         	movq	%rsi, 0xf7c(%rip)       # 0x401008 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0>
+  40008c: 48 89 15 7d 0f 00 00         	movq	%rdx, 0xf7d(%rip)       # 0x401010 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0>
+  400093: e8 48 00 00 00               	callq	0x4000e0 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3tls8init_tls>
+  400098: 84 c0                        	testb	%al, %al
+  40009a: 74 18                        	je	0x4000b4 <sl_std_start+0x44>
+  40009c: b8 14 00 00 00               	movl	$0x14, %eax
+  4000a1: bf 65 00 00 00               	movl	$0x65, %edi
+  4000a6: 0f 05                        	syscall
+  4000a8: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  4000b0: f3 90                        	pause
+  4000b2: eb fc                        	jmp	0x4000b0 <sl_std_start+0x40>
+  4000b4: 4c 89 3d 5d 0f 00 00         	movq	%r15, 0xf5d(%rip)       # 0x401018 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.3067351516085633461>
+  4000bb: 4c 89 f7                     	movq	%r14, %rdi
+  4000be: 48 89 de                     	movq	%rbx, %rsi
+  4000c1: e8 5a ff ff ff               	callq	0x400020 <main>
+  4000c6: 48 63 f8                     	movslq	%eax, %rdi
+  4000c9: b8 9d 00 00 00               	movl	$0x9d, %eax
+  4000ce: 0f 05                        	syscall
+  4000d0: f3 90                        	pause
+  4000d2: eb fc                        	jmp	0x4000d0 <sl_std_start+0x60>
+  4000d4: cc                           	int3
+  4000d5: cc                           	int3
+  4000d6: cc                           	int3
+  4000d7: cc                           	int3
+  4000d8: cc                           	int3
+  4000d9: cc                           	int3
+  4000da: cc                           	int3
+  4000db: cc                           	int3
+  4000dc: cc                           	int3
+  4000dd: cc                           	int3
+  4000de: cc                           	int3
+  4000df: cc                           	int3
+
+exit=0

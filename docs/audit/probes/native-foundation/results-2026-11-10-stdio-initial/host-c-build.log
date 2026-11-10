@@ -1,0 +1,6 @@
+$ clang -std=c11 -Wall -Wextra -Werror -fno-builtin -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include tools/native-c/tests/stdio.c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-initial/libstdio-host.a -ldl -lpthread -lm -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-initial/stdio-host
+stdout:
+
+stderr:
+
+exit=0

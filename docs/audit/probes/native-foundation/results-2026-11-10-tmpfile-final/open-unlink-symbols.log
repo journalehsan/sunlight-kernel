@@ -1,0 +1,16 @@
+$ llvm-nm --defined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-tmpfile-final/open-unlink-native
+stdout:
+0000000000402000 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0
+0000000000402008 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0
+0000000000402010 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0
+0000000000402020 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.17696747300396483626
+0000000000402018 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc5errno9TLS_READY.0.llvm.9389749990464273862
+00000000004002e8 T _start
+00000000004002b0 t call3
+0000000000400000 T main
+0000000000400310 T memcmp
+0000000000400340 T sl_std_start
+
+stderr:
+
+exit=0

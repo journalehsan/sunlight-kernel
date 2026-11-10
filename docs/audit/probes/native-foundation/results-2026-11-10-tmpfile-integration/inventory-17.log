@@ -1,0 +1,10 @@
+$ rg -n 'PT_INTERP|classify_personality|ET_DYN' sunlight-elf/src/lib.rs
+22:const PT_INTERP: u32 = 3;
+116:pub fn classify_personality(elf_bytes: &[u8]) -> Personality {
+212:        if p_type == PT_INTERP {
+601:        assert_eq!(classify_personality(&native), Personality::Native);
+604:        assert_eq!(classify_personality(&native), Personality::Linux);
+608:        assert_eq!(classify_personality(&native), Personality::Linux);
+612:        assert_eq!(classify_personality(&native), Personality::Unknown);
+
+exit=0

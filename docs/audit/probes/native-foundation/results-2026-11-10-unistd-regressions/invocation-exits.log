@@ -1,0 +1,10 @@
+Observed exec-session statuses after completion:
+initial broad libc host=101 (identified process stopped; incomplete coverage)
+initial 2cpu suite=0
+stdio host/build runner=0
+first 4cpu suite=0
+ordinary kernel check=0
+first unistd host/header runner=1 (existing C++ keyword in stdlib.h)
+final 2cpu suite=0
+final v2 4cpu suite=0
+final unistd host/header runner=0

@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -I/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-random-before -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-random-before/getrandom.elf
+ld.lld: error: undefined symbol: getrandom
+>>> referenced by getrandom.c
+>>>               /tmp/getrandom-a05bd1.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

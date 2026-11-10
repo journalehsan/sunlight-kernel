@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Itarget/native-c-phase5-before docs/audit/probes/atexit.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/atexit-declaration-only.elf
+docs/audit/probes/atexit.c:5:23: error: call to undeclared function 'atexit'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+    5 | int main(void){return atexit(bye);}
+      |                       ^
+1 error generated.
+
+exit=1

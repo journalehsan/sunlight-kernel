@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/poll_select.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/poll_select.elf
+docs/audit/probes/poll_select.c:2:10: fatal error: 'poll.h' file not found
+    2 | #include <poll.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

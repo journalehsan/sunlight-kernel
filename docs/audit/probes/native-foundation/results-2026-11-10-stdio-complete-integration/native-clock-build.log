@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-complete-integration/native-clock -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c:2:10: fatal error: 'time.h' file not found
+    2 | #include <time.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

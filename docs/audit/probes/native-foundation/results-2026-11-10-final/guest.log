@@ -1,0 +1,4 @@
+guest=UNKNOWN; no execution command issued.
+tools/native_std_boot_gate.py boots a fixed ISO with Rust FP/parser payloads;
+it cannot load these C ELFs. No arbitrary-ELF isolated runner is configured.
+No ELF was executed on the Linux host. exit.c requires guest status 23.

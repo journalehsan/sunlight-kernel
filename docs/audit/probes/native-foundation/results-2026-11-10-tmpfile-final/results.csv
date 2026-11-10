@@ -1,0 +1,4 @@
+probe,native_build,elf,guest,host_adapter
+stdio,PASS,PASS,UNKNOWN,PASS
+original-stdio,PASS,PASS,UNKNOWN,PASS
+open-unlink,PASS,PASS,UNKNOWN,NOT_RUN: native syscall probe

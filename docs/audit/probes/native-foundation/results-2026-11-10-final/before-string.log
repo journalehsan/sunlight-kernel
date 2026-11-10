@@ -1,0 +1,7 @@
+$ clang --target=x86_64-unknown-none-elf -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/string.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/before-string -nostdlib -fuse-ld=lld
+ld.lld: error: undefined symbol: strcmp
+>>> referenced by string.c
+>>>               /tmp/string-968875.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

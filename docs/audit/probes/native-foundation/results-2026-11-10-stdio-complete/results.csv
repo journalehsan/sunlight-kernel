@@ -1,0 +1,3 @@
+probe,native_build,elf,guest,host_adapter
+stdio,PASS,PASS,UNKNOWN,PASS
+original-stdio,PASS,PASS,UNKNOWN,UNSUPPORTED: tmpfile ENOSYS (exit 1)

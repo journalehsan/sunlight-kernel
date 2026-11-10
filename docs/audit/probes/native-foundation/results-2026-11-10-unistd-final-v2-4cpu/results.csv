@@ -1,0 +1,35 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+entry,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,7805b6563cef1d98ffb69f16f4d3ffd92fa056cf8e3648536b08724602037940
+write,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,5f60808d52d01ad4aff91997c4cabe7736d348418575e99ccc90ad3f93b02134
+exit,True,PASS,PASS,PASS,23,23,exit/output/reap/physical-frame checks,8d1cad5eef43d8a8ff7b7ca0dcbc8ac12ce370aabcbf10992bc43a9ca0cb5a33
+atexit,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,4d542c936fa052ec6ddebfca2fb308c2a4bc695050600cf905336ac4bddac763
+clock,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+dirent,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+dlfcn,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+getrandom,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+langinfo,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+locale,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+math,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+mmap,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+poll_select,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+pthread,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+signal,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+socket,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdio,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,b5f2f89d80f6f0fb1bcb274cdea1ffde8f67c579a597921674dd386aaae85517
+string,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,ba6f7d59ae21b0b0573cceb5ea016470d3968cc2cb9018199e3b70a10cb13122
+termios,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+wchar,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+cpp-runtime,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdout,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,4a0054df5a907d143d041b28d8ddf9711a7675a972a2a995462736a256bdfba1
+stdio-full,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,7cc5db94fe7608af237218bf8d209c25e8ad9b763512d0fffa9be722cd69a796
+open-unlink,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,d618807e740359f70b4f391eb23d9c2f9bc98fdc59c100b6df4567e4d017b187
+exit-cleanup,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,2bccd0592422479bf5a40a90da8e8a736a66d8ed4e0e89f18ec6471e350b42a0
+write-basic,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+write-zero,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+write-short,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+write-errors,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+atexit-order,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+atexit-register,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+atexit-capacity,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+atexit-exit,False,PASS,PASS,PASS,27,27,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96
+atexit-raw-exit,False,PASS,PASS,PASS,29,29,exit/output/reap/physical-frame checks,063ce19b76771ec6ebb2d5d66849ffec9a048544d98a28623e61c9b3fce29d96

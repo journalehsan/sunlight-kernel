@@ -1,0 +1,131 @@
+$ env -u NATIVE_RUNNER -u HELIOS_RUNNER python3 docs/audit/probes/run.py --targets native --out docs/audit/probes/native-foundation/results-2026-11-10-stdio-complete-integration
+[
+  {
+    "target": "native",
+    "probe": "atexit.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "clock.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "dirent.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "dlfcn.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "getrandom.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "langinfo.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "locale.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "math.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "mmap.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "poll_select.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "pthread.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "signal.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "socket.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "stdio.c",
+    "build": "PASS",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "string.c",
+    "build": "PASS",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "termios.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "wchar.c",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  },
+  {
+    "target": "native",
+    "probe": "cpp-runtime.cpp",
+    "build": "FAIL",
+    "host_run": "NOT_RUN",
+    "guest_run": "UNKNOWN"
+  }
+]
+
+exit=0

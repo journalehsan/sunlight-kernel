@@ -1,0 +1,22 @@
+$ rustc --edition=2021 --test tools/native-c/tests/stdio-host.rs -o /tmp/sunlight-stdio-review-tests
+exit=0
+$ /tmp/sunlight-stdio-review-tests fgets_unsigned_character_and_short_format_write_failure
+
+running 1 test
+test tests::fgets_unsigned_character_and_short_format_write_failure ... FAILED
+
+failures:
+
+---- tests::fgets_unsigned_character_and_short_format_write_failure stdout ----
+
+thread 'tests::fgets_unsigned_character_and_short_format_write_failure' (834647) panicked at tools/native-c/tests/stdio-tests.rs:251:9:
+assertion failed: !fgets(line.as_mut_ptr(), 8, s.ptr).is_null()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::fgets_unsigned_character_and_short_format_write_failure
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+exit=101

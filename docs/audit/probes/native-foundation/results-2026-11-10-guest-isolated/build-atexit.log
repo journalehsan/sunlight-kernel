@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/atexit.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/atexit.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/atexit.c:3:10: fatal error: 'unistd.h' file not found
+    3 | #include <unistd.h>
+      |          ^~~~~~~~~~
+1 error generated.
+
+exit=1

@@ -1,0 +1,48 @@
+$ rg -n 'signal|fork|mmap|thread|net|process' docs/native-std-post-implementation-audit.md
+27:- Native Hayro smoke gate (open/render/close, TLS/threads/locks, OOM/panic/group
+43:  process entry, and post-exec entry. Reaped slots reset to architectural
+45:- New native threads capture the creator's live FP state at spawn
+46:  (`thread.fx_state.save()` in `thread_spawn`), so native threads inherit live
+50:- The FP probe (`tools/native-std-probe/src/fp.S`) runs eight borrower threads
+84:  files/paths, TLS, threads and sync selection. `prepare.py` rewrites the
+85:  `cfg_select!` for `mutex`, `rwlock`, `condvar`, `once`, `thread_parking` to
+91:  `SystemTime`, `thread::sleep`, `Mutex`, `OnceLock`, `Condvar` (incl. timeout),
+92:  `RwLock`, `thread::spawn`/`join`, thread-local keys with destructors,
+95:  offsets across threads, and panic/abort exit semantics.
+104:- `thread::available_parallelism` always errors (`UNKNOWN_THREAD_COUNT`);
+109:- Networking (`std::net` uses the upstream `unsupported` shim; `TcpStream`,
+111:- `std::process` Command/fork/exec, directory iteration (`readdir`), links,
+117:- Spawn: `std::thread` maps to native syscall 158 (`sl_std_spawn`), which opts
+126:- TLS: key-based, 255 usable process-wide keys in the TCB page immediately
+128:  Destructors run via `run_dtors` (5 passes) at thread completion and at main
+132:  32 thread-local destructor drops for 32 `DropWitness` instances across 8
+133:  rounds of 4 threads. Thread creation/join churn and slot reuse are stable to
+141:- Detached threads keep their mappings until the next spawn/join/detach sweep or
+144:- `set_name`/`current_os_id` are no-ops, so thread identity introspection is
+154:  once/thread-parking (not reimplemented).
+155:- Verified: Mutex counter to 2048 across threads; `OnceLock` init; `Condvar`
+157:  with four writer threads (`shared == 128`); `thread::sleep` non-spurious
+177:  replacement tracking buffer and mmap rollback journals while both app heaps
+187:- Guest accounting on reap: the render smoke process reports
+189:  after reap. OOM/panic/exit probe processes report `user_frames=0` on reap,
+194:- The kernel reports **owned page frames** and page-table pages per process
+237:- Worker panic: `--native-panic-test` panics a worker; the *whole process* aborts
+238:  with code 101 and the borrower thread is reaped (`native-exit-group`).
+239:- Group exit: `std::process::exit(43)` terminates every task sharing the VM,
+241:- Resource cleanup: reaped processes report `owned_frames=0`, and the document
+244:- Isolation: the renderer runs as its own process with the supervisor unit
+251:- "Worker panic containment" is **process-level**, not thread-level. The native
+254:  Hayro panic. The service's panic path terminates the entire process (verified:
+275:  keyed on shared address-space identity and an aligned in-VM address; thread
+276:  reaped reports only for `native_thread` tasks in the same VM; exit-group
+292:   path, and a test that a corrupted page cannot abort the process (or, if
+293:   Hayro can panic, mitigate with a per-document renderer process or upstream
+306:6. Correct the "worker panic containment" wording to state process-level
+315:- Solid: FP/SIMD isolation on 2/4 CPUs, core `std` thread/TLS/sync semantics
+317:  open/render/close, capability-scoped IPC, and process-isolated failure
+436:- Cache accounting reports bytes retained by the viewed-process bitmap cache,
+437:  not process RSS/PSS; there is no guest resident/shared/private instrument
+467:  renderer (process-level), dropping all clients' handles.
+486:general-purpose reader because renderer panics remain process-level, corrupt-PDF
+
+exit=0

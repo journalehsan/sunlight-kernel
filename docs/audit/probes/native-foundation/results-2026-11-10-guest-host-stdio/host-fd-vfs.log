@@ -1,0 +1,751 @@
+$ cargo test --manifest-path tools/tests/fd-description/Cargo.toml --target x86_64-unknown-linux-gnu -- --test-threads=1
+stdout:
+
+running 17 tests
+test fd_table::tests::cloexec_and_reaping_release_vfs_only_once ... ok
+test fd_table::tests::cloexec_handles_are_removed_without_touching_standard_streams ... ok
+test fd_table::tests::cloexec_on_standard_streams_is_honoured ... ok
+test fd_table::tests::closed_descriptor_is_reused_indefinitely ... ok
+test fd_table::tests::closed_standard_stream_is_reused ... ok
+test fd_table::tests::dup2_returns_displaced_handle_and_clears_cloexec ... ok
+test fd_table::tests::dup3_rejects_same_fd_and_honours_cloexec ... ok
+test fd_table::tests::dup_clears_cloexec_on_the_new_descriptor ... ok
+test fd_table::tests::open_and_dup_fill_the_lowest_hole ... ok
+test fd_table::tests::spawn_and_dup_share_vfs_position_and_final_close_ownership ... ok
+test fd_table::tests::status_is_shared_by_dup_but_not_independent_open ... ok
+test fd_table::tests::take_all_handles_empties_the_table ... ok
+test fd_table::tests::take_makes_close_consuming_and_prevents_a_second_release ... ok
+test fd_table::thread_snapshot_tests::failed_and_uncommitted_snapshots_never_adopt_references ... ok
+test fd_table::thread_snapshot_tests::shared_descriptor_placeholder_allocates_no_descriptions ... ok
+test open_unlink::vfs_open_unlink_seek_dup_and_exit_cleanup ... ok
+test thread_admission::tests::quota_boundaries_and_overflow ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+stderr:
+   Compiling sunlight-fs v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling fd-description-tests v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/tests/fd-description)
+warning: unexpected `cfg` condition value: `thread_admission_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1012:9
+     |
+1012 |         feature = "thread_admission_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_admission_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `thread_lifecycle_race_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1013:9
+     |
+1013 |         feature = "thread_lifecycle_race_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_lifecycle_race_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `thread_migration_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1014:9
+     |
+1014 |         feature = "thread_migration_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_migration_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `atomic_futex_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1015:9
+     |
+1015 |         feature = "atomic_futex_test"
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `atomic_futex_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `core::num::NonZeroU32`
+ --> src/../../../../kernel/src/process/fd_table.rs:2:5
+  |
+2 | use core::num::NonZeroU32;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unexpected `cfg` condition value: `thread_admission_test`
+  --> src/../../../../kernel/src/process/thread_admission.rs:42:33
+   |
+42 |     #[cfg(all(debug_assertions, feature = "thread_admission_test", not(test)))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+   |
+   = note: no expected values for `feature`
+   = help: consider adding `thread_admission_test` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: function `socket_retain` is never used
+ --> src/lib.rs:5:12
+  |
+5 |     pub fn socket_retain(_: u32, _: usize) {}
+  |            ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `pipe_retain_end` is never used
+ --> src/lib.rs:6:12
+  |
+6 |     pub fn pipe_retain_end(_: u32, _: bool) {}
+  |            ^^^^^^^^^^^^^^^
+
+warning: function `pipe_close_end` is never used
+ --> src/lib.rs:7:12
+  |
+7 |     pub fn pipe_close_end(_: u32, _: bool) {}
+  |            ^^^^^^^^^^^^^^
+
+warning: function `socket_close` is never used
+ --> src/lib.rs:8:12
+  |
+8 |     pub fn socket_close(_: u32, _: usize) {}
+  |            ^^^^^^^^^^^^
+
+warning: function `socket_stream` is never used
+ --> src/lib.rs:9:12
+  |
+9 |     pub fn socket_stream(_: u32, _: usize) -> Option<(u32, u32)> { None }
+  |            ^^^^^^^^^^^^^
+
+warning: function `retain` is never used
+  --> src/lib.rs:12:12
+   |
+12 |     pub fn retain(_: u32) {}
+   |            ^^^^^^
+
+warning: function `release` is never used
+  --> src/lib.rs:13:12
+   |
+13 |     pub fn release(_: u32) {}
+   |            ^^^^^^^
+
+warning: struct `CapRights` is never constructed
+  --> src/../../../../kernel/src/process/fd_table.rs:10:12
+   |
+10 | pub struct CapRights {
+   |            ^^^^^^^^^
+
+warning: multiple associated items are never used
+  --> src/../../../../kernel/src/process/fd_table.rs:15:15
+   |
+14 | impl CapRights {
+   | -------------- associated items in this implementation
+15 |     pub const READ: u64 = 1 << 0;
+   |               ^^^^
+16 |     pub const WRITE: u64 = 1 << 1;
+   |               ^^^^^
+17 |     pub const SEEK: u64 = 1 << 2;
+   |               ^^^^
+18 |     pub const FSTAT: u64 = 1 << 3;
+   |               ^^^^^
+19 |     pub const FCHMOD: u64 = 1 << 4;
+   |               ^^^^^^
+20 |     pub const FCHOWN: u64 = 1 << 5;
+   |               ^^^^^^
+21 |     pub const FTRUNCATE: u64 = 1 << 6;
+   |               ^^^^^^^^^
+22 |     pub const MMAP_R: u64 = 1 << 7;
+   |               ^^^^^^
+23 |     pub const MMAP_W: u64 = 1 << 8;
+   |               ^^^^^^
+24 |     pub const MMAP_X: u64 = 1 << 9;
+   |               ^^^^^^
+25 |     pub const CONNECT: u64 = 1 << 10; // Phase 5: network
+   |               ^^^^^^^
+26 |     pub const BIND: u64 = 1 << 11;
+   |               ^^^^
+27 |     pub const ACCEPT: u64 = 1 << 12;
+   |               ^^^^^^
+28 |
+29 |     pub const fn new(bits: u64) -> Self {
+   |                  ^^^
+...
+33 |     pub const fn empty() -> Self {
+   |                  ^^^^^
+...
+37 |     pub const fn all() -> Self {
+   |                  ^^^
+...
+41 |     pub fn contains(self, other: Self) -> bool {
+   |            ^^^^^^^^
+...
+45 |     pub fn intersection(self, other: Self) -> Self {
+   |            ^^^^^^^^^^^^
+...
+51 |     pub fn union(self, other: Self) -> Self {
+   |            ^^^^^
+...
+57 |     pub fn bits(self) -> u64 {
+   |            ^^^^
+
+warning: struct `FileHandle` is never constructed
+  --> src/../../../../kernel/src/process/fd_table.rs:64:12
+   |
+64 | pub struct FileHandle(pub u32);
+   |            ^^^^^^^^^^
+
+warning: multiple associated items are never used
+   --> src/../../../../kernel/src/process/fd_table.rs:67:11
+    |
+ 66 | impl FileHandle {
+    | --------------- associated items in this implementation
+ 67 |     const PIPE_FLAG: u32 = 0x8000_0000;
+    |           ^^^^^^^^^
+ 68 |     const PIPE_WRITE_FLAG: u32 = 0x4000_0000;
+    |           ^^^^^^^^^^^^^^^
+ 69 |     const PIPE_INDEX_MASK: u32 = 0x3FFF_FFFF;
+    |           ^^^^^^^^^^^^^^^
+...
+ 72 |     const VFS_FLAG: u32 = 0x4000_0000;
+    |           ^^^^^^^^
+...
+ 76 |     const TTY_STDIN_FLAG: u32 = 0x2000_0000;
+    |           ^^^^^^^^^^^^^^
+ 77 |     const TTY_STDOUT_FLAG: u32 = 0x1000_0000;
+    |           ^^^^^^^^^^^^^^^
+...
+ 80 |     const EPOLL_FLAG: u32 = 0x0800_0000;
+    |           ^^^^^^^^^^
+ 81 |     const EPOLL_INDEX_MASK: u32 = 0x00FF_FFFF;
+    |           ^^^^^^^^^^^^^^^^
+ 82 |     const EVENTFD_FLAG: u32 = 0x0400_0000;
+    |           ^^^^^^^^^^^^
+ 83 |     const SOCKET_FLAG: u32 = 0x0200_0000;
+    |           ^^^^^^^^^^^
+...
+ 86 |     const UNIX_FLAG: u32 = 0x0100_0000;
+    |           ^^^^^^^^^
+ 87 |     const TTY_TAG_MASK: u32 = 0xF000_0000;
+    |           ^^^^^^^^^^^^
+ 88 |     const TTY_TAB_MASK: u32 = 0x0000_00FF;
+    |           ^^^^^^^^^^^^
+ 89 |
+ 90 |     pub fn is_pipe(self) -> bool {
+    |            ^^^^^^^
+...
+ 94 |     pub fn pipe_index(self) -> u32 {
+    |            ^^^^^^^^^^
+...
+ 98 |     pub fn pipe_is_write(self) -> bool {
+    |            ^^^^^^^^^^^^^
+...
+102 |     pub fn vfs(packed: u32) -> Self {
+    |            ^^^
+...
+106 |     pub fn is_vfs(self) -> bool {
+    |            ^^^^^^
+...
+110 |     pub fn vfs_handle(self) -> u32 {
+    |            ^^^^^^^^^^
+...
+115 |     pub fn tty_stdin(tab: u8) -> Self {
+    |            ^^^^^^^^^
+...
+120 |     pub fn tty_stdout(tab: u8) -> Self {
+    |            ^^^^^^^^^^
+...
+124 |     pub fn is_tty_stdin(self) -> bool {
+    |            ^^^^^^^^^^^^
+...
+128 |     pub fn is_tty_stdout(self) -> bool {
+    |            ^^^^^^^^^^^^^
+...
+133 |     pub fn tty_tab(self) -> u8 {
+    |            ^^^^^^^
+...
+137 |     pub fn epoll(pool_idx: u32) -> Self {
+    |            ^^^^^
+...
+141 |     pub fn is_epoll(self) -> bool {
+    |            ^^^^^^^^
+...
+149 |     pub fn epoll_index(self) -> u32 {
+    |            ^^^^^^^^^^^
+...
+153 |     pub fn eventfd(pool_idx: u32) -> Self {
+    |            ^^^^^^^
+...
+157 |     pub fn is_eventfd(self) -> bool {
+    |            ^^^^^^^^^^
+...
+161 |     pub fn eventfd_index(self) -> u32 {
+    |            ^^^^^^^^^^^^^
+...
+165 |     pub fn socket(index: u32, endpoint: u32) -> Self {
+    |            ^^^^^^
+...
+169 |     pub fn is_socket(self) -> bool {
+    |            ^^^^^^^^^
+...
+173 |     pub fn socket_index(self) -> u32 {
+    |            ^^^^^^^^^^^^
+...
+177 |     pub fn socket_endpoint(self) -> usize {
+    |            ^^^^^^^^^^^^^^^
+...
+181 |     pub fn unix_socket(index: u32) -> Self {
+    |            ^^^^^^^^^^^
+...
+185 |     pub fn is_unix_socket(self) -> bool {
+    |            ^^^^^^^^^^^^^^
+...
+189 |     pub fn unix_socket_index(self) -> u32 {
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: function `retain_socket` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:194:4
+    |
+194 | fn retain_socket(handle: FileHandle) {
+    |    ^^^^^^^^^^^^^
+
+warning: function `retain_pipe` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:200:4
+    |
+200 | fn retain_pipe(handle: FileHandle) {
+    |    ^^^^^^^^^^^
+
+warning: function `retain_eventfd` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:206:4
+    |
+206 | fn retain_eventfd(handle: FileHandle) {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `release_eventfd` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:212:4
+    |
+212 | fn release_eventfd(handle: FileHandle) {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `retain_unix_socket` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:218:4
+    |
+218 | fn retain_unix_socket(handle: FileHandle) {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `release_unix_socket` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:224:4
+    |
+224 | fn release_unix_socket(handle: FileHandle) {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: enum `FdError` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:232:10
+    |
+232 | pub enum FdError {
+    |          ^^^^^^^
+
+warning: struct `FileDescriptor` is never constructed
+   --> src/../../../../kernel/src/process/fd_table.rs:241:12
+    |
+241 | pub struct FileDescriptor {
+    |            ^^^^^^^^^^^^^^
+
+warning: methods `current_offset` and `set_offset` are never used
+   --> src/../../../../kernel/src/process/fd_table.rs:256:12
+    |
+255 | impl FileDescriptor {
+    | ------------------- methods in this implementation
+256 |     pub fn current_offset(&self) -> usize {
+    |            ^^^^^^^^^^^^^^
+...
+262 |     pub fn set_offset(&mut self, offset: usize) {
+    |            ^^^^^^^^^^
+
+warning: struct `OpenDescription` is never constructed
+   --> src/../../../../kernel/src/process/fd_table.rs:271:8
+    |
+271 | struct OpenDescription {
+    |        ^^^^^^^^^^^^^^^
+
+warning: static `DESCRIPTIONS` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:277:8
+    |
+277 | static DESCRIPTIONS: Mutex<Vec<Option<OpenDescription>>> = Mutex::new(Vec::new());
+    |        ^^^^^^^^^^^^
+
+warning: function `new_description` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:279:4
+    |
+279 | fn new_description(flags: u32) -> u32 {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `retain_description` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:295:4
+    |
+295 | fn retain_description(idx: u32) {
+    |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `release_description` is never used
+   --> src/../../../../kernel/src/process/fd_table.rs:302:4
+    |
+302 | fn release_description(idx: u32) -> bool {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `FdTable` is never constructed
+   --> src/../../../../kernel/src/process/fd_table.rs:315:12
+    |
+315 | pub struct FdTable {
+    |            ^^^^^^^
+
+warning: multiple associated items are never used
+   --> src/../../../../kernel/src/process/fd_table.rs:320:12
+    |
+319 | impl FdTable {
+    | ------------ associated items in this implementation
+320 |     pub fn new() -> Self {
+    |            ^^^
+...
+354 |     pub fn new_boxed() -> alloc::boxed::Box<Self> {
+    |            ^^^^^^^^^
+...
+395 |     pub fn open(
+    |            ^^^^
+...
+404 |     fn open_from(
+    |        ^^^^^^^^^
+...
+449 |     pub fn close(&mut self, fd: i32) -> Result<(), FdError> {
+    |            ^^^^^
+...
+460 |     pub fn take(&mut self, fd: i32) -> Result<FileDescriptor, FdError> {
+    |            ^^^^
+...
+474 |     pub fn take_cloexec_handles(&mut self) -> [Option<FileHandle>; 256] {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+495 |     pub fn take_all_handles(&mut self) -> [Option<FileHandle>; 256] {
+    |            ^^^^^^^^^^^^^^^^
+...
+508 |     pub fn get(&self, fd: i32) -> Option<&FileDescriptor> {
+    |            ^^^
+...
+515 |     pub fn contains_eventfd(&self, idx: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^
+...
+522 |     pub fn contains_tty_stdin_tab(&self, tab: usize) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+529 |     pub fn contains_pipe_ring(&self, ring: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+539 |     pub fn contains_unix_socket(&self, idx: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+547 |     pub fn get_mut(&mut self, fd: i32) -> Option<&mut FileDescriptor> {
+    |            ^^^^^^^
+...
+554 |     pub fn status_flags(&self, fd: i32) -> Option<u32> {
+    |            ^^^^^^^^^^^^
+...
+563 |     pub fn set_status_flags(&self, fd: i32, flags: u32) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^^^^^
+...
+576 |     pub fn install_at(
+    |            ^^^^^^^^^^
+...
+624 |     pub fn replace_handle(
+    |            ^^^^^^^^^^^^^^
+...
+646 |     pub fn install_from(&mut self, fd: i32, source: FileDescriptor) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^
+...
+664 |     pub fn check_rights(&self, fd: i32, required: CapRights) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^
+...
+674 |     pub fn dup(&mut self, fd: i32) -> Result<i32, FdError> {
+    |            ^^^
+...
+680 |     pub fn dup_from(&mut self, fd: i32, min_fd: i32, cloexec: bool) -> Result<i32, FdError> {
+    |            ^^^^^^^^
+...
+704 |     pub fn dup2(&mut self, old_fd: i32, new_fd: i32) -> Result<(i32, Option<FileHandle>), FdError> {
+    |            ^^^^
+...
+710 |     pub fn dup3(
+    |            ^^^^
+...
+719 |     fn dup2_with_cloexec(
+    |        ^^^^^^^^^^^^^^^^^
+...
+769 |     pub fn clone_boxed(&self) -> alloc::boxed::Box<Self> {
+    |            ^^^^^^^^^^^
+...
+792 |     pub(crate) fn try_thread_snapshot(
+    |                   ^^^^^^^^^^^^^^^^^^^
+...
+809 |     pub(crate) fn retain_thread_snapshot(&self) {
+    |                   ^^^^^^^^^^^^^^^^^^^^^^
+...
+820 |     pub fn reduce_rights(&mut self, fd: i32, new_rights: CapRights) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^^
+
+warning: function `retain` is never used
+  --> src/lib.rs:19:12
+   |
+19 |     pub fn retain(_: u32) {}
+   |            ^^^^^^
+
+warning: function `release` is never used
+  --> src/lib.rs:20:12
+   |
+20 |     pub fn release(_: u32) {}
+   |            ^^^^^^^
+
+warning: constant `MAX_VM_WORKERS` is never used
+ --> src/../../../../kernel/src/process/thread_admission.rs:8:11
+  |
+8 | pub const MAX_VM_WORKERS: usize = 32;
+  |           ^^^^^^^^^^^^^^
+
+warning: constant `MAX_GLOBAL_WORKERS` is never used
+ --> src/../../../../kernel/src/process/thread_admission.rs:9:11
+  |
+9 | pub const MAX_GLOBAL_WORKERS: usize = 96;
+  |           ^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_THREAD_TASK_SLOTS` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:10:11
+   |
+10 | pub const MAX_THREAD_TASK_SLOTS: usize = 512;
+   |           ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_INHERITED_BYTES` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:11:11
+   |
+11 | pub const MAX_INHERITED_BYTES: usize = 16 * 1024;
+   |           ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `THREAD_HEAP_HEADROOM` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:14:11
+   |
+14 | pub const THREAD_HEAP_HEADROOM: usize = 2 * 1024 * 1024;
+   |           ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_ENV_ENTRIES` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:15:11
+   |
+15 | pub const MAX_ENV_ENTRIES: usize = 128;
+   |           ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_CAPABILITIES` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:16:11
+   |
+16 | pub const MAX_CAPABILITIES: usize = 256;
+   |           ^^^^^^^^^^^^^^^^
+
+warning: enum `Error` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:19:10
+   |
+19 | pub enum Error {
+   |          ^^^^^
+
+warning: function `check_counts` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:26:8
+   |
+26 | pub fn check_counts(global: usize, vm: usize, slots: usize) -> Result<(), Error> {
+   |        ^^^^^^^^^^^^
+
+warning: function `checkpoint` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:41:8
+   |
+41 | pub fn checkpoint(stage: &'static str) -> Result<(), Error> {
+   |        ^^^^^^^^^^
+
+warning: function `try_box_uninit` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:50:8
+   |
+50 | pub fn try_box_uninit<T>() -> Result<Box<MaybeUninit<T>>, Error> {
+   |        ^^^^^^^^^^^^^^
+
+warning: function `try_string` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:62:8
+   |
+62 | pub fn try_string(value: &str) -> Result<String, Error> {
+   |        ^^^^^^^^^^
+
+warning: function `try_copy` is never used
+  --> src/../../../../kernel/src/process/thread_admission.rs:72:8
+   |
+72 | pub fn try_copy<T: Copy>(value: &[T]) -> Result<Vec<T>, Error> {
+   |        ^^^^^^^^
+
+warning: `fd-description-tests` (lib) generated 48 warnings (run `cargo fix --lib -p fd-description-tests` to apply 1 suggestion)
+warning: function `socket_stream` is never used
+ --> src/lib.rs:9:12
+  |
+9 |     pub fn socket_stream(_: u32, _: usize) -> Option<(u32, u32)> { None }
+  |            ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated items are never used
+  --> src/../../../../kernel/src/process/fd_table.rs:17:15
+   |
+14 | impl CapRights {
+   | -------------- associated items in this implementation
+...
+17 |     pub const SEEK: u64 = 1 << 2;
+   |               ^^^^
+18 |     pub const FSTAT: u64 = 1 << 3;
+19 |     pub const FCHMOD: u64 = 1 << 4;
+   |               ^^^^^^
+20 |     pub const FCHOWN: u64 = 1 << 5;
+   |               ^^^^^^
+21 |     pub const FTRUNCATE: u64 = 1 << 6;
+   |               ^^^^^^^^^
+22 |     pub const MMAP_R: u64 = 1 << 7;
+   |               ^^^^^^
+23 |     pub const MMAP_W: u64 = 1 << 8;
+   |               ^^^^^^
+24 |     pub const MMAP_X: u64 = 1 << 9;
+   |               ^^^^^^
+25 |     pub const CONNECT: u64 = 1 << 10; // Phase 5: network
+   |               ^^^^^^^
+26 |     pub const BIND: u64 = 1 << 11;
+   |               ^^^^
+27 |     pub const ACCEPT: u64 = 1 << 12;
+   |               ^^^^^^
+...
+33 |     pub const fn empty() -> Self {
+   |                  ^^^^^
+...
+37 |     pub const fn all() -> Self {
+   |                  ^^^
+...
+41 |     pub fn contains(self, other: Self) -> bool {
+   |            ^^^^^^^^
+...
+45 |     pub fn intersection(self, other: Self) -> Self {
+   |            ^^^^^^^^^^^^
+...
+51 |     pub fn union(self, other: Self) -> Self {
+   |            ^^^^^
+...
+57 |     pub fn bits(self) -> u64 {
+   |            ^^^^
+
+warning: multiple associated items are never used
+   --> src/../../../../kernel/src/process/fd_table.rs:76:11
+    |
+ 66 | impl FileHandle {
+    | --------------- associated items in this implementation
+...
+ 76 |     const TTY_STDIN_FLAG: u32 = 0x2000_0000;
+    |           ^^^^^^^^^^^^^^
+ 77 |     const TTY_STDOUT_FLAG: u32 = 0x1000_0000;
+    |           ^^^^^^^^^^^^^^^
+...
+ 80 |     const EPOLL_FLAG: u32 = 0x0800_0000;
+    |           ^^^^^^^^^^
+...
+ 87 |     const TTY_TAG_MASK: u32 = 0xF000_0000;
+    |           ^^^^^^^^^^^^
+ 88 |     const TTY_TAB_MASK: u32 = 0x0000_00FF;
+    |           ^^^^^^^^^^^^
+...
+115 |     pub fn tty_stdin(tab: u8) -> Self {
+    |            ^^^^^^^^^
+...
+120 |     pub fn tty_stdout(tab: u8) -> Self {
+    |            ^^^^^^^^^^
+...
+124 |     pub fn is_tty_stdin(self) -> bool {
+    |            ^^^^^^^^^^^^
+...
+128 |     pub fn is_tty_stdout(self) -> bool {
+    |            ^^^^^^^^^^^^^
+...
+133 |     pub fn tty_tab(self) -> u8 {
+    |            ^^^^^^^
+...
+137 |     pub fn epoll(pool_idx: u32) -> Self {
+    |            ^^^^^
+...
+141 |     pub fn is_epoll(self) -> bool {
+    |            ^^^^^^^^
+...
+149 |     pub fn epoll_index(self) -> u32 {
+    |            ^^^^^^^^^^^
+...
+153 |     pub fn eventfd(pool_idx: u32) -> Self {
+    |            ^^^^^^^
+...
+165 |     pub fn socket(index: u32, endpoint: u32) -> Self {
+    |            ^^^^^^
+...
+181 |     pub fn unix_socket(index: u32) -> Self {
+    |            ^^^^^^^^^^^
+
+warning: variants `AlreadyOpen` and `CapabilityDenied` are never constructed
+   --> src/../../../../kernel/src/process/fd_table.rs:234:5
+    |
+232 | pub enum FdError {
+    |          ------- variants in this enum
+233 |     InvalidFd,
+234 |     AlreadyOpen,
+    |     ^^^^^^^^^^^
+235 |     NoSlots,
+236 |     CapabilityDenied,
+    |     ^^^^^^^^^^^^^^^^
+    |
+    = note: `FdError` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: multiple methods are never used
+   --> src/../../../../kernel/src/process/fd_table.rs:515:12
+    |
+319 | impl FdTable {
+    | ------------ methods in this implementation
+...
+515 |     pub fn contains_eventfd(&self, idx: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^
+...
+522 |     pub fn contains_tty_stdin_tab(&self, tab: usize) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+529 |     pub fn contains_pipe_ring(&self, ring: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+539 |     pub fn contains_unix_socket(&self, idx: u32) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+624 |     pub fn replace_handle(
+    |            ^^^^^^^^^^^^^^
+...
+664 |     pub fn check_rights(&self, fd: i32, required: CapRights) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^
+...
+820 |     pub fn reduce_rights(&mut self, fd: i32, new_rights: CapRights) -> Result<(), FdError> {
+    |            ^^^^^^^^^^^^^
+
+warning: variant `Cancelled` is never constructed
+  --> src/../../../../kernel/src/process/thread_admission.rs:22:5
+   |
+19 | pub enum Error {
+   |          ----- variant in this enum
+...
+22 |     Cancelled,
+   |     ^^^^^^^^^
+   |
+   = note: `Error` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: `fd-description-tests` (lib test) generated 18 warnings (12 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.41s
+     Running unittests src/lib.rs (tools/tests/fd-description/target/x86_64-unknown-linux-gnu/debug/deps/fd_description_tests-b2c604ba96ec1547)
+   Doc-tests fd_description_tests
+
+exit=0

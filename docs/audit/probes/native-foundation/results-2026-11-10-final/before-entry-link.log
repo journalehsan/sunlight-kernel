@@ -1,0 +1,4 @@
+$ clang --target=x86_64-unknown-none-elf -nostdlib -fuse-ld=lld /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/entry.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/before-entry
+ld.lld: warning: cannot find entry symbol _start; not setting start address
+
+exit=0

@@ -1,0 +1,6 @@
+2 CPUs: all 26 built cases PASS; API=4 PASS/14 BUILD_FAIL; historical=7 PASS/14 NOT_RUN; getrandom exit=0 stdout=empty stderr=empty; transport=33; faults=none
+4 CPUs: all 26 built cases PASS; API=4 PASS/14 BUILD_FAIL; historical=7 PASS/14 NOT_RUN; getrandom exit=0 stdout=empty stderr=empty; transport=33; faults=none
+identical ELF SHA-256 across both CPU runs: 26/26
+unchanged historical source SHA-256=00f337b1a796f90005aa8d65569deef53d4bc8c722322a639a17637aa7b0c5f1
+getrandom ELF SHA-256=1cb1c6e1d39e8dd2adb3fb0c28e64bc4050d420690030cac2a22acb81a7ac628
+host ABI runner and both guest suites used identical getrandom ELF

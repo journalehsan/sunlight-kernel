@@ -1,0 +1,4 @@
+Historical Phase 2 source before adaptation:
+#define _GNU_SOURCE
+#include <stdio.h>
+int main(void){FILE *f=tmpfile(); if(!f) return 1; if(fputs("x",f)<0) return 2; rewind(f); int x=fgetc(f); fclose(f); return x!='x';}

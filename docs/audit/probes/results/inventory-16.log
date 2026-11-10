@@ -1,0 +1,5 @@
+$ rg -n 'rartui|ratatui|tokio' helios-note/Cargo.toml rappid-rabbit/Cargo.toml sunlight-tui
+rappid-rabbit/Cargo.toml:431:tokio = { version = "1.48", default-features = false, features = ["rt", "sync", "time"] }
+helios-note/Cargo.toml:593:ratatui = { version = "0.26", default-features = false, features = ["crossterm"] }
+
+exit=0

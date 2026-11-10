@@ -1,0 +1,7 @@
+$ clang --target=x86_64-unknown-none-elf -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/stdio.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/before-stdio -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/stdio.c:2:10: fatal error: 'stdio.h' file not found
+    2 | #include <stdio.h>
+      |          ^~~~~~~~~
+1 error generated.
+
+exit=1

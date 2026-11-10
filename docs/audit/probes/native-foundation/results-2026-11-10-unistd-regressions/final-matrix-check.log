@@ -1,0 +1,4 @@
+Final 2/4-CPU case ELF hashes identical. 19 PASS each, no fault records, QEMU exit 33.
+Historical: 6 PASS / 15 BUILD_FAIL, guest 0 FAIL and 15 NOT_RUN.
+Nine new focused: 9 PASS each. Prior four focused: 4 PASS each.
+atexit: status 0; stdout exactly 617465786974204f4b0a; stderr empty.

@@ -1,0 +1,6 @@
+$ rustc --edition=2021 --crate-type=staticlib tools/native-c/tests/stdio-host.rs -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-stdio-verified/libstdio-host.a
+stdout:
+
+stderr:
+
+exit=0

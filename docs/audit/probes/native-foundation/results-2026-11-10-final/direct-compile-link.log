@@ -1,0 +1,6 @@
+$ python3 tools/native-c/cc.py -std=c11 -c docs/audit/probes/compiler.c -o /tmp/native-c-compiler.o
+
+exit=0
+$ python3 tools/native-c/cc.py -std=c11 docs/audit/probes/native-foundation/entry.c -o /tmp/native-c-entry
+
+exit=0

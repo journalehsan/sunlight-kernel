@@ -1,0 +1,19 @@
+$ llvm-nm --defined-only --extern-only target/native-c/sysroot/lib/libsunlight_native_c.a
+Selected symbol inventory from the full archive:
+_start: T
+exit: ABSENT
+fclose: ABSENT
+fgetc: ABSENT
+fputs: ABSENT
+free: T
+malloc: T
+memcpy: T
+printf: ABSENT
+rewind: ABSENT
+sl_std_exit: T
+sl_std_start: T
+sl_std_write: T
+strcmp: T
+tmpfile: ABSENT
+write: ABSENT
+exit=0

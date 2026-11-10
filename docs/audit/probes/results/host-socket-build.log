@@ -1,0 +1,3 @@
+$ cc /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/results/host-socket -pthread -lm -ldl
+
+exit=0

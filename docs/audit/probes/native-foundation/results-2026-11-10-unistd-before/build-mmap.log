@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/mmap.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/mmap.elf
+docs/audit/probes/mmap.c:2:10: fatal error: 'sys/mman.h' file not found
+    2 | #include <sys/mman.h>
+      |          ^~~~~~~~~~~~
+1 error generated.
+
+exit=1

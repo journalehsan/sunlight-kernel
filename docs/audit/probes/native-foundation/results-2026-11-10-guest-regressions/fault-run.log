@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-10-guest-regressions/fault.elf --expect-exit 132 --out docs/audit/probes/native-foundation/results-2026-11-10-guest-fault
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-fault
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: FAIL exit=132 expected=132
+
+exit=1
+expected_host_exit=1

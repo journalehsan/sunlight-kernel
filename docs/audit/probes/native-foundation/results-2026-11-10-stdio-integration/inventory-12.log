@@ -1,0 +1,16 @@
+$ rg --files -g '*python*' -g '*libc++*' -g '*libunwind*' -g '*sysroot*' -g '*rartui*'
+docs/audit/python-port-audit.md
+docs/icons/SunlightOS/mimetypes/32/text-x-python.svg
+docs/icons/SunlightOS/mimetypes/16/text-x-python.svg
+docs/icons/SunlightOS/mimetypes/32/application-x-python-bytecode.svg
+docs/icons/SunlightOS/mimetypes/16/application-x-python-bytecode.svg
+docs/icons/SunlightOS/apps/48/ipython.org.svg
+docs/icons/SunlightOS/apps/48/ipython3.svg
+docs/icons/SunlightOS/apps/48/ipython-3.11.svg
+docs/icons/SunlightOS/apps/48/ipython-notebook.svg
+docs/icons/SunlightOS/apps/48/pattern-python-devel.svg
+docs/icons/SunlightOS/apps/48/ipython-3.svg
+docs/icons/SunlightOS/apps/48/pythonbackend.svg
+docs/icons/SunlightOS/apps/48/ipython.svg
+
+exit=0

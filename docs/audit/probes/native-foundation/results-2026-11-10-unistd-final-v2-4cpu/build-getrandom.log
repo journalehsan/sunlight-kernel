@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/getrandom.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c:2:10: fatal error: 'sys/random.h' file not found
+    2 | #include <sys/random.h>
+      |          ^~~~~~~~~~~~~~
+1 error generated.
+
+exit=1

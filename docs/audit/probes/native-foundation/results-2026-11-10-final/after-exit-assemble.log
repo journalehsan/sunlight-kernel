@@ -1,0 +1,8 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/exit.s -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/exit.o
+clang: warning: argument unused during compilation: '-mno-red-zone' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-ffreestanding' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-fno-stack-protector' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-nostdinc' [-Wunused-command-line-argument]
+clang: warning: argument unused during compilation: '-isystem /usr/lib/clang/23/include' [-Wunused-command-line-argument]
+
+exit=0

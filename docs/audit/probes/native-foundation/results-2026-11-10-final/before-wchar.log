@@ -1,0 +1,7 @@
+$ clang --target=x86_64-unknown-none-elf -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/before-wchar -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c:2:10: fatal error: 'wchar.h' file not found
+    2 | #include <wchar.h>
+      |          ^~~~~~~~~
+1 error generated.
+
+exit=1

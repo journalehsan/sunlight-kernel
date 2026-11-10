@@ -1,0 +1,5 @@
+$ rg -n 'pthread_|sigaction|sigaltstack|socketpair|tcgetattr|select' sunlight-libc/src tools/native-std/overlay
+
+
+exit_code=1
+CSV guest_run counts: {'UNKNOWN': 54}

@@ -1,0 +1,14 @@
+$ llvm-nm --defined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/string
+0000000000402000 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0
+0000000000402008 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0
+0000000000402010 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0
+0000000000402018 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.3067351516085633461
+00000000004000d0 T _RNvNtCs6bNXbN6WHyR_13sunlight_libc3tls8init_tls
+0000000000402020 b _RNvNtCs6bNXbN6WHyR_13sunlight_libc5errno9TLS_READY.0
+000000000040003c T _start
+0000000000400000 T main
+0000000000400150 T memcpy
+0000000000400060 T sl_std_start
+0000000000400250 T strcmp
+
+exit=0

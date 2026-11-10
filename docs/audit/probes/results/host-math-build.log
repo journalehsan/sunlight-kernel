@@ -1,0 +1,3 @@
+$ cc /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/math.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/results/host-math -pthread -lm -ldl
+
+exit=0

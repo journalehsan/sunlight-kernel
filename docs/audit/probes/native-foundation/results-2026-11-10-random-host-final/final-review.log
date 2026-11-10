@@ -1,0 +1,3 @@
+Final source hashes unchanged after both guest runs and host regressions: 17/17 PASS
+Kernel, native Rust std, memory/string and futex commands: exit 0
+Audit contains completed Phase 6 evidence, final counts and Phase 7 target

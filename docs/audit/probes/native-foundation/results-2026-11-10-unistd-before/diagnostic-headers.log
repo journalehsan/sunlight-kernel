@@ -1,0 +1,9 @@
+Temporary declaration-only diagnostic inputs (not production headers):
+target/native-c-phase5-before/unistd.h:
+#include <stddef.h>
+typedef long ssize_t;
+ssize_t write(int, const void *, size_t);
+
+target/native-c-phase5-before/atexit.h:
+int atexit(void (*)(void));
+

@@ -1,0 +1,147 @@
+$ llvm-objdump -d --disassemble-symbols=_start,sl_std_start,main,sl_std_write /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/write
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-final/write:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400000 <main>:
+  400000: 55                           	pushq	%rbp
+  400001: 48 89 e5                     	movq	%rsp, %rbp
+  400004: bf 02 00 00 00               	movl	$0x2, %edi
+  400009: 48 be 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rsi         # imm = 0x401000
+  400013: ba 14 00 00 00               	movl	$0x14, %edx
+  400018: e8 a3 00 00 00               	callq	0x4000c0 <sl_std_write>
+  40001d: 48 89 c2                     	movq	%rax, %rdx
+  400020: b8 0c 00 00 00               	movl	$0xc, %eax
+  400025: 31 c9                        	xorl	%ecx, %ecx
+  400027: 48 83 fa 14                  	cmpq	$0x14, %rdx
+  40002b: 0f 44 c1                     	cmovel	%ecx, %eax
+  40002e: 5d                           	popq	%rbp
+  40002f: c3                           	retq
+
+0000000000400030 <_start>:
+  400030: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  400034: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  400039: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  40003e: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  400042: e8 09 00 00 00               	callq	0x400050 <sl_std_start>
+  400047: 0f 0b                        	ud2
+  400049: cc                           	int3
+  40004a: cc                           	int3
+  40004b: cc                           	int3
+  40004c: cc                           	int3
+  40004d: cc                           	int3
+  40004e: cc                           	int3
+  40004f: cc                           	int3
+
+0000000000400050 <sl_std_start>:
+  400050: 41 57                        	pushq	%r15
+  400052: 41 56                        	pushq	%r14
+  400054: 53                           	pushq	%rbx
+  400055: 49 89 d7                     	movq	%rdx, %r15
+  400058: 48 89 f3                     	movq	%rsi, %rbx
+  40005b: 49 89 fe                     	movq	%rdi, %r14
+  40005e: 48 89 3d 9b 1f 00 00         	movq	%rdi, 0x1f9b(%rip)      # 0x402000 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0>
+  400065: 48 89 35 9c 1f 00 00         	movq	%rsi, 0x1f9c(%rip)      # 0x402008 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0>
+  40006c: 48 89 15 9d 1f 00 00         	movq	%rdx, 0x1f9d(%rip)      # 0x402010 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0>
+  400073: e8 38 01 00 00               	callq	0x4001b0 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3tls8init_tls>
+  400078: 84 c0                        	testb	%al, %al
+  40007a: 74 18                        	je	0x400094 <sl_std_start+0x44>
+  40007c: b8 14 00 00 00               	movl	$0x14, %eax
+  400081: bf 65 00 00 00               	movl	$0x65, %edi
+  400086: 0f 05                        	syscall
+  400088: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  400090: f3 90                        	pause
+  400092: eb fc                        	jmp	0x400090 <sl_std_start+0x40>
+  400094: 4c 89 3d 7d 1f 00 00         	movq	%r15, 0x1f7d(%rip)      # 0x402018 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.3067351516085633461>
+  40009b: 4c 89 f7                     	movq	%r14, %rdi
+  40009e: 48 89 de                     	movq	%rbx, %rsi
+  4000a1: e8 5a ff ff ff               	callq	0x400000 <main>
+  4000a6: 48 63 f8                     	movslq	%eax, %rdi
+  4000a9: b8 9d 00 00 00               	movl	$0x9d, %eax
+  4000ae: 0f 05                        	syscall
+  4000b0: f3 90                        	pause
+  4000b2: eb fc                        	jmp	0x4000b0 <sl_std_start+0x60>
+  4000b4: cc                           	int3
+  4000b5: cc                           	int3
+  4000b6: cc                           	int3
+  4000b7: cc                           	int3
+  4000b8: cc                           	int3
+  4000b9: cc                           	int3
+  4000ba: cc                           	int3
+  4000bb: cc                           	int3
+  4000bc: cc                           	int3
+  4000bd: cc                           	int3
+  4000be: cc                           	int3
+  4000bf: cc                           	int3
+
+00000000004000c0 <sl_std_write>:
+  4000c0: 49 89 d0                     	movq	%rdx, %r8
+  4000c3: 83 ff 02                     	cmpl	$0x2, %edi
+  4000c6: 75 69                        	jne	0x400131 <sl_std_write+0x71>
+  4000c8: 4d 85 c0                     	testq	%r8, %r8
+  4000cb: 0f 84 8d 00 00 00            	je	0x40015e <sl_std_write+0x9e>
+  4000d1: 4c 89 c2                     	movq	%r8, %rdx
+  4000d4: eb 13                        	jmp	0x4000e9 <sl_std_write+0x29>
+  4000d6: 66 2e 0f 1f 84 00 00 00 00 00	nopw	%cs:(%rax,%rax)
+  4000e0: 48 85 d2                     	testq	%rdx, %rdx
+  4000e3: 0f 84 a7 00 00 00            	je	0x400190 <sl_std_write+0xd0>
+  4000e9: b8 2b 00 00 00               	movl	$0x2b, %eax
+  4000ee: bf 02 00 00 00               	movl	$0x2, %edi
+  4000f3: 0f 05                        	syscall
+  4000f5: 48 89 c1                     	movq	%rax, %rcx
+  4000f8: 48 c7 c0 fb ff ff ff         	movq	$-0x5, %rax
+  4000ff: 48 8d 79 0d                  	leaq	0xd(%rcx), %rdi
+  400103: 48 83 ff 0c                  	cmpq	$0xc, %rdi
+  400107: 77 17                        	ja	0x400120 <sl_std_write+0x60>
+  400109: ff 24 fd 18 10 40 00         	jmpq	*0x401018(,%rdi,8)
+  400110: b8 15 00 00 00               	movl	$0x15, %eax
+  400115: 0f 05                        	syscall
+  400117: eb c7                        	jmp	0x4000e0 <sl_std_write+0x20>
+  400119: 0f 1f 80 00 00 00 00         	nopl	(%rax)
+  400120: 48 8d 79 ff                  	leaq	-0x1(%rcx), %rdi
+  400124: 48 39 d7                     	cmpq	%rdx, %rdi
+  400127: 73 6a                        	jae	0x400193 <sl_std_write+0xd3>
+  400129: 48 29 ca                     	subq	%rcx, %rdx
+  40012c: 48 01 ce                     	addq	%rcx, %rsi
+  40012f: eb af                        	jmp	0x4000e0 <sl_std_write+0x20>
+  400131: 89 ff                        	movl	%edi, %edi
+  400133: b8 2b 00 00 00               	movl	$0x2b, %eax
+  400138: 4c 89 c2                     	movq	%r8, %rdx
+  40013b: 0f 05                        	syscall
+  40013d: 48 83 f8 f2                  	cmpq	$-0xe, %rax
+  400141: 76 09                        	jbe	0x40014c <sl_std_write+0x8c>
+  400143: 48 8b 04 c5 e8 10 40 00      	movq	0x4010e8(,%rax,8), %rax
+  40014b: c3                           	retq
+  40014c: 4c 39 c0                     	cmpq	%r8, %rax
+  40014f: 48 89 c1                     	movq	%rax, %rcx
+  400152: 48 c7 c0 fb ff ff ff         	movq	$-0x5, %rax
+  400159: 48 0f 46 c1                  	cmovbeq	%rcx, %rax
+  40015d: c3                           	retq
+  40015e: 31 c0                        	xorl	%eax, %eax
+  400160: c3                           	retq
+  400161: 48 c7 c0 ea ff ff ff         	movq	$-0x16, %rax
+  400168: c3                           	retq
+  400169: 48 c7 c0 fe ff ff ff         	movq	$-0x2, %rax
+  400170: c3                           	retq
+  400171: 48 c7 c0 f4 ff ff ff         	movq	$-0xc, %rax
+  400178: c3                           	retq
+  400179: 48 c7 c0 e4 ff ff ff         	movq	$-0x1c, %rax
+  400180: c3                           	retq
+  400181: 48 c7 c0 ec ff ff ff         	movq	$-0x14, %rax
+  400188: c3                           	retq
+  400189: 49 c7 c0 eb ff ff ff         	movq	$-0x15, %r8
+  400190: 4c 89 c0                     	movq	%r8, %rax
+  400193: c3                           	retq
+  400194: 48 c7 c0 f3 ff ff ff         	movq	$-0xd, %rax
+  40019b: c3                           	retq
+  40019c: 48 c7 c0 e0 ff ff ff         	movq	$-0x20, %rax
+  4001a3: c3                           	retq
+  4001a4: 48 c7 c0 f7 ff ff ff         	movq	$-0x9, %rax
+  4001ab: c3                           	retq
+  4001ac: cc                           	int3
+  4001ad: cc                           	int3
+  4001ae: cc                           	int3
+  4001af: cc                           	int3
+
+exit=0

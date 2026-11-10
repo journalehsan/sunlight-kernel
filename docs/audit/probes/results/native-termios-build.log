@@ -1,0 +1,7 @@
+$ clang --target=x86_64-unknown-none-elf -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/termios.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/results/native-termios -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/termios.c:2:10: fatal error: 'termios.h' file not found
+    2 | #include <termios.h>
+      |          ^~~~~~~~~~~
+1 error generated.
+
+exit=1

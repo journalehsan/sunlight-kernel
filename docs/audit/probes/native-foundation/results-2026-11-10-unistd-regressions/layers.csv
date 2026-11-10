@@ -1,0 +1,10 @@
+check,host,native_build,guest_2,guest_4
+libc,94 PASS / 2 NOT_RUN,PASS,covered subset only,covered subset only
+filesystem,90 PASS,PASS,covered subset only,covered subset only
+descriptor-vfs,17 PASS,PASS,covered subset only,covered subset only
+stdio-temp,19 PASS + 2 C adapter PASS,3 ELF PASS,PASS focused fixtures,PASS focused fixtures
+mem-string,24 PASS,codegen/C ABI/C++ PASS,PASS historical string,PASS historical string
+futex,3 PASS,native std check PASS,NOT_RUN,NOT_RUN
+header-export,NOT_RUN runtime,12 header checks and unique exports PASS,covered subset only,covered subset only
+native-rust-std,NOT_RUN,PASS,NOT_RUN,NOT_RUN
+ordinary-kernel,NOT_RUN,PASS,NOT_RUN ordinary feature set,NOT_RUN ordinary feature set

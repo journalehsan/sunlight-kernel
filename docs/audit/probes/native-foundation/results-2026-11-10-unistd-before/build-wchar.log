@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/wchar.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/wchar.elf
+docs/audit/probes/wchar.c:2:10: fatal error: 'wchar.h' file not found
+    2 | #include <wchar.h>
+      |          ^~~~~~~~~
+1 error generated.
+
+exit=1

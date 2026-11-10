@@ -1,0 +1,296 @@
+$ llvm-objdump -d /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-host-stdio/open-unlink-native
+stdout:
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10-guest-host-stdio/open-unlink-native:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400000 <main>:
+  400000: 55                           	pushq	%rbp
+  400001: 48 89 e5                     	movq	%rsp, %rbp
+  400004: 48 83 ec 40                  	subq	$0x40, %rsp
+  400008: 89 7d f8                     	movl	%edi, -0x8(%rbp)
+  40000b: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+  40000f: 83 7d f8 02                  	cmpl	$0x2, -0x8(%rbp)
+  400013: 74 0c                        	je	0x400021 <main+0x21>
+  400015: c7 45 fc 0a 00 00 00         	movl	$0xa, -0x4(%rbp)
+  40001c: e9 7b 02 00 00               	jmp	0x40029c <main+0x29c>
+  400021: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  400025: 48 8b 70 08                  	movq	0x8(%rax), %rsi
+  400029: bf 28 00 00 00               	movl	$0x28, %edi
+  40002e: ba c2 00 00 00               	movl	$0xc2, %edx
+  400033: b9 80 01 00 00               	movl	$0x180, %ecx            # imm = 0x180
+  400038: e8 73 02 00 00               	callq	0x4002b0 <call3>
+  40003d: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+  400041: 48 83 7d e8 00               	cmpq	$0x0, -0x18(%rbp)
+  400046: 7d 0c                        	jge	0x400054 <main+0x54>
+  400048: c7 45 fc 0b 00 00 00         	movl	$0xb, -0x4(%rbp)
+  40004f: e9 48 02 00 00               	jmp	0x40029c <main+0x29c>
+  400054: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  400058: bf 2d 00 00 00               	movl	$0x2d, %edi
+  40005d: 31 c0                        	xorl	%eax, %eax
+  40005f: 89 c1                        	movl	%eax, %ecx
+  400061: 48 89 ca                     	movq	%rcx, %rdx
+  400064: e8 47 02 00 00               	callq	0x4002b0 <call3>
+  400069: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+  40006d: c7 45 dc 00 00 00 00         	movl	$0x0, -0x24(%rbp)
+  400074: 48 83 7d e0 00               	cmpq	$0x0, -0x20(%rbp)
+  400079: 7d 0c                        	jge	0x400087 <main+0x87>
+  40007b: c7 45 dc 0c 00 00 00         	movl	$0xc, -0x24(%rbp)
+  400082: e9 a5 01 00 00               	jmp	0x40022c <main+0x22c>
+  400087: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  40008b: 48 8b 70 08                  	movq	0x8(%rax), %rsi
+  40008f: bf 41 00 00 00               	movl	$0x41, %edi
+  400094: 31 c0                        	xorl	%eax, %eax
+  400096: 89 c1                        	movl	%eax, %ecx
+  400098: 48 89 ca                     	movq	%rcx, %rdx
+  40009b: e8 10 02 00 00               	callq	0x4002b0 <call3>
+  4000a0: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4000a4: 74 0c                        	je	0x4000b2 <main+0xb2>
+  4000a6: c7 45 dc 0d 00 00 00         	movl	$0xd, -0x24(%rbp)
+  4000ad: e9 7a 01 00 00               	jmp	0x40022c <main+0x22c>
+  4000b2: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  4000b6: 48 8b 70 08                  	movq	0x8(%rax), %rsi
+  4000ba: bf 28 00 00 00               	movl	$0x28, %edi
+  4000bf: 31 c0                        	xorl	%eax, %eax
+  4000c1: 89 c1                        	movl	%eax, %ecx
+  4000c3: 48 89 ca                     	movq	%rcx, %rdx
+  4000c6: e8 e5 01 00 00               	callq	0x4002b0 <call3>
+  4000cb: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+  4000cf: 48 83 7d d0 fd               	cmpq	$-0x3, -0x30(%rbp)
+  4000d4: 74 28                        	je	0x4000fe <main+0xfe>
+  4000d6: 48 83 7d d0 00               	cmpq	$0x0, -0x30(%rbp)
+  4000db: 7c 15                        	jl	0x4000f2 <main+0xf2>
+  4000dd: 48 8b 75 d0                  	movq	-0x30(%rbp), %rsi
+  4000e1: bf 29 00 00 00               	movl	$0x29, %edi
+  4000e6: 31 c0                        	xorl	%eax, %eax
+  4000e8: 89 c1                        	movl	%eax, %ecx
+  4000ea: 48 89 ca                     	movq	%rcx, %rdx
+  4000ed: e8 be 01 00 00               	callq	0x4002b0 <call3>
+  4000f2: c7 45 dc 0e 00 00 00         	movl	$0xe, -0x24(%rbp)
+  4000f9: e9 2e 01 00 00               	jmp	0x40022c <main+0x22c>
+  4000fe: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  400102: bf 2b 00 00 00               	movl	$0x2b, %edi
+  400107: 48 ba 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rdx         # imm = 0x401000
+  400111: b9 08 00 00 00               	movl	$0x8, %ecx
+  400116: e8 95 01 00 00               	callq	0x4002b0 <call3>
+  40011b: 48 83 f8 08                  	cmpq	$0x8, %rax
+  40011f: 74 0c                        	je	0x40012d <main+0x12d>
+  400121: c7 45 dc 0f 00 00 00         	movl	$0xf, -0x24(%rbp)
+  400128: e9 ff 00 00 00               	jmp	0x40022c <main+0x22c>
+  40012d: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400131: bf 2c 00 00 00               	movl	$0x2c, %edi
+  400136: 31 c0                        	xorl	%eax, %eax
+  400138: 89 c1                        	movl	%eax, %ecx
+  40013a: 48 89 ca                     	movq	%rcx, %rdx
+  40013d: e8 6e 01 00 00               	callq	0x4002b0 <call3>
+  400142: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400146: 74 0c                        	je	0x400154 <main+0x154>
+  400148: c7 45 dc 10 00 00 00         	movl	$0x10, -0x24(%rbp)
+  40014f: e9 d8 00 00 00               	jmp	0x40022c <main+0x22c>
+  400154: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400158: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  40015c: bf 2a 00 00 00               	movl	$0x2a, %edi
+  400161: b9 08 00 00 00               	movl	$0x8, %ecx
+  400166: e8 45 01 00 00               	callq	0x4002b0 <call3>
+  40016b: 48 83 f8 08                  	cmpq	$0x8, %rax
+  40016f: 75 1d                        	jne	0x40018e <main+0x18e>
+  400171: 48 8d 7d c8                  	leaq	-0x38(%rbp), %rdi
+  400175: 48 be 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rsi         # imm = 0x401000
+  40017f: ba 08 00 00 00               	movl	$0x8, %edx
+  400184: e8 87 01 00 00               	callq	0x400310 <memcmp>
+  400189: 83 f8 00                     	cmpl	$0x0, %eax
+  40018c: 74 0c                        	je	0x40019a <main+0x19a>
+  40018e: c7 45 dc 11 00 00 00         	movl	$0x11, -0x24(%rbp)
+  400195: e9 92 00 00 00               	jmp	0x40022c <main+0x22c>
+  40019a: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  40019e: bf 29 00 00 00               	movl	$0x29, %edi
+  4001a3: 31 c0                        	xorl	%eax, %eax
+  4001a5: 89 c1                        	movl	%eax, %ecx
+  4001a7: 48 89 ca                     	movq	%rcx, %rdx
+  4001aa: e8 01 01 00 00               	callq	0x4002b0 <call3>
+  4001af: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4001b3: 74 11                        	je	0x4001c6 <main+0x1c6>
+  4001b5: 48 c7 45 e8 ff ff ff ff      	movq	$-0x1, -0x18(%rbp)
+  4001bd: c7 45 dc 12 00 00 00         	movl	$0x12, -0x24(%rbp)
+  4001c4: eb 66                        	jmp	0x40022c <main+0x22c>
+  4001c6: 48 c7 45 e8 ff ff ff ff      	movq	$-0x1, -0x18(%rbp)
+  4001ce: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4001d2: bf 2c 00 00 00               	movl	$0x2c, %edi
+  4001d7: 31 c0                        	xorl	%eax, %eax
+  4001d9: 89 c1                        	movl	%eax, %ecx
+  4001db: 48 89 ca                     	movq	%rcx, %rdx
+  4001de: e8 cd 00 00 00               	callq	0x4002b0 <call3>
+  4001e3: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4001e7: 75 3a                        	jne	0x400223 <main+0x223>
+  4001e9: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4001ed: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  4001f1: bf 2a 00 00 00               	movl	$0x2a, %edi
+  4001f6: b9 08 00 00 00               	movl	$0x8, %ecx
+  4001fb: e8 b0 00 00 00               	callq	0x4002b0 <call3>
+  400200: 48 83 f8 08                  	cmpq	$0x8, %rax
+  400204: 75 1d                        	jne	0x400223 <main+0x223>
+  400206: 48 8d 7d c8                  	leaq	-0x38(%rbp), %rdi
+  40020a: 48 be 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rsi         # imm = 0x401000
+  400214: ba 08 00 00 00               	movl	$0x8, %edx
+  400219: e8 f2 00 00 00               	callq	0x400310 <memcmp>
+  40021e: 83 f8 00                     	cmpl	$0x0, %eax
+  400221: 74 07                        	je	0x40022a <main+0x22a>
+  400223: c7 45 dc 13 00 00 00         	movl	$0x13, -0x24(%rbp)
+  40022a: eb 00                        	jmp	0x40022c <main+0x22c>
+  40022c: 48 83 7d e0 00               	cmpq	$0x0, -0x20(%rbp)
+  400231: 7c 28                        	jl	0x40025b <main+0x25b>
+  400233: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400237: bf 29 00 00 00               	movl	$0x29, %edi
+  40023c: 31 c0                        	xorl	%eax, %eax
+  40023e: 89 c1                        	movl	%eax, %ecx
+  400240: 48 89 ca                     	movq	%rcx, %rdx
+  400243: e8 68 00 00 00               	callq	0x4002b0 <call3>
+  400248: 48 83 f8 00                  	cmpq	$0x0, %rax
+  40024c: 74 0d                        	je	0x40025b <main+0x25b>
+  40024e: 83 7d dc 00                  	cmpl	$0x0, -0x24(%rbp)
+  400252: 75 07                        	jne	0x40025b <main+0x25b>
+  400254: c7 45 dc 14 00 00 00         	movl	$0x14, -0x24(%rbp)
+  40025b: 48 83 7d e8 00               	cmpq	$0x0, -0x18(%rbp)
+  400260: 7c 15                        	jl	0x400277 <main+0x277>
+  400262: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  400266: bf 29 00 00 00               	movl	$0x29, %edi
+  40026b: 31 c0                        	xorl	%eax, %eax
+  40026d: 89 c1                        	movl	%eax, %ecx
+  40026f: 48 89 ca                     	movq	%rcx, %rdx
+  400272: e8 39 00 00 00               	callq	0x4002b0 <call3>
+  400277: 83 7d dc 00                  	cmpl	$0x0, -0x24(%rbp)
+  40027b: 74 19                        	je	0x400296 <main+0x296>
+  40027d: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+  400281: 48 8b 70 08                  	movq	0x8(%rax), %rsi
+  400285: bf 41 00 00 00               	movl	$0x41, %edi
+  40028a: 31 c0                        	xorl	%eax, %eax
+  40028c: 89 c1                        	movl	%eax, %ecx
+  40028e: 48 89 ca                     	movq	%rcx, %rdx
+  400291: e8 1a 00 00 00               	callq	0x4002b0 <call3>
+  400296: 8b 45 dc                     	movl	-0x24(%rbp), %eax
+  400299: 89 45 fc                     	movl	%eax, -0x4(%rbp)
+  40029c: 8b 45 fc                     	movl	-0x4(%rbp), %eax
+  40029f: 48 83 c4 40                  	addq	$0x40, %rsp
+  4002a3: 5d                           	popq	%rbp
+  4002a4: c3                           	retq
+  4002a5: 66 66 2e 0f 1f 84 00 00 00 00 00     	nopw	%cs:(%rax,%rax)
+
+00000000004002b0 <call3>:
+  4002b0: 55                           	pushq	%rbp
+  4002b1: 48 89 e5                     	movq	%rsp, %rbp
+  4002b4: 48 83 ec 28                  	subq	$0x28, %rsp
+  4002b8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+  4002bc: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+  4002c0: 48 89 55 e8                  	movq	%rdx, -0x18(%rbp)
+  4002c4: 48 89 4d e0                  	movq	%rcx, -0x20(%rbp)
+  4002c8: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+  4002cc: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+  4002d0: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  4002d4: 48 8b 55 e0                  	movq	-0x20(%rbp), %rdx
+  4002d8: 0f 05                        	syscall
+  4002da: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+  4002de: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+  4002e2: 48 83 c4 28                  	addq	$0x28, %rsp
+  4002e6: 5d                           	popq	%rbp
+  4002e7: c3                           	retq
+
+00000000004002e8 <_start>:
+  4002e8: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  4002ec: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  4002f1: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  4002f6: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  4002fa: e8 41 00 00 00               	callq	0x400340 <sl_std_start>
+  4002ff: 0f 0b                        	ud2
+  400301: cc                           	int3
+  400302: cc                           	int3
+  400303: cc                           	int3
+  400304: cc                           	int3
+  400305: cc                           	int3
+  400306: cc                           	int3
+  400307: cc                           	int3
+  400308: cc                           	int3
+  400309: cc                           	int3
+  40030a: cc                           	int3
+  40030b: cc                           	int3
+  40030c: cc                           	int3
+  40030d: cc                           	int3
+  40030e: cc                           	int3
+  40030f: cc                           	int3
+
+0000000000400310 <memcmp>:
+  400310: 48 85 d2                     	testq	%rdx, %rdx
+  400313: 74 21                        	je	0x400336 <memcmp+0x26>
+  400315: 31 c9                        	xorl	%ecx, %ecx
+  400317: 66 0f 1f 84 00 00 00 00 00   	nopw	(%rax,%rax)
+  400320: 0f b6 04 0f                  	movzbl	(%rdi,%rcx), %eax
+  400324: 44 0f b6 04 0e               	movzbl	(%rsi,%rcx), %r8d
+  400329: 44 38 c0                     	cmpb	%r8b, %al
+  40032c: 75 0b                        	jne	0x400339 <memcmp+0x29>
+  40032e: 48 ff c1                     	incq	%rcx
+  400331: 48 39 ca                     	cmpq	%rcx, %rdx
+  400334: 75 ea                        	jne	0x400320 <memcmp+0x10>
+  400336: 31 c0                        	xorl	%eax, %eax
+  400338: c3                           	retq
+  400339: 44 29 c0                     	subl	%r8d, %eax
+  40033c: c3                           	retq
+  40033d: cc                           	int3
+  40033e: cc                           	int3
+  40033f: cc                           	int3
+
+0000000000400340 <sl_std_start>:
+  400340: 41 57                        	pushq	%r15
+  400342: 41 56                        	pushq	%r14
+  400344: 53                           	pushq	%rbx
+  400345: 49 89 d7                     	movq	%rdx, %r15
+  400348: 48 89 f3                     	movq	%rsi, %rbx
+  40034b: 49 89 fe                     	movq	%rdi, %r14
+  40034e: 48 89 3d ab 1c 00 00         	movq	%rdi, 0x1cab(%rip)      # 0x402000 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0>
+  400355: 48 89 35 ac 1c 00 00         	movq	%rsi, 0x1cac(%rip)      # 0x402008 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0>
+  40035c: 48 89 15 ad 1c 00 00         	movq	%rdx, 0x1cad(%rip)      # 0x402010 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0>
+  400363: b8 32 00 00 00               	movl	$0x32, %eax
+  400368: be 00 10 00 00               	movl	$0x1000, %esi           # imm = 0x1000
+  40036d: ba 03 00 00 00               	movl	$0x3, %edx
+  400372: 41 ba 22 00 00 00            	movl	$0x22, %r10d
+  400378: 31 ff                        	xorl	%edi, %edi
+  40037a: 49 c7 c0 ff ff ff ff         	movq	$-0x1, %r8
+  400381: 45 31 c9                     	xorl	%r9d, %r9d
+  400384: 0f 05                        	syscall
+  400386: 48 83 f8 f2                  	cmpq	$-0xe, %rax
+  40038a: 77 3a                        	ja	0x4003c6 <sl_std_start+0x86>
+  40038c: 48 89 c7                     	movq	%rax, %rdi
+  40038f: f7 c7 ff 0f 00 00            	testl	$0xfff, %edi            # imm = 0xFFF
+  400395: 0f 95 c0                     	setne	%al
+  400398: 48 89 f9                     	movq	%rdi, %rcx
+  40039b: 48 81 c1 00 10 00 00         	addq	$0x1000, %rcx           # imm = 0x1000
+  4003a2: 48 81 f9 01 10 00 00         	cmpq	$0x1001, %rcx           # imm = 0x1001
+  4003a9: 0f 92 c1                     	setb	%cl
+  4003ac: 08 c1                        	orb	%al, %cl
+  4003ae: 75 16                        	jne	0x4003c6 <sl_std_start+0x86>
+  4003b0: 48 89 3f                     	movq	%rdi, (%rdi)
+  4003b3: c7 47 08 00 00 00 00         	movl	$0x0, 0x8(%rdi)
+  4003ba: b8 65 00 00 00               	movl	$0x65, %eax
+  4003bf: 0f 05                        	syscall
+  4003c1: 48 85 c0                     	testq	%rax, %rax
+  4003c4: 74 1e                        	je	0x4003e4 <sl_std_start+0xa4>
+  4003c6: b8 14 00 00 00               	movl	$0x14, %eax
+  4003cb: bf 65 00 00 00               	movl	$0x65, %edi
+  4003d0: 0f 05                        	syscall
+  4003d2: 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00    	nopw	%cs:(%rax,%rax)
+  4003e0: f3 90                        	pause
+  4003e2: eb fc                        	jmp	0x4003e0 <sl_std_start+0xa0>
+  4003e4: c6 05 2d 1c 00 00 01         	movb	$0x1, 0x1c2d(%rip)      # 0x402018 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc5errno9TLS_READY.0.llvm.9389749990464273862>
+  4003eb: 4c 89 3d 2e 1c 00 00         	movq	%r15, 0x1c2e(%rip)      # 0x402020 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.17696747300396483626>
+  4003f2: 4c 89 f7                     	movq	%r14, %rdi
+  4003f5: 48 89 de                     	movq	%rbx, %rsi
+  4003f8: e8 03 fc ff ff               	callq	0x400000 <main>
+  4003fd: 48 63 f8                     	movslq	%eax, %rdi
+  400400: b8 9d 00 00 00               	movl	$0x9d, %eax
+  400405: 0f 05                        	syscall
+  400407: 66 0f 1f 84 00 00 00 00 00   	nopw	(%rax,%rax)
+  400410: f3 90                        	pause
+  400412: eb fc                        	jmp	0x400410 <sl_std_start+0xd0>
+
+stderr:
+
+exit=0

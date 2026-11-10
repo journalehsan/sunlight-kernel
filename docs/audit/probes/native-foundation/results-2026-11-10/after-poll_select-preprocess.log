@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -ffreestanding -fno-builtin -E /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/poll_select.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/poll_select.i
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/poll_select.c:2:10: fatal error: 'poll.h' file not found
+    2 | #include <poll.h>
+      |          ^~~~~~~~
+1 error generated.
+
+exit=1

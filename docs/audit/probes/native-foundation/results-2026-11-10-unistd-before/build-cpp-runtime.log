@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -Isunlight-libc/include -nostdlib -fuse-ld=lld docs/audit/probes/cpp-runtime.cpp -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/cpp-runtime.elf
+docs/audit/probes/cpp-runtime.cpp:1:10: fatal error: 'iostream' file not found
+    1 | #include <iostream>
+      |          ^~~~~~~~~~
+1 error generated.
+
+exit=1

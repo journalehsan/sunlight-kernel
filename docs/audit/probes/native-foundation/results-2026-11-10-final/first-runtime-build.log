@@ -1,0 +1,38 @@
+$ bash tools/build_native_c.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+     Locking 2 packages to latest compatible versions
+   Compiling compiler_builtins v0.1.160 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+   Compiling core v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/core)
+   Compiling libc v0.2.185
+   Compiling std v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std)
+   Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+   Compiling alloc v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/alloc)
+   Compiling panic_abort v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_abort)
+   Compiling cfg-if v1.0.4
+   Compiling rustc-demangle v0.1.27
+   Compiling rustc-literal-escaper v0.0.7
+   Compiling unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/unwind)
+   Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+   Compiling panic_unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_unwind)
+   Compiling hashbrown v0.17.1
+   Compiling std_detect v0.1.5 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std_detect)
+   Compiling proc_macro v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/proc_macro)
+   Compiling sunlight-ipc v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+   Compiling sunlight-libc v0.2.7061-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+   Compiling sunlight-native-c v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/tools/native-c)
+    Finished `release` profile [optimized] target(s) in 19.47s
+
+exit=0

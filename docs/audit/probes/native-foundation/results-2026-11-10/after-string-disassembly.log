@@ -1,0 +1,87 @@
+$ llvm-objdump -d --disassemble-symbols=_start,sl_std_start,main,sl_std_write,sl_std_exit /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/string
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/string:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400000 <main>:
+  400000: 55                           	pushq	%rbp
+  400001: 48 89 e5                     	movq	%rsp, %rbp
+  400004: 48 83 ec 10                  	subq	$0x10, %rsp
+  400008: 48 8d 7d f8                  	leaq	-0x8(%rbp), %rdi
+  40000c: 48 be 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rsi         # imm = 0x401000
+  400016: ba 04 00 00 00               	movl	$0x4, %edx
+  40001b: e8 30 01 00 00               	callq	0x400150 <memcpy>
+  400020: 48 8d 7d f8                  	leaq	-0x8(%rbp), %rdi
+  400024: 48 be 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rsi         # imm = 0x401000
+  40002e: e8 1d 02 00 00               	callq	0x400250 <strcmp>
+  400033: 48 83 c4 10                  	addq	$0x10, %rsp
+  400037: 5d                           	popq	%rbp
+  400038: c3                           	retq
+  400039: cc                           	int3
+  40003a: cc                           	int3
+  40003b: cc                           	int3
+
+000000000040003c <_start>:
+  40003c: 48 8b 3c 24                  	movq	(%rsp), %rdi
+  400040: 48 8d 74 24 08               	leaq	0x8(%rsp), %rsi
+  400045: 48 8d 54 fe 08               	leaq	0x8(%rsi,%rdi,8), %rdx
+  40004a: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  40004e: e8 0d 00 00 00               	callq	0x400060 <sl_std_start>
+  400053: 0f 0b                        	ud2
+  400055: cc                           	int3
+  400056: cc                           	int3
+  400057: cc                           	int3
+  400058: cc                           	int3
+  400059: cc                           	int3
+  40005a: cc                           	int3
+  40005b: cc                           	int3
+  40005c: cc                           	int3
+  40005d: cc                           	int3
+  40005e: cc                           	int3
+  40005f: cc                           	int3
+
+0000000000400060 <sl_std_start>:
+  400060: 41 57                        	pushq	%r15
+  400062: 41 56                        	pushq	%r14
+  400064: 53                           	pushq	%rbx
+  400065: 49 89 d7                     	movq	%rdx, %r15
+  400068: 48 89 f3                     	movq	%rsi, %rbx
+  40006b: 49 89 fe                     	movq	%rdi, %r14
+  40006e: 48 89 3d 8b 1f 00 00         	movq	%rdi, 0x1f8b(%rip)      # 0x402000 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGC.0>
+  400075: 48 89 35 8c 1f 00 00         	movq	%rsi, 0x1f8c(%rip)      # 0x402008 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ARGV.0>
+  40007c: 48 89 15 8d 1f 00 00         	movq	%rdx, 0x1f8d(%rip)      # 0x402010 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc11std_runtime10START_ENVP.0>
+  400083: e8 48 00 00 00               	callq	0x4000d0 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3tls8init_tls>
+  400088: 84 c0                        	testb	%al, %al
+  40008a: 74 18                        	je	0x4000a4 <sl_std_start+0x44>
+  40008c: b8 14 00 00 00               	movl	$0x14, %eax
+  400091: bf 65 00 00 00               	movl	$0x65, %edi
+  400096: 0f 05                        	syscall
+  400098: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  4000a0: f3 90                        	pause
+  4000a2: eb fc                        	jmp	0x4000a0 <sl_std_start+0x40>
+  4000a4: 4c 89 3d 6d 1f 00 00         	movq	%r15, 0x1f6d(%rip)      # 0x402018 <_RNvNtCs6bNXbN6WHyR_13sunlight_libc3env4ENVP.0.llvm.3067351516085633461>
+  4000ab: 4c 89 f7                     	movq	%r14, %rdi
+  4000ae: 48 89 de                     	movq	%rbx, %rsi
+  4000b1: e8 4a ff ff ff               	callq	0x400000 <main>
+  4000b6: 48 63 f8                     	movslq	%eax, %rdi
+  4000b9: b8 9d 00 00 00               	movl	$0x9d, %eax
+  4000be: 0f 05                        	syscall
+  4000c0: f3 90                        	pause
+  4000c2: eb fc                        	jmp	0x4000c0 <sl_std_start+0x60>
+  4000c4: cc                           	int3
+  4000c5: cc                           	int3
+  4000c6: cc                           	int3
+  4000c7: cc                           	int3
+  4000c8: cc                           	int3
+  4000c9: cc                           	int3
+  4000ca: cc                           	int3
+  4000cb: cc                           	int3
+  4000cc: cc                           	int3
+  4000cd: cc                           	int3
+  4000ce: cc                           	int3
+  4000cf: cc                           	int3
+llvm-objdump: warning: '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/string': failed to disassemble missing symbol sl_std_exit
+llvm-objdump: warning: '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-10/string': failed to disassemble missing symbol sl_std_write
+
+exit=0

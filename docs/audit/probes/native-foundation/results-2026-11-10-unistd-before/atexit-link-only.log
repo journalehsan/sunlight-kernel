@@ -1,0 +1,11 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Itarget/native-c-phase5-before -include target/native-c-phase5-before/atexit.h docs/audit/probes/atexit.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/atexit-link-only.elf
+ld.lld: error: undefined symbol: atexit
+>>> referenced by atexit.c
+>>>               /tmp/atexit-f2c698.o:(main)
+
+ld.lld: error: undefined symbol: write
+>>> referenced by atexit.c
+>>>               /tmp/atexit-f2c698.o:(bye)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/langinfo.c -o docs/audit/probes/native-foundation/results-2026-11-10-unistd-before/langinfo.elf
+docs/audit/probes/langinfo.c:2:10: fatal error: 'langinfo.h' file not found
+    2 | #include <langinfo.h>
+      |          ^~~~~~~~~~~~
+1 error generated.
+
+exit=1

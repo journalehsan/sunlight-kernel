@@ -1,0 +1,19 @@
+probe,build,first_error
+atexit.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/atexit.c:2:10: fatal error: 'stdlib.h' file not found
+clock.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c:2:10: fatal error: 'time.h' file not found
+dirent.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dirent.c:2:10: fatal error: 'dirent.h' file not found
+dlfcn.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c:2:10: fatal error: 'dlfcn.h' file not found
+getrandom.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c:2:10: fatal error: 'sys/random.h' file not found
+langinfo.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/langinfo.c:2:10: fatal error: 'langinfo.h' file not found
+locale.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/locale.c:2:10: fatal error: 'locale.h' file not found
+math.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/math.c:2:10: fatal error: 'math.h' file not found
+mmap.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/mmap.c:2:10: fatal error: 'sys/mman.h' file not found
+poll_select.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/poll_select.c:2:10: fatal error: 'poll.h' file not found
+pthread.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/pthread.c:2:10: fatal error: 'pthread.h' file not found
+signal.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c:2:10: fatal error: 'signal.h' file not found
+socket.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c:2:10: fatal error: 'sys/socket.h' file not found
+stdio.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/stdio.c:2:10: fatal error: 'stdio.h' file not found
+string.c,FAIL,ld.lld: error: undefined symbol: strcmp
+termios.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/termios.c:2:10: fatal error: 'termios.h' file not found
+wchar.c,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c:2:10: fatal error: 'wchar.h' file not found
+cpp-runtime.cpp,FAIL,/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp:1:10: fatal error: 'iostream' file not found

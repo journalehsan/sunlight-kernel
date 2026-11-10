@@ -1,0 +1,4 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/fault.c -o docs/audit/probes/native-foundation/results-2026-11-10-guest-regressions/fault.elf
+
+exit=0
+expected_host_exit=0
