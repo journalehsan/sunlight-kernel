@@ -1,0 +1,30 @@
+{
+  "revision": "9ec5a16484fe5d7024898737ca6c896f3345d6cf",
+  "date": "2026-11-10 08:52:58.201433+00:00",
+  "verdict": "PARTIAL",
+  "path_families": 34,
+  "confirmed_defects": 0,
+  "suspected_defects": 5,
+  "unproven_properties": 14,
+  "commands": [
+    {
+      "command": "python3 tools/threading_t4b_host.py .kfp-1-evidence/current/t4b-host",
+      "exit": 0
+    },
+    {
+      "command": "python3 -m unittest discover -s tools -p test_threading_t4b.py -v",
+      "exit": 0,
+      "tests": 4
+    },
+    {
+      "command": "python3 -m unittest discover -s tools -p test_threading_t4a.py -v",
+      "exit": 0,
+      "tests": 2
+    },
+    {
+      "command": "python3 tools/test_scheduler_host.py",
+      "exit": 0
+    }
+  ],
+  "guest_runs": 0
+}

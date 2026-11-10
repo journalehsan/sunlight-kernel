@@ -699,6 +699,9 @@ pub extern "C" fn _start() -> ! {
     usb_storage::init(&mut vmm, hhdm_offset.as_u64());
 
     // 5.5. Kernel-global VFS over INITRAMFS + boot FAT volume (Phase 6.5.3)
+    memory::tmpfs::init(hhdm_offset.as_u64());
+    #[cfg(feature = "tmpfs_test")]
+    memory::tmpfs::run_gate();
     init_kernel_vfs();
 
     // 6. Syscall MSRs
@@ -2319,7 +2322,7 @@ fn init_kernel_vfs() {
     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
 
     if vfs
-        .mount_ramfs("/", sunlight_fs::RamFs::new(sunlight_fs::INITRAMFS))
+        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(sunlight_fs::INITRAMFS))
         .is_err()
     {
         serial_println!("[VFS] kernel ramfs mount FAILED");

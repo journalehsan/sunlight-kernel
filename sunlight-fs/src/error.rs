@@ -14,5 +14,9 @@ pub enum FsError {
     OperationNotPermitted,
     ReadOnlyFilesystem,
     Io,
+    /// ENOSPC: mount byte or inode quota exhausted.
+    NoSpace,
+    /// ENOMEM: metadata allocator or PMM exhausted.
+    NoMemory,
     Unsupported,
 }

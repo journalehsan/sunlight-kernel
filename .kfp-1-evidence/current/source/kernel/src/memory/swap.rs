@@ -1,0 +1,552 @@
+//! Anonymous-page reclaim and the fault-critical ZRAM swap lifecycle.
+
+use super::pmm::PhysicalMemoryManager;
+use super::zram::{self, SlotId, ZramError, ZRAM_BLOCK_SIZE};
+use crate::process::address_space::{
+    AddressSpace, ExpectedMapping, OwnershipTransition, ReplacementMapping,
+};
+use crate::process::region::{MappingKind, RegionBacking, RegionPolicy};
+use crate::sched::Scheduler;
+use alloc::collections::VecDeque;
+use core::sync::atomic::{AtomicU64, Ordering};
+use spin::Mutex;
+use sunlight_ipc::swap_policy::{FillDiagnostics, FillError};
+use x86_64::{
+    structures::paging::{Page, PageTableFlags, PhysFrame, Size4KiB},
+    PhysAddr, VirtAddr,
+};
+
+const MIN_START_WATERMARK_PAGES: usize = 256;
+const MAX_START_WATERMARK_PAGES: usize = 16 * 1024;
+const MIN_TARGET_WATERMARK_PAGES: usize = 512;
+const MAX_TARGET_WATERMARK_PAGES: usize = 32 * 1024;
+pub(crate) const MAX_DIRECT_RECLAIM_PAGES: usize = 256;
+// One timer tick of synchronous work, shared by the entire mmap transaction.
+// Check between candidates; a page already being replaced must finish its
+// compression/shootdown before its frame or slot can safely be released.
+const MAX_ALLOCATION_RECLAIM_NS: u64 = 10_000_000;
+const MAX_SCAN_SLOP: usize = 32;
+
+pub(crate) struct DirectReclaimBudget {
+    remaining_pages: usize,
+    deadline_ns: Option<u64>,
+}
+
+impl DirectReclaimBudget {
+    pub(crate) const fn new() -> Self {
+        Self {
+            remaining_pages: MAX_DIRECT_RECLAIM_PAGES,
+            deadline_ns: None,
+        }
+    }
+}
+
+static CANDIDATE_SCANS: AtomicU64 = AtomicU64::new(0);
+static PAGES_RECLAIMED: AtomicU64 = AtomicU64::new(0);
+static WATERMARK_ACTIVATIONS: AtomicU64 = AtomicU64::new(0);
+static RECLAIM_NO_PROGRESS: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_REQUESTED: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_STORED: AtomicU64 = AtomicU64::new(0);
+static LAST_FILL_ERROR: AtomicU64 = AtomicU64::new(FillError::None as u64);
+
+#[derive(Debug, Clone, Copy)]
+pub struct AnonFrame {
+    pub pid: usize,
+    pub vaddr: VirtAddr,
+    pub frame: PhysAddr,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReclaimDiagnostics {
+    pub candidate_scans: u64,
+    pub pages_reclaimed: u64,
+    pub watermark_activations: u64,
+    pub no_progress_events: u64,
+    pub candidate_count: usize,
+}
+
+static CANDIDATES: Mutex<VecDeque<AnonFrame>> = Mutex::new(VecDeque::new());
+
+pub fn reserve_candidates(additional: usize) -> Result<(), ()> {
+    // mmap already knows its complete page count. Avoid geometric growth here:
+    // two large userspace heaps otherwise need the old candidate buffer, a
+    // doubled replacement buffer and the mapping rollback journal at once.
+    CANDIDATES
+        .lock()
+        .try_reserve_exact(additional)
+        .map_err(|_| ())
+}
+
+pub fn track_anon(pid: usize, vaddr: VirtAddr, frame: PhysAddr) {
+    CANDIDATES.lock().push_back(AnonFrame { pid, vaddr, frame });
+}
+
+pub fn untrack(frame: PhysAddr) {
+    CANDIDATES
+        .lock()
+        .retain(|candidate| candidate.frame != frame);
+}
+
+/// Retire a sorted batch of physical frames with one candidate queue scan.
+/// The caller must prevent concurrent use of the retiring address space.
+pub fn untrack_frames(frames: &[u64]) {
+    if frames.is_empty() {
+        return;
+    }
+    CANDIDATES.lock().retain(|candidate| {
+        frames.binary_search(&candidate.frame.as_u64()).is_err()
+    });
+}
+
+/// Retire candidates for a completely unmapped owner range in one scan.
+/// The caller holds the process/VM lock and has completed the TLB shootdown
+/// before releasing any frame in the range.
+pub fn untrack_range(pid: usize, start: u64, end: u64) {
+    CANDIDATES.lock().retain(|candidate| {
+        candidate.pid != pid || candidate.vaddr.as_u64() < start || candidate.vaddr.as_u64() >= end
+    });
+}
+
+pub fn untrack_process(pid: usize) {
+    CANDIDATES.lock().retain(|candidate| candidate.pid != pid);
+}
+
+pub fn candidate_count() -> usize {
+    CANDIDATES.lock().len()
+}
+
+pub fn diagnostics() -> ReclaimDiagnostics {
+    ReclaimDiagnostics {
+        candidate_scans: CANDIDATE_SCANS.load(Ordering::Relaxed),
+        pages_reclaimed: PAGES_RECLAIMED.load(Ordering::Relaxed),
+        watermark_activations: WATERMARK_ACTIVATIONS.load(Ordering::Relaxed),
+        no_progress_events: RECLAIM_NO_PROGRESS.load(Ordering::Relaxed),
+        candidate_count: candidate_count(),
+    }
+}
+
+/// Returns `(start_reclaim_below, stop_reclaim_at)` in free 4 KiB pages.
+pub fn watermarks(total_pages: usize) -> (usize, usize) {
+    let start = (total_pages / 64)
+        .max(MIN_START_WATERMARK_PAGES)
+        .min(MAX_START_WATERMARK_PAGES)
+        .min(total_pages);
+    let target = (total_pages / 32)
+        .max(MIN_TARGET_WATERMARK_PAGES)
+        .min(MAX_TARGET_WATERMARK_PAGES)
+        .min(total_pages)
+        .max(start);
+    (start, target)
+}
+
+/// Compress a verified anonymous frame, publish a stale-safe swapped marker,
+/// complete the MM-2B shootdown, and only then release the physical frame.
+///
+/// SAFETY: caller holds the owning scheduler/address-space and PMM locks.
+pub unsafe fn swap_out_page(
+    address_space: &mut AddressSpace,
+    page: Page<Size4KiB>,
+    frame: PhysAddr,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> Result<u64, ZramError> {
+    let (_, flags) = match address_space.lookup_entry(page, hhdm_offset) {
+        Some(entry) if entry.0 == frame && entry.1.contains(PageTableFlags::PRESENT) => entry,
+        _ => return Err(ZramError::InvalidBlock),
+    };
+    let src = &*((hhdm_offset + frame.as_u64()).as_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
+    let identity = address_space.identity();
+    let selection_key = identity.generation.wrapping_mul(0x9e37_79b9)
+        ^ page.start_address().as_u64().rotate_right(12)
+        ^ crate::sched::current_cpu_id() as u64;
+    let slot = zram::write_page(src, flags.bits(), selection_key, pmm, hhdm_offset)?;
+
+    if address_space
+        .replace_mapping(
+            page,
+            ExpectedMapping::Present { frame, flags },
+            ReplacementMapping::Swapped {
+                block_id: slot.raw(),
+            },
+            OwnershipTransition::ReleaseOldFrame,
+            pmm,
+            hhdm_offset,
+        )
+        .is_err()
+    {
+        let _ = zram::discard(slot, pmm, hhdm_offset);
+        return Err(ZramError::InvalidBlock);
+    }
+    untrack(frame);
+    Ok(slot.raw())
+}
+
+pub unsafe fn diagnostic_fill(
+    start_address: u64,
+    requested_pages: u64,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> FillDiagnostics {
+    let mut result = FillDiagnostics {
+        requested_pages,
+        stored_pages: 0,
+        error: FillError::None as u64,
+    };
+    if zram::policy().is_none() {
+        result.error = FillError::SwapNotConfigured as u64;
+        record_fill_result(result);
+        return result;
+    }
+    if requested_pages == 0 || start_address % ZRAM_BLOCK_SIZE as u64 != 0 {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    }
+    let Some(length_bytes) = requested_pages.checked_mul(ZRAM_BLOCK_SIZE as u64) else {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    };
+    if start_address.checked_add(length_bytes).is_none() {
+        result.error = FillError::InvalidRequest as u64;
+        record_fill_result(result);
+        return result;
+    }
+
+    let process = sched.current_process_mut();
+    let Ok(owner_pid) = u32::try_from(process.pid) else {
+        result.error = FillError::InternalInvariantFailure as u64;
+        record_fill_result(result);
+        return result;
+    };
+    for index in 0..requested_pages {
+        let address = start_address + index * ZRAM_BLOCK_SIZE as u64;
+        let page = match Page::<Size4KiB>::from_start_address(VirtAddr::new(address)) {
+            Ok(page) => page,
+            Err(_) => {
+                result.error = FillError::InvalidRequest as u64;
+                break;
+            }
+        };
+        let Some(region) = process.address_space.lookup_region(address) else {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        };
+        if region.kind != MappingKind::Anonymous
+            || region.backing != RegionBacking::AnonymousOwner(owner_pid)
+        {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        }
+        let Some((frame, flags)) = process.address_space.lookup_entry(page, hhdm_offset) else {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        };
+        if !flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE) {
+            result.error = FillError::NoEligibleCandidate as u64;
+            break;
+        }
+        match swap_out_page(&mut process.address_space, page, frame, hhdm_offset, pmm) {
+            Ok(_) => result.stored_pages += 1,
+            Err(error) => {
+                result.error = fill_error(error) as u64;
+                break;
+            }
+        }
+    }
+    record_fill_result(result);
+    result
+}
+
+fn record_fill_result(result: FillDiagnostics) {
+    LAST_FILL_REQUESTED.store(result.requested_pages, Ordering::Relaxed);
+    LAST_FILL_STORED.store(result.stored_pages, Ordering::Relaxed);
+    LAST_FILL_ERROR.store(result.error, Ordering::Relaxed);
+}
+
+pub fn last_fill_result() -> FillDiagnostics {
+    FillDiagnostics {
+        requested_pages: LAST_FILL_REQUESTED.load(Ordering::Relaxed),
+        stored_pages: LAST_FILL_STORED.load(Ordering::Relaxed),
+        error: LAST_FILL_ERROR.load(Ordering::Relaxed),
+    }
+}
+
+fn fill_error(error: ZramError) -> FillError {
+    match error {
+        ZramError::NotConfigured => FillError::SwapNotConfigured,
+        ZramError::OutOfSpace | ZramError::MetadataExhausted => FillError::PoolFull,
+        ZramError::PhysicalBudgetExceeded => FillError::PhysicalBudgetExhausted,
+        ZramError::AllocationFailure => FillError::AllocationFailure,
+        ZramError::Incompressible => FillError::CompressionNotBeneficial,
+        ZramError::InvalidData | ZramError::ChecksumMismatch => FillError::IntegrityFailure,
+        ZramError::InvalidBlock | ZramError::NoData | ZramError::StaleSlot => {
+            FillError::InternalInvariantFailure
+        }
+        ZramError::AlreadyConfigured | ZramError::InvalidPolicy => {
+            FillError::InternalInvariantFailure
+        }
+    }
+}
+
+/// Restore and validate one page before publishing its new present mapping.
+/// A read/decompression/checksum/PTE failure leaves the original slot live.
+///
+/// SAFETY: caller holds the owning scheduler/address-space and PMM locks.
+pub unsafe fn swap_in_page(
+    address_space: &mut AddressSpace,
+    page: Page<Size4KiB>,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> Result<PhysAddr, ZramError> {
+    let raw = address_space
+        .swapped_block_id(page, hhdm_offset)
+        .ok_or(ZramError::InvalidBlock)?;
+    let slot = SlotId::from_raw(raw).ok_or(ZramError::InvalidBlock)?;
+    let region = address_space
+        .lookup_region(page.start_address().as_u64())
+        .ok_or(ZramError::InvalidBlock)?;
+    let owner_pid = match (region.kind, region.backing) {
+        (MappingKind::Anonymous, RegionBacking::AnonymousOwner(owner)) => owner,
+        _ => return Err(ZramError::InvalidBlock),
+    };
+    let frame_addr = pmm
+        .alloc_frame_owned(owner_pid)
+        .ok_or(ZramError::OutOfSpace)?;
+    if !crate::memory::security::sanitize_user_frame(frame_addr, hhdm_offset) {
+        pmm.free_frame(frame_addr);
+        return Err(ZramError::OutOfSpace);
+    }
+    let dst = &mut *((hhdm_offset + frame_addr.as_u64()).as_mut_ptr::<[u8; ZRAM_BLOCK_SIZE]>());
+    let stored_bits = match zram::read_page(slot, dst, hhdm_offset) {
+        Ok(bits) => bits,
+        Err(error) => {
+            dst.fill(0);
+            pmm.free_frame(frame_addr);
+            return Err(error);
+        }
+    };
+    let stored_flags = PageTableFlags::from_bits_truncate(stored_bits);
+    let stored_protection = match AddressSpace::protection_from_pte_flags(stored_flags) {
+        Ok(protection) => protection,
+        Err(_) => {
+            dst.fill(0);
+            pmm.free_frame(frame_addr);
+            return Err(ZramError::InvalidData);
+        }
+    };
+    if stored_protection != region.protection
+        || !stored_flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+    {
+        dst.fill(0);
+        pmm.free_frame(frame_addr);
+        return Err(ZramError::InvalidData);
+    }
+
+    let frame = PhysFrame::from_start_address_unchecked(frame_addr);
+    if address_space
+        .replace_mapping(
+            page,
+            ExpectedMapping::Swapped { block_id: raw },
+            ReplacementMapping::Present {
+                frame,
+                flags: stored_flags,
+            },
+            OwnershipTransition::RetainOld,
+            pmm,
+            hhdm_offset,
+        )
+        .is_err()
+    {
+        dst.fill(0);
+        pmm.free_frame(frame_addr);
+        return Err(ZramError::InvalidBlock);
+    }
+    // Scheduler/address-space serialization makes disappearance impossible.
+    // Fail-stop instead of publishing a present page while silently leaking or
+    // double-releasing its old ownership token.
+    zram::discard(slot, pmm, hhdm_offset).expect("published swap-in lost its live ZRAM slot");
+    // Do not enqueue from the page-fault path: that could grow the kernel heap
+    // and would make the just-faulted, currently active page an immediate
+    // reclaim candidate. A later aging/re-registration mechanism is deferred.
+    Ok(frame_addr)
+}
+
+fn candidate_is_eligible(
+    candidate: AnonFrame,
+    sched: &Scheduler,
+    pmm: &PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> bool {
+    let Some(process) = sched
+        .processes
+        .iter()
+        .find(|process| process.pid == candidate.pid)
+    else {
+        return false;
+    };
+    if process.trusted_swap_admin_service || process.trusted_display_service {
+        return false;
+    }
+    let Some(region) = process
+        .address_space
+        .lookup_region(candidate.vaddr.as_u64())
+    else {
+        return false;
+    };
+    if region.kind != MappingKind::Anonymous
+        || !region.policy.contains(RegionPolicy::MAY_UNMAP)
+        || region.backing != RegionBacking::AnonymousOwner(candidate.pid as u32)
+        || pmm.owner_of(candidate.frame) != Some(candidate.pid as u32)
+    {
+        return false;
+    }
+    let Ok(page) = Page::<Size4KiB>::from_start_address(candidate.vaddr) else {
+        return false;
+    };
+    unsafe {
+        process
+            .address_space
+            .lookup_entry(page, hhdm_offset)
+            .is_some_and(|(frame, flags)| {
+                frame == candidate.frame
+                    && flags.contains(PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+            })
+    }
+}
+
+/// Bounded direct reclaim. Failed/full/incompressible candidates rotate to the
+/// tail; stale or newly ineligible candidates are dropped.
+///
+/// SAFETY: caller holds the scheduler and PMM locks.
+pub unsafe fn reclaim(
+    max_pages: usize,
+    avoid: Option<(usize, VirtAddr)>,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+) -> usize {
+    reclaim_until(max_pages, avoid, sched, hhdm_offset, pmm, None)
+}
+
+/// Same ownership rules as `reclaim`; allocation-driven work also has a
+/// monotonic execution budget, independent of client IPC deadlines.
+unsafe fn reclaim_until(
+    max_pages: usize,
+    avoid: Option<(usize, VirtAddr)>,
+    sched: &mut Scheduler,
+    hhdm_offset: VirtAddr,
+    pmm: &mut PhysicalMemoryManager,
+    deadline_ns: Option<u64>,
+) -> usize {
+    if max_pages == 0 || zram::policy().is_none() {
+        return 0;
+    }
+    let initial_candidates = candidate_count();
+    let scan_limit =
+        initial_candidates.min(max_pages.saturating_mul(8).saturating_add(MAX_SCAN_SLOP));
+    let mut evicted = 0;
+    for _ in 0..scan_limit {
+        if evicted >= max_pages
+            || deadline_ns.is_some_and(|end| crate::arch::x86_64::interrupts::now_ns() >= end)
+        {
+            break;
+        }
+        let Some(candidate) = CANDIDATES.lock().pop_front() else {
+            break;
+        };
+        CANDIDATE_SCANS.fetch_add(1, Ordering::Relaxed);
+        if avoid.is_some_and(|(pid, vaddr)| pid == candidate.pid && vaddr == candidate.vaddr) {
+            CANDIDATES.lock().push_back(candidate);
+            continue;
+        }
+        if !candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
+            continue;
+        }
+        let Some(process_index) = sched
+            .processes
+            .iter()
+            .position(|process| process.pid == candidate.pid)
+        else {
+            continue;
+        };
+        let page = Page::<Size4KiB>::from_start_address(candidate.vaddr)
+            .expect("tracked anonymous address lost page alignment");
+        let result = swap_out_page(
+            &mut sched.processes[process_index].address_space,
+            page,
+            candidate.frame,
+            hhdm_offset,
+            pmm,
+        );
+        if result.is_ok() {
+            evicted += 1;
+            PAGES_RECLAIMED.fetch_add(1, Ordering::Relaxed);
+        } else if candidate_is_eligible(candidate, sched, pmm, hhdm_offset) {
+            CANDIDATES.lock().push_back(candidate);
+        }
+    }
+    if evicted == 0 {
+        RECLAIM_NO_PROGRESS.fetch_add(1, Ordering::Relaxed);
+    }
+    evicted
+}
+
+/// Trigger direct reclaim before an anonymous allocation reaches PMM
+/// exhaustion. Charge attempted reclaim to the allocation's shared budget,
+/// including attempts that make no progress. A multi-page mmap must not reset
+/// the direct-reclaim bound for each page while holding SCHEDULER and PMM.
+/// Returns pages reclaimed in this bounded activation.
+pub(crate) fn maybe_reclaim_for_anonymous_allocation(
+    sched: &mut Scheduler,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+    avoid: Option<(usize, VirtAddr)>,
+    budget: &mut DirectReclaimBudget,
+) -> usize {
+    if budget.remaining_pages == 0 {
+        return 0;
+    }
+    let (total, free) = pmm.stats();
+    let (start, target) = watermarks(total);
+    if free > start || zram::policy().is_none() {
+        return 0;
+    }
+    // The coarse BSP tick can be frozen by this transaction. Without a
+    // calibrated elapsed-time source, fail allocation normally if necessary
+    // instead of doing opportunistic synchronous work with no time bound.
+    if crate::arch::x86_64::interrupts::tsc_hz() == 0 {
+        budget.remaining_pages = 0;
+        return 0;
+    }
+    // This transaction cannot migrate and runs with interrupts disabled.
+    // Use elapsed local TSC time; the BSP tick clock can stop while we hold
+    // SCHEDULER and therefore cannot bound this critical section.
+    let now = crate::arch::x86_64::interrupts::now_ns();
+    let deadline = *budget
+        .deadline_ns
+        .get_or_insert_with(|| now.saturating_add(MAX_ALLOCATION_RECLAIM_NS));
+    if now >= deadline {
+        return 0;
+    }
+    WATERMARK_ACTIVATIONS.fetch_add(1, Ordering::Relaxed);
+    let requested = target
+        .saturating_sub(free)
+        .max(1)
+        .min(MAX_DIRECT_RECLAIM_PAGES)
+        .min(budget.remaining_pages);
+    budget.remaining_pages -= requested;
+    unsafe { reclaim_until(requested, avoid, sched, hhdm_offset, pmm, Some(deadline)) }
+}
+
+#[cfg(feature = "swap1_test")]
+pub fn force_pressure_gate(
+    pages: usize,
+    sched: &mut Scheduler,
+    pmm: &mut PhysicalMemoryManager,
+    hhdm_offset: VirtAddr,
+) -> usize {
+    WATERMARK_ACTIVATIONS.fetch_add(1, Ordering::Relaxed);
+    unsafe { reclaim(pages, None, sched, hhdm_offset, pmm) }
+}

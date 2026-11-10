@@ -1353,6 +1353,8 @@ const ERR_ENOTDIR: u64 = u64::MAX - 7;
 const ERR_EIO: u64 = u64::MAX - 8;
 const ERR_ERANGE: u64 = u64::MAX - 9;
 const ERR_EPIPE: u64 = u64::MAX - 10;
+const ERR_ENOSPC: u64 = u64::MAX - 11;
+const ERR_ENOMEM: u64 = u64::MAX - 12;
 
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
@@ -1365,6 +1367,8 @@ fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
         sunlight_fs::FsError::IsDir => ERR_EISDIR,
         sunlight_fs::FsError::NotDir => ERR_ENOTDIR,
         sunlight_fs::FsError::Io => ERR_EIO,
+        sunlight_fs::FsError::NoSpace => ERR_ENOSPC,
+        sunlight_fs::FsError::NoMemory => ERR_ENOMEM,
         _ => u64::MAX,
     }
 }
@@ -5464,9 +5468,15 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
                 }
             }
         };
-        if wants_truncate && vfs.truncate(opened).is_err() {
-            let _ = vfs.close(opened);
-            return ERR_EIO;
+        if wants_truncate {
+            if let Err(error) = vfs.truncate(opened) {
+                let _ = vfs.close(opened);
+                return if is_linux {
+                    linux_from_fs(error)
+                } else {
+                    fs_error_raw(error)
+                };
+            }
         }
         opened
     };
@@ -6273,6 +6283,8 @@ fn linux_from_fs(error: sunlight_fs::FsError) -> u64 {
         FsError::ReadOnlyFilesystem => linux_errno(sunlight_compat_linux::abi::EROFS as u64),
         FsError::InvalidPath => linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
         FsError::TooManyOpenFiles => linux_errno(sunlight_compat_linux::abi::EMFILE as u64),
+        FsError::NoMemory => linux_errno(sunlight_compat_linux::abi::ENOMEM as u64),
+        FsError::NoSpace => linux_errno(28),
         FsError::Unsupported => linux_errno(sunlight_compat_linux::abi::ENOSYS as u64),
         _ => linux_errno(sunlight_compat_linux::abi::EIO as u64),
     }
@@ -9694,7 +9706,13 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
                             }
                             n as u64
                         }
-                        Err(_) => u64::MAX,
+                        Err(error) => {
+                            if is_linux {
+                                linux_from_fs(error)
+                            } else {
+                                fs_error_raw(error)
+                            }
+                        }
                     }
                 } else if fd_entry.handle.is_tty_stdout() {
                     // fd1 wired to a TTY tab's kernel stdout ring. tty_server

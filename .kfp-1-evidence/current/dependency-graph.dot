@@ -1,0 +1,17 @@
+digraph KFP1 {
+  "thread A" -> "kernel futex registration" [label="compare/register under scheduler"];
+  "kernel futex registration" -> "peer B WAKE" [label="normal completion; optional timer/signal/VM retirement alternatives"];
+  "peer B WAKE" -> "scheduler + target IPI" [label="completion publication and runnable transition"];
+  "target IPI" -> "target IF enabled" [label="no prompt kernel preemption"];
+  "TLB initiator" -> "ICR idle" [label="before ack timeout"];
+  "TLB initiator" -> "target NMI handler" [label="mailbox claim/flush/ack"];
+  "target NMI handler" -> "active slot snapshot" [label="no scheduler/PMM/broker mutex"];
+  "reclamation" -> "TLB complete" [label="normal return precedes frame release"];
+  "timed waiter" -> "BSP clock advance" [label="global time owner is CPU0"];
+  "BSP clock advance" -> "BSP IF enabled" [label="maskable timer delivery"];
+  "service A waiting on B" -> "service B" [label="conditional protocol edge"];
+  "service B" -> "service A waiting on B" [label="hypothetical callback/user-lock cycle; not actual deployed cycle"];
+  "scheduler lock waiter" -> "remote scheduler holder" [label="remote must finish"];
+  "virtio submit" -> "device used ring" [label="bounded poll, late completion risk"];
+  "Ready pinned task" -> "remote stack epilogue" [label="no spin; waiter bit queues reschedule"];
+}

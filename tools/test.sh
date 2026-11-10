@@ -57,6 +57,12 @@ case "$PHASE" in
         PASS_LABEL="Phase 2B.1 utilities"
         NEED_DISK=false
         ;;
+    tmpfs)
+        EXPECTED_FILE="tools/tests/tmpfs.expected"
+        FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
+        PASS_LABEL="Tmpfs"
+        NEED_DISK=false
+        ;;
     phase3.0)
         EXPECTED_FILE="tools/tests/phase3_0.expected"
         FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
@@ -749,6 +755,8 @@ elif [[ "$PHASE" == "mm2e" ]]; then
     KERNEL_FEATURES="--features mm2e_mprotect_test"
 elif [[ "$PHASE" == "swap1" ]]; then
     KERNEL_FEATURES="--features swap1_test"
+elif [[ "$PHASE" == "tmpfs" ]]; then
+    KERNEL_FEATURES="--features tmpfs_test"
 elif [[ "$PHASE" == "memory-accounting" ]]; then
     KERNEL_FEATURES="--features memory_accounting_test"
 fi

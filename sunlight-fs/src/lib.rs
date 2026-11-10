@@ -1,4 +1,5 @@
 #![no_std]
+#![feature(allocator_api)]
 
 extern crate alloc;
 
@@ -13,6 +14,8 @@ pub mod path;
 pub mod permission;
 pub mod policy;
 pub mod ramfs;
+pub mod tmpfs;
+pub use tmpfs::{Tmpfs, TmpfsDir, TmpfsInode, TmpfsLimits};
 pub mod vfs;
 
 pub use block::{BlockDevice, BlockError, CachedBlockDevice, NullDevice, BLOCK_SIZE};

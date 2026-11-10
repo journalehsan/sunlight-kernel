@@ -655,6 +655,7 @@ path = "src/main.rs"
 
 [dependencies]
 sunlight-libc = { path = "../../sunlight-libc" }
+sunlight-mm = { path = "../../sunlight-mm" }
 sunlight-fs = { path = "../../sunlight-fs" }
 sunlight-ipc = { path = "../../ipc" }
 sunlight-fat = { path = "../../sunlight-fat" }

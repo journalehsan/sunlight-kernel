@@ -1,0 +1,162 @@
+
+running 7 tests
+test tests::cannot_overwrite_an_unreleased_context - should panic ... ok
+test tests::cpu_release_does_not_release_a_remote_stack_or_reused_index ... ok
+test tests::no_waiters_means_no_release_work ... ok
+test tests::racing_register_and_release_never_loses_the_waiter ... ok
+test tests::remote_reclaim_and_selection_wait_for_physical_release ... ok
+test tests::waiter_after_release_proceeds_and_leaves_no_registration ... ok
+test tests::waiter_registered_while_pinned_is_drained_by_release ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.83s
+
+
+running 5 tests
+test tests::every_supported_target_has_independent_bounded_state ... ok
+test tests::local_intent_does_not_own_a_remote_delivery ... ok
+test tests::new_request_after_dispatch_entry_survives ... ok
+test tests::repeated_requests_coalesce_without_consuming_another_cpu ... ok
+test tests::two_sources_share_delivery_and_post_ack_publication_survives ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test tests::elapsed_time_handles_delayed_and_duplicate_callbacks ... ok
+test tests::fallback_budget_and_same_task_renewal ... ok
+test tests::fallback_interruption_keeps_delivered_ticks_without_idle_credit ... ok
+test tests::idle_callbacks_and_previous_task_never_charge_new_dispatch ... ok
+test tests::sub_tick_interruptions_never_refill_and_migration_excludes_wait ... ok
+test tests::yield_block_and_migration_end_the_slice_once ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 7 tests
+test concurrent_scope_creation_never_reuses_identity ... ok
+test exit_race_and_descendants_preserve_already_recorded_status ... ok
+test full_session_teardown_reaches_idle_and_reparented_members ... ok
+test members_cannot_detach_and_scope_storage_is_bounded ... ok
+test numeric_signals_respect_scope_and_parent_incarnation ... ok
+test session_identity_is_qualified_by_broker_publication ... ok
+test stale_process_slots_and_duplicate_cancel_cannot_target_new_work ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test tests::actor_time_charges_migration_exactly_once ... ok
+test tests::backward_clock_is_a_discontinuity_not_a_negative_charge ... ok
+test tests::blocked_syscall_tail_and_running_snapshot_are_counted ... ok
+test tests::duplicate_open_does_not_double_charge ... ok
+test tests::exhausted_accumulator_is_reported_and_leaves_state_stable ... ok
+test tests::long_uptime_saturates_without_wrapping ... ok
+test tests::migrating_task_commits_once_per_cpu ... ok
+test tests::reconciliation_accepts_slack_and_rejects_double_charging ... ok
+test tests::scheduling_gap_refuses_inverted_wall_and_runtime ... ok
+test tests::tiny_real_work_is_not_rounded_to_zero ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+warning: function `timekeeper_core` is never used
+  --> /home/ehsantor/Projects/sunlightos-kernel/kernel/src/timekeeping.rs:22:8
+   |
+22 | pub fn timekeeper_core() -> usize {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `uptime_secs` is never used
+  --> /home/ehsantor/Projects/sunlightos-kernel/kernel/src/timekeeping.rs:32:8
+   |
+32 | pub fn uptime_secs() -> u64 {
+   |        ^^^^^^^^^^^
+
+warning: function `monotonic_ms` is never used
+  --> /home/ehsantor/Projects/sunlightos-kernel/kernel/src/timekeeping.rs:37:8
+   |
+37 | pub fn monotonic_ms() -> u64 {
+   |        ^^^^^^^^^^^^
+
+warning: function `last_tick_monotonic_ns` is never used
+  --> /home/ehsantor/Projects/sunlightos-kernel/kernel/src/timekeeping.rs:51:8
+   |
+51 | pub fn last_tick_monotonic_ns() -> u64 {
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `drift_warning_active` is never used
+  --> /home/ehsantor/Projects/sunlightos-kernel/kernel/src/timekeeping.rs:55:8
+   |
+55 | pub fn drift_warning_active() -> bool {
+   |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: 5 warnings emitted
+
+
+running 4 tests
+test timekeeping::tests::calibrated_progression_matches_elapsed_time ... ok
+test timekeeping::tests::duplicate_callbacks_and_aps_cannot_multiply_global_time ... ok
+test timekeeping::tests::many_small_steps_equal_one_large_step ... ok
+test timekeeping::tests::uncalibrated_fallback_counts_only_bsp_interrupts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+legacy=true nice=0 selected=5000 peer_selected=5000 final_counter=0 longest_wait=2
+legacy=true nice=7 selected=95 peer_selected=9905 final_counter=-7 longest_wait=106
+legacy=true nice=8 selected=0 peer_selected=10000 final_counter=-7 longest_wait=10000
+legacy=true nice=9 selected=0 peer_selected=10000 final_counter=-7 longest_wait=10000
+legacy=true nice=10 selected=0 peer_selected=10000 final_counter=-7 longest_wait=10000
+burst=0 nice=0 quantum_ticks=5
+burst=256 nice=0 quantum_ticks=16
+burst=1024 nice=0 quantum_ticks=50
+legacy=false nice=0 selected=5000 peer_selected=5000 final_counter=0 longest_wait=2
+legacy=false nice=7 selected=100 peer_selected=9900 final_counter=-6 longest_wait=101
+legacy=false nice=8 selected=99 peer_selected=9901 final_counter=-7 longest_wait=101
+legacy=false nice=9 selected=99 peer_selected=9901 final_counter=-7 longest_wait=101
+legacy=false nice=10 selected=99 peer_selected=9901 final_counter=-7 longest_wait=101
+burst=0 nice=0 quantum_ticks=5
+burst=256 nice=0 quantum_ticks=16
+burst=1024 nice=0 quantum_ticks=50
+remote handoff selector defers without losing queue entry: PASS
+
+running 36 tests
+test another_service_blocking_retains_request_for_already_ready_timer ... ok
+test cpu_accounting::tests::actor_time_charges_migration_exactly_once ... ok
+test cpu_accounting::tests::backward_clock_is_a_discontinuity_not_a_negative_charge ... ok
+test cpu_accounting::tests::blocked_syscall_tail_and_running_snapshot_are_counted ... ok
+test cpu_accounting::tests::duplicate_open_does_not_double_charge ... ok
+test cpu_accounting::tests::exhausted_accumulator_is_reported_and_leaves_state_stable ... ok
+test cpu_accounting::tests::long_uptime_saturates_without_wrapping ... ok
+test cpu_accounting::tests::migrating_task_commits_once_per_cpu ... ok
+test cpu_accounting::tests::reconciliation_accepts_slack_and_rejects_double_charging ... ok
+test cpu_accounting::tests::scheduling_gap_refuses_inverted_wall_and_runtime ... ok
+test cpu_accounting::tests::tiny_real_work_is_not_rounded_to_zero ... ok
+test direct_io_block_keeps_voluntary_feedback_without_double_checkpoint ... ok
+test equal_peer_and_boot_dispatch_do_not_queue_priority_ipis ... ok
+test frequent_background_wakes_produce_equal_service_and_stable_bursts ... ok
+test high_priority_timer_service_wake_is_bounded_without_losing_worker_credit ... ok
+test higher_priority_wake_wins_when_worker_slice_expires_same_tick ... ok
+test idle_dispatch_retains_request_when_fifo_selects_a_lower_priority_peer ... ok
+test immediate_wake_delivery_preserves_admitted_nice_cpu_peers ... ok
+test low_nice_workers_progress_under_higher_priority_background_wakes ... ok
+test priority_candidates_must_be_eligible_and_burst_is_not_wake_priority ... ok
+test priority_interrupt_resumes_fractional_budget_and_original_position ... ok
+test quantum::tests::elapsed_time_handles_delayed_and_duplicate_callbacks ... ok
+test quantum::tests::fallback_budget_and_same_task_renewal ... ok
+test quantum::tests::fallback_interruption_keeps_delivered_ticks_without_idle_credit ... ok
+test quantum::tests::idle_callbacks_and_previous_task_never_charge_new_dispatch ... ok
+test quantum::tests::sub_tick_interruptions_never_refill_and_migration_excludes_wait ... ok
+test quantum::tests::yield_block_and_migration_end_the_slice_once ... ok
+test requests::tests::every_supported_target_has_independent_bounded_state ... ok
+test requests::tests::local_intent_does_not_own_a_remote_delivery ... ok
+test requests::tests::new_request_after_dispatch_entry_survives ... ok
+test requests::tests::repeated_requests_coalesce_without_consuming_another_cpu ... ok
+test requests::tests::two_sources_share_delivery_and_post_ack_publication_survives ... ok
+test residual_turn_bypasses_readmission_debt_and_retires_override_once ... ok
+test timer_bootstrap_policy_requires_root_and_exact_embedded_path ... ok
+test unrelated_wakes_keep_turn_and_expiration_rotates_once ... ok
+test yield_sleep_wake_termination_discard_credit_and_reject_duplicate_enqueue ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+queue publication/internal rotation/request preservation/owned and terminal rejection: PASS

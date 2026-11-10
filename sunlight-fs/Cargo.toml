@@ -650,8 +650,10 @@ version = "0.2.6935-alpha.2"
 edition = "2021"
 
 [dependencies]
+sunlight-mm = { path = "../sunlight-mm" }
 sunlight-block = { path = "../sunlight-block" }
 sunlight-fat = { path = "../sunlight-fat" }
 
 [dev-dependencies]
+sunlight-mm = { path = "../sunlight-mm", features = ["testutil"] }
 sunlight-fat = { path = "../sunlight-fat", features = ["testutil"] }

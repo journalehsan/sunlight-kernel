@@ -85,7 +85,8 @@ pub fn parse_fstab(text: &str) -> Result<FstabTable<'_>, FstabError> {
             return Err(fail("invalid absolute target"));
         }
         match fs_type {
-            "ramfs" if device == "/dev/ram0" && mountpoint == "/" && options == "defaults" => {}
+            "ramfs" | "tmpfs"
+                if device == "/dev/ram0" && mountpoint == "/" && options == "defaults" => {}
             "bootfs" if device == "/dev/sda1" && mountpoint == "/boot" && options == "defaults" => {
             }
             "fat32" => {
@@ -197,6 +198,8 @@ mod tests {
         let table = parse_fstab(FSTAB_TEXT).unwrap();
         assert_eq!(table[0].unwrap().fs_type, "bootfs");
         assert_eq!(table[1].unwrap().mountpoint, "/");
+        assert_eq!(table[1].unwrap().fs_type, "tmpfs");
+        assert!(parse_fstab("/dev/ram0 / ramfs defaults").is_ok());
         assert!(parse_fstab(" # blank\n").unwrap()[0].is_none());
     }
     #[test]

@@ -99,6 +99,8 @@ fn error(error: sys::Errno) -> isize {
         sys::Errno::IsDir => 21,
         sys::Errno::NotDir => 20,
         sys::Errno::BrokenPipe => 32,
+        sys::Errno::NoSpace => 28,
+        sys::Errno::NoMemory => 12,
         sys::Errno::Failed => 5,
     })
 }

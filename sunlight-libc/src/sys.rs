@@ -70,6 +70,8 @@ pub const ENOTDIR_RAW: u64 = u64::MAX - 7;
 pub const EIO_RAW: u64 = u64::MAX - 8;
 pub const ERANGE_RAW: u64 = u64::MAX - 9;
 pub const EPIPE_RAW: u64 = u64::MAX - 10;
+pub const ENOSPC_RAW: u64 = u64::MAX - 11;
+pub const ENOMEM_RAW: u64 = u64::MAX - 12;
 
 /// Largest count that can be represented by the public `ssize_t` result.
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
@@ -92,6 +94,8 @@ pub enum Errno {
     IsDir,
     NotDir,
     BrokenPipe,
+    NoSpace,
+    NoMemory,
 }
 
 pub fn check(ret: u64) -> Result<u64, Errno> {
@@ -107,6 +111,8 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         EIO_RAW => Err(Errno::Failed),
         ERANGE_RAW => Err(Errno::TooBig),
         EPIPE_RAW => Err(Errno::BrokenPipe),
+        ENOSPC_RAW => Err(Errno::NoSpace),
+        ENOMEM_RAW => Err(Errno::NoMemory),
         n => Ok(n),
     }
 }
@@ -265,5 +271,7 @@ mod tests {
         assert_eq!(check(EISDIR_RAW), Err(Errno::IsDir));
         assert_eq!(check(ENOTDIR_RAW), Err(Errno::NotDir));
         assert_eq!(check(ERANGE_RAW), Err(Errno::TooBig));
+        assert_eq!(check(ENOSPC_RAW), Err(Errno::NoSpace));
+        assert_eq!(check(ENOMEM_RAW), Err(Errno::NoMemory));
     }
 }

@@ -1,0 +1,194 @@
+[
+  {
+    "cpus": 1,
+    "scenario": "A single-CPU blocking",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 1,
+    "scenario": "B priority inversion",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 1,
+    "scenario": "C wake-before-block",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 1,
+    "scenario": "D exit during wait",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 1,
+    "scenario": "E remote TLB",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 1,
+    "scenario": "F service dependency",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 2,
+    "scenario": "A single-CPU blocking",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 2,
+    "scenario": "B priority inversion",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 2,
+    "scenario": "C wake-before-block",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 2,
+    "scenario": "D exit during wait",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 2,
+    "scenario": "E remote TLB",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 2,
+    "scenario": "F service dependency",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 4,
+    "scenario": "A single-CPU blocking",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 4,
+    "scenario": "B priority inversion",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 4,
+    "scenario": "C wake-before-block",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 4,
+    "scenario": "D exit during wait",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 4,
+    "scenario": "E remote TLB",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 4,
+    "scenario": "F service dependency",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 12,
+    "scenario": "A single-CPU blocking",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 12,
+    "scenario": "B priority inversion",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 12,
+    "scenario": "C wake-before-block",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 12,
+    "scenario": "D exit during wait",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "tools/threading_t4b_run.py races --cpus 2 1 4 12",
+    "host_evidence": "T4B admission/completion adapters PASS"
+  },
+  {
+    "cpus": 12,
+    "scenario": "E remote TLB",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  },
+  {
+    "cpus": 12,
+    "scenario": "F service dependency",
+    "guest_status": "NOT_TESTED",
+    "property_status": "NOT_PROVEN",
+    "reusable": "scheduler guest benchmark / MM-2B feature fixture / lifecycle fixtures; see report",
+    "host_evidence": "scheduler state controls PASS; not scenario proof"
+  }
+]

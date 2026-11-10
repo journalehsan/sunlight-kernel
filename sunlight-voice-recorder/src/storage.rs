@@ -204,6 +204,8 @@ pub mod native {
             Errno::BadFd => 9,
             Errno::Failed => 5,
             Errno::BrokenPipe => 32,
+            Errno::NoSpace => 28,
+            Errno::NoMemory => 12,
         })
     }
     impl File for NativeFile {

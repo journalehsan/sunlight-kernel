@@ -213,6 +213,7 @@ impl OpenMeta {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    init_tmpfs_pages();
     debug_log("[VFS]  VFS server started");
 
     let ep = endpoint_create();
@@ -300,7 +301,7 @@ fn mount_fstab_entry(
     entry: &FstabEntry<'_>,
 ) -> Option<&'static str> {
     match entry.fs_type {
-        "ramfs" => {
+        "ramfs" | "tmpfs" => {
             if entry.mountpoint == "/" {
                 let _ = vfs.mount_ramfs("/", RamFs::new(INITRAMFS));
             }
@@ -1397,6 +1398,8 @@ fn errno(err: FsError) -> u64 {
         FsError::PermissionDenied => ERR_ACCES,
         FsError::OperationNotPermitted => ERR_PERM,
         FsError::ReadOnlyFilesystem => ERR_ROFS,
+        FsError::NoSpace => 28,
+        FsError::NoMemory => 12,
         _ => ERR_INVALID,
     }
 }
@@ -1518,5 +1521,39 @@ fn unpack_data(msg: &IpcMsg, out: &mut [u8]) {
         let word = if idx < 8 { msg.words[2] } else { msg.words[3] };
         out[idx] = ((word >> ((idx % 8) * 8)) & 0xff) as u8;
         idx += 1;
+    }
+}
+
+// Legacy IPC VFS owns a separate view. Allocate its payload pages through the
+// kernel mapping API; physical addresses and the kernel direct map stay private.
+fn init_tmpfs_pages() {
+    fn allocate() -> Option<u64> {
+        use sunlight_libc::mman::*;
+        mmap(
+            core::ptr::null_mut(),
+            4096,
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD,
+            -1,
+            0,
+        )
+        .ok()
+        .map(|p| p as u64)
+    }
+    unsafe fn free(address: u64) {
+        let _ = sunlight_libc::mman::munmap(address as *mut u8, 4096);
+    }
+    unsafe fn direct_map(address: u64) -> *mut u8 {
+        address as *mut u8
+    }
+    static PROVIDER: sunlight_mm::FrameAllocator = sunlight_mm::FrameAllocator {
+        allocate,
+        free,
+        direct_map,
+    };
+    // SAFETY: mmap provides exclusive page-aligned backing with exact unmap
+    // boundaries. The callbacks remain valid for the lifetime of this service.
+    unsafe {
+        sunlight_mm::install_allocator(&PROVIDER);
     }
 }

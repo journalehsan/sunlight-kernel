@@ -15,6 +15,7 @@ pub const EBADF: i32 = 9;
 pub const EAGAIN: i32 = 11;
 pub const EPIPE: i32 = 32;
 pub const ENOMEM: i32 = 12;
+pub const ENOSPC: i32 = 28;
 pub const EACCES: i32 = 13;
 pub const EFAULT: i32 = 14;
 pub const EINVAL: i32 = 22;
@@ -74,6 +75,8 @@ pub fn set_from_errno(e: Errno) {
         Errno::IsDir => EISDIR,
         Errno::NotDir => ENOTDIR,
         Errno::BrokenPipe => EPIPE,
+        Errno::NoSpace => ENOSPC,
+        Errno::NoMemory => ENOMEM,
     };
     set_errno(code);
 }

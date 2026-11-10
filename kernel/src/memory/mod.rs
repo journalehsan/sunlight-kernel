@@ -27,6 +27,7 @@ pub(crate) mod shared_quota_gate;
 pub mod swap;
 pub mod swap_slot;
 pub mod tlb;
+pub mod tmpfs;
 pub mod user;
 pub mod validate;
 pub mod vmm;

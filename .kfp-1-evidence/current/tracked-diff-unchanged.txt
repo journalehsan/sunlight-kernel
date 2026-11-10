@@ -1,0 +1,1 @@
+PASS: git diff --binary equals preexisting.patch; all recorded source SHA256 values unchanged.

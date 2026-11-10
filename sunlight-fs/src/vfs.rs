@@ -770,9 +770,12 @@ impl<D: BlockDevice> Vfs<D> {
             .position(|(i, m)| m.is_none() && self.next_tags[i] <= u8::MAX as u16)
             .ok_or(FsError::TooManyOpenFiles)?;
         let tag = self.next_tags[slot] as u8;
+        let mut mount_path = String::new();
+        mount_path.try_reserve_exact(path.len()).map_err(|_| FsError::NoMemory)?;
+        mount_path.push_str(path);
         self.next_tags[slot] += MAX_MOUNTS as u16;
         self.mounts[slot] = Some(Mount {
-            path: String::from(path),
+            path: mount_path,
             fs,
             tag,
             source: 0,
@@ -783,8 +786,13 @@ impl<D: BlockDevice> Vfs<D> {
         Ok(())
     }
 
-    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
+    pub fn mount_tmpfs(&mut self, path: &str, fs: crate::Tmpfs) -> Result<(), FsError> {
         self.mount(path, FsNode::Ram(fs))
+    }
+
+    /// Compatibility spelling for older callers and fstab entries.
+    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
+        self.mount_tmpfs(path, fs)
     }
 
     pub fn mount_fat(&mut self, path: &str, fat: Fat32<D>) -> Result<(), FsError> {

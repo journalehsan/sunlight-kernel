@@ -1,0 +1,1762 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index ff48ae417..41044543b 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2954,6 +2954,7 @@ version = "0.2.6935-alpha.2"
+ dependencies = [
+  "sunlight-block",
+  "sunlight-fat",
++ "sunlight-mm",
+ ]
+ 
+ [[package]]
+@@ -3023,6 +3024,7 @@ dependencies = [
+  "sunlight-fat",
+  "sunlight-fs",
+  "sunlight-ipc",
++ "sunlight-mm",
+  "sunlight-net",
+  "sunlight-sensors",
+  "sunlight-smbios",
+@@ -3100,6 +3102,13 @@ dependencies = [
+  "sunlight-libc",
+ ]
+ 
++[[package]]
++name = "sunlight-mm"
++version = "0.1.0"
++dependencies = [
++ "spin",
++]
++
+ [[package]]
+ name = "sunlight-mouse"
+ version = "0.2.6935-alpha.2"
+@@ -3458,6 +3467,7 @@ dependencies = [
+  "sunlight-fs",
+  "sunlight-ipc",
+  "sunlight-libc",
++ "sunlight-mm",
+ ]
+ 
+ [[package]]
+diff --git a/Cargo.toml b/Cargo.toml
+index 097b11d2d..3b2322903 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -27,6 +27,7 @@ members = [
+     "sunlight-tz",
+     "sunlight-block",
+     "sunlight-fs",
++    "sunlight-mm",
+     "sunlight-virtio",
+     "sunlight-fat",
+     "sunlight-libc",
+diff --git a/kernel/Cargo.toml b/kernel/Cargo.toml
+index ab05ed1c5..a667242fe 100644
+--- a/kernel/Cargo.toml
++++ b/kernel/Cargo.toml
+@@ -671,6 +671,7 @@ sunlight-virtio = { path = "../sunlight-virtio" }
+ sunlight-block = { path = "../sunlight-block" }
+ sunlight-fat = { path = "../sunlight-fat" }
+ sunlight-elf = { path = "../sunlight-elf" }
++sunlight-mm = { path = "../sunlight-mm" }
+ sunlight-fs = { path = "../sunlight-fs" }
+ sunlight-compat-linux = { path = "../compat-linux" }
+ sunlight-net = { path = "../sunlight-net" }
+@@ -680,6 +681,8 @@ sunlight-sensors = { path = "../sunlight-sensors" }
+ lz4_flex = { version = "0.11", default-features = false }
+ 
+ [features]
++# Bounded PMM-backed filesystem regression gate; off in ordinary boots.
++tmpfs_test = []
+ # M5.3R4 attachment prerequisite; not admitted in release or ordinary boots.
+ session_launch_test = []
+ # Native authenticated lifecycle receipts; never admitted in release.
+diff --git a/kernel/src/arch/x86_64/syscall.rs b/kernel/src/arch/x86_64/syscall.rs
+index 2886568cf..915495cfd 100644
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -1353,6 +1353,8 @@ const ERR_ENOTDIR: u64 = u64::MAX - 7;
+ const ERR_EIO: u64 = u64::MAX - 8;
+ const ERR_ERANGE: u64 = u64::MAX - 9;
+ const ERR_EPIPE: u64 = u64::MAX - 10;
++const ERR_ENOSPC: u64 = u64::MAX - 11;
++const ERR_ENOMEM: u64 = u64::MAX - 12;
+ 
+ fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
+     match error {
+@@ -1365,6 +1367,8 @@ fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
+         sunlight_fs::FsError::IsDir => ERR_EISDIR,
+         sunlight_fs::FsError::NotDir => ERR_ENOTDIR,
+         sunlight_fs::FsError::Io => ERR_EIO,
++        sunlight_fs::FsError::NoSpace => ERR_ENOSPC,
++        sunlight_fs::FsError::NoMemory => ERR_ENOMEM,
+         _ => u64::MAX,
+     }
+ }
+@@ -5464,9 +5468,15 @@ fn open_resolved_path(path: &str, flags: u64, mode: u64) -> u64 {
+                 }
+             }
+         };
+-        if wants_truncate && vfs.truncate(opened).is_err() {
+-            let _ = vfs.close(opened);
+-            return ERR_EIO;
++        if wants_truncate {
++            if let Err(error) = vfs.truncate(opened) {
++                let _ = vfs.close(opened);
++                return if is_linux {
++                    linux_from_fs(error)
++                } else {
++                    fs_error_raw(error)
++                };
++            }
+         }
+         opened
+     };
+@@ -6273,6 +6283,8 @@ fn linux_from_fs(error: sunlight_fs::FsError) -> u64 {
+         FsError::ReadOnlyFilesystem => linux_errno(sunlight_compat_linux::abi::EROFS as u64),
+         FsError::InvalidPath => linux_errno(sunlight_compat_linux::abi::EINVAL as u64),
+         FsError::TooManyOpenFiles => linux_errno(sunlight_compat_linux::abi::EMFILE as u64),
++        FsError::NoMemory => linux_errno(sunlight_compat_linux::abi::ENOMEM as u64),
++        FsError::NoSpace => linux_errno(28),
+         FsError::Unsupported => linux_errno(sunlight_compat_linux::abi::ENOSYS as u64),
+         _ => linux_errno(sunlight_compat_linux::abi::EIO as u64),
+     }
+@@ -9694,7 +9706,13 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
+                             }
+                             n as u64
+                         }
+-                        Err(_) => u64::MAX,
++                        Err(error) => {
++                            if is_linux {
++                                linux_from_fs(error)
++                            } else {
++                                fs_error_raw(error)
++                            }
++                        }
+                     }
+                 } else if fd_entry.handle.is_tty_stdout() {
+                     // fd1 wired to a TTY tab's kernel stdout ring. tty_server
+diff --git a/kernel/src/main.rs b/kernel/src/main.rs
+index 66ec2afd9..92c994391 100644
+--- a/kernel/src/main.rs
++++ b/kernel/src/main.rs
+@@ -699,6 +699,9 @@ pub extern "C" fn _start() -> ! {
+     usb_storage::init(&mut vmm, hhdm_offset.as_u64());
+ 
+     // 5.5. Kernel-global VFS over INITRAMFS + boot FAT volume (Phase 6.5.3)
++    memory::tmpfs::init(hhdm_offset.as_u64());
++    #[cfg(feature = "tmpfs_test")]
++    memory::tmpfs::run_gate();
+     init_kernel_vfs();
+ 
+     // 6. Syscall MSRs
+@@ -2319,7 +2322,7 @@ fn init_kernel_vfs() {
+     let mut vfs: sunlight_fs::Vfs<KernelDisk> = sunlight_fs::Vfs::new();
+ 
+     if vfs
+-        .mount_ramfs("/", sunlight_fs::RamFs::new(sunlight_fs::INITRAMFS))
++        .mount_tmpfs("/", sunlight_fs::Tmpfs::new(sunlight_fs::INITRAMFS))
+         .is_err()
+     {
+         serial_println!("[VFS] kernel ramfs mount FAILED");
+diff --git a/kernel/src/memory/mod.rs b/kernel/src/memory/mod.rs
+index 6edb5f6a8..805a065d4 100644
+--- a/kernel/src/memory/mod.rs
++++ b/kernel/src/memory/mod.rs
+@@ -27,6 +27,7 @@ pub(crate) mod shared_quota_gate;
+ pub mod swap;
+ pub mod swap_slot;
+ pub mod tlb;
++pub mod tmpfs;
+ pub mod user;
+ pub mod validate;
+ pub mod vmm;
+diff --git a/services/vfs_server/Cargo.toml b/services/vfs_server/Cargo.toml
+index 34565835c..7c76e0157 100644
+--- a/services/vfs_server/Cargo.toml
++++ b/services/vfs_server/Cargo.toml
+@@ -655,6 +655,7 @@ path = "src/main.rs"
+ 
+ [dependencies]
+ sunlight-libc = { path = "../../sunlight-libc" }
++sunlight-mm = { path = "../../sunlight-mm" }
+ sunlight-fs = { path = "../../sunlight-fs" }
+ sunlight-ipc = { path = "../../ipc" }
+ sunlight-fat = { path = "../../sunlight-fat" }
+diff --git a/services/vfs_server/src/main.rs b/services/vfs_server/src/main.rs
+index fffa51fec..8099cf290 100644
+--- a/services/vfs_server/src/main.rs
++++ b/services/vfs_server/src/main.rs
+@@ -213,6 +213,7 @@ impl OpenMeta {
+ 
+ #[no_mangle]
+ pub extern "C" fn _start() -> ! {
++    init_tmpfs_pages();
+     debug_log("[VFS]  VFS server started");
+ 
+     let ep = endpoint_create();
+@@ -300,7 +301,7 @@ fn mount_fstab_entry(
+     entry: &FstabEntry<'_>,
+ ) -> Option<&'static str> {
+     match entry.fs_type {
+-        "ramfs" => {
++        "ramfs" | "tmpfs" => {
+             if entry.mountpoint == "/" {
+                 let _ = vfs.mount_ramfs("/", RamFs::new(INITRAMFS));
+             }
+@@ -1397,6 +1398,8 @@ fn errno(err: FsError) -> u64 {
+         FsError::PermissionDenied => ERR_ACCES,
+         FsError::OperationNotPermitted => ERR_PERM,
+         FsError::ReadOnlyFilesystem => ERR_ROFS,
++        FsError::NoSpace => 28,
++        FsError::NoMemory => 12,
+         _ => ERR_INVALID,
+     }
+ }
+@@ -1520,3 +1523,37 @@ fn unpack_data(msg: &IpcMsg, out: &mut [u8]) {
+         idx += 1;
+     }
+ }
++
++// Legacy IPC VFS owns a separate view. Allocate its payload pages through the
++// kernel mapping API; physical addresses and the kernel direct map stay private.
++fn init_tmpfs_pages() {
++    fn allocate() -> Option<u64> {
++        use sunlight_libc::mman::*;
++        mmap(
++            core::ptr::null_mut(),
++            4096,
++            PROT_READ | PROT_WRITE,
++            MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD,
++            -1,
++            0,
++        )
++        .ok()
++        .map(|p| p as u64)
++    }
++    unsafe fn free(address: u64) {
++        let _ = sunlight_libc::mman::munmap(address as *mut u8, 4096);
++    }
++    unsafe fn direct_map(address: u64) -> *mut u8 {
++        address as *mut u8
++    }
++    static PROVIDER: sunlight_mm::FrameAllocator = sunlight_mm::FrameAllocator {
++        allocate,
++        free,
++        direct_map,
++    };
++    // SAFETY: mmap provides exclusive page-aligned backing with exact unmap
++    // boundaries. The callbacks remain valid for the lifetime of this service.
++    unsafe {
++        sunlight_mm::install_allocator(&PROVIDER);
++    }
++}
+diff --git a/sunlight-fs/Cargo.toml b/sunlight-fs/Cargo.toml
+index eb6e8900a..113b081a6 100644
+--- a/sunlight-fs/Cargo.toml
++++ b/sunlight-fs/Cargo.toml
+@@ -650,8 +650,10 @@ version = "0.2.6935-alpha.2"
+ edition = "2021"
+ 
+ [dependencies]
++sunlight-mm = { path = "../sunlight-mm" }
+ sunlight-block = { path = "../sunlight-block" }
+ sunlight-fat = { path = "../sunlight-fat" }
+ 
+ [dev-dependencies]
++sunlight-mm = { path = "../sunlight-mm", features = ["testutil"] }
+ sunlight-fat = { path = "../sunlight-fat", features = ["testutil"] }
+diff --git a/sunlight-fs/etc/fstab b/sunlight-fs/etc/fstab
+index d2e8c8b5f..e313762b4 100644
+--- a/sunlight-fs/etc/fstab
++++ b/sunlight-fs/etc/fstab
+@@ -1,5 +1,5 @@
+ # source    target    type    options (exactly four fields)
+ /dev/sda1   /boot     bootfs  defaults
+-/dev/ram0   /         ramfs   defaults
++/dev/ram0   /         tmpfs   defaults
+ # Runtime FAT32 example (GPT only; pre-existing root-owned empty target):
+ # PARTUUID=12345678-1234-5678-9abc-123456789abc /mnt fat32 rw,nofail
+diff --git a/sunlight-fs/src/error.rs b/sunlight-fs/src/error.rs
+index c9baa7e28..8aa7e0ae1 100644
+--- a/sunlight-fs/src/error.rs
++++ b/sunlight-fs/src/error.rs
+@@ -14,5 +14,9 @@ pub enum FsError {
+     OperationNotPermitted,
+     ReadOnlyFilesystem,
+     Io,
++    /// ENOSPC: mount byte or inode quota exhausted.
++    NoSpace,
++    /// ENOMEM: metadata allocator or PMM exhausted.
++    NoMemory,
+     Unsupported,
+ }
+diff --git a/sunlight-fs/src/fstab.rs b/sunlight-fs/src/fstab.rs
+index f71b56b0b..73347a114 100644
+--- a/sunlight-fs/src/fstab.rs
++++ b/sunlight-fs/src/fstab.rs
+@@ -85,7 +85,8 @@ pub fn parse_fstab(text: &str) -> Result<FstabTable<'_>, FstabError> {
+             return Err(fail("invalid absolute target"));
+         }
+         match fs_type {
+-            "ramfs" if device == "/dev/ram0" && mountpoint == "/" && options == "defaults" => {}
++            "ramfs" | "tmpfs"
++                if device == "/dev/ram0" && mountpoint == "/" && options == "defaults" => {}
+             "bootfs" if device == "/dev/sda1" && mountpoint == "/boot" && options == "defaults" => {
+             }
+             "fat32" => {
+@@ -197,6 +198,8 @@ mod tests {
+         let table = parse_fstab(FSTAB_TEXT).unwrap();
+         assert_eq!(table[0].unwrap().fs_type, "bootfs");
+         assert_eq!(table[1].unwrap().mountpoint, "/");
++        assert_eq!(table[1].unwrap().fs_type, "tmpfs");
++        assert!(parse_fstab("/dev/ram0 / ramfs defaults").is_ok());
+         assert!(parse_fstab(" # blank\n").unwrap()[0].is_none());
+     }
+     #[test]
+diff --git a/sunlight-fs/src/lib.rs b/sunlight-fs/src/lib.rs
+index c6e8d80ba..872b43a22 100644
+--- a/sunlight-fs/src/lib.rs
++++ b/sunlight-fs/src/lib.rs
+@@ -1,4 +1,5 @@
+ #![no_std]
++#![feature(allocator_api)]
+ 
+ extern crate alloc;
+ 
+@@ -13,6 +14,8 @@ pub mod path;
+ pub mod permission;
+ pub mod policy;
+ pub mod ramfs;
++pub mod tmpfs;
++pub use tmpfs::{Tmpfs, TmpfsDir, TmpfsInode, TmpfsLimits};
+ pub mod vfs;
+ 
+ pub use block::{BlockDevice, BlockError, CachedBlockDevice, NullDevice, BLOCK_SIZE};
+diff --git a/sunlight-fs/src/ramfs.rs b/sunlight-fs/src/ramfs.rs
+index cb615ba78..ad290b82c 100644
+--- a/sunlight-fs/src/ramfs.rs
++++ b/sunlight-fs/src/ramfs.rs
+@@ -1,10 +1,6 @@
+-use crate::vfs::{
+-    make_local_handle, mode, next_handle_generation, split_local_handle, FileHandle, FileStat,
+-    FileSystem, FileType, VfsDirEntry,
+-};
+-use crate::{path, FsError};
+-use alloc::vec::Vec;
+-
++//! Static boot image and compatibility names for the page-backed Tmpfs.
++pub use crate::tmpfs::Tmpfs as RamFs;
++use crate::vfs::mode;
+ pub const RAMFS_MAX_HANDLES: usize = 32;
+ pub const RAMFS_MAX_ENTRIES: usize = 512;
+ 
+@@ -64,617 +60,6 @@ impl RamEntry {
+     }
+ }
+ 
+-/// A dynamic entry created at runtime (e.g., by mkdir or write).
+-struct DynamicEntry {
+-    path: Vec<u8>,
+-    data: Vec<u8>,
+-    uid: u32,
+-    gid: u32,
+-    mode: u16,
+-    is_dir: bool,
+-}
+-
+-pub struct RamFs {
+-    entries: &'static [RamEntry],
+-    handles: [Option<RamOpen>; RAMFS_MAX_HANDLES],
+-    generations: [u32; RAMFS_MAX_HANDLES],
+-    /// Mutable data copies for static entries. Indexed by entry index.
+-    buffers: [Option<Vec<u8>>; RAMFS_MAX_ENTRIES],
+-    /// Dynamic entries created at runtime.
+-    dynamic: Vec<DynamicEntry>,
+-}
+-
+-#[derive(Clone, Copy)]
+-struct RamOpen {
+-    entry_idx: usize,
+-    generation: u32,
+-}
+-
+-impl RamFs {
+-    pub fn new(entries: &'static [RamEntry]) -> Self {
+-        Self {
+-            entries,
+-            handles: [None; RAMFS_MAX_HANDLES],
+-            generations: [0; RAMFS_MAX_HANDLES],
+-            buffers: [const { None }; RAMFS_MAX_ENTRIES],
+-            dynamic: Vec::new(),
+-        }
+-    }
+-
+-    fn all_entry_count(&self) -> usize {
+-        self.entries.len() + self.dynamic.len()
+-    }
+-
+-    fn entry_idx(&self, path: &str) -> Result<usize, FsError> {
+-        path::validate_absolute(path)?;
+-        if let Some(idx) = self.entries.iter().position(|e| e.path == path) {
+-            return Ok(idx);
+-        }
+-        if let Some(idx) = self
+-            .dynamic
+-            .iter()
+-            .position(|e| core::str::from_utf8(&e.path).ok() == Some(path))
+-        {
+-            return Ok(self.entries.len() + idx);
+-        }
+-        Err(FsError::NotFound)
+-    }
+-
+-    fn is_dir(&self, idx: usize) -> bool {
+-        if idx < self.entries.len() {
+-            self.entries[idx].is_dir
+-        } else {
+-            self.dynamic[idx - self.entries.len()].is_dir
+-        }
+-    }
+-
+-    fn entry_mode(&self, idx: usize) -> u16 {
+-        if idx < self.entries.len() {
+-            self.entries[idx].mode
+-        } else {
+-            self.dynamic[idx - self.entries.len()].mode
+-        }
+-    }
+-
+-    fn entry_uid(&self, idx: usize) -> u32 {
+-        if idx < self.entries.len() {
+-            self.entries[idx].uid
+-        } else {
+-            self.dynamic[idx - self.entries.len()].uid
+-        }
+-    }
+-
+-    fn entry_gid(&self, idx: usize) -> u32 {
+-        if idx < self.entries.len() {
+-            self.entries[idx].gid
+-        } else {
+-            self.dynamic[idx - self.entries.len()].gid
+-        }
+-    }
+-
+-    fn entry_data(&self, idx: usize) -> &[u8] {
+-        if idx < self.entries.len() {
+-            self.buffers[idx]
+-                .as_deref()
+-                .unwrap_or(self.entries[idx].data)
+-        } else {
+-            &self.dynamic[idx - self.entries.len()].data
+-        }
+-    }
+-
+-    fn entry_data_len(&self, idx: usize) -> usize {
+-        if idx < self.entries.len() {
+-            self.buffers[idx]
+-                .as_ref()
+-                .map(|v| v.len())
+-                .unwrap_or(self.entries[idx].data.len())
+-        } else {
+-            self.dynamic[idx - self.entries.len()].data.len()
+-        }
+-    }
+-
+-    fn set_entry_data(&mut self, idx: usize, data: Vec<u8>) {
+-        if idx < self.entries.len() {
+-            self.buffers[idx] = Some(data);
+-        } else {
+-            self.dynamic[idx - self.entries.len()].data = data;
+-        }
+-    }
+-
+-    fn set_entry_mode(&mut self, idx: usize, mode: u16) {
+-        if idx < self.entries.len() {
+-            // Static entries are immutable for mode; ignore or we could add a buffer for metadata
+-        } else {
+-            self.dynamic[idx - self.entries.len()].mode = mode;
+-        }
+-    }
+-
+-    fn set_entry_owner(&mut self, idx: usize, uid: u32, gid: u32) {
+-        if idx < self.entries.len() {
+-            // Static entries are immutable for owner
+-        } else {
+-            self.dynamic[idx - self.entries.len()].uid = uid;
+-            self.dynamic[idx - self.entries.len()].gid = gid;
+-        }
+-    }
+-
+-    fn entry_path(&self, idx: usize) -> Option<&str> {
+-        if idx < self.entries.len() {
+-            Some(self.entries[idx].path)
+-        } else {
+-            core::str::from_utf8(&self.dynamic[idx - self.entries.len()].path).ok()
+-        }
+-    }
+-
+-    fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
+-        for (idx, slot) in self.handles.iter_mut().enumerate() {
+-            if slot.is_none() {
+-                let generation = next_handle_generation(self.generations[idx]);
+-                self.generations[idx] = generation;
+-                *slot = Some(RamOpen {
+-                    entry_idx,
+-                    generation,
+-                });
+-                return Ok(make_local_handle(idx, generation));
+-            }
+-        }
+-        Err(FsError::TooManyOpenFiles)
+-    }
+-
+-    fn handle_entry_idx(&self, handle: FileHandle) -> Result<usize, FsError> {
+-        let (idx, generation) = split_local_handle(handle)?;
+-        self.handles
+-            .get(idx)
+-            .and_then(|slot| slot.filter(|open| open.generation == generation))
+-            .map(|open| open.entry_idx)
+-            .ok_or(FsError::BadHandle)
+-    }
+-
+-    fn parent_is_dir(&self, path: &str) -> Result<bool, FsError> {
+-        let parent = parent_path(path)?;
+-        if parent == "/" {
+-            return Ok(true);
+-        }
+-        let idx = self.entry_idx(parent)?;
+-        Ok(self.is_dir(idx))
+-    }
+-}
+-
+-impl FileSystem for RamFs {
+-    fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+-        let entry_idx = self.entry_idx(path)?;
+-        self.alloc_handle(entry_idx)
+-    }
+-
+-    fn create_file(
+-        &mut self,
+-        path: &str,
+-        uid: u32,
+-        gid: u32,
+-        mode: u16,
+-    ) -> Result<FileHandle, FsError> {
+-        path::validate_absolute(path)?;
+-        if self.entry_idx(path).is_ok() {
+-            return self.open(path);
+-        }
+-        if !self.parent_is_dir(path)? {
+-            return Err(FsError::NotDir);
+-        }
+-        self.dynamic.push(DynamicEntry {
+-            path: Vec::from(path.as_bytes()),
+-            data: Vec::new(),
+-            uid,
+-            gid,
+-            mode: mode::S_IFREG | mode,
+-            is_dir: false,
+-        });
+-        self.alloc_handle(self.all_entry_count() - 1)
+-    }
+-
+-    fn create_file_exclusive(
+-        &mut self,
+-        path: &str,
+-        uid: u32,
+-        gid: u32,
+-        mode: u16,
+-    ) -> Result<FileHandle, FsError> {
+-        path::validate_absolute(path)?;
+-        if self.entry_idx(path).is_ok() {
+-            return Err(FsError::AlreadyExists);
+-        }
+-        if !self.parent_is_dir(path)? {
+-            return Err(FsError::NotDir);
+-        }
+-        self.dynamic.push(DynamicEntry {
+-            path: Vec::from(path.as_bytes()),
+-            data: Vec::new(),
+-            uid,
+-            gid,
+-            mode: mode::S_IFREG | mode,
+-            is_dir: false,
+-        });
+-        self.alloc_handle(self.all_entry_count() - 1)
+-    }
+-
+-    fn read(
+-        &mut self,
+-        handle: FileHandle,
+-        offset: usize,
+-        buf: &mut [u8],
+-    ) -> Result<usize, FsError> {
+-        let entry_idx = self.handle_entry_idx(handle)?;
+-        if self.is_dir(entry_idx) {
+-            return Err(FsError::IsDir);
+-        }
+-        let data = self.entry_data(entry_idx);
+-        if offset >= data.len() {
+-            return Ok(0);
+-        }
+-        let src = &data[offset..];
+-        let len = src.len().min(buf.len());
+-        buf[..len].copy_from_slice(&src[..len]);
+-        Ok(len)
+-    }
+-
+-    fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
+-        let entry_idx = self.handle_entry_idx(handle)?;
+-        if self.is_dir(entry_idx) {
+-            return Err(FsError::IsDir);
+-        }
+-        let end = offset.checked_add(buf.len()).ok_or(FsError::Io)?;
+-
+-        // Static initramfs entries borrow their original bytes. Materialize a
+-        // mutable copy only on the first write, reserving the complete size up
+-        // front so `extend_from_slice` cannot invoke the infallible allocator.
+-        if entry_idx < self.entries.len() && self.buffers[entry_idx].is_none() {
+-            let original = self.entries[entry_idx].data;
+-            let required = original.len().max(end);
+-            let mut data = Vec::new();
+-            data.try_reserve_exact(required).map_err(|_| FsError::Io)?;
+-            data.extend_from_slice(original);
+-            self.buffers[entry_idx] = Some(data);
+-        }
+-
+-        let data = if entry_idx < self.entries.len() {
+-            self.buffers[entry_idx].as_mut().ok_or(FsError::Io)?
+-        } else {
+-            &mut self.dynamic[entry_idx - self.entries.len()].data
+-        };
+-        if end > data.len() {
+-            data.try_reserve(end - data.len())
+-                .map_err(|_| FsError::Io)?;
+-            data.resize(end, 0);
+-        }
+-        data[offset..end].copy_from_slice(buf);
+-        Ok(buf.len())
+-    }
+-
+-    fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
+-        let entry_idx = self.handle_entry_idx(handle)?;
+-        if self.is_dir(entry_idx) {
+-            return Err(FsError::IsDir);
+-        }
+-
+-        if entry_idx < self.entries.len() && self.buffers[entry_idx].is_none() {
+-            let original = self.entries[entry_idx].data;
+-            let mut data = Vec::new();
+-            data.try_reserve_exact(original.len().max(size))
+-                .map_err(|_| FsError::Io)?;
+-            data.extend_from_slice(original);
+-            self.buffers[entry_idx] = Some(data);
+-            return Ok(());
+-        }
+-
+-        let data = if entry_idx < self.entries.len() {
+-            self.buffers[entry_idx].as_mut().ok_or(FsError::Io)?
+-        } else {
+-            &mut self.dynamic[entry_idx - self.entries.len()].data
+-        };
+-        if size > data.capacity() {
+-            data.try_reserve_exact(size - data.len())
+-                .map_err(|_| FsError::Io)?;
+-        }
+-        Ok(())
+-    }
+-
+-    fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+-        let entry_idx = self.handle_entry_idx(handle)?;
+-        if self.is_dir(entry_idx) {
+-            return Err(FsError::IsDir);
+-        }
+-        self.set_entry_data(entry_idx, Vec::new());
+-        Ok(())
+-    }
+-
+-    fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
+-        let (idx, generation) = split_local_handle(handle)?;
+-        let slot = self.handles.get_mut(idx).ok_or(FsError::BadHandle)?;
+-        if slot
+-            .as_ref()
+-            .map(|open| open.generation != generation)
+-            .unwrap_or(true)
+-        {
+-            return Err(FsError::BadHandle);
+-        }
+-        *slot = None;
+-        Ok(())
+-    }
+-
+-    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+-        self.handle_entry_idx(handle)?;
+-        Err(FsError::Unsupported)
+-    }
+-
+-    fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+-        let entry_idx = self.entry_idx(path)?;
+-        if !self.is_dir(entry_idx) {
+-            return Err(FsError::NotDir);
+-        }
+-        Err(FsError::Unsupported)
+-    }
+-
+-    fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+-        let idx = self.handle_entry_idx(handle)?;
+-        let ft = if self.is_dir(idx) {
+-            FileType::Directory
+-        } else {
+-            FileType::File
+-        };
+-        Ok(FileStat {
+-            file_type: ft,
+-            size: if ft == FileType::Directory {
+-                0
+-            } else {
+-                self.entry_data_len(idx)
+-            },
+-            uid: self.entry_uid(idx),
+-            gid: self.entry_gid(idx),
+-            mode: self.entry_mode(idx),
+-            nlinks: if ft == FileType::Directory { 2 } else { 1 },
+-        })
+-    }
+-
+-    fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
+-        let entry_idx = self.entry_idx(path)?;
+-        let ft = if self.is_dir(entry_idx) {
+-            FileType::Directory
+-        } else {
+-            FileType::File
+-        };
+-        let size = if ft == FileType::Directory {
+-            0
+-        } else {
+-            self.entry_data_len(entry_idx)
+-        };
+-        let nlinks = if ft == FileType::Directory { 2 } else { 1 };
+-        Ok(FileStat {
+-            file_type: ft,
+-            size,
+-            uid: self.entry_uid(entry_idx),
+-            gid: self.entry_gid(entry_idx),
+-            mode: self.entry_mode(entry_idx),
+-            nlinks,
+-        })
+-    }
+-
+-    fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
+-        path::validate_absolute(path)?;
+-        if self.entry_idx(path).is_ok() {
+-            return Err(FsError::AlreadyExists);
+-        }
+-        if !self.parent_is_dir(path)? {
+-            return Err(FsError::NotDir);
+-        }
+-        self.dynamic.push(DynamicEntry {
+-            path: Vec::from(path.as_bytes()),
+-            data: Vec::new(),
+-            uid,
+-            gid,
+-            mode: mode::S_IFDIR | mode,
+-            is_dir: true,
+-        });
+-        Ok(())
+-    }
+-
+-    fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError> {
+-        let entry_idx = self.entry_idx(path)?;
+-        if entry_idx < self.entries.len() {
+-            return Err(FsError::ReadOnlyFilesystem);
+-        }
+-        self.set_entry_mode(entry_idx, mode);
+-        Ok(())
+-    }
+-
+-    fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError> {
+-        let entry_idx = self.entry_idx(path)?;
+-        self.set_entry_owner(entry_idx, uid, gid);
+-        Ok(())
+-    }
+-
+-    fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+-        path::validate_absolute(path)?;
+-        let entry_idx = self.entry_idx(path)?;
+-        if self.is_dir(entry_idx) {
+-            return Err(FsError::IsDir);
+-        }
+-        if entry_idx < self.entries.len() {
+-            return Err(FsError::ReadOnlyFilesystem);
+-        }
+-        let dyn_idx = entry_idx - self.entries.len();
+-        // Invalidate any open handles pointing at this entry or at entries
+-        // that shifted past it.
+-        for slot in self.handles.iter_mut() {
+-            if let Some(open) = slot.as_mut() {
+-                if open.entry_idx == entry_idx {
+-                    *slot = None;
+-                } else if open.entry_idx > entry_idx {
+-                    open.entry_idx -= 1;
+-                }
+-            }
+-        }
+-        self.dynamic.remove(dyn_idx);
+-        Ok(())
+-    }
+-
+-    fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+-        path::validate_absolute(old)?;
+-        path::validate_absolute(new)?;
+-        let entry_idx = self.entry_idx(old)?;
+-        if entry_idx < self.entries.len() {
+-            return Err(FsError::ReadOnlyFilesystem);
+-        }
+-        let dyn_idx = entry_idx - self.entries.len();
+-        if old == new {
+-            return Ok(());
+-        }
+-        let parent = new
+-            .rsplit_once('/')
+-            .map(|(parent, _)| if parent.is_empty() { "/" } else { parent })
+-            .ok_or(FsError::NotFound)?;
+-        if parent != "/" && !self.is_dir(self.entry_idx(parent)?) {
+-            return Err(FsError::NotDir);
+-        }
+-        if self.is_dir(entry_idx) {
+-            let prefix = alloc::format!("{}/", old);
+-            if self
+-                .entries
+-                .iter()
+-                .any(|entry| entry.path.starts_with(&prefix))
+-            {
+-                return Err(FsError::ReadOnlyFilesystem);
+-            }
+-            if new.starts_with(&prefix) {
+-                return Err(FsError::Unsupported);
+-            }
+-            if self.entry_idx(new).is_ok() {
+-                return Err(FsError::AlreadyExists);
+-            }
+-            // RAMFS paths are stored in full on every entry. Move the whole subtree.
+-            let mut updates = Vec::new();
+-            for (index, entry) in self.dynamic.iter().enumerate() {
+-                if index == dyn_idx || entry.path.starts_with(prefix.as_bytes()) {
+-                    let mut path = Vec::from(new.as_bytes());
+-                    path.extend_from_slice(&entry.path[old.len()..]);
+-                    let text = core::str::from_utf8(&path).map_err(|_| FsError::Unsupported)?;
+-                    path::validate_absolute(text)?;
+-                    updates.push((index, path));
+-                }
+-            }
+-            for (index, path) in updates {
+-                self.dynamic[index].path = path;
+-            }
+-            return Ok(());
+-        }
+-        // If destination exists (and is a file), remove it first.
+-        if let Ok(dst_idx) = self.entry_idx(new) {
+-            if self.is_dir(dst_idx) {
+-                return Err(FsError::IsDir);
+-            }
+-            if dst_idx < self.entries.len() {
+-                let source = self.dynamic.remove(dyn_idx);
+-                self.buffers[dst_idx] = Some(source.data);
+-                for slot in self.handles.iter_mut() {
+-                    if let Some(open) = slot.as_mut() {
+-                        if open.entry_idx == entry_idx {
+-                            open.entry_idx = dst_idx;
+-                        } else if open.entry_idx > entry_idx {
+-                            open.entry_idx -= 1;
+-                        }
+-                    }
+-                }
+-                return Ok(());
+-            }
+-            if dst_idx >= self.entries.len() {
+-                let ddyn = dst_idx - self.entries.len();
+-                for slot in self.handles.iter_mut() {
+-                    if let Some(open) = slot.as_mut() {
+-                        if open.entry_idx == dst_idx {
+-                            *slot = None;
+-                        } else if open.entry_idx > dst_idx {
+-                            open.entry_idx -= 1;
+-                        }
+-                    }
+-                }
+-                self.dynamic.remove(ddyn);
+-                // dyn_idx may have shifted if dst came before src in the vec
+-                let dyn_idx = self.entry_idx(old)? - self.entries.len();
+-                self.dynamic[dyn_idx].path = Vec::from(new.as_bytes());
+-                return Ok(());
+-            }
+-            return Err(FsError::ReadOnlyFilesystem);
+-        }
+-        self.dynamic[dyn_idx].path = Vec::from(new.as_bytes());
+-        Ok(())
+-    }
+-
+-    fn read_dir(
+-        &mut self,
+-        path: &str,
+-        f: &mut dyn FnMut(&VfsDirEntry) -> bool,
+-    ) -> Result<(), FsError> {
+-        path::validate_absolute(path)?;
+-        if path != "/" {
+-            let idx = self.entry_idx(path)?;
+-            if !self.is_dir(idx) {
+-                return Err(FsError::NotDir);
+-            }
+-        }
+-        for idx in 0..self.all_entry_count() {
+-            let Some(entry_path) = self.entry_path(idx) else {
+-                continue;
+-            };
+-            let Some(name) = direct_child_name(entry_path, path) else {
+-                continue;
+-            };
+-            let entry = if self.is_dir(idx) {
+-                VfsDirEntry::from_bytes(name.as_bytes(), FileType::Directory, 0)
+-            } else {
+-                VfsDirEntry::from_bytes(name.as_bytes(), FileType::File, self.entry_data_len(idx))
+-            };
+-            if !f(&entry) {
+-                break;
+-            }
+-        }
+-        Ok(())
+-    }
+-
+-    fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+-        let idx = self.handle_entry_idx(handle)?;
+-        let path = self.entry_path(idx).ok_or(FsError::BadHandle)?;
+-        let bytes = path.as_bytes();
+-        if buf.len() < bytes.len() {
+-            return Err(FsError::InvalidPath);
+-        }
+-        buf[..bytes.len()].copy_from_slice(bytes);
+-        Ok(bytes.len())
+-    }
+-}
+-
+-fn parent_path(path: &str) -> Result<&str, FsError> {
+-    if path == "/" {
+-        return Err(FsError::InvalidPath);
+-    }
+-    match path.rfind('/') {
+-        Some(0) => Ok("/"),
+-        Some(idx) => Ok(&path[..idx]),
+-        None => Err(FsError::InvalidPath),
+-    }
+-}
+-
+-/// If `entry_path` names a direct child of directory `dir`, return its name.
+-fn direct_child_name<'a>(entry_path: &'a str, dir: &str) -> Option<&'a str> {
+-    let rest = if dir == "/" {
+-        entry_path.strip_prefix('/')?
+-    } else {
+-        entry_path.strip_prefix(dir)?.strip_prefix('/')?
+-    };
+-    if rest.is_empty() || rest.contains('/') {
+-        None
+-    } else {
+-        Some(rest)
+-    }
+-}
+-
+ /// The conventional per-user directory structure that the OS guarantees to
+ /// exist inside every home directory (`/root` and each `/home/<user>`).
+ ///
+@@ -3221,641 +2606,3 @@ StandardOutput=journal\nStandardError=journal\n\n\
+         include_bytes!("../../assets/documents/Why SunlightOS Exists.txt"),
+     ),
+ ];
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-    use alloc::borrow::ToOwned;
+-
+-    static TEST_ENTRIES: &[RamEntry] = &[
+-        RamEntry::file(
+-            "/etc/motd",
+-            0,
+-            0,
+-            mode::FILE_644,
+-            b"Welcome to SunlightOS\n",
+-        ),
+-        RamEntry::file("/bin/sh", 0, 0, mode::FILE_755, b"shell"),
+-    ];
+-
+-    #[test]
+-    fn chmod_rejects_immutable_static_entry() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        assert_eq!(
+-            fs.chmod("/etc/motd", mode::FILE_600),
+-            Err(FsError::ReadOnlyFilesystem)
+-        );
+-        assert_eq!(fs.stat("/etc/motd").unwrap().mode, mode::FILE_644);
+-    }
+-
+-    #[test]
+-    fn open_and_read_whole_file() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/etc/motd").unwrap();
+-        let mut buf = [0u8; 32];
+-
+-        let read = fs.read(handle, 0, &mut buf).unwrap();
+-
+-        assert_eq!(read, b"Welcome to SunlightOS\n".len());
+-        assert_eq!(&buf[..read], b"Welcome to SunlightOS\n");
+-    }
+-
+-    #[test]
+-    fn read_respects_offset_and_buffer_size() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/etc/motd").unwrap();
+-        let mut buf = [0u8; 8];
+-
+-        let read = fs.read(handle, 11, &mut buf).unwrap();
+-
+-        assert_eq!(read, 8);
+-        assert_eq!(&buf, b"Sunlight");
+-    }
+-
+-    #[test]
+-    fn read_past_end_returns_zero() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/bin/sh").unwrap();
+-        let mut buf = [0u8; 4];
+-
+-        assert_eq!(fs.read(handle, 99, &mut buf), Ok(0));
+-    }
+-
+-    #[test]
+-    fn stat_reports_file_size_and_permissions() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-
+-        assert_eq!(
+-            fs.stat("/bin/sh"),
+-            Ok(FileStat {
+-                file_type: FileType::File,
+-                size: 5,
+-                uid: 0,
+-                gid: 0,
+-                mode: mode::FILE_755,
+-                nlinks: 1,
+-            })
+-        );
+-    }
+-
+-    #[test]
+-    fn missing_file_returns_not_found() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-
+-        assert_eq!(fs.open("/missing"), Err(FsError::NotFound));
+-    }
+-
+-    #[test]
+-    fn invalid_path_returns_invalid_path() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-
+-        assert_eq!(fs.open("etc/motd"), Err(FsError::InvalidPath));
+-    }
+-
+-    #[test]
+-    fn close_rejects_stale_handle() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/bin/sh").unwrap();
+-
+-        assert_eq!(fs.close(handle), Ok(()));
+-        assert_eq!(fs.close(handle), Err(FsError::BadHandle));
+-    }
+-
+-    #[test]
+-    fn reused_slot_rejects_the_previous_handle_incarnation() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let first = fs.open("/bin/sh").unwrap();
+-        fs.close(first).unwrap();
+-        let second = fs.open("/etc/motd").unwrap();
+-
+-        assert_ne!(first, second);
+-        assert_eq!(fs.read(first, 0, &mut [0; 1]), Err(FsError::BadHandle));
+-        assert_eq!(fs.close(first), Err(FsError::BadHandle));
+-        assert!(fs.read(second, 0, &mut [0; 1]).is_ok());
+-    }
+-
+-    #[test]
+-    fn truncate_keeps_the_handle_valid_and_discards_old_contents() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/bin/sh").unwrap();
+-        fs.truncate(handle).unwrap();
+-
+-        let mut one = [0u8; 1];
+-        assert_eq!(fs.read(handle, 0, &mut one), Ok(0));
+-        assert_eq!(fs.write(handle, 0, b"x"), Ok(1));
+-        assert_eq!(fs.read(handle, 0, &mut one), Ok(1));
+-        assert_eq!(one, [b'x']);
+-    }
+-
+-    #[test]
+-    fn too_many_open_files_is_reported() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        for _ in 0..RAMFS_MAX_HANDLES {
+-            fs.open("/bin/sh").unwrap();
+-        }
+-
+-        assert_eq!(fs.open("/bin/sh"), Err(FsError::TooManyOpenFiles));
+-    }
+-
+-    static DIR_ENTRIES: &[RamEntry] = &[
+-        RamEntry::dir("/", 0, 0, mode::DIR_755),
+-        RamEntry::dir("/etc", 0, 0, mode::DIR_755),
+-        RamEntry::file("/etc/motd", 0, 0, mode::FILE_644, b"hello\n"),
+-    ];
+-
+-    #[test]
+-    fn open_dir_succeeds_and_read_returns_isdir() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        let handle = fs.open("/etc").unwrap();
+-        let stat = fs.fstat_handle(handle).unwrap();
+-        assert_eq!(stat.file_type, FileType::Directory);
+-        let mut buf = [0u8; 8];
+-        assert_eq!(fs.read(handle, 0, &mut buf), Err(FsError::IsDir));
+-        let mut path = [0u8; 16];
+-        let n = fs.handle_path(handle, &mut path).unwrap();
+-        assert_eq!(&path[..n], b"/etc");
+-    }
+-
+-    #[test]
+-    fn mkdir_existing_returns_already_exists() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        assert_eq!(fs.mkdir("/etc", 0, 0, 0o755), Err(FsError::AlreadyExists));
+-    }
+-
+-    #[test]
+-    fn stat_dir_returns_directory_type() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        let stat = fs.stat("/etc").unwrap();
+-        assert_eq!(stat.file_type, FileType::Directory);
+-        assert_eq!(stat.mode, mode::DIR_755);
+-        assert_eq!(stat.nlinks, 2);
+-    }
+-
+-    #[test]
+-    fn write_extends_file() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        let handle = fs.open("/bin/sh").unwrap();
+-        assert_eq!(fs.write(handle, 0, b"newdata"), Ok(7));
+-        let mut buf = [0u8; 16];
+-        let n = fs.read(handle, 0, &mut buf).unwrap();
+-        assert_eq!(&buf[..n], b"newdata");
+-    }
+-
+-    #[test]
+-    fn streamed_large_write_grows_in_place_without_losing_data() {
+-        let mut fs = RamFs::new(&[]);
+-        let handle = fs.create_file("/large.simg", 0, 0, mode::FILE_644).unwrap();
+-        let chunk = [0x5au8; 4096];
+-        let chunk_count = 512;
+-        fs.reserve(handle, chunk.len() * chunk_count).unwrap();
+-        assert_eq!(fs.stat("/large.simg").unwrap().size, 0);
+-        let entry_idx = fs.handle_entry_idx(handle).unwrap();
+-        let allocation = fs.dynamic[entry_idx - fs.entries.len()].data.as_ptr();
+-
+-        for index in 0..chunk_count {
+-            assert_eq!(
+-                fs.write(handle, index * chunk.len(), &chunk),
+-                Ok(chunk.len())
+-            );
+-        }
+-
+-        assert_eq!(
+-            fs.stat("/large.simg").unwrap().size,
+-            chunk.len() * chunk_count
+-        );
+-        let data = fs.entry_data(fs.handle_entry_idx(handle).unwrap());
+-        assert_eq!(data.as_ptr(), allocation);
+-        assert_eq!(data.len(), chunk.len() * chunk_count);
+-        assert!(data.iter().all(|byte| *byte == 0x5a));
+-    }
+-
+-    #[test]
+-    fn write_overwrite_preserves_existing_suffix_and_zero_fills_holes() {
+-        let mut fs = RamFs::new(&[]);
+-        let handle = fs.create_file("/data", 0, 0, mode::FILE_644).unwrap();
+-        fs.write(handle, 0, b"abcdefgh").unwrap();
+-        fs.write(handle, 2, b"XY").unwrap();
+-        fs.write(handle, 10, b"Z").unwrap();
+-
+-        let data = fs.entry_data(fs.handle_entry_idx(handle).unwrap());
+-        assert_eq!(data, b"abXYefgh\0\0Z");
+-    }
+-
+-    #[test]
+-    fn mkdir_creates_directory() {
+-        let mut fs = RamFs::new(TEST_ENTRIES);
+-        assert_eq!(fs.mkdir("/newdir", 0, 0, 0o755), Ok(()));
+-        let stat = fs.stat("/newdir").unwrap();
+-        assert_eq!(stat.file_type, FileType::Directory);
+-        assert_eq!(stat.mode, mode::S_IFDIR | 0o755);
+-    }
+-
+-    #[test]
+-    fn create_file_creates_and_opens_file() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        let handle = fs.create_file("/etc/new", 1000, 1000, 0o644).unwrap();
+-        assert_eq!(fs.write(handle, 0, b"ok"), Ok(2));
+-        let stat = fs.stat("/etc/new").unwrap();
+-        assert_eq!(stat.file_type, FileType::File);
+-        assert_eq!(stat.uid, 1000);
+-        assert_eq!(stat.mode, mode::S_IFREG | 0o644);
+-    }
+-
+-    #[test]
+-    fn rename_dynamic_file_replaces_static_file_contents() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        let handle = fs
+-            .create_file("/etc/motd.tmp", 0, 0, mode::FILE_644)
+-            .unwrap();
+-        fs.write(handle, 0, b"updated\n").unwrap();
+-        fs.close(handle).unwrap();
+-
+-        assert_eq!(fs.rename("/etc/motd.tmp", "/etc/motd"), Ok(()));
+-        assert_eq!(fs.open("/etc/motd.tmp"), Err(FsError::NotFound));
+-
+-        let handle = fs.open("/etc/motd").unwrap();
+-        let mut buf = [0u8; 16];
+-        let read = fs.read(handle, 0, &mut buf).unwrap();
+-        assert_eq!(&buf[..read], b"updated\n");
+-    }
+-
+-    #[test]
+-    fn folder_rename_moves_descendants_and_keeps_open_handles() {
+-        let mut fs = RamFs::new(&[]);
+-        fs.mkdir("/source", 0, 0, 0o755).unwrap();
+-        fs.mkdir("/source/sub", 0, 0, 0o755).unwrap();
+-        fs.mkdir("/destination", 0, 0, 0o755).unwrap();
+-        let handle = fs.create_file("/source/sub/file", 0, 0, 0o644).unwrap();
+-        fs.write(handle, 0, b"retained").unwrap();
+-        fs.rename("/source", "/destination/moved").unwrap();
+-        assert_eq!(fs.open("/source/sub/file"), Err(FsError::NotFound));
+-        assert_eq!(fs.stat("/destination/moved/sub/file").unwrap().size, 8);
+-        let mut bytes = [0; 8];
+-        assert_eq!(fs.read(handle, 0, &mut bytes).unwrap(), 8);
+-        assert_eq!(&bytes, b"retained");
+-        assert_eq!(
+-            fs.rename("/destination", "/destination/moved/loop"),
+-            Err(FsError::Unsupported)
+-        );
+-        assert!(fs.stat("/destination/moved/sub/file").is_ok());
+-    }
+-
+-    #[test]
+-    fn exclusive_create_never_reopens_or_truncates_existing_file() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        let original = fs
+-            .create_file_exclusive("/etc/secret", 0, 0, mode::FILE_600)
+-            .unwrap();
+-        fs.write(original, 0, b"retained").unwrap();
+-        fs.close(original).unwrap();
+-
+-        assert_eq!(
+-            fs.create_file_exclusive("/etc/secret", 0, 0, mode::FILE_600),
+-            Err(FsError::AlreadyExists)
+-        );
+-        let handle = fs.open("/etc/secret").unwrap();
+-        let mut bytes = [0u8; 16];
+-        let len = fs.read(handle, 0, &mut bytes).unwrap();
+-        assert_eq!(&bytes[..len], b"retained");
+-    }
+-
+-    #[test]
+-    fn read_dir_lists_direct_children_only() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-
+-        let mut root_names = Vec::new();
+-        fs.read_dir("/", &mut |entry| {
+-            root_names.push((entry.name().to_owned(), entry.file_type));
+-            true
+-        })
+-        .unwrap();
+-        // "/etc/motd" is not a direct child of "/".
+-        assert_eq!(
+-            root_names,
+-            std::vec![("etc".to_owned(), FileType::Directory)]
+-        );
+-
+-        let mut etc_names = Vec::new();
+-        fs.read_dir("/etc", &mut |entry| {
+-            etc_names.push((entry.name().to_owned(), entry.size));
+-            true
+-        })
+-        .unwrap();
+-        assert_eq!(etc_names, std::vec![("motd".to_owned(), 6)]);
+-    }
+-
+-    #[test]
+-    fn read_dir_includes_dynamic_entries_and_rejects_files() {
+-        let mut fs = RamFs::new(DIR_ENTRIES);
+-        fs.mkdir("/etc/sunlight", 0, 0, 0o755).unwrap();
+-
+-        let mut names = Vec::new();
+-        fs.read_dir("/etc", &mut |entry| {
+-            names.push(entry.name().to_owned());
+-            true
+-        })
+-        .unwrap();
+-        assert_eq!(names, std::vec!["motd".to_owned(), "sunlight".to_owned()]);
+-
+-        assert_eq!(
+-            fs.read_dir("/etc/motd", &mut |_| true),
+-            Err(FsError::NotDir)
+-        );
+-        assert_eq!(
+-            fs.read_dir("/missing", &mut |_| true),
+-            Err(FsError::NotFound)
+-        );
+-    }
+-
+-    #[test]
+-    fn welcome_document_is_present_in_default_homes() {
+-        // Verify the welcome document asset is wired into root and the
+-        // default user template under Documents, and that Documents dirs
+-        // exist (they are declared earlier in INITRAMFS).
+-        let has_root_welcome = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/root/Documents/Welcome to SunlightOS.txt" && !e.is_dir);
+-        let has_user_welcome = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/home/user/Documents/Welcome to SunlightOS.txt" && !e.is_dir);
+-        let has_documents_root = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/root/Documents" && e.is_dir);
+-        let has_documents_user = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/home/user/Documents" && e.is_dir);
+-
+-        assert!(has_root_welcome, "missing /root/Documents welcome file");
+-        assert!(
+-            has_user_welcome,
+-            "missing /home/user/Documents welcome file"
+-        );
+-        assert!(has_documents_root, "missing /root/Documents dir entry");
+-        assert!(has_documents_user, "missing /home/user/Documents dir entry");
+-
+-        // Also spot-check content by opening via a fresh RamFs.
+-        let mut fs = RamFs::new(INITRAMFS);
+-        let h = fs
+-            .open("/home/user/Documents/Welcome to SunlightOS.txt")
+-            .unwrap();
+-        let mut buf = [0u8; 80];
+-        let n = fs.read(h, 0, &mut buf).unwrap();
+-        // Should start with the ASCII title box.
+-        assert!(n > 0);
+-        assert_eq!(&buf[..10], b"+---------");
+-        // Verify text from the header/intro is present (full content is the
+-        // asset bytes; we just sanity-check a few early distinctive words).
+-        let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
+-        assert!(text.contains("Welcome to SunlightOS") || text.contains("A bright"));
+-    }
+-
+-    #[test]
+-    fn document_tools_have_launcher_paths_in_initramfs() {
+-        for path in [
+-            "/bin/sunlight-docserv",
+-            "/usr/bin/sunlight-docserv",
+-            "/sbin/sunlight-docserv",
+-            "/bin/sunlight-docview",
+-            "/usr/bin/sunlight-docview",
+-            "/bin/gs",
+-            "/usr/bin/gs",
+-        ] {
+-            let entry = INITRAMFS
+-                .iter()
+-                .find(|entry| entry.path == path)
+-                .unwrap_or_else(|| panic!("missing document tool path: {path}"));
+-            assert!(!entry.is_dir, "document tool path is a directory: {path}");
+-            assert_ne!(
+-                entry.mode & 0o111,
+-                0,
+-                "document tool is not executable: {path}"
+-            );
+-        }
+-    }
+-
+-    #[test]
+-    fn melody_mina_wav_fixture_is_present_in_system_media() {
+-        let entry = INITRAMFS
+-            .iter()
+-            .find(|entry| entry.path == "/usr/share/sunlightos/media/melody-mina-sample.wav")
+-            .expect("missing built-in Melody Mina WAV");
+-        assert!(!entry.is_dir);
+-        assert_eq!(&entry.data[..4], b"RIFF");
+-        assert_eq!(&entry.data[8..12], b"WAVE");
+-    }
+-
+-    #[test]
+-    fn melody_mina_user_music_track_is_present() {
+-        for path in [
+-            "/home/user/Music/Catch the Sunlight.ogg",
+-            "/root/Music/Catch the Sunlight.ogg",
+-        ] {
+-            let entry = INITRAMFS
+-                .iter()
+-                .find(|entry| entry.path == path)
+-                .expect("missing seeded user Music track");
+-            assert!(!entry.is_dir);
+-            assert_eq!(&entry.data[..4], b"OggS");
+-        }
+-        for name in [
+-            "002-Zamfir-EinsamerHirte.mp3",
+-            "014-SecretGarden-SongFromASecretGarden.mp3",
+-            "081-Mantovani-Greensleeves.mp3",
+-            "095-ClaudeCiari-ElBimbo.mp3",
+-            "love story (320).mp3",
+-        ] {
+-            for home in ["/home/user", "/root"] {
+-                let path = alloc::format!("{home}/Music/{name}");
+-                let entry = INITRAMFS
+-                    .iter()
+-                    .find(|entry| entry.path == path)
+-                    .expect("missing seeded Melody Mina MP3");
+-                assert!(!entry.is_dir);
+-                assert_eq!(&entry.data[..3], b"ID3");
+-            }
+-        }
+-    }
+-
+-    #[test]
+-    fn living_sunlight_is_available_in_default_music_libraries() {
+-        for path in [
+-            "/home/user/Music/The Living Sunlight.wav",
+-            "/root/Music/The Living Sunlight.wav",
+-        ] {
+-            let entry = INITRAMFS.iter().find(|entry| entry.path == path).unwrap();
+-            assert_eq!(&entry.data[..4], b"RIFF");
+-            assert_eq!(&entry.data[8..12], b"WAVE");
+-            assert!(entry.data.len() <= 4 * 1024 * 1024);
+-        }
+-    }
+-
+-    #[test]
+-    fn chronos_command_stubs_are_present_in_initramfs() {
+-        for path in ["/bin/sunlight-chronos", "/usr/bin/sunlight-chronos"] {
+-            let entry = INITRAMFS
+-                .iter()
+-                .find(|entry| entry.path == path)
+-                .unwrap_or_else(|| panic!("missing {path}"));
+-            assert!(!entry.is_dir);
+-            assert_eq!(entry.mode, mode::FILE_755);
+-            assert_eq!(entry.data, b"#!/sunlight/sunlight-chronos\n");
+-        }
+-    }
+-
+-    #[test]
+-    fn melody_mina_command_stubs_are_present_in_initramfs() {
+-        for path in ["/bin/melody-mina", "/usr/bin/melody-mina"] {
+-            let entry = INITRAMFS
+-                .iter()
+-                .find(|entry| entry.path == path)
+-                .unwrap_or_else(|| panic!("missing {path}"));
+-            assert!(!entry.is_dir);
+-            assert_eq!(entry.mode, mode::FILE_755);
+-            assert_eq!(entry.data, b"#!/sunlight/melody-mina\n");
+-        }
+-    }
+-
+-    #[test]
+-    fn chronos_dos_shell_bundle_is_present_in_initramfs() {
+-        for path in [
+-            "/Applications/ChronosDosShell.sunapp/Manifest.toml",
+-            "/Applications/ChronosDosShell.sunapp/Program/SUNSH.EXE",
+-            "/Applications/ChronosDosShell.sunapp/Program/TESTS/VGALAB.COM",
+-            "/Applications/ChronosDosShell.sunapp/Program/TESTS/PALCYCLE.COM",
+-            "/Applications/ChronosDosShell.sunapp/Program/TESTS/SUNPAINT.COM",
+-            "/Applications/ChronosDosShell.sunapp/Resources/icon.tga",
+-        ] {
+-            assert!(
+-                INITRAMFS
+-                    .iter()
+-                    .any(|entry| entry.path == path && !entry.is_dir),
+-                "missing {path}"
+-            );
+-        }
+-    }
+-
+-    #[test]
+-    fn why_sunlightos_exists_document_is_present_in_default_homes() {
+-        // Verify the "Why SunlightOS Exists" identity document is seeded
+-        // into the same locations as the Welcome document.
+-        let has_root_copy = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/root/Documents/Why SunlightOS Exists.txt" && !e.is_dir);
+-        let has_user_copy = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/home/user/Documents/Why SunlightOS Exists.txt" && !e.is_dir);
+-        let has_system_copy = INITRAMFS.iter().any(|e| {
+-            e.path == "/usr/share/sunlightos/documents/Why SunlightOS Exists.txt" && !e.is_dir
+-        });
+-
+-        assert!(
+-            has_root_copy,
+-            "missing /root/Documents/Why SunlightOS Exists.txt"
+-        );
+-        assert!(
+-            has_user_copy,
+-            "missing /home/user/Documents/Why SunlightOS Exists.txt"
+-        );
+-        assert!(
+-            has_system_copy,
+-            "missing /usr/share/sunlightos/documents/Why SunlightOS Exists.txt"
+-        );
+-
+-        // Spot-check content via a fresh RamFs.
+-        let mut fs = RamFs::new(INITRAMFS);
+-        let h = fs
+-            .open("/home/user/Documents/Why SunlightOS Exists.txt")
+-            .unwrap();
+-        let mut buf = [0u8; 160];
+-        let n = fs.read(h, 0, &mut buf).unwrap();
+-        assert!(n > 0);
+-        assert_eq!(&buf[..10], b"+---------");
+-        let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
+-        assert!(text.contains("SunlightOS exists") || text.contains("future-first"));
+-    }
+-
+-    #[test]
+-    fn locale_foundation_files_present_in_initramfs() {
+-        // Verify /etc/locale.conf and /etc/locale.gen are registered for boot.
+-        let has_locale_conf = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/etc/locale.conf" && !e.is_dir);
+-        let has_locale_gen = INITRAMFS
+-            .iter()
+-            .any(|e| e.path == "/etc/locale.gen" && !e.is_dir);
+-        assert!(has_locale_conf, "missing /etc/locale.conf in INITRAMFS");
+-        assert!(has_locale_gen, "missing /etc/locale.gen in INITRAMFS");
+-
+-        // Spot-check content is the expected default.
+-        let mut fs = RamFs::new(INITRAMFS);
+-        let h = fs.open("/etc/locale.conf").unwrap();
+-        let mut buf = [0u8; 256];
+-        let n = fs.read(h, 0, &mut buf).unwrap();
+-        let text = core::str::from_utf8(&buf[..n]).unwrap_or("");
+-        assert!(text.contains("LANG=en_US.UTF-8"));
+-        assert!(text.contains("LC_TIME=en_US.UTF-8"));
+-
+-        let h2 = fs.open("/etc/locale.gen").unwrap();
+-        let mut buf2 = [0u8; 64];
+-        let n2 = fs.read(h2, 0, &mut buf2).unwrap();
+-        let text2 = core::str::from_utf8(&buf2[..n2]).unwrap_or("");
+-        assert!(text2.contains("C.UTF-8"));
+-        assert!(text2.contains("en_US.UTF-8"));
+-    }
+-
+-    #[test]
+-    fn sun_emoji_assets_and_license_are_present_in_initramfs() {
+-        for path in [
+-            "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_16.mtf",
+-            "/usr/share/sunlightos/fonts/minitype/sunlight_emoji_manifest.txt",
+-            "/usr/share/licenses/openmoji/LICENSE.txt",
+-            "/usr/share/licenses/openmoji/ATTRIBUTION.txt",
+-        ] {
+-            assert!(
+-                INITRAMFS
+-                    .iter()
+-                    .any(|entry| entry.path == path && !entry.is_dir),
+-                "missing {path} in INITRAMFS"
+-            );
+-        }
+-    }
+-
+-    #[test]
+-    fn phase_2b5_utilities_have_path_visible_stubs() {
+-        for path in [
+-            "/bin/tr",
+-            "/bin/paste",
+-            "/bin/join",
+-            "/bin/printf",
+-            "/bin/tee",
+-            "/bin/nl",
+-            "/bin/od",
+-            "/bin/split",
+-        ] {
+-            assert!(
+-                INITRAMFS.iter().any(|entry| {
+-                    entry.path == path && !entry.is_dir && entry.mode == mode::FILE_755
+-                }),
+-                "missing executable stub for {path}"
+-            );
+-        }
+-    }
+-
+-    #[test]
+-    fn find_xargs_pipeline_utilities_have_path_visible_stubs() {
+-        for path in [
+-            "/bin/find",
+-            "/bin/xargs",
+-            "/bin/grep",
+-            "/bin/sort",
+-            "/bin/uniq",
+-        ] {
+-            assert!(
+-                INITRAMFS.iter().any(|entry| {
+-                    entry.path == path && !entry.is_dir && entry.mode == mode::FILE_755
+-                }),
+-                "missing executable stub for {path}"
+-            );
+-        }
+-    }
+-}
+diff --git a/sunlight-fs/src/vfs.rs b/sunlight-fs/src/vfs.rs
+index ad3afd314..fd4d66bcf 100644
+--- a/sunlight-fs/src/vfs.rs
++++ b/sunlight-fs/src/vfs.rs
+@@ -770,9 +770,12 @@ impl<D: BlockDevice> Vfs<D> {
+             .position(|(i, m)| m.is_none() && self.next_tags[i] <= u8::MAX as u16)
+             .ok_or(FsError::TooManyOpenFiles)?;
+         let tag = self.next_tags[slot] as u8;
++        let mut mount_path = String::new();
++        mount_path.try_reserve_exact(path.len()).map_err(|_| FsError::NoMemory)?;
++        mount_path.push_str(path);
+         self.next_tags[slot] += MAX_MOUNTS as u16;
+         self.mounts[slot] = Some(Mount {
+-            path: String::from(path),
++            path: mount_path,
+             fs,
+             tag,
+             source: 0,
+@@ -783,10 +786,15 @@ impl<D: BlockDevice> Vfs<D> {
+         Ok(())
+     }
+ 
+-    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
++    pub fn mount_tmpfs(&mut self, path: &str, fs: crate::Tmpfs) -> Result<(), FsError> {
+         self.mount(path, FsNode::Ram(fs))
+     }
+ 
++    /// Compatibility spelling for older callers and fstab entries.
++    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
++        self.mount_tmpfs(path, fs)
++    }
++
+     pub fn mount_fat(&mut self, path: &str, fat: Fat32<D>) -> Result<(), FsError> {
+         let mut fs = FatFs::new(fat);
+         fs.user_storage = path == "/state";
+diff --git a/sunlight-libc/src/errno.rs b/sunlight-libc/src/errno.rs
+index 3493f215f..993fe055d 100644
+--- a/sunlight-libc/src/errno.rs
++++ b/sunlight-libc/src/errno.rs
+@@ -15,6 +15,7 @@ pub const EBADF: i32 = 9;
+ pub const EAGAIN: i32 = 11;
+ pub const EPIPE: i32 = 32;
+ pub const ENOMEM: i32 = 12;
++pub const ENOSPC: i32 = 28;
+ pub const EACCES: i32 = 13;
+ pub const EFAULT: i32 = 14;
+ pub const EINVAL: i32 = 22;
+@@ -74,6 +75,8 @@ pub fn set_from_errno(e: Errno) {
+         Errno::IsDir => EISDIR,
+         Errno::NotDir => ENOTDIR,
+         Errno::BrokenPipe => EPIPE,
++        Errno::NoSpace => ENOSPC,
++        Errno::NoMemory => ENOMEM,
+     };
+     set_errno(code);
+ }
+diff --git a/sunlight-libc/src/std_runtime.rs b/sunlight-libc/src/std_runtime.rs
+index 30d3fb1d4..acd11008d 100644
+--- a/sunlight-libc/src/std_runtime.rs
++++ b/sunlight-libc/src/std_runtime.rs
+@@ -99,6 +99,8 @@ fn error(error: sys::Errno) -> isize {
+         sys::Errno::IsDir => 21,
+         sys::Errno::NotDir => 20,
+         sys::Errno::BrokenPipe => 32,
++        sys::Errno::NoSpace => 28,
++        sys::Errno::NoMemory => 12,
+         sys::Errno::Failed => 5,
+     })
+ }
+diff --git a/sunlight-libc/src/sys.rs b/sunlight-libc/src/sys.rs
+index 5e8de794b..ab5aa3a54 100644
+--- a/sunlight-libc/src/sys.rs
++++ b/sunlight-libc/src/sys.rs
+@@ -70,6 +70,8 @@ pub const ENOTDIR_RAW: u64 = u64::MAX - 7;
+ pub const EIO_RAW: u64 = u64::MAX - 8;
+ pub const ERANGE_RAW: u64 = u64::MAX - 9;
+ pub const EPIPE_RAW: u64 = u64::MAX - 10;
++pub const ENOSPC_RAW: u64 = u64::MAX - 11;
++pub const ENOMEM_RAW: u64 = u64::MAX - 12;
+ 
+ /// Largest count that can be represented by the public `ssize_t` result.
+ /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
+@@ -92,6 +94,8 @@ pub enum Errno {
+     IsDir,
+     NotDir,
+     BrokenPipe,
++    NoSpace,
++    NoMemory,
+ }
+ 
+ pub fn check(ret: u64) -> Result<u64, Errno> {
+@@ -107,6 +111,8 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
+         EIO_RAW => Err(Errno::Failed),
+         ERANGE_RAW => Err(Errno::TooBig),
+         EPIPE_RAW => Err(Errno::BrokenPipe),
++        ENOSPC_RAW => Err(Errno::NoSpace),
++        ENOMEM_RAW => Err(Errno::NoMemory),
+         n => Ok(n),
+     }
+ }
+@@ -265,5 +271,7 @@ mod tests {
+         assert_eq!(check(EISDIR_RAW), Err(Errno::IsDir));
+         assert_eq!(check(ENOTDIR_RAW), Err(Errno::NotDir));
+         assert_eq!(check(ERANGE_RAW), Err(Errno::TooBig));
++        assert_eq!(check(ENOSPC_RAW), Err(Errno::NoSpace));
++        assert_eq!(check(ENOMEM_RAW), Err(Errno::NoMemory));
+     }
+ }
+diff --git a/sunlight-voice-recorder/src/storage.rs b/sunlight-voice-recorder/src/storage.rs
+index ffd206a97..d07d4bba6 100644
+--- a/sunlight-voice-recorder/src/storage.rs
++++ b/sunlight-voice-recorder/src/storage.rs
+@@ -204,6 +204,8 @@ pub mod native {
+             Errno::BadFd => 9,
+             Errno::Failed => 5,
+             Errno::BrokenPipe => 32,
++            Errno::NoSpace => 28,
++            Errno::NoMemory => 12,
+         })
+     }
+     impl File for NativeFile {
+diff --git a/tools/test.sh b/tools/test.sh
+index 07e83e091..defbda3da 100755
+--- a/tools/test.sh
++++ b/tools/test.sh
+@@ -57,6 +57,12 @@ case "$PHASE" in
+         PASS_LABEL="Phase 2B.1 utilities"
+         NEED_DISK=false
+         ;;
++    tmpfs)
++        EXPECTED_FILE="tools/tests/tmpfs.expected"
++        FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
++        PASS_LABEL="Tmpfs"
++        NEED_DISK=false
++        ;;
+     phase3.0)
+         EXPECTED_FILE="tools/tests/phase3_0.expected"
+         FINAL_MARKER="[SunlightOS] Phase 3.0 OK"
+@@ -749,6 +755,8 @@ elif [[ "$PHASE" == "mm2e" ]]; then
+     KERNEL_FEATURES="--features mm2e_mprotect_test"
+ elif [[ "$PHASE" == "swap1" ]]; then
+     KERNEL_FEATURES="--features swap1_test"
++elif [[ "$PHASE" == "tmpfs" ]]; then
++    KERNEL_FEATURES="--features tmpfs_test"
+ elif [[ "$PHASE" == "memory-accounting" ]]; then
+     KERNEL_FEATURES="--features memory_accounting_test"
+ fi

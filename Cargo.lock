@@ -2954,6 +2954,7 @@ version = "0.2.6935-alpha.2"
 dependencies = [
  "sunlight-block",
  "sunlight-fat",
+ "sunlight-mm",
 ]
 
 [[package]]
@@ -3023,6 +3024,7 @@ dependencies = [
  "sunlight-fat",
  "sunlight-fs",
  "sunlight-ipc",
+ "sunlight-mm",
  "sunlight-net",
  "sunlight-sensors",
  "sunlight-smbios",
@@ -3098,6 +3100,13 @@ dependencies = [
  "sunlight-audiod",
  "sunlight-ipc",
  "sunlight-libc",
+]
+
+[[package]]
+name = "sunlight-mm"
+version = "0.1.0"
+dependencies = [
+ "spin",
 ]
 
 [[package]]
@@ -3458,6 +3467,7 @@ dependencies = [
  "sunlight-fs",
  "sunlight-ipc",
  "sunlight-libc",
+ "sunlight-mm",
 ]
 
 [[package]]

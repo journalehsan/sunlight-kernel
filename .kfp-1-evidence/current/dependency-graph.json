@@ -1,0 +1,77 @@
+[
+  {
+    "waiter": "thread A",
+    "completion": "kernel futex registration",
+    "condition": "compare/register under scheduler"
+  },
+  {
+    "waiter": "kernel futex registration",
+    "completion": "peer B WAKE",
+    "condition": "normal completion; optional timer/signal/VM retirement alternatives"
+  },
+  {
+    "waiter": "peer B WAKE",
+    "completion": "scheduler + target IPI",
+    "condition": "completion publication and runnable transition"
+  },
+  {
+    "waiter": "target IPI",
+    "completion": "target IF enabled",
+    "condition": "no prompt kernel preemption"
+  },
+  {
+    "waiter": "TLB initiator",
+    "completion": "ICR idle",
+    "condition": "before ack timeout"
+  },
+  {
+    "waiter": "TLB initiator",
+    "completion": "target NMI handler",
+    "condition": "mailbox claim/flush/ack"
+  },
+  {
+    "waiter": "target NMI handler",
+    "completion": "active slot snapshot",
+    "condition": "no scheduler/PMM/broker mutex"
+  },
+  {
+    "waiter": "reclamation",
+    "completion": "TLB complete",
+    "condition": "normal return precedes frame release"
+  },
+  {
+    "waiter": "timed waiter",
+    "completion": "BSP clock advance",
+    "condition": "global time owner is CPU0"
+  },
+  {
+    "waiter": "BSP clock advance",
+    "completion": "BSP IF enabled",
+    "condition": "maskable timer delivery"
+  },
+  {
+    "waiter": "service A waiting on B",
+    "completion": "service B",
+    "condition": "conditional protocol edge"
+  },
+  {
+    "waiter": "service B",
+    "completion": "service A waiting on B",
+    "condition": "hypothetical callback/user-lock cycle; not actual deployed cycle"
+  },
+  {
+    "waiter": "scheduler lock waiter",
+    "completion": "remote scheduler holder",
+    "condition": "remote must finish"
+  },
+  {
+    "waiter": "virtio submit",
+    "completion": "device used ring",
+    "condition": "bounded poll, late completion risk"
+  },
+  {
+    "waiter": "Ready pinned task",
+    "completion": "remote stack epilogue",
+    "condition": "no spin; waiter bit queues reschedule"
+  }
+]

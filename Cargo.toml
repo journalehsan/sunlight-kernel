@@ -27,6 +27,7 @@ members = [
     "sunlight-tz",
     "sunlight-block",
     "sunlight-fs",
+    "sunlight-mm",
     "sunlight-virtio",
     "sunlight-fat",
     "sunlight-libc",
