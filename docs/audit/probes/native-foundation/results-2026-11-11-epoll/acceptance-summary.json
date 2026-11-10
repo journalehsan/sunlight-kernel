@@ -1,0 +1,22 @@
+{
+  "complete-2cpu": {
+    "pass": 52,
+    "fail": 0,
+    "faults": 0
+  },
+  "complete-4cpu": {
+    "pass": 52,
+    "fail": 0,
+    "faults": 0
+  },
+  "lifecycle-2cpu": {
+    "pass": 1,
+    "fail": 0,
+    "faults": 0
+  },
+  "lifecycle-4cpu": {
+    "pass": 1,
+    "fail": 0,
+    "faults": 0
+  }
+}

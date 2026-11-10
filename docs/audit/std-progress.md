@@ -2693,3 +2693,258 @@ edits are intact: audit/README text is preserved as a prefix, and the only new
 change to the incoming guest runner is the math fixture registration. Historical
 probe sources remain untouched. Python compilation and `git diff --check` pass.
 No commit, reset or workspace cleanup was performed.
+
+### Phase 13 — native C poll and bounded select bridge (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-poll/`.
+The Phase 12 record and its retained `next-blocker.log` were read first.
+The equivalent historical poll probe is **`poll_select.c`**, unchanged SHA-256
+`4c3148d0a7c2c7823c5d17dcc1c3d793215305f05e4fa3c14a1523c1b297dc9d`.
+It includes `<poll.h>` and `<sys/select.h>`, calls `poll(NULL,0,0)` and
+`select(0,NULL,NULL,NULL,&zero_timeval)`, and expects zero from both.
+It instantiates **no pollfd**, references **no event masks**, probes **no
+file descriptors**, and tests **neither negative nor positive timeouts**.
+Those requirements are covered by separate fixtures, not attributed to the
+historical source. `inspection.log` records the inventory and mechanism review.
+
+The bridge uses existing **native syscall 159**, without Linux personality,
+compatibility syscall routing, a host libc, or new dependencies. Linux poll
+and ppoll exist separately behind compatibility remapping; neither is used.
+The old native path accepted only one to three pipe readers/TTY input with
+`events == POLLIN`; it rejected zero descriptors. Its finite wait replayed
+SYSCALL and restarted the timeout after timer wakeup. The expanded path accepts
+**0..256 entries**, matching the native descriptor-table limit. C `struct
+pollfd` maps directly to the existing Rust/IPC layout: size 8, alignment 4,
+signed int fd at offset 0, signed short events/revents at offsets 4/6.
+`nfds_t` is **unsigned long**, unsigned 64-bit on native LP64. Both C exports
+have one canonical definition in the native archive.
+
+`poll()` returns the number of **entries** with nonzero revents, zero on
+timeout, or -1 with errno on error. Each successful scan overwrites all revents;
+negative fds are ignored with zero revents, and absent/closed nonnegative fds
+produce POLLNVAL even with events zero. Duplicate entries count individually.
+NULL with nonzero count fails EFAULT, and counts above 256 fail EINVAL.
+Arbitrary invalid non-NULL user mappings retain the native generic EIO
+copy-error encoding; signal interruption/EINTR is not implemented. Existing
+foreground cancellation still terminates the wait with the native error.
+
+| Flag | Native support |
+| --- | --- |
+| POLLIN (0x001) | Pipe data or readable EOF, TTY input ring, eventfd counter readiness, synchronous VFS files including EOF |
+| POLLPRI (0x002) | Defined ABI constant; no native exceptional/priority producer, never fabricated |
+| POLLOUT (0x004) | Pipe capacity/broken-peer readiness, stdout/stderr, eventfd write readiness, synchronous VFS files |
+| POLLERR (0x008) | Pipe writer with no readers, independent of requested events |
+| POLLHUP (0x010) | Pipe reader with no writers, including buffered data, independent of requested events |
+| POLLNVAL (0x020) | Absent/closed nonnegative descriptor, independent of requested events |
+
+Pipe state comes from the existing pool's data length and reader/writer
+references. Existing shared readiness hooks supply TTY and eventfd readiness;
+native poll waiters now participate in eventfd and all held TTY-tab wakeups.
+Synchronous regular-file I/O needs no asynchronous VFS hook: EOF is readable
+and is not a file hangup. Native socket and epoll handles explicitly fail
+EINVAL pending complete event/hangup semantics. Socket polling, priority
+conditions, native ppoll/pselect and signal-mask handling remain unsupported.
+Eventfd and multiple-TTY wake integration is source-inspected here; the focused
+C guest does not establish their complete lifecycle acceptance.
+
+Any negative timeout means indefinite waiting; zero only scans. Positive
+milliseconds convert to scheduler ticks with `ceil(ms*TICK_HZ/1000)` at 100 Hz,
+using u64 arithmetic. An absolute per-thread deadline survives syscall replay
+and producer wakeups and clears on completion. Readiness checks and wait
+registration hold the scheduler lock used by producers, preventing a lost
+wake. Finite zero-descriptor waits use the same timer path. Timing is at the
+native 10 ms granularity; no high-resolution timer guarantee is claimed.
+
+The accompanying `<sys/select.h>` and C export are needed to execute the
+unchanged combined probe. They provide LP64 timeval, a 1024-bit fd_set and
+FD_ZERO/SET/CLR/ISSET, with native nfds bounded to 0..256. The bridge uses poll,
+counts returned set bits, maps pipe HUP/ERR to read readiness and ERR to write
+readiness, and maps POLLNVAL to EBADF. NULL timeout waits indefinitely;
+nonnegative timeval rounds up to milliseconds and must fit INT_MAX ms.
+Timeout storage remains unchanged. A hangup with only exceptional interest
+does not end the wait early: nonselected terminal entries are suppressed and
+the remaining timeout follows an absolute monotonic deadline. No exceptional
+conditions are fabricated.
+Non-NULL fd_set/timeval pointers must designate valid storage; these userspace
+objects do not have a kernel fault-recovery boundary.
+
+`tools/native-c/tests/poll.c` independently checks zero/positive waits with
+zero descriptors, cleared stale revents, ignored negative fds, invalid and
+closed descriptors, errno, ready-entry counts, stdio output, empty/readable
+pipes, buffered hangup and empty EOF, broken readers, regular-file EOF,
+unsupported priority events, fd-set operations, select readiness/EBADF and
+invalid timevals, and an except-only hangup retaining its timeout. Native runtime threads exercise delayed writes waking
+negative/infinite and positive waits, plus a notification with no requested
+event followed by finite timeout. All threads are joined and pipe ends closed.
+Pipe creation/closure and thread spawning use existing native test/runtime
+interfaces; no public POSIX pipe or pthread implementation is inferred.
+`poll-abi.c` and `run_poll.py` verify layout, signedness, flags, signatures,
+C11/C++17 feature/include combinations, exports and unchanged historical link.
+
+| Test domain | Phase 13 result | Evidence |
+| --- | --- | --- |
+| Native poll/select C11/C++17 ABI | **12 PASS**, base/POSIX/GNU, both include orders | `abi-complete/` |
+| Canonical exports / historical native ELF | **PASS**, one poll/select definition each, no unresolved symbols/interpreter/dynamic loader | `abi-complete/` |
+| Historical poll_select, 2 CPUs / 2048 MiB | **PASS**, exit 0, empty streams, clean reaping | `accepted-2cpu/` |
+| Historical poll_select, 4 CPUs / 2048 MiB | **PASS**, exit 0, empty streams, clean reaping | `accepted-4cpu/` |
+| Separate multiplexing guest contract | **PASS on 2 and 4 CPUs**, exit 0, empty streams, clean reaping including producer threads | both accepted directories |
+| Full native-C suite | **50/50 PASS per CPU count**, zero guest failures | both accepted directories |
+| Production libc host tests | **119 PASS**, two native-credential-only tests filtered | `libc-complete.log` |
+| Host ELF / stdio / VFS / descriptor tests | **11 / 19 / 90 / 17 PASS** | `final-checks/` |
+| Locale, langinfo, directory, dlfcn, math, stdio, random, time, mmap, unistd runners | **all PASS**, including ABI/export and historical links | `final-checks/summary.json` |
+| Kernel check / native Rust-std overlay check | **PASS / PASS** | `final-checks/`, `native-std-complete.log` |
+| Production Rust-std futex contract | **3 PASS** | `futex.log` |
+| Full FP foundation gate, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, x87/XMM/MXCSR isolation and PDF parser/vector raster | `fp-foundation.log`, `native-std-fp-{2,4}cpu.log` |
+
+Counts advance from 48 to **50 PASS per CPU count** (unchanged historical
+poll_select plus one separate contract). Original 18 APIs are **12 PASS /
+6 BUILD_FAIL**; historical 21 including foundation probes are **15 PASS /
+0 FAIL / 6 NOT_RUN**. Build failures remain guest NOT_RUN. Both accepted
+guest directories retain empty `faults.log`: no unexpected faults, exceptions,
+unknown or unhandled syscalls. Every executed case checks actual Reaped state,
+zero PID-owned frames/descriptors/stack, and restoration of file-data,
+private-frame, page-table and VFS-handle snapshots. Historical stdout/stderr
+are empty and exit status is zero. `acceptance-summary.json` retains matching
+historical ELF hashes across the two CPU configurations.
+
+**Next single verified blocker:** unchanged `pthread.c`, SHA-256
+`a73c817cb4f35239c56e4026a670a6f994f3c2967e6eebfdedcd6ba3d4790957`,
+fails at missing **`<pthread.h>`**. `next-blocker.log` retains fresh strict
+native compilation. It requires pthread_t, pthread_create/pthread_join and a
+C `_Thread_local` initializer in its worker; existing native Rust thread
+facilities do not establish that C pthread/TLS contract. No link or guest
+acceptance is inferred. The remaining historical build failures are pthread,
+signal, socket, termios, wchar and cpp-runtime.
+
+Phase 8 hardware user-write-fault and forced stale-TLB/cross-core tests remain
+**NOT_RUN**. QEMU polling and FP results do not establish hardware acceptance.
+
+Reproduce in new output directories:
+
+```sh
+bash tools/build_native_std.sh build --manifest-path tools/native-c/Cargo.toml --target-dir target/native-c --release --offline
+python3 tools/native-c/tests/run_poll.py --out <new-poll-abi-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-4cpu-dir>
+bash tools/test_native_std_foundation.sh
+```
+
+All historical probe sources remain unchanged. The incoming worktree was clean;
+`preservation.json` records restoration of incidental standalone lockfile
+refreshes to their pre-validation contents. Python compilation, Rust formatting
+of the new module, and `git diff --check` pass. No commit, reset or workspace
+cleanup was performed. The FP gate used its dedicated ISO, no user VM or disk.
+
+### Phase 14 — native C epoll event notification (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-epoll/`.
+Read the Phase 13 record first and postponed pthread work as requested.
+The worktree already contained uncommitted poll/select, socket and epoll work;
+`incoming.json` inventories its hashes. This phase extends that implementation.
+No historical probe was edited, no commit/reset/cleanup was performed, and the
+incoming native-C lockfile contents were retained.
+
+`<sys/epoll.h>` defines EPOLLIN/OUT/ERR/HUP, EPOLLET, EPOLLONESHOT,
+EPOLL_CTL_ADD/DEL/MOD and EPOLL_CLOEXEC (plus the incoming EPOLLPRI).
+The **native** LP64 `struct epoll_event` is **16 bytes, alignment 8**, events
+at offset 0 and the incoming 64-bit data field at offset 8. The native Rust
+wrapper uses the same layout. Linux compatibility copy-in/out retains its
+separate **12-byte packed** layout; the native header does not advertise Linux
+binary-layout compatibility. C11/C++17 checks verify sizes, offsets, constants,
+function signatures, include orders and base/POSIX/GNU feature settings.
+Canonical native exports epoll_create1/epoll_ctl/epoll_wait occur once each.
+
+The C wrappers use existing native syscalls **171/172/173**, with no Linux
+personality, host libc or new dependency. Creation allocates the existing
+bounded event queue and installs an epoll handle in the shared FD registry;
+invalid creation flags fail. ADD inserts an open descriptor, MOD changes its
+mask/data and rearms it, and DEL removes it without dereferencing its event
+argument. Invalid operations and direct self-registration fail. Native close
+removes the descriptor's interests from queues held by that FD table, preventing
+closed/reused fd slots from inheriting stale readiness. Closing the queue frees
+its pool slot. Edge-state refresh is scoped to queues held by the calling
+shared descriptor table rather than unrelated processes' queues.
+
+Level-triggered interests are returned on every wait while requested readiness
+persists. Edge-triggered interests remember delivered readiness bits, suppress
+repeats, and clear drained conditions through existing read/write/recv/accept
+hooks so a later transition can notify again. EPOLLONESHOT disables an interest
+after delivery; MOD rearms it even if its source remains ready. Pipe/socket
+readiness comes from the shared poll backing-object queries. Pipe writer
+capacity produces OUT, data/EOF produces IN, and terminal states produce
+ERR/HUP independently of the requested mask. Orderly stream peer closure
+produces EOF/HUP rather than a fabricated pending socket error. TTY/eventfd
+hooks continue to share the existing scheduler wake mechanism.
+
+Wait readiness scans and wait registration hold the same scheduler lock as
+producer publication/wakeup. Timeout zero scans only; negative waits indefinitely;
+positive milliseconds round up to native 100 Hz ticks and retain an absolute
+per-thread deadline across producer/timer wakes. Blocked native waits preserve
+the syscall number while replaying SYSCALL. An incoming OOB receive deadlock
+was also fixed by releasing SCHEDULER before user-copy reacquires it.
+
+The focused `tools/native-c/tests/epoll.c` tests ADD/duplicate ADD/MOD/DEL,
+64-bit user-data round trips, IN/OUT, repeated level readiness, edge suppression,
+drain and delayed edge reactivation, one-shot suppression and MOD rearming,
+finite timeout and blocking pipe/socket producer wakeups. Both producer threads
+are joined and all descriptors explicitly closed. The separate
+`epoll-lifecycle.c` repeats queue/pipe creation and closure **80 times**, exceeding
+the 32-instance pool bound; it verifies two simultaneous events and the aligned
+array stride, automatic interest removal, and absence of stale events on fd reuse.
+
+| Test domain | Phase 14 result | Evidence |
+| --- | --- | --- |
+| Native C11/C++17 ABI and unique exports | **12 PASS**, including epoll layouts/modes/signatures | `final-abi/` |
+| Full native-C suite, 2 / 4 CPUs, 2048 MiB | **52/52 PASS on each**, zero guest failures | `complete-2cpu/`, `complete-4cpu/` |
+| Epoll contract, 2 / 4 CPUs | **PASS / PASS**, exit 0, empty streams, producer threads reaped | both complete directories |
+| Epoll lifecycle/array/slot-reuse probe, 2 / 4 CPUs | **PASS / PASS**, 80 iterations each, exit 0, clean reaping | `lifecycle-2cpu/`, `lifecycle-4cpu/` |
+| Production libc host tests | **119 PASS**, two native-credential tests filtered | `host-abi/libc.log` |
+| Host ELF / stdio / VFS / descriptor tests | **11 / 19 / 90 / 17 PASS** | `elf.log`, `stdio/` |
+| Poll/select, unistd and stdio ABI/export/build runners | **PASS** | `final-abi/`, `host-abi/`, `stdio/` |
+| Locale/langinfo/directory/dlfcn/math/random/time/mmap runners | **all PASS** | `regressions/summary.json` |
+| Kernel check / native Rust-std overlay check | **PASS / PASS** | `kernel-complete.log`, `rust-std.log` |
+| Production Rust-std futex contract | **3 PASS** | `futex.log` |
+| Full FP foundation gate, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, x87/XMM/MXCSR isolation and PDF parser/vector raster | `fp-foundation.log`, `native-std-fp-{2,4}cpu.log` |
+
+The FP gate used its dedicated ISO and no user disk. Validation-only edits to
+previously clean standalone lockfiles were restored. `preservation.json` records
+retained incoming files and the eight intentionally extended files. Python
+compilation, formatting of the epoll/socket modules and `git diff --check` pass.
+
+Counts advance from the recorded Phase 13 **50** to **52** per CPU configuration:
+the incoming separate socket/OOB fixture plus the new epoll fixture. The extra
+standalone lifecycle probe is not included in those suite counts. Historical
+21 remain **15 PASS / 0 guest FAIL / 6 BUILD_FAIL and guest NOT_RUN**; original
+18 remain **12 PASS / 6 BUILD_FAIL**. Each executed case requires Reaped state,
+zero PID-owned frames/descriptors/stack, and restoration of physical-frame,
+page-table, file-data and VFS-handle snapshots. Complete guest fault logs are
+empty. Early attempts are retained: a fixture compile error, blocked-wait replay
+failure, OOB deadlock and extra socket ERR were corrected before the complete
+runs; they are not acceptance evidence.
+
+Limits: this is the existing bounded registry (32 queues, 64 interests per
+queue, up to 128 returned events), not a benchmarked scalable ready-list design.
+Nested queue wait graphs, general asynchronous regular-file hooks, POSIX signal
+interruption and full Linux open-file-description/dup/fork epoll semantics are
+not established by these probes. Native duplicate/missing-interest/resource
+errors retain the existing generic EIO mapping; EBADF/EINVAL are distinct.
+ET guarantees here cover the exercised native pipe/socket transitions; no
+high-resolution timeout, network-stack or hardware acceptance is inferred.
+
+**Next single verified blocker: `<pthread.h>`**. Fresh strict compilation of the
+unchanged `pthread.c` fails at that header in both complete directories' retained
+`build-pthread.log`. Its pthread_create/pthread_join and C `_Thread_local`
+contract remains unimplemented. Signal, socket's broader historical API,
+termios, wchar and C++ runtime remain the other historical build failures.
+Phase 8 hardware acceptance remains NOT_RUN.
+
+Reproduce in fresh output directories:
+
+```sh
+python3 tools/native-c/tests/run_poll.py --out <new-abi-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-4cpu-dir>
+python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/epoll-lifecycle.c -o target/epoll-lifecycle.elf
+python3 tools/native-c/guest.py target/epoll-lifecycle.elf --cpus 2 --out <new-lifecycle-2cpu-dir>
+python3 tools/native-c/guest.py target/epoll-lifecycle.elf --cpus 4 --out <new-lifecycle-4cpu-dir>
+```

@@ -1,0 +1,26 @@
+$ cargo test -p sunlight-elf --lib --target x86_64-unknown-linux-gnu
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_elf-75045a3533a1f64e)
+
+running 11 tests
+test tests::header_carries_osabi ... ok
+test tests::personality_selection_is_explicit_and_fail_closed ... ok
+test tests::rejects_filesz_larger_than_memsz ... ok
+test tests::rejects_vaddr_overflow_wraparound ... ok
+test tests::rejects_writable_executable_segment ... ok
+test tests::rejects_entry_outside_executable_segment ... ok
+test tests::rejects_file_range_past_end_of_binary ... ok
+test tests::rejects_kernel_half_segment ... ok
+test tests::rejects_undersized_program_headers_without_panicking ... ok
+test tests::rejects_wrong_machine ... ok
+test tests::plans_valid_text_and_data_segments ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+exit=0

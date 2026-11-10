@@ -1,0 +1,59 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+entry,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,09692dd9fee56cea9b7f2ce194399858a9f981b9aab94722a0b2858e34e5d6df
+write,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,603cf2155f491b1174ce4c4b0f191022c3e60c0b293ccb1aafdf91825386a915
+exit,True,PASS,PASS,PASS,23,23,exit/output/reap/physical-frame checks,2ea9c87c73fdd6655fef8867dc17111e4ab10cf3e143fb366096c096876e23b2
+atexit,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,eb46224d0a70b75c07de185ef20a650d498e6bbc20e60034ef2a1e38713a490a
+clock,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,154ec83716757f4a356fb08e567fcb2fb401718ad5d27869880e7a26a4ba4c4c
+dirent,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,7e31c809e6e79efff0ef99e67084b2285d250d07c22afb76db95f9ddd0518f82
+dlfcn,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,994fc5daa272cf62ca36b121943799afacccc37e66fd33e0a72dbbdef2163a4d
+random-service-before,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+getrandom,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1c993b8b7d25343d341d1205a8cc55584f3de93cdbca6cc339c6f79995f751b7
+random-service-after,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+langinfo,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f2678014161541536b259967bc2f6fa8919eeb2d16bbee43b2ad486cf2e55a00
+locale,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,a358be7b5a3d7476abefe04e4956de215f049b69d3c9aee11f97e01d5479d06b
+math,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,372d3d717dfd26ebe7b843094f84fb52f5e3b325dce8c32c8dfe77996cf37799
+mmap,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,4db19123b00f7b654204237f66d8631df56b9ac1da2714c4f877526af15fb291
+poll_select,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,335d01103e13dff10ab527f2fbe90d3c655ec1d44052c42ea16f4bd5fe20344a
+pthread,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+signal,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+socket,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdio,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,7fc41ff4e905f58a763869ece06fb519db9e01ef161b13a9df6d34ebed1b3b34
+string,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,d3f9efd98f9bf6e7bc8d0e2ce339b19ab5250685d494d574283f0229563bf34f
+termios,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+wchar,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+cpp-runtime,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+dlfcn-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,cb270a109bc5ec71bfcd5f413038e786bb95ab62dac10b0aa35043a0812a5fb2
+epoll-contract,False,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+poll-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,15066457f10245e80845911f418ae82fa2e590803144ba823f0e76d6416987de
+poll-socket-contract,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,9e8c43bcea28444d38bbfa3efe34746520d0cd32d025ec9b9244671a3d20b150
+math-contract,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,3e0bfe41c42472171c5c388e1aa8fab3a7264db6d9d6856dbd6ce5aade3cff9e
+locale-contract,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,fded5d75c82cd9d6aa0e918ded40b117e3f53ba659b64570eb3cab1b66571bd2
+locale-environment,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,fded5d75c82cd9d6aa0e918ded40b117e3f53ba659b64570eb3cab1b66571bd2
+langinfo-contract,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,80c7332248687a0e4f3ac996d090b9936c97f3d029f5fd097e88a37f64f20544
+stdout,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,b604feac9cc61a711805947477b723c2a40853133dfdd9a6c25d358140a018f5
+stdio-full,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,9799926fee0a54279e14b965558b98d0670c889967fdcfa4664b2fab5e9fc46a
+open-unlink,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,4bf435e94bbe84c1306f5171395d84f2c5c3784a0c280eaf443ff3202309c05b
+exit-cleanup,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,390294b2a0ef172088815695e98b207320652a1b1733c0cb28478962322b5213
+write-basic,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+write-zero,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+write-short,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+write-errors,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+atexit-order,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+atexit-register,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+atexit-capacity,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+atexit-exit,False,PASS,FAIL,FAIL,,27,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+atexit-raw-exit,False,PASS,FAIL,FAIL,,29,no unique completed guest result; inspect serial.log and qemu.log,75059b0ee18f613eae2ea7085db07c3d205b2f6b26a55f5e2e7685757687098a
+random-basic,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+random-zero,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+random-errors,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+random-guards,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,0f4a7f0dd0e26e415796203c066f5bc37c24f31fa82d1fc82c5c3eb7313ca8ef
+time-clocks,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,b0eaaf304d2b30391829514d453a837be3dcb4442190faf4e8f145a06cf6cbe7
+time-errors,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,b0eaaf304d2b30391829514d453a837be3dcb4442190faf4e8f145a06cf6cbe7
+time-zero,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,b0eaaf304d2b30391829514d453a837be3dcb4442190faf4e8f145a06cf6cbe7
+time-sleep,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,b0eaaf304d2b30391829514d453a837be3dcb4442190faf4e8f145a06cf6cbe7
+mman-subset,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,40e719c731cfdce1e0a2efc0ae60e543549e4eafdae86fce506b1a20e2026fda
+mman-fixed,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,40e719c731cfdce1e0a2efc0ae60e543549e4eafdae86fce506b1a20e2026fda
+mman-bounds,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,40e719c731cfdce1e0a2efc0ae60e543549e4eafdae86fce506b1a20e2026fda
+dirent-root,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,e1cd6413a1c563c83d96b788860b26d05c8754996bd1d10b961653d03cbdb7f1
+dirent-errors,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,e1cd6413a1c563c83d96b788860b26d05c8754996bd1d10b961653d03cbdb7f1
+dirent-entries,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,e1cd6413a1c563c83d96b788860b26d05c8754996bd1d10b961653d03cbdb7f1

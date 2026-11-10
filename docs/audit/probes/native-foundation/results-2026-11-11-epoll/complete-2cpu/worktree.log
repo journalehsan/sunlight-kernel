@@ -1,0 +1,31 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M ipc/src/lib.rs
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/process/epoll.rs
+ M kernel/src/process/mod.rs
+ M kernel/src/process/pipe.rs
+ M kernel/src/sched/mod.rs
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/sys.rs
+ M tools/native-c/Cargo.lock
+ M tools/native-c/guest.py
+ M tools/tests/fd-description/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-11-epoll/
+?? docs/audit/probes/native-foundation/results-2026-11-11-poll-socket-guest-2cpu/
+?? docs/audit/probes/native-foundation/results-2026-11-11-poll-socket-v2/
+?? docs/audit/probes/native-foundation/results-2026-11-11-poll-socket/
+?? docs/audit/probes/native-foundation/results-2026-11-11-poll/
+?? sunlight-libc/include/poll.h
+?? sunlight-libc/include/sys/epoll.h
+?? sunlight-libc/include/sys/select.h
+?? sunlight-libc/include/sys/socket.h
+?? sunlight-libc/src/multiplex.rs
+?? sunlight-libc/src/socket.rs
+?? tools/native-c/tests/epoll.c
+?? tools/native-c/tests/poll-abi.c
+?? tools/native-c/tests/poll-socket.c
+?? tools/native-c/tests/poll.c
+?? tools/native-c/tests/run_poll.py
+
+exit=0

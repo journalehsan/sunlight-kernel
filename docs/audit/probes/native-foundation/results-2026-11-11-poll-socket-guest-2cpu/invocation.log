@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-11-poll-socket-v2/poll-socket-contract.elf --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-11-poll-socket-guest-2cpu --timeout 120

@@ -1,0 +1,15 @@
+{
+  "locale": 0,
+  "langinfo": 0,
+  "dirent": 0,
+  "dlfcn": 0,
+  "math": 0,
+  "stdio": 0,
+  "random": 0,
+  "time": 0,
+  "mman": 0,
+  "unistd": 0,
+  "elf": 0,
+  "kernel": 0,
+  "native-std": 0
+}

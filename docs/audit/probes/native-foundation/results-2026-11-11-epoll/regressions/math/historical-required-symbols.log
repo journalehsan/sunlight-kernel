@@ -1,0 +1,5 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-epoll/regressions/math/math.o
+                 U fabs
+                 U sqrt
+
+exit=0

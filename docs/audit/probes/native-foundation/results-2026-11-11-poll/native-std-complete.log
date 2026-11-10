@@ -1,0 +1,63 @@
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+   Compiling compiler_builtins v0.1.160 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins)
+   Compiling libm v0.2.16
+   Compiling num-traits v0.2.19
+   Compiling thiserror v2.0.21
+   Compiling rustc-std-workspace-core v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-core)
+   Compiling alloc v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/alloc)
+   Compiling libc v0.2.185
+   Compiling cfg-if v1.0.4
+   Compiling panic_abort v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_abort)
+   Compiling rustc-demangle v0.1.27
+   Compiling rustc-literal-escaper v0.0.7
+   Compiling unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/unwind)
+   Compiling rustc-std-workspace-alloc v1.99.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/rustc-std-workspace-alloc)
+   Compiling panic_unwind v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/panic_unwind)
+   Compiling hashbrown v0.17.1
+   Compiling std_detect v0.1.5 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std_detect)
+   Compiling std v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/std)
+   Compiling proc_macro v0.0.0 (/home/ehsantor/Projects/sunlightos-kernel/target/native-std/sysroot/lib/rustlib/src/rust/library/proc_macro)
+    Checking smallvec v1.16.3
+    Checking arrayvec v0.7.8
+    Checking simd-adler32 v0.3.10
+    Checking zune-core v0.4.12
+    Checking bytemuck v1.25.2
+    Checking linebender_resource_handle v0.1.1
+    Checking lz4_flex v0.11.6
+    Checking log v0.4.34
+    Checking foldhash v0.2.0
+    Checking sunlight-cert v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-cert)
+    Checking unicode-segmentation v1.13.3
+    Checking sunlight-ipc v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc)
+    Checking zune-jpeg v0.4.21
+    Checking zune-inflate v0.2.54
+    Checking hayro-syntax v0.8.0
+    Checking zune-png v0.4.10
+    Checking euclid v0.22.14
+    Checking sun-img v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img)
+    Checking polycool v0.4.0
+    Checking color v0.3.3
+    Checking fearless_simd v0.7.0
+    Checking sunlight-ui v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui)
+    Checking kurbo v0.13.1
+    Checking guillotiere v0.7.0
+    Checking sunlight-libc v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+    Checking peniko v0.6.1
+warning: `sunlight-libc` (lib) generated 1 warning
+    Checking vello_common v0.3.0
+    Checking vello_cpu v0.3.0
+    Checking sunlight-hayro-native-probe v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/hayro-native-probe)
+    Checking sunlight-native-std-probe v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/native-std-probe)
+    Finished `release` profile [optimized] target(s) in 20.05s

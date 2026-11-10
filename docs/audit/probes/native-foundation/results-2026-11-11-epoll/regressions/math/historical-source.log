@@ -1,0 +1,4 @@
+50b362bbac72b4a16a66aed9ece0a13e43bb8c87786d99ec57cf08a23c28feff
+#define _GNU_SOURCE
+#include <math.h>
+int main(void){volatile double x=2.0; return fabs(sqrt(x)*sqrt(x)-x)>1e-12;}

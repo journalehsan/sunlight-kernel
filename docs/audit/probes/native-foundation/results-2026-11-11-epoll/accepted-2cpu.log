@@ -1,0 +1,71 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu
+Building isolated native C guest (52 ELFs, 2 CPUs)
+Booting disposable TCG guest
+entry: FAIL exit=0 expected=0
+write: FAIL exit=0 expected=0
+guest write stderr: b'[NATIVE-C] write OK\n'
+exit: FAIL exit=23 expected=23
+atexit: FAIL exit=0 expected=0
+guest atexit stdout: b'atexit OK\n'
+clock: FAIL exit=0 expected=0
+dirent: FAIL exit=0 expected=0
+dlfcn: FAIL exit=0 expected=0
+random-service-before: FAIL exit=0 expected=0
+guest random-service-before stdout: b'rand service: requests=0 bytes=0\n'
+getrandom: FAIL exit=0 expected=0
+random-service-after: FAIL exit=0 expected=0
+guest random-service-after stdout: b'rand service: requests=1 bytes=16\n'
+langinfo: FAIL exit=0 expected=0
+locale: FAIL exit=0 expected=0
+math: FAIL exit=0 expected=0
+mmap: FAIL exit=0 expected=0
+poll_select: FAIL exit=0 expected=0
+stdio: FAIL exit=0 expected=0
+string: FAIL exit=0 expected=0
+dlfcn-contract: FAIL exit=0 expected=0
+epoll-contract: FAIL exit=4 expected=0
+poll-contract: FAIL exit=0 expected=0
+poll-socket-contract: FAIL exit=24 expected=0
+math-contract: FAIL exit=0 expected=0
+locale-contract: FAIL exit=0 expected=0
+locale-environment: FAIL exit=0 expected=0
+langinfo-contract: FAIL exit=0 expected=0
+stdout: FAIL exit=0 expected=0
+guest stdout stdout: b'[NATIVE-C] stdout OK\n'
+stdio-full: FAIL exit=0 expected=0
+guest stdio-full stdout: b'stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\nstdio: file PASS; tmpfile PASS\n'
+guest stdio-full stderr: b'stdio: stderr 0007\n'
+open-unlink: FAIL exit=0 expected=0
+exit-cleanup: FAIL exit=0 expected=0
+write-basic: FAIL exit=0 expected=0
+guest write-basic stdout: b'write OK\n'
+guest write-basic stderr: b'stderr OK\n'
+write-zero: FAIL exit=0 expected=0
+write-short: FAIL exit=0 expected=0
+write-errors: FAIL exit=0 expected=0
+atexit-order: FAIL exit=0 expected=0
+guest atexit-order stdout: b'CBA'
+atexit-register: FAIL exit=0 expected=0
+guest atexit-register stdout: b'BCA'
+atexit-capacity: FAIL exit=0 expected=0
+guest atexit-capacity stdout: b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+atexit-exit: FAIL exit=27 expected=27
+guest atexit-exit stdout: b'A'
+atexit-raw-exit: FAIL exit=29 expected=29
+random-basic: FAIL exit=0 expected=0
+random-zero: FAIL exit=0 expected=0
+random-errors: FAIL exit=0 expected=0
+random-guards: FAIL exit=0 expected=0
+time-clocks: FAIL exit=0 expected=0
+guest time-clocks stdout: b'time: clocks realtime=1794351253.000000000 monotonic=22.740000000\n'
+time-errors: FAIL exit=0 expected=0
+time-zero: FAIL exit=0 expected=0
+time-sleep: FAIL exit=0 expected=0
+guest time-sleep stdout: b'time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged\ntime: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged\n'
+mman-subset: FAIL exit=0 expected=0
+mman-fixed: FAIL exit=0 expected=0
+mman-bounds: FAIL exit=0 expected=0
+dirent-root: FAIL exit=0 expected=0
+dirent-errors: FAIL exit=0 expected=0
+dirent-entries: FAIL exit=0 expected=0
+Historical 21: PASS=0 guest_FAIL=15 BUILD_FAIL=6 guest_NOT_RUN=6

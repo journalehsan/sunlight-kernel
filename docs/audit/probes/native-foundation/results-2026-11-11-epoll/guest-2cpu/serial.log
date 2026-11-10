@@ -1,0 +1,580 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 14
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=unknown
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x1d25cc8 (7462 frames, 29 MiB)
+[PMM] 1936/1965 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=0 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11900 end_count=7898 elapsed_counts=4002 tsc_delta=8311022 tsc_hz=2477901512
+[TIME] TSC calibrated ~2477901512 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff812cfde8 ist_df=0xffffffff813eef10 ist_nmi=0xffffffff81a28b40
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=62752900 lapic_initial_count=627529 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2477901512
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x10 hour=0x22 minute=0x51 second=0x39 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-10T22:51:39Z assumed_basis=UTC
+wall: utc=2026-11-10T22:51:39Z unix=1794351099 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8006d754
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff81634b40..0xffffffff81644b40
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8006d754
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff812cff58 ist_df=0xffffffff81644b40 ist_nmi=0xffffffff81a2cb40
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[NATIVE-C-RUNNER] cases=51 cpus=2 entropy=true
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=526d memsz=526d prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=600 memsz=600 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bdf memsz=1bdf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=9e memsz=9e prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[SCHED] CREATED process #2 'rand_service' idx=1 burst_score=256 tier=High
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff900087b0
+[ init] SunlightOS init process started
+[RAND] Starting rand_service
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[CAP] Created endpoint 1 for pid=2
+[init] nameserver registry integrity tests: OK
+[RAND] Registered as 'rand'
+[NATIVE-C-SUPPORT] nameserver=production rand=production receive_wait=ready
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=19f8 memsz=19f8 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=26c memsz=26c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=199 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400060, stack=0x7fffffffef80
+[SCHED] CREATED process #3 'entry' idx=2 burst_score=256 tier=High
+[NATIVE-C-START] case=0 name=entry pid=100 bytes=22224 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=100 name='entry' reason=exit code=0
+[SCHED] terminating pid=100 name='entry' reason=exit
+[SCHED] FINISHED process pid=100 name='entry'
+[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=0 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=100 name='entry' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=100 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=100 cleared_msgs=0
+[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1ab8 memsz=1ab8 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=34c memsz=34c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=199 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400030, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=101 (reused reaped slot)
+[SCHED] CREATED process #4 'write' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=1 name=write pid=101 bytes=22296 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=101 name='write' reason=exit code=0
+[SCHED] terminating pid=101 name='write' reason=exit
+[SCHED] FINISHED process pid=101 name='write'
+[NATIVE-C-REAP-BEGIN] case=1 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=1 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=101 name='write' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[NATIVE-C-STREAM] case=1 fd=2 hex=5b4e41544956452d435d207772697465204f4b0a
+[NATIVE-C-RESULT] case=1 exit=0 stdout=0 stderr=20 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=19a8 memsz=19a8 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=26c memsz=26c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=199 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400010, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=102 (reused reaped slot)
+[SCHED] CREATED process #5 'exit' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=2 name=exit pid=102 bytes=22224 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=102 name='exit' reason=exit code=23
+[SCHED] terminating pid=102 name='exit' reason=exit
+[SCHED] FINISHED process pid=102 name='exit'
+[NATIVE-C-REAP-BEGIN] case=2 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=2 exit=23 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=102 name='exit' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[NATIVE-C-RESULT] case=2 exit=23 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1b78 memsz=1b78 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=2bc memsz=2bc prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400ca0, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=103 (reused reaped slot)
+[SCHED] CREATED process #6 'atexit' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=3 name=atexit pid=103 bytes=22424 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=103 name='atexit' reason=exit code=0
+[SCHED] terminating pid=103 name='atexit' reason=exit
+[SCHED] FINISHED process pid=103 name='atexit'
+[NATIVE-C-REAP-BEGIN] case=3 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=3 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=103 name='atexit' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[NATIVE-C-STREAM] case=3 fd=1 hex=617465786974204f4b0a
+[NATIVE-C-RESULT] case=3 exit=0 stdout=10 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1d78 memsz=1d78 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=2e4 memsz=2e4 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400ea0, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=104 (reused reaped slot)
+[SCHED] CREATED process #7 'clock' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=4 name=clock pid=104 bytes=22400 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=104 name='clock' reason=exit code=0
+[SCHED] terminating pid=104 name='clock' reason=exit
+[SCHED] FINISHED process pid=104 name='clock'
+[NATIVE-C-REAP-BEGIN] case=4 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=4 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=104 name='clock' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=104 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=104 cleared_msgs=0
+[NATIVE-C-RESULT] case=4 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2758 memsz=2758 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=424 memsz=424 prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x4016c0, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=105 (reused reaped slot)
+[SCHED] CREATED process #8 'dirent' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=5 name=dirent pid=105 bytes=26808 owned_frames=517 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000001000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=105 name='dirent' reason=exit code=0
+[SCHED] terminating pid=105 name='dirent' reason=exit
+[SCHED] FINISHED process pid=105 name='dirent'
+[NATIVE-C-REAP-BEGIN] case=5 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=5 exit=0 user_frames=774 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=105 name='dirent' user_frames=774 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=105 frames=774 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=105 cleared_msgs=0
+[NATIVE-C-RESULT] case=5 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1d58 memsz=1d58 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=26c memsz=26c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400e80, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=106 (reused reaped slot)
+[SCHED] CREATED process #9 'dlfcn' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=6 name=dlfcn pid=106 bytes=22392 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=106 name='dlfcn' reason=exit code=0
+[SCHED] terminating pid=106 name='dlfcn' reason=exit
+[SCHED] FINISHED process pid=106 name='dlfcn'
+[NATIVE-C-REAP-BEGIN] case=6 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=6 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=106 name='dlfcn' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=106 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=106 cleared_msgs=0
+[NATIVE-C-RESULT] case=6 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=45d8 memsz=45d8 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=7fc memsz=7fc prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=18 memsz=11a0 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=1 auxv=2 rsp=0x7fffffffef70
+[EXEC] Loaded ELF entry=0x401a50, stack=0x7fffffffef70
+[SCHED] process_slot_reused idx=2 pid=107 (reused reaped slot)
+[SCHED] CREATED process #10 'random-service-before' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=7 name=random-service-before pid=107 bytes=35632 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=107 name='random-service-before' reason=exit code=0
+[SCHED] terminating pid=107 name='random-service-before' reason=exit
+[SCHED] FINISHED process pid=107 name='random-service-before'
+[NATIVE-C-REAP-BEGIN] case=7 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=7 exit=0 user_frames=521 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=107 name='random-service-before' user_frames=521 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=107 frames=521 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=107 cleared_msgs=0
+[NATIVE-C-STREAM] case=7 fd=1 hex=72616e6420736572766963653a2072657175657374733d302062797465733d300a
+[NATIVE-C-RESULT] case=7 exit=0 stdout=33 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=23f8 memsz=23f8 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=3dc memsz=3dc prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401080, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=108 (reused reaped slot)
+[SCHED] CREATED process #11 'getrandom' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=8 name=getrandom pid=108 bytes=26776 owned_frames=517 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=108 name='getrandom' reason=exit code=0
+[SCHED] terminating pid=108 name='getrandom' reason=exit
+[SCHED] FINISHED process pid=108 name='getrandom'
+[NATIVE-C-REAP-BEGIN] case=8 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=8 exit=0 user_frames=518 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=108 name='getrandom' user_frames=518 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=108 frames=518 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=108 cleared_msgs=0
+[NATIVE-C-RESULT] case=8 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=45d8 memsz=45d8 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=7fc memsz=7fc prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=18 memsz=11a0 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=1 auxv=2 rsp=0x7fffffffef70
+[EXEC] Loaded ELF entry=0x401a50, stack=0x7fffffffef70
+[SCHED] process_slot_reused idx=2 pid=109 (reused reaped slot)
+[SCHED] CREATED process #12 'random-service-after' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=9 name=random-service-after pid=109 bytes=35632 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=109 name='random-service-after' reason=exit code=0
+[SCHED] terminating pid=109 name='random-service-after' reason=exit
+[SCHED] FINISHED process pid=109 name='random-service-after'
+[NATIVE-C-REAP-BEGIN] case=9 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=9 exit=0 user_frames=521 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=109 name='random-service-after' user_frames=521 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=109 frames=521 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=109 cleared_msgs=0
+[NATIVE-C-STREAM] case=9 fd=1 hex=72616e6420736572766963653a2072657175657374733d312062797465733d31360a
+[NATIVE-C-RESULT] case=9 exit=0 stdout=34 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1a08 memsz=1a08 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=27c memsz=27c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=2a8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400b30, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=110 (reused reaped slot)
+[SCHED] CREATED process #13 'langinfo' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=10 name=langinfo pid=110 bytes=22360 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=110 name='langinfo' reason=exit code=0
+[SCHED] terminating pid=110 name='langinfo' reason=exit
+[SCHED] FINISHED process pid=110 name='langinfo'
+[NATIVE-C-REAP-BEGIN] case=10 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=10 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=110 name='langinfo' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=110 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=110 cleared_msgs=0
+[NATIVE-C-RESULT] case=10 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=4b28 memsz=4b28 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=1514 memsz=1514 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=2a8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x402b04, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=111 (reused reaped slot)
+[SCHED] CREATED process #14 'locale' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=11 name=locale pid=111 bytes=41360 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=111 name='locale' reason=exit code=0
+[SCHED] terminating pid=111 name='locale' reason=exit
+[SCHED] FINISHED process pid=111 name='locale'
+[NATIVE-C-REAP-BEGIN] case=11 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=11 exit=0 user_frames=521 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=111 name='locale' user_frames=521 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=111 frames=521 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=111 cleared_msgs=0
+[NATIVE-C-RESULT] case=11 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1a38 memsz=1a38 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=28c memsz=28c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=199 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x40007c, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=112 (reused reaped slot)
+[SCHED] CREATED process #15 'math' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=12 name=math pid=112 bytes=22280 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=112 name='math' reason=exit code=0
+[SCHED] terminating pid=112 name='math' reason=exit
+[SCHED] FINISHED process pid=112 name='math'
+[NATIVE-C-REAP-BEGIN] case=12 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=12 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=112 name='math' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=112 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=112 cleared_msgs=0
+[NATIVE-C-RESULT] case=12 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bc8 memsz=1bc8 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=2cc memsz=2cc prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400cf0, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=113 (reused reaped slot)
+[SCHED] CREATED process #16 'mmap' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=13 name=mmap pid=113 bytes=22424 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000001000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=113 name='mmap' reason=exit code=0
+[SCHED] terminating pid=113 name='mmap' reason=exit
+[SCHED] FINISHED process pid=113 name='mmap'
+[NATIVE-C-REAP-BEGIN] case=13 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=13 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=113 name='mmap' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=113 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=113 cleared_msgs=0
+[NATIVE-C-RESULT] case=13 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=22e8 memsz=22e8 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=34c memsz=34c prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401410, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=114 (reused reaped slot)
+[SCHED] CREATED process #17 'poll_select' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=14 name=poll_select pid=114 bytes=26528 owned_frames=517 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=114 name='poll_select' reason=exit code=0
+[SCHED] terminating pid=114 name='poll_select' reason=exit
+[SCHED] FINISHED process pid=114 name='poll_select'
+[NATIVE-C-REAP-BEGIN] case=14 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=14 exit=0 user_frames=518 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=114 name='poll_select' user_frames=518 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=114 frames=518 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=114 cleared_msgs=0
+[NATIVE-C-RESULT] case=14 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3b98 memsz=3b98 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=75c memsz=75c prot=Read
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=30 memsz=11a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x402708, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=115 (reused reaped slot)
+[SCHED] CREATED process #18 'stdio' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=15 name=stdio pid=115 bytes=31992 owned_frames=519 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000001000
+[SUNLIGHT-FS] request actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.3Pwakd
+[SUNLIGHT-FS] decision actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.3Pwakd result=allow reason=AllowedTmp err=None
+[SUNLIGHT-FS] request actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.8-iBGS
+[SUNLIGHT-FS] decision actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.8-iBGS result=allow reason=AllowedTmp err=None
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=115 name='stdio' reason=exit code=0
+[SCHED] terminating pid=115 name='stdio' reason=exit
+[SCHED] FINISHED process pid=115 name='stdio'
+[NATIVE-C-REAP-BEGIN] case=15 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=15 exit=0 user_frames=776 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=115 name='stdio' user_frames=776 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=115 frames=776 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=115 cleared_msgs=0
+[NATIVE-C-RESULT] case=15 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1a08 memsz=1a08 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=26c memsz=26c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400b30, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=116 (reused reaped slot)
+[SCHED] CREATED process #19 'string' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=16 name=string pid=116 bytes=22256 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=116 name='string' reason=exit code=0
+[SCHED] terminating pid=116 name='string' reason=exit
+[SCHED] FINISHED process pid=116 name='string'
+[NATIVE-C-REAP-BEGIN] case=16 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=16 exit=0 user_frames=517 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=116 name='string' user_frames=517 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=116 frames=517 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=116 cleared_msgs=0
+[NATIVE-C-RESULT] case=16 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1f18 memsz=1f18 prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=28c memsz=28c prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=0 memsz=1a8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401040, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=117 (reused reaped slot)
+[SCHED] CREATED process #20 'dlfcn-contract' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=17 name=dlfcn-contract pid=117 bytes=22392 owned_frames=516 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000001000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=117 name='dlfcn-contract' reason=exit code=0
+[SCHED] terminating pid=117 name='dlfcn-contract' reason=exit
+[SCHED] FINISHED process pid=117 name='dlfcn-contract'
+[NATIVE-C-REAP-BEGIN] case=17 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=17 exit=0 user_frames=773 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=117 name='dlfcn-contract' user_frames=773 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=117 frames=773 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=117 cleared_msgs=0
+[NATIVE-C-RESULT] case=17 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=46e8 memsz=46e8 prot=ReadExec
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=6ac memsz=6ac prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=30 memsz=19a8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x402fe8, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=118 (reused reaped slot)
+[SCHED] CREATED process #21 'poll-contract' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=18 name=poll-contract pid=118 bytes=36504 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[PIPE] created pipe: read_fd=3, write_fd=4, pool_idx=0
+[PIPE] created pipe: read_fd=3, write_fd=4, pool_idx=0
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000001000
+[SUNLIGHT-FS] request actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.cEiEj1
+[SUNLIGHT-FS] decision actor=User { uid: 1000, name: "user" } op=Create path=/tmp/.sunlight-stdio.cEiEj1 result=allow reason=AllowedTmp err=None
+[PIPE] created pipe: read_fd=3, write_fd=4, pool_idx=0
+[SYSCALL] mmap(0x0, 0x10000) -> 0x1000101000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000111000
+[SYSCALL] thread_spawn: parent=118 tid=119 trampoline=0x400f38
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=119 name='poll-contract' reason=exit code=0
+[SCHED] terminating pid=119 name='poll-contract' reason=exit
+[SCHED] FINISHED process pid=119 name='poll-contract'
+[NATIVE-C-REAP-BEGIN] case=19 fds=0 file_frames=0
+[NATIVE-C-REAP-END] case=19 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=119 name='poll-contract' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=119 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=119 cleared_msgs=0
+[THREAD-LIFECYCLE] created=1 finished=1 reaped=1 borrower_reclaim_skipped=1 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[SYSCALL] mmap(0x0, 0x10000) -> 0x1000112000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000122000
+[SYSCALL] thread_spawn: parent=118 tid=120 trampoline=0x400f38
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=120 name='poll-contract' reason=exit code=0
+[SCHED] terminating pid=120 name='poll-contract' reason=exit
+[SCHED] FINISHED process pid=120 name='poll-contract'
+[NATIVE-C-REAP-BEGIN] case=20 fds=0 file_frames=0
+[NATIVE-C-REAP-END] case=20 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=120 name='poll-contract' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=120 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=120 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=1 max_live=1
+[SYSCALL] mmap(0x0, 0x10000) -> 0x1000123000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000133000
+[SYSCALL] thread_spawn: parent=118 tid=121 trampoline=0x400f38
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=121 name='poll-contract' reason=exit code=0
+[SCHED] terminating pid=121 name='poll-contract' reason=exit
+[SCHED] FINISHED process pid=121 name='poll-contract'
+[NATIVE-C-REAP-BEGIN] case=21 fds=0 file_frames=0
+[NATIVE-C-REAP-END] case=21 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=121 name='poll-contract' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=121 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=121 cleared_msgs=0
+[THREAD-LIFECYCLE] created=3 finished=3 reaped=3 borrower_reclaim_skipped=3 stale_wake_rejected=0 borrower_slots_reused=2 max_live=1
+[PIPE] created pipe: read_fd=3, write_fd=4, pool_idx=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=118 name='poll-contract' reason=exit code=0
+[SCHED] terminating pid=118 name='poll-contract' reason=exit
+[SCHED] FINISHED process pid=118 name='poll-contract'
+[NATIVE-C-REAP-BEGIN] case=18 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=18 exit=0 user_frames=777 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=118 name='poll-contract' user_frames=777 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=118 frames=777 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=118 cleared_msgs=0
+[NATIVE-C-RESULT] case=18 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=2258 memsz=2258 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=2ec memsz=2ec prot=Read
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401380, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=119 (reused reaped slot)
+[SCHED] CREATED process #25 'poll-socket-contract' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=19 name=poll-socket-contract pid=119 bytes=26728 owned_frames=517 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000

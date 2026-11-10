@@ -1,0 +1,10 @@
+{
+  "initial_git_status_short": "",
+  "historical_poll_unchanged": true,
+  "restored_incidental_lockfiles": {
+    "tools/native-c/Cargo.lock": "aa29a6d9a4be1110bd795337ba7b6badbb1bd9cd277a4a8bf47944b23f70195d",
+    "tools/native-std-probe/Cargo.lock": "86642110093b74c7603c2b554ed94cfa919fc7817bde0433aa86c41f9874dd52",
+    "tools/tests/fd-description/Cargo.lock": "f9a57289a73d8a47f9dff60ef96697be7d2f3002d9c35700370d07b7faac6180"
+  },
+  "committed": false
+}

@@ -2460,7 +2460,11 @@ impl Scheduler {
     /// Wake poll waiters attached to the TTY tab which just received input.
     pub fn wake_linux_poll_tty(&mut self, tab: usize) {
         for idx in 0..self.processes.len() {
-            let native_wait = self.processes[idx].tty_read_wait == Some(tab);
+            let native_wait = self.processes[idx].tty_read_wait == Some(tab)
+                || (self.processes[idx].native_pipe_poll_wait
+                    && self.processes[self.shared_process_index(idx)]
+                        .fd_table
+                        .contains_tty_stdin_tab(tab));
             let linux_wait = self.processes[idx]
                 .linux_state()
                 .is_some_and(|state| state.poll_wake_tick.is_some())
@@ -2484,9 +2488,10 @@ impl Scheduler {
                 .linux_state()
                 .and_then(|s| s.eventfd_wait);
             let waiting_on_poll = wait.is_none()
-                && self.processes[idx]
-                    .linux_state()
-                    .is_some_and(|s| s.poll_wake_tick.is_some())
+                && (self.processes[idx].native_pipe_poll_wait
+                    || self.processes[idx]
+                        .linux_state()
+                        .is_some_and(|s| s.poll_wake_tick.is_some()))
                 && self.processes[self.shared_process_index(idx)]
                     .fd_table
                     .contains_eventfd(event_idx);
@@ -2558,7 +2563,8 @@ impl Scheduler {
             let waiting_on_poll = self.processes[idx]
                 .linux_state()
                 .is_some_and(|s| s.poll_wake_tick.is_some());
-            if waiting_on_poll
+            let waiting_native = self.processes[idx].native_pipe_poll_wait;
+            if (waiting_on_poll || waiting_native)
                 && self.processes[self.shared_process_index(idx)]
                     .fd_table
                     .contains_unix_socket(listener)

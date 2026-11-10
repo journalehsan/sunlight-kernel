@@ -1,0 +1,20 @@
+$ bash tools/build_native_c.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+   Compiling sunlight-libc v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+   Compiling sunlight-native-c v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/native-c)
+    Finished `release` profile [optimized] target(s) in 2.03s
+
+exit=0

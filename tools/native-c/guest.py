@@ -102,6 +102,10 @@ def main():
         sources.insert(random_index, ('random-service-before', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources.insert(random_index + 2, ('random-service-after', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources += [('dlfcn-contract', ROOT / 'tools/native-c/tests/dlfcn.c', 0, (), b'', b'', b'', False)]
+        sources += [('epoll-contract', ROOT / 'tools/native-c/tests/epoll.c', 0, (), b'', b'', b'', False)]
+        sources += [('poll-contract', ROOT / 'tools/native-c/tests/poll.c', 0, (), b'', b'', b'', False)]
+        sources += [('poll-socket-contract', ROOT / 'tools/native-c/tests/poll-socket.c', 0,
+                     (), b'', b'', b'', False)]
         sources += [('math-contract', ROOT / 'tools/native-c/tests/math.c', 0, (), b'', b'', b'', False)]
         sources += [('locale-contract', ROOT / 'tools/native-c/tests/locale.c', 0, (), b'', b'', b'', False),
                     ('locale-environment', ROOT / 'tools/native-c/tests/locale.c', 0, ('environment',), b'', b'', b'', False)]

@@ -1,0 +1,16 @@
+{
+  "2": {
+    "pass": 50,
+    "historical_pass": 15,
+    "build_fail": 6,
+    "historical_poll_sha256": "6636cec4e340f136744b2719b5a77291187a2307ca794238ddd455c3eac0ae83",
+    "contract_sha256": "595c3a4ec345f6a546d7375fca6d926d65553fbfbdd5c7248b2680e5b0fd4dae"
+  },
+  "4": {
+    "pass": 50,
+    "historical_pass": 15,
+    "build_fail": 6,
+    "historical_poll_sha256": "6636cec4e340f136744b2719b5a77291187a2307ca794238ddd455c3eac0ae83",
+    "contract_sha256": "595c3a4ec345f6a546d7375fca6d926d65553fbfbdd5c7248b2680e5b0fd4dae"
+  }
+}

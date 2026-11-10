@@ -24,6 +24,9 @@ static PIPE_POOL: spin::Mutex<Vec<Option<Pipe>>> = spin::Mutex::new(Vec::new());
 struct SocketPair {
     incoming: [u32; 2],
     refs: [usize; 2],
+    /// One pending urgent byte per destination endpoint. Out-of-band data is
+    /// separate from the normal stream ring and is consumed only by MSG_OOB.
+    oob: [Option<u8>; 2],
 }
 
 static SOCKET_PAIRS: spin::Mutex<Vec<Option<SocketPair>>> = spin::Mutex::new(Vec::new());
@@ -34,6 +37,37 @@ pub fn socket_stream(index: u32, endpoint: usize) -> Option<(u32, u32)> {
         .get(index as usize)?
         .as_ref()
         .map(|pair| (pair.incoming[endpoint], pair.incoming[1 - endpoint]))
+}
+
+/// Publish one urgent byte to `endpoint`. A second unconsumed urgent byte
+/// reports failure so callers can return EAGAIN instead of silently replacing
+/// data the peer has not observed.
+pub fn socket_send_oob(index: u32, endpoint: usize, byte: u8) -> bool {
+    let mut pool = SOCKET_PAIRS.lock();
+    let Some(pair) = pool.get_mut(index as usize).and_then(Option::as_mut) else {
+        return false;
+    };
+    let destination = 1 - endpoint;
+    if pair.oob[destination].is_some() {
+        return false;
+    }
+    pair.oob[destination] = Some(byte);
+    true
+}
+
+pub fn socket_has_oob(index: u32, endpoint: usize) -> bool {
+    SOCKET_PAIRS
+        .lock()
+        .get(index as usize)
+        .and_then(Option::as_ref)
+        .is_some_and(|pair| pair.oob[endpoint].is_some())
+}
+
+pub fn socket_take_oob(index: u32, endpoint: usize) -> Option<u8> {
+    let mut pool = SOCKET_PAIRS.lock();
+    pool.get_mut(index as usize)
+        .and_then(Option::as_mut)
+        .and_then(|pair| pair.oob[endpoint].take())
 }
 
 pub fn socket_retain(index: u32, endpoint: usize) {
@@ -60,6 +94,7 @@ pub fn socket_close(index: u32, endpoint: usize) -> (u32, u32) {
         let pair = pool[index as usize].as_mut().expect("live socket pair");
         pair.refs[endpoint] -= 1;
         let streams = (pair.incoming[endpoint], pair.incoming[1 - endpoint]);
+        pair.oob[endpoint] = None;
         if pair.refs == [0, 0] {
             pool[index as usize] = None;
         }
@@ -111,6 +146,7 @@ pub fn alloc_socketpair() -> u32 {
     let item = SocketPair {
         incoming: [first, second],
         refs: [1, 1],
+        oob: [None, None],
     };
     let mut pool = SOCKET_PAIRS.lock();
     if let Some((idx, slot)) = pool.iter_mut().enumerate().find(|(_, s)| s.is_none()) {

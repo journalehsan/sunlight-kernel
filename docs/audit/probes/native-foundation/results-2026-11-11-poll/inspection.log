@@ -1,0 +1,31 @@
+Historical source SHA-256: 4c3148d0a7c2c7823c5d17dcc1c3d793215305f05e4fa3c14a1523c1b297dc9d
+#define _GNU_SOURCE
+#include <poll.h>
+#include <sys/select.h>
+int main(void){struct timeval t={0,0}; return poll(0,0,0)!=0 || select(0,0,0,0,&t)!=0;}
+
+Phase 12 record (std-progress.md, Phase 12) and retained next-blocker.log read before edits.
+Historical operations: poll(NULL,0,0); select(0,NULL,NULL,NULL,&zero_timeval).
+No struct pollfd instantiation or field/layout check; no event flags referenced.
+Only zero/nonblocking timeout tested. Negative/infinite and positive millisecond
+waits are NOT tested by the historical probe. No pipe, stdio, socket, invalid,
+closed, or negative descriptor is passed. These are separate contract coverage.
+
+Native syscall 159 previously required 1..3 pipe-read/TTY descriptors,
+events exactly POLLIN and timeout >= -1; zero fds failed. Finite timeout
+replayed SYSCALL without retaining the absolute deadline, restarting the wait.
+Linux poll and ppoll exist only via compatibility syscall remapping (1006/1047).
+The native bridge uses 159 and retains native personality and capabilities.
+C pollfd is identical to the existing repr(C) PollFd / IPC NativePollFd:
+size 8, alignment 4, fd:i32 at 0, events:i16 at 4, revents:i16 at 6.
+nfds_t is unsigned long, 64-bit unsigned on LP64.
+
+Readiness inspection: pipe pool exposes data length and reader/writer reference
+counts; TTY readiness uses the input ring; stdout/stderr are writable;
+synchronous VFS operations cannot park and regular-file EOF remains readable.
+Native eventfd readiness uses the existing counter hook; eventfd and TTY wakes
+now include native poll waiters. Socket and epoll handle polling is rejected
+with EINVAL pending a complete native event/hangup contract, not faked ready.
+POLLIN/POLLOUT readiness and unconditional POLLERR/POLLHUP/POLLNVAL supported.
+POLLPRI is defined but has no native producer; no exceptional readiness claimed.
+No native ppoll/pselect, signal mask, or EINTR implementation added.

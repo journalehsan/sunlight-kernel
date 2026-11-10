@@ -1,0 +1,2 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+elf,False,PASS,FAIL,FAIL,,,no unique completed guest result; inspect serial.log and qemu.log,ff68ca4119655effd2f916f04f2b841df0bf3e53b19db467ac88a9e25798e8c3

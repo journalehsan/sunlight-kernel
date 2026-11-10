@@ -1,0 +1,314 @@
+{
+  "entry": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "[NATIVE-C] write OK\n",
+    "pass_": false
+  },
+  "exit": {
+    "exit": 23,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit": {
+    "exit": 0,
+    "stdout": "atexit OK\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "clock": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dirent": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dlfcn": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-service-before": {
+    "exit": 0,
+    "stdout": "rand service: requests=0 bytes=0\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "getrandom": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-service-after": {
+    "exit": 0,
+    "stdout": "rand service: requests=1 bytes=16\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "langinfo": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "locale": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "math": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "mmap": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "poll_select": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdio": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "string": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dlfcn-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "epoll-contract": {
+    "exit": 4,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "poll-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "poll-socket-contract": {
+    "exit": 24,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "math-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "locale-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "locale-environment": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "langinfo-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdout": {
+    "exit": 0,
+    "stdout": "[NATIVE-C] stdout OK\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdio-full": {
+    "exit": 0,
+    "stdout": "stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\nstdio: file PASS; tmpfile PASS\n",
+    "stderr": "stdio: stderr 0007\n",
+    "pass_": false
+  },
+  "open-unlink": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "exit-cleanup": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write-basic": {
+    "exit": 0,
+    "stdout": "write OK\n",
+    "stderr": "stderr OK\n",
+    "pass_": false
+  },
+  "write-zero": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write-short": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write-errors": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit-order": {
+    "exit": 0,
+    "stdout": "CBA",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit-register": {
+    "exit": 0,
+    "stdout": "BCA",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit-capacity": {
+    "exit": 0,
+    "stdout": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit-exit": {
+    "exit": 27,
+    "stdout": "A",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit-raw-exit": {
+    "exit": 29,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-basic": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-zero": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-errors": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-guards": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "time-clocks": {
+    "exit": 0,
+    "stdout": "time: clocks realtime=1794351253.000000000 monotonic=22.740000000\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "time-errors": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "time-zero": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "time-sleep": {
+    "exit": 0,
+    "stdout": "time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged\ntime: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "mman-subset": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "mman-fixed": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "mman-bounds": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dirent-root": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dirent-errors": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dirent-entries": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  }
+}

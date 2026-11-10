@@ -156,6 +156,8 @@ pub struct Process {
     pub native_pipe_poll_wait: bool,
     /// Deadline for a native readiness wait. `None` means wait indefinitely.
     pub native_poll_wake_tick: Option<u64>,
+    /// Absolute deadline retained across native poll syscall retries.
+    pub native_poll_deadline: Option<u64>,
     /// Blocking TTY output waiting for space in this tab's bounded ring.
     pub tty_write_wait: Option<usize>,
     /// Native blocking input waits; independent of Linux poll state.
@@ -504,6 +506,7 @@ impl Process {
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
+            native_poll_deadline: None,
             tty_write_wait: None,
             tty_read_wait: None,
             native_shared_owner: None,
@@ -743,6 +746,7 @@ impl Process {
             native_pipe_wait: None,
             native_pipe_poll_wait: false,
             native_poll_wake_tick: None,
+            native_poll_deadline: None,
             tty_write_wait: None,
             tty_read_wait: None,
             native_shared_owner: None,

@@ -1,0 +1,5 @@
+guest=NOT_RUN
+No guest command issued by this host-only regression runner. Use tools/native-c/guest.py --suite; the isolated guest gate captures native exit/output/reaping. Host adapters replace only descriptor/allocator/errno calls and do not validate SunlightOS kernel I/O.
+Native probe requires argv[1]=disposable writable path, stdin=Q\n, exit=0 and exact stdout/stderr from host-c-run.log.
+Historical stdio.c requires tmpfile; its host pass does not validate guest execution.
+open-unlink-native requires argv[1]=absent disposable path on tmpfs and exit=0.

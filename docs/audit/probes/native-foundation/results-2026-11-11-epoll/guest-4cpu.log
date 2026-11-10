@@ -1,0 +1,59 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu
+Building isolated native C guest (51 ELFs, 4 CPUs)
+Booting disposable TCG guest
+entry: PASS exit=0 expected=0
+write: PASS exit=0 expected=0
+guest write stderr: b'[NATIVE-C] write OK\n'
+exit: PASS exit=23 expected=23
+atexit: PASS exit=0 expected=0
+guest atexit stdout: b'atexit OK\n'
+clock: PASS exit=0 expected=0
+dirent: PASS exit=0 expected=0
+dlfcn: PASS exit=0 expected=0
+random-service-before: PASS exit=0 expected=0
+guest random-service-before stdout: b'rand service: requests=0 bytes=0\n'
+getrandom: PASS exit=0 expected=0
+random-service-after: PASS exit=0 expected=0
+guest random-service-after stdout: b'rand service: requests=1 bytes=16\n'
+langinfo: PASS exit=0 expected=0
+locale: PASS exit=0 expected=0
+math: PASS exit=0 expected=0
+mmap: PASS exit=0 expected=0
+poll_select: PASS exit=0 expected=0
+stdio: PASS exit=0 expected=0
+string: PASS exit=0 expected=0
+dlfcn-contract: PASS exit=0 expected=0
+poll-contract: PASS exit=0 expected=0
+poll-socket-contract: FAIL exit= expected=0
+math-contract: FAIL exit= expected=0
+locale-contract: FAIL exit= expected=0
+locale-environment: FAIL exit= expected=0
+langinfo-contract: FAIL exit= expected=0
+stdout: FAIL exit= expected=0
+stdio-full: FAIL exit= expected=0
+open-unlink: FAIL exit= expected=0
+exit-cleanup: FAIL exit= expected=0
+write-basic: FAIL exit= expected=0
+write-zero: FAIL exit= expected=0
+write-short: FAIL exit= expected=0
+write-errors: FAIL exit= expected=0
+atexit-order: FAIL exit= expected=0
+atexit-register: FAIL exit= expected=0
+atexit-capacity: FAIL exit= expected=0
+atexit-exit: FAIL exit= expected=27
+atexit-raw-exit: FAIL exit= expected=29
+random-basic: FAIL exit= expected=0
+random-zero: FAIL exit= expected=0
+random-errors: FAIL exit= expected=0
+random-guards: FAIL exit= expected=0
+time-clocks: FAIL exit= expected=0
+time-errors: FAIL exit= expected=0
+time-zero: FAIL exit= expected=0
+time-sleep: FAIL exit= expected=0
+mman-subset: FAIL exit= expected=0
+mman-fixed: FAIL exit= expected=0
+mman-bounds: FAIL exit= expected=0
+dirent-root: FAIL exit= expected=0
+dirent-errors: FAIL exit= expected=0
+dirent-entries: FAIL exit= expected=0
+Historical 21: PASS=15 guest_FAIL=0 BUILD_FAIL=6 guest_NOT_RUN=6

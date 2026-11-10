@@ -57,6 +57,12 @@ pub mod mem;
 pub mod mman;
 /// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
 pub mod power;
+/// Native C poll/select ABI over syscall 159.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod multiplex;
+/// Native AF_UNIX stream sockets and epoll readiness.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod socket;
 pub mod secret_store;
 /// Strict, fail-closed configuration loader for the future SSH daemon.
 pub mod ssh_config;
@@ -582,7 +588,7 @@ pub fn pipe() -> Result<(Fd, Fd), Errno> {
     Ok((Fd(fds[0] as u32), Fd(fds[1] as u32)))
 }
 
-/// Native readiness for 1 to 3 pipe readers. Timeout must be 0 or -1.
+/// Native readiness for up to 256 descriptors. Timeouts are milliseconds.
 /// A negative timeout parks until a descriptor
 /// becomes ready; the kernel registers the wait under the producer's lock.
 #[repr(C)]

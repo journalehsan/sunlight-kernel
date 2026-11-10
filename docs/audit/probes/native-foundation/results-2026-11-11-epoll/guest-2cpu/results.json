@@ -1,0 +1,116 @@
+{
+  "entry": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "write": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "[NATIVE-C] write OK\n",
+    "pass_": true
+  },
+  "exit": {
+    "exit": 23,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "atexit": {
+    "exit": 0,
+    "stdout": "atexit OK\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "clock": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "dirent": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "dlfcn": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "random-service-before": {
+    "exit": 0,
+    "stdout": "rand service: requests=0 bytes=0\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "getrandom": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "random-service-after": {
+    "exit": 0,
+    "stdout": "rand service: requests=1 bytes=16\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "langinfo": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "locale": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "math": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "mmap": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "poll_select": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "stdio": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "string": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "dlfcn-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "poll-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  }
+}

@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -O2 -fno-builtin /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll-socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-poll-socket/poll-socket-contract.elf
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll-socket.c:54:9: error: call to undeclared function 'close'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   54 |     if (close(sv[0])) return 23;
+      |         ^
+1 error generated.
+
+exit=1

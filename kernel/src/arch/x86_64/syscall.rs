@@ -1012,6 +1012,12 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         157 => sys_native_exit_group(frame.rdi as i32),
         158 => thread_spawn(frame, true),
         159 => sys_native_pipe_poll(frame),
+        166 => sys_native_socketpair(frame),
+        169 => sys_native_send(frame),
+        170 => sys_native_recv(frame),
+        171 => sys_native_epoll_create(frame),
+        172 => sys_native_epoll_ctl(frame),
+        173 => sys_native_epoll_wait(frame),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -6217,6 +6223,92 @@ fn wait_pipe_io(
 
 /// The socketpair endpoints use the existing pipe rings for stream I/O.
 /// Keep socket descriptor validation here; generic read remains usable on them.
+const MSG_OOB: u64 = 0x01;
+const MSG_DONTWAIT: u64 = 0x40;
+
+fn socket_flag_error(linux: bool, errno: u64) -> u64 {
+    if linux {
+        linux_errno(errno)
+    } else {
+        match errno {
+            9 => ERR_EBADF,
+            11 => u64::MAX - 1,
+            22 | 95 => ERR_EINVAL,
+            _ => u64::MAX,
+        }
+    }
+}
+
+fn socket_send_oob(
+    frame: &mut SyscallFrame,
+    handle: crate::process::fd_table::FileHandle,
+    linux: bool,
+) -> u64 {
+    let count = frame.rdx as usize;
+    if count == 0 || frame.rdx > isize::MAX as u64 {
+        return socket_flag_error(linux, 22);
+    }
+    let Some(byte_ptr) = frame.rsi.checked_add(frame.rdx - 1) else {
+        return socket_flag_error(linux, 14);
+    };
+    if crate::memory::user::validate_current_read(byte_ptr, 1).is_err() {
+        return socket_flag_error(linux, 14);
+    }
+    let mut byte = [0u8; 1];
+    if crate::memory::user::copy_from_current(byte_ptr, &mut byte).is_err() {
+        return socket_flag_error(linux, 14);
+    }
+    let Some((_, write)) =
+        crate::process::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+    else {
+        return socket_flag_error(linux, 9);
+    };
+    let mut sched = crate::sched::SCHEDULER.lock();
+    if !crate::process::pipe::socket_send_oob(
+        handle.socket_index(),
+        handle.socket_endpoint(),
+        byte[0],
+    ) {
+        return socket_flag_error(linux, 11);
+    }
+    sched.wake_linux_pipe(write);
+    1
+}
+
+fn socket_recv_oob(
+    frame: &mut SyscallFrame,
+    handle: crate::process::fd_table::FileHandle,
+    linux: bool,
+) -> u64 {
+    if frame.rdx == 0 {
+        return 0;
+    }
+    if frame.rdx > isize::MAX as u64
+        || crate::memory::user::validate_current_write(frame.rsi, 1).is_err()
+    {
+        return socket_flag_error(linux, if frame.rdx > isize::MAX as u64 { 22 } else { 14 });
+    }
+    let Some((read, _)) =
+        crate::process::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
+    else {
+        return socket_flag_error(linux, 9);
+    };
+    let mut sched = crate::sched::SCHEDULER.lock();
+    let Some(byte) =
+        crate::process::pipe::socket_take_oob(handle.socket_index(), handle.socket_endpoint())
+    else {
+        return socket_flag_error(linux, 22);
+    };
+    crate::process::epoll::refresh_after_io(handle, sched.current_shared_process());
+    sched.wake_linux_pipe(read);
+    // User-copy resolves the current address space through SCHEDULER.
+    drop(sched);
+    if crate::memory::user::copy_to_current(frame.rsi, &[byte]).is_err() {
+        return socket_flag_error(linux, 14);
+    }
+    1
+}
+
 fn sys_linux_recvfrom(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let handle = {
@@ -6229,7 +6321,7 @@ fn sys_linux_recvfrom(frame: &mut SyscallFrame) -> u64 {
     if !handle.is_socket() {
         return linux_errno(88); // ENOTSOCK
     }
-    if frame.r10 & !0x40 != 0 {
+    if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 {
         return linux_errno(95);
     } // unsupported message flags
     if frame.r8 != 0 {
@@ -6244,7 +6336,11 @@ fn sys_linux_recvfrom(frame: &mut SyscallFrame) -> u64 {
     if crate::memory::user::validate_current_write(frame.rsi, frame.rdx as usize).is_err() {
         return linux_errno(14);
     }
-    sys_read_with_nonblocking(frame, frame.r10 & 0x40 != 0)
+    if frame.r10 & MSG_OOB != 0 {
+        socket_recv_oob(frame, handle, true)
+    } else {
+        sys_read_with_nonblocking(frame, frame.r10 & MSG_DONTWAIT != 0)
+    }
 }
 
 fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
@@ -6259,7 +6355,7 @@ fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
     if !handle.is_socket() {
         return linux_errno(88);
     }
-    if frame.r10 & !0x40 != 0 || frame.r8 != 0 || frame.r9 != 0 {
+    if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 || frame.r8 != 0 || frame.r9 != 0 {
         return linux_errno(95);
     }
     if frame.rdx > isize::MAX as u64 || frame.rdx.checked_add(frame.rsi).is_none() {
@@ -6270,7 +6366,11 @@ fn sys_linux_sendto(frame: &mut SyscallFrame) -> u64 {
     {
         return linux_errno(14);
     }
-    sys_write_with_nonblocking(frame, frame.r10 & 0x40 != 0)
+    if frame.r10 & MSG_OOB != 0 {
+        socket_send_oob(frame, handle, true)
+    } else {
+        sys_write_with_nonblocking(frame, frame.r10 & MSG_DONTWAIT != 0)
+    }
 }
 
 fn sys_linux_openat(frame: &mut SyscallFrame) -> u64 {
@@ -6978,60 +7078,83 @@ fn sys_linux_getrandom(frame: &mut SyscallFrame) -> u64 {
     len as u64
 }
 
-/// Native capture readiness for up to three readable pipe or TTY descriptors.
-/// Checking readiness and registering the wait share the scheduler lock with
-/// producer notifications. A finite timeout is serviced by the same scheduler
-/// timer path as Linux poll, without attaching Linux state or changing process
-/// personality/capabilities.
+/// Native poll uses the C LP64 pollfd layout (i32, i16, i16). Readiness
+/// checking and wait registration share the producer scheduler lock. Retain
+/// the absolute deadline across syscall replay, including unrelated wakes.
 fn sys_native_pipe_poll(frame: &mut SyscallFrame) -> u64 {
     let count = frame.rsi as usize;
     let timeout = frame.rdx as i32;
-    if count == 0 || count > 3 || timeout < -1 {
-        return u64::MAX;
+    if count > 256 {
+        return ERR_EINVAL;
     }
-    let mut storage = [0u8; 24];
+    let mut storage = [0u8; 256 * 8];
     let fds = &mut storage[..count * 8];
-    if crate::memory::user::copy_from_current(frame.rdi, fds).is_err()
-        || crate::memory::user::copy_to_current(frame.rdi, fds).is_err()
+    if count != 0
+        && (crate::memory::user::copy_from_current(frame.rdi, fds).is_err()
+            || crate::memory::user::copy_to_current(frame.rdi, fds).is_err())
     {
         return u64::MAX;
     }
     let (ready, blocked) = {
         let mut sched = crate::sched::SCHEDULER.lock();
         if sched.current_process().foreground.cancel != 0 {
+            sched.current_process_mut().native_poll_deadline = None;
             return u64::MAX;
         }
         let mut tty_tab = None;
-        for record in fds.chunks_exact(8) {
+        let mut ready = 0;
+        for record in fds.chunks_exact_mut(8) {
             let fd = i32::from_ne_bytes(record[..4].try_into().unwrap());
             let events = i16::from_ne_bytes(record[4..6].try_into().unwrap());
-            if events != 1 {
-                return u64::MAX;
-            }
-            let Some(entry) = sched.current_shared_process().fd_table.get(fd) else {
-                return u64::MAX;
+            let revents = if fd < 0 {
+                0
+            } else if let Some(entry) = sched.current_shared_process().fd_table.get(fd) {
+                let h = entry.handle;
+                if h.is_tty_stdin() {
+                    tty_tab = Some(h.tty_tab() as usize);
+                }
+                let readiness = if h.is_vfs() {
+                    // Native VFS handles use synchronous regular-file I/O;
+                    // EOF is readable, and does not mean POLLHUP.
+                    crate::process::epoll::POLLIN | crate::process::epoll::POLLOUT
+                } else {
+                    crate::process::epoll::descriptor_events(
+                        fd,
+                        h,
+                        sched.current_shared_process(),
+                    )
+                };
+                (readiness & events & (crate::process::epoll::POLLIN
+                    | crate::process::epoll::POLLPRI
+                    | crate::process::epoll::POLLOUT))
+                    | (readiness
+                        & (crate::process::epoll::POLLERR | crate::process::epoll::POLLHUP))
+            } else {
+                crate::process::epoll::POLLNVAL
             };
-            if entry.handle.is_tty_stdin() && fd == 0 {
-                tty_tab = Some(entry.handle.tty_tab() as usize);
-            } else if !(entry.handle.is_pipe() && !entry.handle.pipe_is_write()) {
-                return u64::MAX;
-            }
+            record[6..8].copy_from_slice(&revents.to_ne_bytes());
+            ready += u64::from(revents != 0);
         }
-        let ready = linux_poll_ready(&sched, tty_tab.unwrap_or(0), fds, count);
-        let blocked = ready == 0 && timeout != 0;
+        let now = sched.global_tick;
+        let deadline = if timeout > 0 {
+            let saved = sched.current_process().native_poll_deadline;
+            Some(saved.unwrap_or_else(|| now.saturating_add(native_poll_timeout_ticks(timeout))))
+        } else {
+            None
+        };
+        let blocked = ready == 0 && timeout != 0 && deadline.is_none_or(|end| now < end);
+        sched.current_process_mut().native_poll_deadline = if blocked { deadline } else { None };
         if blocked {
-            sched.block_current_native_poll(tty_tab, native_poll_timeout_ticks(timeout));
+            sched.block_current_native_poll(tty_tab, deadline.map_or(u64::MAX, |end| end - now));
         }
         (ready, blocked)
     };
-    if crate::memory::user::copy_to_current(frame.rdi, fds).is_err() {
+    if count != 0 && crate::memory::user::copy_to_current(frame.rdi, fds).is_err() {
         return u64::MAX;
     }
     if blocked {
         frame.rcx = frame.rcx.saturating_sub(2);
         crate::sched::request_reschedule_after_sysret();
-        // The parked task resumes at SYSCALL itself, so RAX must retain the
-        // native syscall number until readiness is rechecked after wakeup.
         return frame.rax;
     }
     ready
@@ -7281,36 +7404,55 @@ fn sys_linux_clock_gettime(frame: &mut SyscallFrame) -> u64 {
 /// For create1, `rdi` holds flags (`EPOLL_CLOEXEC`); for legacy create, flags
 /// were cleared to 0 by the translate path.
 fn sys_linux_epoll_create(frame: &mut SyscallFrame) -> u64 {
+    epoll_create_impl(frame, true)
+}
+
+fn sys_native_epoll_create(frame: &mut SyscallFrame) -> u64 {
+    epoll_create_impl(frame, false)
+}
+
+fn epoll_create_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
     let flags = frame.rdi as u32;
     // Linux EPOLL_CLOEXEC == O_CLOEXEC == 0x80000
     const EPOLL_CLOEXEC: u32 = 0x0008_0000;
     if flags & !EPOLL_CLOEXEC != 0 {
-        return linux_errno(22); // EINVAL
+        return epoll_errno(linux, 22);
     }
     let cloexec = flags & EPOLL_CLOEXEC != 0;
     let mut sched = crate::sched::SCHEDULER.lock();
     match crate::process::epoll::create_epoll_fd(&mut *sched, cloexec) {
         Ok(fd) => fd as u64,
-        Err(e) => linux_errno(e.to_linux_errno()),
+        Err(e) => epoll_error(linux, e),
     }
 }
 
 /// Linux `epoll_ctl(epfd, op, fd, event)`.
 fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
+    epoll_ctl_impl(frame, true)
+}
+
+fn sys_native_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
+    epoll_ctl_impl(frame, false)
+}
+
+fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
     use crate::process::epoll::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLL_EVENT_SIZE};
 
     let epfd = frame.rdi as i32;
     let op = frame.rsi as i32;
     let target_fd = frame.rdx as i32;
     let event_ptr = frame.r10;
+    if !matches!(op, EPOLL_CTL_ADD | EPOLL_CTL_MOD | EPOLL_CTL_DEL) || epfd == target_fd {
+        return epoll_errno(linux, 22);
+    }
 
     let epoll_idx = {
         let sched = crate::sched::SCHEDULER.lock();
         let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd).copied() else {
-            return linux_errno(9); // EBADF
+            return epoll_errno(linux, 9);
         };
         if !ep_entry.handle.is_epoll() {
-            return linux_errno(9);
+            return epoll_errno(linux, 9);
         }
 
         // Target must exist for ADD/MOD (except we allow ADD only for open fds).
@@ -7321,7 +7463,7 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
                 .get(target_fd)
                 .is_none()
             {
-                return linux_errno(9);
+                return epoll_errno(linux, 9);
             }
         }
 
@@ -7335,21 +7477,23 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
         (0u32, [0u8; 8])
     } else {
         if event_ptr == 0 {
-            return linux_errno(14); // EFAULT
+            return epoll_errno(linux, 14);
         }
-        let mut wire = [0u8; EPOLL_EVENT_SIZE];
-        if crate::memory::user::copy_from_current(event_ptr, &mut wire).is_err() {
-            return linux_errno(14);
+        let mut wire = [0u8; 16];
+        let size = if linux { EPOLL_EVENT_SIZE } else { 16 };
+        if crate::memory::user::copy_from_current(event_ptr, &mut wire[..size]).is_err() {
+            return epoll_errno(linux, 14);
         }
         let events = u32::from_ne_bytes(wire[0..4].try_into().unwrap());
         let mut data = [0u8; 8];
-        data.copy_from_slice(&wire[4..12]);
+        let offset = if linux { 4 } else { 8 };
+        data.copy_from_slice(&wire[offset..offset + 8]);
         (events, data)
     };
 
     match crate::process::epoll::ctl(epoll_idx, op, target_fd, events, data) {
         Ok(()) => 0,
-        Err(e) => linux_errno(e.to_linux_errno()),
+        Err(e) => epoll_error(linux, e),
     }
 }
 
@@ -7360,6 +7504,14 @@ fn sys_linux_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
 /// scheduler deadline instead of waiting in-place. The next timer interrupt
 /// deschedules it; either TTY input or the deadline makes it runnable again.
 fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+    epoll_wait_impl(frame, true)
+}
+
+fn sys_native_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+    epoll_wait_impl(frame, false)
+}
+
+fn epoll_wait_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
     use crate::process::epoll::EPOLL_EVENT_SIZE;
 
     let epfd = frame.rdi as i32;
@@ -7368,25 +7520,26 @@ fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
     let timeout_ms = frame.r10 as i32;
 
     if maxevents <= 0 {
-        return linux_errno(22);
+        return epoll_errno(linux, 22);
     }
     let maxevents = (maxevents as usize).min(128);
+    let event_size = if linux { EPOLL_EVENT_SIZE } else { 16 };
 
     let bytes = maxevents
-        .checked_mul(EPOLL_EVENT_SIZE)
+        .checked_mul(event_size)
         .filter(|&b| b > 0)
         .unwrap_or(0);
     if events_ptr == 0 || crate::memory::user::UserRange::new(events_ptr, bytes).is_err() {
-        return linux_errno(14);
+        return epoll_errno(linux, 14);
     }
 
     let epoll_idx = {
         let sched = crate::sched::SCHEDULER.lock();
         let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd) else {
-            return linux_errno(9);
+            return epoll_errno(linux, 9);
         };
         if !ep_entry.handle.is_epoll() {
-            return linux_errno(9);
+            return epoll_errno(linux, 9);
         }
         ep_entry.handle.epoll_index()
     };
@@ -7395,39 +7548,93 @@ fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
         let mut sched = crate::sched::SCHEDULER.lock();
         let ready = match crate::process::epoll::collect_ready(epoll_idx, maxevents, &*sched) {
             Ok(r) => r,
-            Err(e) => return linux_errno(e.to_linux_errno()),
+            Err(e) => {
+                if !linux {
+                    sched.current_process_mut().native_poll_deadline = None;
+                }
+                return epoll_error(linux, e);
+            }
         };
         // The producer also takes SCHEDULER before publishing an event and
         // waking pollers. Register the wait under that same lock so a write
         // cannot land after the empty check but before we sleep.
-        let blocked = ready.is_empty() && timeout_ms != 0;
-        if blocked {
-            sched.block_current_linux_poll(linux_poll_timeout_ticks(timeout_ms));
-        }
+        let blocked = if linux {
+            let blocked = ready.is_empty() && timeout_ms != 0;
+            if blocked {
+                sched.block_current_linux_poll(linux_poll_timeout_ticks(timeout_ms));
+            }
+            blocked
+        } else {
+            let now = sched.global_tick;
+            let deadline = if timeout_ms > 0 {
+                let saved = sched.current_process().native_poll_deadline;
+                Some(saved.unwrap_or_else(|| {
+                    now.saturating_add(native_poll_timeout_ticks(timeout_ms))
+                }))
+            } else {
+                None
+            };
+            let blocked =
+                ready.is_empty() && timeout_ms != 0 && deadline.is_none_or(|end| now < end);
+            sched.current_process_mut().native_poll_deadline =
+                if blocked { deadline } else { None };
+            if blocked {
+                sched.block_current_native_poll(
+                    None,
+                    deadline.map_or(u64::MAX, |end| end - now),
+                );
+            }
+            blocked
+        };
         (ready, blocked)
     };
 
     if !ready.is_empty() {
-        let mut wire = alloc::vec![0u8; ready.len() * EPOLL_EVENT_SIZE];
+        let mut wire = alloc::vec![0u8; ready.len() * event_size];
         for (i, ev) in ready.iter().enumerate() {
-            let base = i * EPOLL_EVENT_SIZE;
+            let base = i * event_size;
             wire[base..base + 4].copy_from_slice(&ev.events.to_ne_bytes());
-            wire[base + 4..base + 12].copy_from_slice(&ev.data);
+            let offset = base + if linux { 4 } else { 8 };
+            wire[offset..offset + 8].copy_from_slice(&ev.data);
         }
         if crate::memory::user::copy_to_current(events_ptr, &wire).is_err() {
-            return linux_errno(14);
+            return epoll_errno(linux, 14);
         }
         return ready.len() as u64;
     }
 
     if blocked {
-        if timeout_ms < 0 {
+        if !linux || timeout_ms < 0 {
             frame.rcx = frame.rcx.saturating_sub(2);
         }
         crate::sched::request_reschedule_after_sysret();
+        if !linux || timeout_ms < 0 {
+            return frame.rax;
+        }
     }
 
     0
+}
+
+fn epoll_error(linux: bool, error: crate::process::epoll::EpollError) -> u64 {
+    if linux {
+        linux_errno(error.to_linux_errno())
+    } else {
+        error.to_native_result()
+    }
+}
+
+fn epoll_errno(linux: bool, errno: u64) -> u64 {
+    if linux {
+        linux_errno(errno)
+    } else {
+        match errno {
+            9 => ERR_EBADF,
+            14 => ERR_EIO,
+            22 => ERR_EINVAL,
+            _ => u64::MAX,
+        }
+    }
 }
 
 /// Linux `pipe2(pipefd, flags)`.
@@ -7854,6 +8061,14 @@ fn sys_linux_shutdown(frame: &mut SyscallFrame) -> u64 {
 /// Use two pipe rings for the full-duplex Unix stream pair. Socket identity
 /// remains distinct from pipe identity for recvfrom/ENOTSOCK validation.
 fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
+    create_socketpair_impl(frame, true)
+}
+
+fn sys_native_socketpair(frame: &mut SyscallFrame) -> u64 {
+    create_socketpair_impl(frame, false)
+}
+
+fn create_socketpair_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
     const SOCK_STREAM: u32 = SOCK_STREAM_TYPE;
 
     let domain = frame.rdi as i32;
@@ -7864,13 +8079,21 @@ fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
     let flags = socket_type & !0xf;
 
     if domain != AF_UNIX || base_type != SOCK_STREAM || protocol != 0 {
-        return linux_errno(97); // EAFNOSUPPORT
+        return if linux {
+            linux_errno(97) // EAFNOSUPPORT
+        } else {
+            ERR_EINVAL
+        };
     }
     if flags & !(SOCK_NONBLOCK | SOCK_CLOEXEC) != 0 {
-        return linux_errno(22); // EINVAL
+        return if linux {
+            linux_errno(22)
+        } else {
+            ERR_EINVAL
+        };
     }
     if crate::memory::user::validate_current_write(pair_ptr, 8).is_err() {
-        return linux_errno(14); // EFAULT
+        return if linux { linux_errno(14) } else { ERR_EIO };
     }
 
     let mut sched = crate::sched::SCHEDULER.lock();
@@ -7892,11 +8115,57 @@ fn sys_linux_socketpair(frame: &mut SyscallFrame) -> u64 {
             if crate::memory::user::copy_to_process_bytes(process, hhdm, pair_ptr, &output).is_err()
             {
                 abandon_process_fds(&mut sched, [read_fd, write_fd]);
-                return linux_errno(14);
+                return if linux { linux_errno(14) } else { ERR_EIO };
             }
             0
         }
-        Err(_) => linux_errno(24), // EMFILE
+        Err(_) => {
+            if linux {
+                linux_errno(24) // EMFILE
+            } else {
+                u64::MAX
+            }
+        }
+    }
+}
+
+fn sys_native_send(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let handle = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_socket() => entry.handle,
+            Some(_) => return ERR_EBADF,
+            None => return ERR_EBADF,
+        }
+    };
+    if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 {
+        return ERR_EINVAL;
+    }
+    if frame.r10 & MSG_OOB != 0 {
+        socket_send_oob(frame, handle, false)
+    } else {
+        sys_write_with_nonblocking(frame, frame.r10 & MSG_DONTWAIT != 0)
+    }
+}
+
+fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
+    let fd = frame.rdi as i32;
+    let handle = {
+        let sched = crate::sched::SCHEDULER.lock();
+        match sched.current_shared_process().fd_table.get(fd) {
+            Some(entry) if entry.handle.is_socket() => entry.handle,
+            Some(_) => return ERR_EBADF,
+            None => return ERR_EBADF,
+        }
+    };
+    if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 {
+        return ERR_EINVAL;
+    }
+    if frame.r10 & MSG_OOB != 0 {
+        socket_recv_oob(frame, handle, false)
+    } else {
+        sys_read_with_nonblocking(frame, frame.r10 & MSG_DONTWAIT != 0)
     }
 }
 
@@ -9198,6 +9467,7 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     // is no ambiguous IPC completion to reconcile here.
     let handle = {
         let mut sched = crate::sched::SCHEDULER.lock();
+        crate::process::epoll::detach_fd(fd, sched.current_shared_process());
         match sched.current_shared_process_mut().fd_table.take(fd) {
             Ok(entry) => {
                 if !entry.release_backend {

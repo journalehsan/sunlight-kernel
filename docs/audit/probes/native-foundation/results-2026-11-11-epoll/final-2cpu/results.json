@@ -1,0 +1,122 @@
+{
+  "entry": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "write": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "[NATIVE-C] write OK\n",
+    "pass_": false
+  },
+  "exit": {
+    "exit": 23,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "atexit": {
+    "exit": 0,
+    "stdout": "atexit OK\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "clock": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dirent": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dlfcn": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-service-before": {
+    "exit": 0,
+    "stdout": "rand service: requests=0 bytes=0\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "getrandom": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "random-service-after": {
+    "exit": 0,
+    "stdout": "rand service: requests=1 bytes=16\n",
+    "stderr": "",
+    "pass_": false
+  },
+  "langinfo": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "locale": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "math": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "mmap": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "poll_select": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "stdio": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "string": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "dlfcn-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "epoll-contract": {
+    "exit": 4,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  },
+  "poll-contract": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": false
+  }
+}

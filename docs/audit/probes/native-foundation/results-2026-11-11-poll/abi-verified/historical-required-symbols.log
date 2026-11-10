@@ -1,0 +1,6 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-poll/abi-verified/poll.o
+                 U memset
+                 U poll
+                 U select
+
+exit=0

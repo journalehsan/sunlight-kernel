@@ -94,8 +94,17 @@ pub enum SunlightSyscall {
     Foreground = 160,
     ProcessExit = 20,
     ProcessYield = 21,
-    /// Native readiness wait for pipe and controlling TTY descriptors.
+    /// Native readiness wait for descriptor-table handles.
     NativePoll = 159,
+    /// Create a connected AF_UNIX stream socketpair.
+    NativeSocketPair = 166,
+    /// Send normal or out-of-band socket data.
+    NativeSend = 169,
+    /// Receive normal or out-of-band socket data.
+    NativeRecv = 170,
+    NativeEpollCreate = 171,
+    NativeEpollCtl = 172,
+    NativeEpollWait = 173,
     ThreadSpawn = 22,
     // TTY mux for foreground input routing — see kernel process::tty_io.
     TtyStdinPush = 23,
@@ -5823,7 +5832,7 @@ pub struct NativePollFd {
 /// Wait for native descriptor readiness or a relative timeout. The kernel
 /// parks the task, so a nonzero timeout does not consume CPU while idle.
 pub fn native_poll(fds: &mut [NativePollFd], timeout_ms: i32) -> Result<usize, ()> {
-    if fds.is_empty() || fds.len() > 3 || timeout_ms < -1 {
+    if fds.len() > 256 {
         return Err(());
     }
     let (ret, _) = unsafe {

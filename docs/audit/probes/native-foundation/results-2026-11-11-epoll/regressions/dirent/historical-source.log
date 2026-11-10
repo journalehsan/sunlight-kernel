@@ -1,0 +1,4 @@
+b77440b252b906b6190de25a6ac0ffb686f88eaa292a146cd529783c5a376bb8  docs/audit/probes/dirent.c
+#define _GNU_SOURCE
+#include <dirent.h>
+int main(void){DIR *d=opendir("."); if(!d) return 1; int bad=readdir(d)==0; closedir(d); return bad;}

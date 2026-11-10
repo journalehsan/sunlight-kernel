@@ -1,0 +1,7 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/epoll-contract.elf
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll.c:42:9: error: call to undeclared function 'read'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   42 |     if (read(f[0], bytes, 2) != 2) return 9;
+      |         ^
+1 error generated.
+
+exit=1

@@ -1,11 +1,10 @@
-//! Minimal Linux epoll emulation for Helios (Linux-compat processes).
+//! Shared native and Linux-compatible descriptor event queues.
 //!
 //! Enough for `mio::Poll` as used by crossterm's Unix event source:
 //! `epoll_create1` → `epoll_ctl(ADD)` on stdin/pipes → `epoll_wait`/`epoll_pwait`.
 //!
-//! Ready sources currently recognized:
-//! - TTY stdin rings (`FileHandle::is_tty_stdin` / legacy fd 0 with tty tab)
-//! - Kernel pipes with readable data (or EOF when writers are gone)
+//! Native records use aligned LP64 layout; Linux records retain packed layout.
+//! Readiness is shared with poll for pipes, stream sockets, TTY and eventfd.
 
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
@@ -19,10 +18,19 @@ const MAX_INTERESTS: usize = 64;
 const MAX_INSTANCES: usize = 32;
 
 pub const EPOLLIN: u32 = 0x001;
+pub const EPOLLPRI: u32 = 0x002;
 pub const EPOLLOUT: u32 = 0x004;
 pub const EPOLLERR: u32 = 0x008;
 pub const EPOLLHUP: u32 = 0x010;
+pub const EPOLLONESHOT: u32 = 0x4000_0000;
 pub const EPOLLET: u32 = 0x8000_0000;
+
+pub const POLLIN: i16 = 0x001;
+pub const POLLPRI: i16 = 0x002;
+pub const POLLOUT: i16 = 0x004;
+pub const POLLERR: i16 = 0x008;
+pub const POLLHUP: i16 = 0x010;
+pub const POLLNVAL: i16 = 0x020;
 
 pub const EPOLL_CTL_ADD: i32 = 1;
 pub const EPOLL_CTL_DEL: i32 = 2;
@@ -37,6 +45,7 @@ struct Interest {
     /// Last observed readiness for edge-triggered interests. An I/O call
     /// that drains readiness clears this mask through refresh_after_io.
     last_ready: u32,
+    disabled: bool,
     /// `epoll_data_t` as raw little-endian bytes (union of ptr/fd/u32/u64).
     data: [u8; 8],
 }
@@ -130,6 +139,7 @@ pub fn ctl(
                     events,
                     data,
                     last_ready: 0,
+                    disabled: false,
                 },
             );
             Ok(())
@@ -142,6 +152,7 @@ pub fn ctl(
             entry.events = events;
             entry.data = data;
             entry.last_ready = 0;
+            entry.disabled = false;
             Ok(())
         }
         EPOLL_CTL_DEL => {
@@ -191,6 +202,9 @@ pub fn collect_ready(
         if out.len() >= maxevents {
             break;
         }
+        if interest.disabled {
+            continue;
+        }
         let Some(entry) = process.fd_table.get(fd) else {
             if trace {
                 crate::serial_println!(
@@ -199,39 +213,32 @@ pub fn collect_ready(
                     interest.events
                 );
             }
-            // Closed target: surface as ERR|HUP if caller cares about errors.
-            if interest.events & (EPOLLERR | EPOLLHUP) != 0 || interest.events & EPOLLIN != 0 {
-                out.push(ReadyEvent {
-                    events: EPOLLERR | EPOLLHUP,
-                    data: interest.data,
-                });
-            }
+            // Closed targets are always reported as ERR|HUP by Linux epoll.
+            out.push(ReadyEvent {
+                events: EPOLLERR | EPOLLHUP,
+                data: interest.data,
+            });
             continue;
         };
 
-        let mut revents = 0u32;
         let handle = entry.handle;
+        // Nested epoll descriptors are not part of the current readiness
+        // graph; reporting them ready would require a second pool lock.
+        let readiness = if handle.is_epoll() {
+            0
+        } else {
+            descriptor_events_depth(fd, handle, process, 0)
+        };
+        let mut revents = (readiness & (POLLIN | POLLPRI | POLLOUT)) as u32 & interest.events;
+        revents |= (readiness & (POLLERR | POLLHUP)) as u32;
         if trace {
-            let (readable, writable) = fd_ready(fd, handle, process);
             crate::serial_println!(
-                "[HELIOS-EPOLL-TRACE] fd={} handle={:#x} interest={:#x} readable={} writable={}",
+                "[HELIOS-EPOLL-TRACE] fd={} handle={:#x} interest={:#x} readiness={:#x}",
                 fd,
                 handle.0,
                 interest.events,
-                readable,
-                writable
+                readiness
             );
-        }
-
-        if interest.events & EPOLLIN != 0 {
-            if fd_ready(fd, handle, process).0 {
-                revents |= EPOLLIN;
-            }
-        }
-        if interest.events & EPOLLOUT != 0 {
-            if fd_ready(fd, handle, process).1 {
-                revents |= EPOLLOUT;
-            }
         }
 
         if interest.events & EPOLLET != 0 {
@@ -240,6 +247,9 @@ pub fn collect_ready(
             revents = new_edges;
         }
         if revents != 0 {
+            if interest.events & EPOLLONESHOT != 0 {
+                interest.disabled = true;
+            }
             out.push(ReadyEvent {
                 events: revents,
                 data: interest.data,
@@ -250,12 +260,43 @@ pub fn collect_ready(
     Ok(out)
 }
 
+/// Remove a closed descriptor only from queues held by its descriptor table.
+pub fn detach_fd(fd: i32, process: &crate::process::Process) {
+    let mut pool = EPOLL_POOL.lock();
+    for number in 0..256 {
+        let Some(entry) = process.fd_table.get(number) else {
+            continue;
+        };
+        if !entry.handle.is_epoll() {
+            continue;
+        }
+        if let Some(instance) = pool
+            .get_mut(entry.handle.epoll_index() as usize)
+            .and_then(Option::as_mut)
+        {
+            instance.interests.remove(&fd);
+        }
+    }
+}
+
 /// Called after a read or write on any descriptor referring to `handle`.
 /// If I/O drained a readiness condition, a later transition can generate a
 /// fresh EPOLLET notification even if no epoll_wait occurred while empty.
 pub fn refresh_after_io(handle: FileHandle, process: &crate::process::Process) {
     let mut pool = EPOLL_POOL.lock();
-    for instance in pool.iter_mut().filter_map(Option::as_mut) {
+    for number in 0..256 {
+        let Some(entry) = process.fd_table.get(number) else {
+            continue;
+        };
+        if !entry.handle.is_epoll() {
+            continue;
+        }
+        let Some(instance) = pool
+            .get_mut(entry.handle.epoll_index() as usize)
+            .and_then(Option::as_mut)
+        else {
+            continue;
+        };
         for (&fd, interest) in instance.interests.iter_mut() {
             if interest.events & EPOLLET == 0
                 || !process
@@ -265,39 +306,134 @@ pub fn refresh_after_io(handle: FileHandle, process: &crate::process::Process) {
             {
                 continue;
             }
-            let (readable, writable) = fd_ready(fd, handle, process);
-            if !readable {
-                interest.last_ready &= !EPOLLIN;
-            }
-            if !writable {
-                interest.last_ready &= !EPOLLOUT;
-            }
+            let readiness = descriptor_events_depth(fd, handle, process, 0) as u32;
+            interest.last_ready &= readiness;
         }
     }
 }
 
 /// Shared readiness query for poll and epoll, including eventfd counters.
 pub fn fd_ready(fd: i32, handle: FileHandle, process: &crate::process::Process) -> (bool, bool) {
+    let events = descriptor_events(fd, handle, process);
+    (events & POLLIN != 0, events & POLLOUT != 0)
+}
+
+/// Complete poll-style readiness for a descriptor. ERR, HUP and PRI are
+/// produced by the backing object; callers decide which requested bits to
+/// expose. This is shared by native poll and epoll so their state cannot drift.
+pub fn descriptor_events(fd: i32, handle: FileHandle, process: &crate::process::Process) -> i16 {
+    descriptor_events_depth(fd, handle, process, 0)
+}
+
+fn descriptor_events_depth(
+    fd: i32,
+    handle: FileHandle,
+    process: &crate::process::Process,
+    depth: usize,
+) -> i16 {
     if handle.is_eventfd() {
-        return super::eventfd::readiness(handle.eventfd_index());
+        let (readable, writable) = super::eventfd::readiness(handle.eventfd_index());
+        return (if readable { POLLIN } else { 0 }) | (if writable { POLLOUT } else { 0 });
     }
     if handle.is_unix_socket() {
         let idx = handle.unix_socket_index();
         let readable =
             super::unix_socket::is_listening(idx) && super::unix_socket::pending_count(idx) > 0;
-        return (readable, false);
+        return if readable { POLLIN } else { 0 };
     }
     if handle.is_socket() {
-        return super::pipe::socket_stream(handle.socket_index(), handle.socket_endpoint())
-            .map(|(read, write)| {
-                (
-                    super::pipe::pipe_has_data_or_eof(read),
-                    super::pipe::pipe_has_space_or_broken(write),
-                )
-            })
-            .unwrap_or((true, true));
+        let index = handle.socket_index();
+        let endpoint = handle.socket_endpoint();
+        let Some((read, write)) = super::pipe::socket_stream(index, endpoint) else {
+            return POLLERR | POLLHUP;
+        };
+        let mut events = 0;
+        if super::pipe::pipe_has_data_or_eof(read) {
+            events |= POLLIN;
+        }
+        if super::pipe::pipe_has_space_or_broken(write) {
+            events |= POLLOUT;
+        }
+        // An orderly full-duplex peer close is HUP/EOF, not a pending
+        // socket error. A subsequent write reports the broken stream.
+        if super::pipe::pipe_state(read).is_some_and(|(_, _, writers)| writers == 0) {
+            events |= POLLHUP;
+        }
+        if super::pipe::socket_has_oob(index, endpoint) {
+            events |= POLLPRI;
+        }
+        return events;
     }
-    (fd_is_readable(fd, handle, process), fd_is_writable(handle))
+    if handle.is_pipe() {
+        let mut events = 0;
+        if let Some((_, readers, writers)) = super::pipe::pipe_state(handle.pipe_index()) {
+            if handle.pipe_is_write() {
+                if super::pipe::pipe_has_space_or_broken(handle.pipe_index()) {
+                    events |= POLLOUT;
+                }
+                if readers == 0 {
+                    events |= POLLERR;
+                }
+            } else {
+                if super::pipe::pipe_has_data_or_eof(handle.pipe_index()) {
+                    events |= POLLIN;
+                }
+                if writers == 0 {
+                    events |= POLLHUP;
+                }
+            }
+        } else {
+            events |= POLLERR | POLLHUP;
+        }
+        return events;
+    }
+    if handle.is_epoll() {
+        if depth >= 4 {
+            return 0;
+        }
+        return epoll_poll_events(handle.epoll_index(), process, depth + 1);
+    }
+    (if fd_is_readable(fd, handle, process) {
+        POLLIN
+    } else {
+        0
+    }) | (if fd_is_writable(handle) { POLLOUT } else { 0 })
+}
+
+fn epoll_poll_events(epoll_idx: u32, process: &crate::process::Process, depth: usize) -> i16 {
+    let interests = {
+        let pool = EPOLL_POOL.lock();
+        let Some(instance) = pool.get(epoll_idx as usize).and_then(Option::as_ref) else {
+            return POLLNVAL;
+        };
+        instance
+            .interests
+            .iter()
+            .map(|(&fd, interest)| (fd, interest.events))
+            .collect::<Vec<_>>()
+    };
+    let mut inner = 0u32;
+    for (fd, requested) in interests {
+        let Some(entry) = process.fd_table.get(fd) else {
+            inner |= EPOLLERR | EPOLLHUP;
+            continue;
+        };
+        let readiness = descriptor_events_depth(fd, entry.handle, process, depth);
+        inner |= ((readiness & (POLLIN | POLLPRI | POLLOUT)) as u32 & requested)
+            | (readiness & (POLLERR | POLLHUP)) as u32;
+    }
+    if inner == 0 {
+        return 0;
+    }
+    let mut events = POLLIN;
+    if inner & EPOLLPRI != 0 {
+        events |= POLLPRI;
+    }
+    if inner & EPOLLOUT != 0 {
+        events |= POLLOUT;
+    }
+    events |= (inner & (EPOLLERR | EPOLLHUP)) as i16;
+    events
 }
 
 fn fd_is_readable(fd: i32, handle: FileHandle, process: &crate::process::Process) -> bool {
@@ -360,6 +496,14 @@ impl EpollError {
             EpollError::Exist => 17,   // EEXIST
             EpollError::Noent => 2,    // ENOENT
             EpollError::Inval => 22,   // EINVAL
+        }
+    }
+
+    pub fn to_native_result(self) -> u64 {
+        match self {
+            EpollError::BadFd => u64::MAX - 4, // ERR_EBADF
+            EpollError::Inval => u64::MAX - 5, // ERR_EINVAL
+            EpollError::NoSpace | EpollError::Exist | EpollError::Noent => u64::MAX,
         }
     }
 }
