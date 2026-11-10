@@ -31,7 +31,8 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-pub extern "C" fn _start(argc: u64, argv: *const *const u8) -> ! {
+pub extern "C" fn _start(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
+    libc::env::init(envp);
     let mut storage = [""; MAX_ARGS];
     let count = unsafe { collect_args(argc, argv, &mut storage) };
     debug_log_start(storage.first().copied().unwrap_or(""));
@@ -86,6 +87,7 @@ fn run(args: &[&str]) -> i32 {
     };
 
     match applet {
+        "mktemp" => sunlight_utils::mktemp::run(rest),
         "ls" => cmd_ls(rest),
         "mkdir" => cmd_mkdir(rest),
         "echo" => cmd_echo(rest),
