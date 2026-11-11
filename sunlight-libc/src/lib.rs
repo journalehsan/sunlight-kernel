@@ -60,6 +60,9 @@ pub mod power;
 /// Native C poll/select ABI over syscall 159.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod multiplex;
+/// Minimal POSIX threads over the native thread/futex ABI.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod pthread;
 /// Native AF_UNIX stream sockets and epoll readiness.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod socket;

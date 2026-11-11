@@ -1,0 +1,64 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+entry,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,17c7e5650e162496b984413c77eb1e2d17f36119d665382fdefddaf6d5bb9483
+write,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,14408382eeb1b9139783f707644f110f70eb8383a5e1a37e57643b84e33c6bb0
+exit,True,PASS,PASS,PASS,23,23,exit/output/reap/physical-frame checks,66ab3bda302600699863fcc11120e9c30374f823b171c92fc973e6251f136f3c
+atexit,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,ce5fd7c2b6b1aebe38ca2e3352d823cdedced556d7f90c8bc264914dbb61f721
+clock,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1fb48378b98af6a56df251c9182c48ba7c3c089c4dbb2b9aa95dccca5448cfff
+dirent,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,a55acf04b742c1c76dd6e16478bfc161378f063a90670461442f015bc176fa7a
+dlfcn,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,9072bfa1ff745a1a548e23bb602dc04c67416490fda3d080337a0de74d5ae69e
+random-service-before,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+getrandom,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,86f063eb55b6bdaca68bedca5fb6dfcf9af58b128e8bedd92d703bfd8bbd828a
+random-service-after,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+langinfo,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,925d87f360aadef9df8cdba3b9846ec23e71e67dde5b37639c9a6fbb086b406d
+locale,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,0d9d235177fa8d9837a0081388fc0069c1014aa317d2547a809431ad21f438c5
+math,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,97363fb9fbd09a1b4c94cb566349911ed075b7786451c7b9fd14d412a98f5d1a
+mmap,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,567be76b2ed8ffbd64f00f0562cfb6b1dadecdbf5c8a156ae46b9ecfb2d258ff
+poll_select,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,e02d9b7523d423e4b7000ed9755e079c2d8147242a42d61d7dcf920cdd1b745c
+pthread,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,64f67e315284c727877dbaad584f8e825bfaeccad3cd76816b18395dd0ba4ebf
+signal,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+socket,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+stdio,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,8efee60c531ab4f615292ab36180319d6c2b7bad3e31f525b88a206b2446d85e
+string,True,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,0f1e2e8e6037dad54f8f5097a796eb70b9ef1d010870be7205819726654a54cb
+termios,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+wchar,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+cpp-runtime,True,FAIL,NOT_RUN,BUILD_FAIL,,0,BUILD_FAILED: no executable to run,
+dlfcn-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,d484e6f7b2239040f9622b01361e383db18c30d4d35597ccac5b0b7e2b523d12
+epoll-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,caa7181f068b0acadfe5ff5f045c661838d8d71d43821e369d0c549ee408ee8e
+pthread-basic,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,58b25992ddd5dcbaff5b57851c7d3e898271bb5eb2693ab39c3672ebceefb7e5
+pthread-exit,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,58b25992ddd5dcbaff5b57851c7d3e898271bb5eb2693ab39c3672ebceefb7e5
+pthread-detached,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,58b25992ddd5dcbaff5b57851c7d3e898271bb5eb2693ab39c3672ebceefb7e5
+pthread-attr,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,58b25992ddd5dcbaff5b57851c7d3e898271bb5eb2693ab39c3672ebceefb7e5
+pthread-abi,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,eab22f6db4c835d61ea521c2108db36f64f8e65b5cf2f22e0f4c96cec8d998b7
+poll-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,cb0c39eecea8be17c6b0cd0958f41ed2d243829d60346588acfce2cf5b728125
+poll-socket-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,5c336c76000c7c5668fa87811ecdf65d8b7fd9e92ae421c025006f2eca71e621
+math-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,3d3332da102067e57284452fcdd90b9543c5d85f32a3b71a9d3ace43a04be2a8
+locale-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1e715eff8be747d187771ce9b540f117781d0fbd48234e79754b0293b1f63509
+locale-environment,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1e715eff8be747d187771ce9b540f117781d0fbd48234e79754b0293b1f63509
+langinfo-contract,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1c45db4644ae65d23332a4614379cb2b1504ca1c3bb71932a0f80a331bc83b1c
+stdout,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,ab102eda698481f63499726c3517e979d6952e16c661631709a8bac736a5d8ae
+stdio-full,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,6172a8caee8bf511078a9c6e97742f7aed27f77d500b8d517586e27919007b15
+open-unlink,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,8acd5ee7a96e9529da7a250a9731bc80acc535650e1c0d004cfe855bfb4b6c04
+exit-cleanup,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1602cd4752156e75c79d15c52eaae53f5d09f6c72db1c8650764ed53c4c5dd9d
+write-basic,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+write-zero,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+write-short,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+write-errors,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+atexit-order,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+atexit-register,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+atexit-capacity,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+atexit-exit,False,PASS,PASS,PASS,27,27,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+atexit-raw-exit,False,PASS,PASS,PASS,29,29,exit/output/reap/physical-frame checks,779746dafd1493f9489a67d4c5e65a7c38f47be186463133ac5bb8617a56fd84
+random-basic,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+random-zero,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+random-errors,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+random-guards,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,88242396a37a03b1b4b3ce24cc3f19510d41304ea8b90131604145d3d0bfabfd
+time-clocks,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1f7eee582107d5b5fb5a4277a2dcdbacc1e899eb971f865405b65674684388a7
+time-errors,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1f7eee582107d5b5fb5a4277a2dcdbacc1e899eb971f865405b65674684388a7
+time-zero,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1f7eee582107d5b5fb5a4277a2dcdbacc1e899eb971f865405b65674684388a7
+time-sleep,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,1f7eee582107d5b5fb5a4277a2dcdbacc1e899eb971f865405b65674684388a7
+mman-subset,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f4f6e5922538040b3262884f345942279b1622173143b38051d1fff9e388337c
+mman-fixed,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f4f6e5922538040b3262884f345942279b1622173143b38051d1fff9e388337c
+mman-bounds,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f4f6e5922538040b3262884f345942279b1622173143b38051d1fff9e388337c
+dirent-root,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f76517ef32886d56b0ddd1b7b5ae7a49e2b5ceb28a04ca536965c65c082c5fb1
+dirent-errors,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f76517ef32886d56b0ddd1b7b5ae7a49e2b5ceb28a04ca536965c65c082c5fb1
+dirent-entries,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,f76517ef32886d56b0ddd1b7b5ae7a49e2b5ceb28a04ca536965c65c082c5fb1

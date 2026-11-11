@@ -1,12 +1,14 @@
 //! Native threading support for SunlightOS.
 //!
 //! Each thread gets its own stack (2 MiB mmap'd) and its own TLS block so
-//! `errno` is per-thread.  The kernel creates the execution context via
-//! `SYS_THREAD_SPAWN` (22) and schedules it immediately.
+//! `errno` and C `_Thread_local` variables are per-thread.  The kernel creates
+//! the execution context via `SYS_THREAD_SPAWN` (22) and schedules it
+//! immediately.
 //!
 //! # Current limitations
-//! - The alloc-only API does not implement join. The separate native std
-//!   runtime waits for kernel quiescence and reclaims these handle resources.
+//! - This alloc-only API does not implement join. The native std runtime and
+//!   the C `pthread_join` bridge wait for kernel quiescence and reclaim these
+//!   handle resources.
 //! - Thread exit re-uses `SYS_PROCESS_EXIT`; MM-0 makes the kernel distinguish
 //!   address-space owners from borrower threads, so a borrower exits alone.
 //!   Alloc-only handles retain their mappings until explicit cleanup or VM exit.
@@ -18,17 +20,10 @@ use crate::mman::{
     mmap, munmap, MAP_ANONYMOUS, MAP_NATIVE_THREAD, MAP_PRIVATE, PROT_READ, PROT_WRITE,
 };
 use crate::sys::{check, Errno, SYS_PROCESS_EXIT};
+use crate::tls::{area_size, prepare_area};
 
 const SYS_THREAD_SPAWN: u64 = 22;
 const DEFAULT_STACK_SIZE: usize = 2 * 1024 * 1024; // 2 MiB
-
-/// TCB layout that mirrors `tls::Tcb` — duplicated here so thread.rs is
-/// self-contained; offset 8 = errno (see errno::__errno_location).
-#[repr(C)]
-struct Tcb {
-    self_ptr: *mut Tcb,
-    errno: i32,
-}
 
 /// Handle returned by `spawn`.  Carries bookkeeping for future cleanup /
 /// join support.  Does NOT automatically free the stack on drop (Phase 1).
@@ -38,8 +33,9 @@ pub struct JoinHandle {
     /// Base of the mmap'd stack region (lowest address).
     pub stack_base: *mut u8,
     pub stack_size: usize,
-    /// Base of the mmap'd TLS page.
+    /// Base of the mmap'd TLS image/TCB region.
     pub tls_base: *mut u8,
+    pub tls_size: usize,
 }
 
 /// Trampoline that the kernel's iretq lands on.
@@ -98,9 +94,10 @@ pub unsafe fn spawn_with_stack(
     )?;
 
     // ── 2. Allocate the TLS block; free the stack on failure ─────────────────
+    let tls_size = area_size();
     let tls_ptr = mmap(
         core::ptr::null_mut(),
-        4096,
+        tls_size,
         PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS | MAP_NATIVE_THREAD,
         -1,
@@ -111,10 +108,12 @@ pub unsafe fn spawn_with_stack(
         e
     })?;
 
-    // ── 3. Initialize the TCB (self-pointer + zero errno) ────────────────────
-    let tcb = tls_ptr as *mut Tcb;
-    (*tcb).self_ptr = tcb;
-    (*tcb).errno = 0;
+    // ── 3. Copy the static TLS image and initialize the TCB ──────────────────
+    let Some(tcb) = prepare_area(tls_ptr, tls_size) else {
+        let _ = munmap(stack_ptr, stack_size);
+        let _ = munmap(tls_ptr, tls_size);
+        return Err(Errno::NoMemory);
+    };
 
     // ── 4. Write entry + arg at the top of the stack ─────────────────────────
     // The kernel reads them from here to set up RDI/RSI in the initial context.
@@ -127,7 +126,7 @@ pub unsafe fn spawn_with_stack(
     // ── 5. Ask the kernel to create the thread context ───────────────────────
     //   rdi = trampoline entry point (kernel sets RIP here via iretq)
     //   rsi = aligned stack top      (kernel sets RSP)
-    //   rdx = TLS pointer            (kernel writes to FS_BASE MSR)
+    //   rdx = thread pointer (TCB)   (kernel writes to FS_BASE MSR)
     let ret = crate::sys::syscall4(
         if shared_descriptors {
             158
@@ -136,7 +135,7 @@ pub unsafe fn spawn_with_stack(
         },
         thread_trampoline as *const () as u64,
         aligned_top,
-        tls_ptr as u64,
+        tcb as u64,
         u64::from(shared_descriptors),
     );
 
@@ -146,10 +145,11 @@ pub unsafe fn spawn_with_stack(
             stack_base: stack_ptr,
             stack_size,
             tls_base: tls_ptr,
+            tls_size,
         }),
         Err(e) => {
             let _ = munmap(stack_ptr, stack_size);
-            let _ = munmap(tls_ptr, 4096);
+            let _ = munmap(tls_ptr, tls_size);
             Err(e)
         }
     }

@@ -1,0 +1,3 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-pthread/abi-final3/pthread.elf
+
+exit=0

@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /tmp/pthread-contract.elf --arg detached --cpus 4 --out docs/audit/probes/native-foundation/results-2026-11-11-pthread/contract-4cpu-detached

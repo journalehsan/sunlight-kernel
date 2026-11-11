@@ -1,0 +1,18 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M services/user-space.ld
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/std_runtime.rs
+ M sunlight-libc/src/thread.rs
+ M sunlight-libc/src/tls.rs
+ M tools/native-c/guest.py
+ M tools/native-c/user-space.ld
+ M tools/native-std-probe/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-11-pthread/
+?? sunlight-libc/include/pthread.h
+?? sunlight-libc/src/pthread.rs
+?? tools/native-c/tests/pthread-abi.c
+?? tools/native-c/tests/pthread.c
+?? tools/native-c/tests/run_pthread.py
+
+exit=0

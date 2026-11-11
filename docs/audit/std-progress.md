@@ -2948,3 +2948,110 @@ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests
 python3 tools/native-c/guest.py target/epoll-lifecycle.elf --cpus 2 --out <new-lifecycle-2cpu-dir>
 python3 tools/native-c/guest.py target/epoll-lifecycle.elf --cpus 4 --out <new-lifecycle-4cpu-dir>
 ```
+
+### Phase 15 — native C `<pthread.h>` and joinable threads (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-pthread/`.
+Read the Phase 14 record first. The worktree was clean on entry. No historical
+probe was edited, no commit/reset/cleanup was performed, and the incidental
+standalone lockfile refresh from the overlay check was restored.
+
+`<pthread.h>` now supplies opaque pointer `pthread_t`, `pthread_attr_t` with a
+detach-state field, `pthread_mutex_t` with one 32-bit futex word,
+`PTHREAD_MUTEX_INITIALIZER`, and the native signatures for
+`pthread_create/join/exit/self/equal/detach`, the four attribute calls, and
+`pthread_mutex_init/destroy/lock/trylock/unlock`. No Linux pthread ABI,
+personality, host libc or new dependency is used.
+
+**Create and TLS.** `pthread_create` allocates a control block, stores the C
+entry point and argument, and wraps the existing `crate::thread::spawn`
+(`SYS_THREAD_SPAWN` 22). The returned `JoinHandle.tid` is the worker's kernel
+tid. The trampoline attaches the control block to the thread's TCB, calls
+`start_routine(arg)`, publishes the return value and exits through the existing
+thread exit path. The TCB gained a third field at `fs:16` for the pthread
+control pointer; `fs:0` self-pointer and `fs:8` errno are unchanged.
+
+The worker also needs the executable's C `_Thread_local` image. Both native
+user-space linker scripts now place `.tdata`/`.tbss` and export
+`__tls_tdata_start/end`, `__tls_tbss_end`, `__tls_align` and `__tls_size`.
+`tls.rs` computes the variant-II block size as the image size rounded up to the
+linker's TLS alignment, copies the `.tdata` bytes to `thread_pointer -
+block_size`, zeroes the remainder, and places the TCB at the aligned end of the
+mapping. `thread.rs` applies the same layout to every spawned thread and
+records the mapping size in `JoinHandle.tls_size`; the std runtime now unmaps
+that exact size instead of a fixed 4096 bytes.
+
+**Join.** The control block's first word is the join futex. On normal return
+or `pthread_exit`, the worker stores its return value, stores `EXITED`,
+`futex_wake`s one waiter, and (for detached handles) lists the block for lazy
+reclamation. `pthread_join` first `futex_wait`s on that word with expected
+value zero, then polls the existing `NativeThreadReaped` query (156) until the
+kernel reports `Reaped`, then unmaps the worker stack and TLS mapping and frees
+the control block. This ordering prevents unmapping a stack that is still
+executing its exit syscall. `pthread_exit` from a pthread-created worker
+publishes the same state and exits only that borrower thread; the initial
+thread has no join control block, so `pthread_exit` there exits that thread
+alone and `pthread_join(pthread_self())` returns `EINVAL`.
+
+**Mutex.** `pthread_mutex_lock` uses compare-exchange 0→1 and waits on the
+word's futex with expected value 1; `pthread_mutex_unlock` stores zero and
+wakes one waiter. `pthread_mutex_trylock` returns `EBUSY` without waiting.
+`PTHREAD_MUTEX_INITIALIZER` is the zero word.
+
+**Detached handles.** `pthread_create` publishes the detach state only after
+the handle's tid/stack/TLS bookkeeping is visible. This closes a race where a
+fast-exiting detached worker could be listed and freed before `pthread_create`
+finished writing its mapping fields. Detached blocks are reclaimed by the next
+`pthread_create` or `pthread_join`; the bounded list holds 64 entries, and a
+thread cannot unmap its own running stack.
+
+| Test domain | Phase 15 result | Evidence |
+| --- | --- | --- |
+| Native C11/C++17 pthread ABI, base/POSIX/GNU, both include orders | **12 PASS**, layouts/constants/signatures, `pthread_exit` returns void | `abi-final3/` |
+| Canonical exports and unchanged historical link | **PASS**, one definition each, no interpreter/dynamic loader/unresolved symbols | `abi-final3/` |
+| Historical `pthread.c`, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, exit 0, empty streams, clean reaping | `accepted2-2cpu/`, `accepted2-4cpu/` |
+| pthread contract modes basic/exit/detached/attr, 2 / 4 CPUs | **PASS / PASS**, 8-thread mutex/TLS/retval, `pthread_exit`, detached `EINVAL` + sweep, attributes | both accepted2 directories |
+| pthread ABI guest fixture, 2 / 4 CPUs | **PASS / PASS**, initializer and layout checks | both accepted2 directories |
+| Full native-C suite, 2 / 4 CPUs, 2048 MiB | **58/58 PASS on each**, zero guest failures | both accepted2 directories |
+| Production libc host tests | **119 PASS**, two native-credential tests filtered | host run |
+| Kernel check / native Rust-std overlay check | **PASS / PASS** | `cargo check -p sunlight-kernel`, `tools/check_native_std.sh` |
+| Native Rust-std FP foundation gate, 2 / 4 CPUs | **PASS / PASS** | `tools/test_native_std_foundation.sh` |
+
+Counts advance from the recorded Phase 14 **52** to **58** per CPU
+configuration: five focused pthread fixtures plus the historical `pthread.c`
+cell moving from BUILD_FAIL to guest PASS. The historical 21 are now **16 PASS
+/ 0 guest FAIL / 5 BUILD_FAIL and guest NOT_RUN**; the original 18 are **13
+PASS / 5 BUILD_FAIL**. Both accepted2 guest directories retain empty
+`faults.log`; the worker tid appears in the scheduler cleanup summary with zero
+PID-owned frames. Every executed case still requires `Reaped` state, zero
+PID-owned frames/descriptors/stack, and restoration of physical-frame,
+page-table, file-data and VFS-handle snapshots.
+
+Limits: pthreads use the existing native spawn path, whose descriptor table is
+a per-thread snapshot rather than a shared POSIX descriptor table. There is no
+cancellation, condition variable, robust/PI mutex, scheduling/affinity or
+stack-size attribute, and no process-wide initial-thread join. Detached
+reclamation is lazy and bounded. The futex join word is private to the process
+address space; no cross-process or timed join is provided. Host tests and the
+ABI runner do not execute pthreads; guest runs are the execution evidence.
+Early ABI attempts `abi/` and `abi-final/` failed on the C++ `noreturn`
+function-type spelling and are retained as failed attempts, not acceptance
+evidence. Earlier successful runs (`abi-final2`, `abi-accepted`, `accepted-*`,
+`complete-final-*`) predate the final thread-pointer alignment fix and are
+retained, not accepted. `cargo check --workspace` still fails in the pre-existing
+`serde_core` kernel-target build; the package-scoped kernel check passes.
+
+**Next single verified blocker: `<signal.h>`**. The remaining historical build
+failures are signal, socket's broader historical API, termios, wchar and C++
+runtime. Phase 8 hardware acceptance remains NOT_RUN.
+
+Reproduce in fresh output directories:
+
+```sh
+python3 tools/native-c/tests/run_pthread.py --out <new-abi-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <new-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <new-4cpu-dir>
+python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/pthread.c -o target/pthread.elf
+python3 tools/native-c/guest.py target/pthread.elf --cpus 2 --out <new-pthread-2cpu-dir>
+python3 tools/native-c/guest.py target/pthread.elf --cpus 4 --out <new-pthread-4cpu-dir>
+```

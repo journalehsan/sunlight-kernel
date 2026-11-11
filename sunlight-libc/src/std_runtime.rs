@@ -233,7 +233,7 @@ pub unsafe extern "C" fn sl_std_spawn(
 unsafe fn release(ptr: *mut crate::thread::JoinHandle) {
     let handle = &*ptr;
     if crate::mman::munmap(handle.stack_base, handle.stack_size).is_err()
-        || crate::mman::munmap(handle.tls_base, 4096).is_err()
+        || crate::mman::munmap(handle.tls_base, handle.tls_size).is_err()
     {
         sl_std_exit(101);
     }

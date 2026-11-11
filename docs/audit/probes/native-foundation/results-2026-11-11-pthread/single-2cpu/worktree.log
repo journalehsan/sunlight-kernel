@@ -1,0 +1,12 @@
+$ git status --short
+ M services/user-space.ld
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/std_runtime.rs
+ M sunlight-libc/src/thread.rs
+ M sunlight-libc/src/tls.rs
+ M tools/native-c/user-space.ld
+?? docs/audit/probes/native-foundation/results-2026-11-11-pthread/
+?? sunlight-libc/include/pthread.h
+?? sunlight-libc/src/pthread.rs
+
+exit=0

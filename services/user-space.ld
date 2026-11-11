@@ -17,6 +17,24 @@ SECTIONS
 
     . = ALIGN(4096);
 
+    /* Static TLS image consumed by sunlight-libc's thread bootstrap. */
+    .tdata : {
+        __tls_tdata_start = .;
+        *(.tdata .tdata.*)
+        __tls_tdata_end = .;
+    }
+
+    .tbss : {
+        __tls_tbss_start = .;
+        *(.tbss .tbss.*)
+        __tls_tbss_end = .;
+    }
+
+    __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss));
+    __tls_size = __tls_tbss_end - __tls_tdata_start;
+
+    . = ALIGN(4096);
+
     .data : {
         *(.data .data.*)
     }

@@ -1,0 +1,29 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -x c++ -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-pthread/abi-final/c++-base.o
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:25:38: error: expected '>'
+   25 | TYPE(&pthread_exit, void (*)(void *) __attribute__((noreturn)));
+      |                                      ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:25:1: note: to match this '<'
+   25 | TYPE(&pthread_exit, void (*)(void *) __attribute__((noreturn)));
+      | ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:12:45: note: expanded from macro 'TYPE'
+   12 | #define TYPE(expr, type) static_assert((same<decltype(expr), type>::value), #expr)
+      |                                             ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:25:1: error: expected ')'
+   25 | TYPE(&pthread_exit, void (*)(void *) __attribute__((noreturn)));
+      | ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:12:66: note: expanded from macro 'TYPE'
+   12 | #define TYPE(expr, type) static_assert((same<decltype(expr), type>::value), #expr)
+      |                                                                  ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:25:1: note: to match this '('
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:12:40: note: expanded from macro 'TYPE'
+   12 | #define TYPE(expr, type) static_assert((same<decltype(expr), type>::value), #expr)
+      |                                        ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:25:1: error: expected expression
+   25 | TYPE(&pthread_exit, void (*)(void *) __attribute__((noreturn)));
+      | ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c:12:75: note: expanded from macro 'TYPE'
+   12 | #define TYPE(expr, type) static_assert((same<decltype(expr), type>::value), #expr)
+      |                                                                           ^
+3 errors generated.
+
+exit=1
