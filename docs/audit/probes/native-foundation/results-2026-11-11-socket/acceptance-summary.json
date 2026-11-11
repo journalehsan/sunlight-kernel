@@ -1,0 +1,34 @@
+{
+  "2": {
+    "ram_mib": 2048,
+    "pass": 68,
+    "guest_fail": 0,
+    "historical_build_fail": [
+      "termios",
+      "wchar",
+      "cpp-runtime"
+    ],
+    "fault_bytes": 0,
+    "clean_reaps": 68,
+    "inet_reference_baselines_restored": 68
+  },
+  "4": {
+    "ram_mib": 2048,
+    "pass": 68,
+    "guest_fail": 0,
+    "historical_build_fail": [
+      "termios",
+      "wchar",
+      "cpp-runtime"
+    ],
+    "fault_bytes": 0,
+    "clean_reaps": 68,
+    "inet_reference_baselines_restored": 68
+  },
+  "fp": {
+    "2": "PASS",
+    "4": "PASS"
+  },
+  "regressions": "signal/pthread/poll ABI, host119, kernel, overlay, FP2/4 PASS",
+  "workspace": "FAIL: pre-existing kernel-target std/serde_core errors"
+}

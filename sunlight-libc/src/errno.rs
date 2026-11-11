@@ -20,6 +20,7 @@ pub const EACCES: i32 = 13;
 pub const EFAULT: i32 = 14;
 pub const EINVAL: i32 = 22;
 pub const ENOSYS: i32 = 38;
+pub const ENOTCONN: i32 = 107;
 pub const EISDIR: i32 = 21;
 pub const ENOTDIR: i32 = 20;
 
@@ -77,6 +78,7 @@ pub fn set_from_errno(e: Errno) {
         Errno::BrokenPipe => EPIPE,
         Errno::NoSpace => ENOSPC,
         Errno::NoMemory => ENOMEM,
+        Errno::NotConnected => ENOTCONN,
     };
     set_errno(code);
 }

@@ -104,6 +104,7 @@ fn error(error: sys::Errno) -> isize {
         sys::Errno::BrokenPipe => 32,
         sys::Errno::NoSpace => 28,
         sys::Errno::NoMemory => 12,
+        sys::Errno::NotConnected => 107,
         sys::Errno::Failed => 5,
     })
 }

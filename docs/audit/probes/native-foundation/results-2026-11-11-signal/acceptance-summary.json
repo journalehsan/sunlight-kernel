@@ -1,0 +1,18 @@
+{
+  "2": {
+    "native_c_pass": 64,
+    "native_c_fail": 0,
+    "historical_pass": 17,
+    "historical_build_fail": 4,
+    "fault_bytes": 0,
+    "clean_results": 64
+  },
+  "4": {
+    "native_c_pass": 64,
+    "native_c_fail": 0,
+    "historical_pass": 17,
+    "historical_build_fail": 4,
+    "fault_bytes": 0,
+    "clean_results": 64
+  }
+}

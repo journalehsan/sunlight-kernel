@@ -106,6 +106,16 @@ def main():
         sources += [('pthread-' + mode, ROOT / 'tools/native-c/tests/pthread.c', 0, (mode,),
                      b'', b'', b'', False)
                     for mode in ('basic', 'exit', 'detached', 'attr')]
+        sources += [('inet-socket-contract', ROOT / 'tools/native-c/tests/inet-socket.c', 0,
+                     (), b'', b'', b'', False),
+                    ('inet-socket-reap', ROOT / 'tools/native-c/tests/inet-socket.c', 0,
+                     ('leak',), b'', b'', b'', False)]
+        sources += [('epoll-lifecycle', ROOT / 'tools/native-c/tests/epoll-lifecycle.c', 0,
+                     (), b'', b'', b'', False)]
+        sources += [('signal-contract', ROOT / 'tools/native-c/tests/signal.c', 0,
+                     (), b'', b'', b'', False)]
+        sources += [('signal-' + mode, ROOT / 'tools/native-c/tests/signal.c', code,
+                     (mode,), b'', b'', b'', False) for mode, code in [('fatal', 138), ('forged', 139), ('handler-exit', 31), ('bad-stack', 139)]]
         sources += [('pthread-abi', ROOT / 'tools/native-c/tests/pthread-abi.c', 0,
                      (), b'', b'', b'', False)]
         sources += [('poll-contract', ROOT / 'tools/native-c/tests/poll.c', 0, (), b'', b'', b'', False)]

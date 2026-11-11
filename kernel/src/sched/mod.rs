@@ -2931,6 +2931,8 @@ impl Scheduler {
                     crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
                 self.wake_linux_pipe(read);
                 self.wake_linux_pipe(write);
+            } else if handle.is_inet_socket() {
+                crate::process::inet_socket::release(handle.inet_socket_index());
             } else if handle.is_unix_socket() {
                 crate::process::unix_socket::release(handle.unix_socket_index());
             } else if handle.is_epoll() {
@@ -3099,6 +3101,9 @@ impl Scheduler {
             owner_live,
         );
         self.supervision.manager_reaped(identity);
+
+        // No handler context survives teardown, including exit from a handler.
+        self.processes[idx].native_signal = crate::process::native_signal::State::default();
 
         // Mark as fully reaped: slot is now safe for add_process reuse.
         self.processes[idx].state = ProcessState::Reaped;

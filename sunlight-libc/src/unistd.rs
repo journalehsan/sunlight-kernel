@@ -39,6 +39,32 @@ fn write_with(
     }
 }
 
+/// Close consumes the descriptor even if backend cleanup reports an error.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn close(fd: c_int) -> c_int {
+    if fd < 0 {
+        errno::set_errno(errno::EBADF);
+        return -1;
+    }
+    match crate::close(Fd(fd as u32)) {
+        Ok(()) => 0,
+        Err(error) => {
+            errno::set_from_errno(error);
+            -1
+        }
+    }
+}
+
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn read(fd: c_int, ptr: *mut c_void, len: usize) -> isize {
+    write_with(fd, ptr, len, |fd, ptr, len| {
+        sys::check_io_count(
+            sys::syscall3(sys::SYS_READ, fd.0 as u64, ptr as u64, len as u64),
+            len,
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

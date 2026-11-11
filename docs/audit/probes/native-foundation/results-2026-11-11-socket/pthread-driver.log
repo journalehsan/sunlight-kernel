@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_pthread.py --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-socket/pthread-abi
+12 native C/C++ ABI checks, unique exports and unchanged historical link: PASS
+
+exit=0

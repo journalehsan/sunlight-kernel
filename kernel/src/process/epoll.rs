@@ -335,6 +335,11 @@ fn descriptor_events_depth(
         let (readable, writable) = super::eventfd::readiness(handle.eventfd_index());
         return (if readable { POLLIN } else { 0 }) | (if writable { POLLOUT } else { 0 });
     }
+    if handle.is_inet_socket() {
+        // Both I/O directions immediately report ENOTCONN. This is an
+        // error state, never evidence of a connected/writable stream.
+        return POLLERR;
+    }
     if handle.is_unix_socket() {
         let idx = handle.unix_socket_index();
         let readable =
@@ -472,6 +477,7 @@ fn fd_is_writable(handle: FileHandle) -> bool {
         && !handle.is_epoll()
         && !handle.is_eventfd()
         && !handle.is_unix_socket()
+        && !handle.is_inet_socket()
 }
 
 fn pipe_readable(pool_idx: u32) -> bool {

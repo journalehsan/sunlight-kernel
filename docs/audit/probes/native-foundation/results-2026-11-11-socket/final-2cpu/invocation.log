@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu

@@ -1,0 +1,4 @@
+[
+  "tools/hayro-native-probe/Cargo.lock",
+  "tools/native-std-probe/Cargo.lock"
+]

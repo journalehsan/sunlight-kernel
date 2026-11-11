@@ -1,0 +1,19 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/memory/user.rs
+ M kernel/src/process/mod.rs
+ M kernel/src/sched/mod.rs
+ M sunlight-libc/src/lib.rs
+ M tools/hayro-native-probe/Cargo.lock
+ M tools/native-c/guest.py
+ M tools/native-std-probe/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-11-signal/
+?? kernel/src/process/native_signal.rs
+?? sunlight-libc/include/signal.h
+?? sunlight-libc/src/signal.rs
+?? tools/native-c/tests/run_signal.py
+?? tools/native-c/tests/signal-abi.c
+?? tools/native-c/tests/signal.c
+
+exit=0

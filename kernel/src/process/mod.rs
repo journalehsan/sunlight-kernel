@@ -5,6 +5,7 @@ pub mod epoll;
 pub mod eventfd;
 mod exec_authority;
 pub mod fd_table;
+pub mod inet_socket;
 pub mod foreground;
 pub mod fork;
 pub mod layout;
@@ -15,6 +16,7 @@ pub(crate) mod pid;
 pub mod pipe;
 pub mod region;
 pub mod signal;
+pub mod native_signal;
 pub mod spawn;
 pub(crate) mod thread_admission;
 pub mod tty_io;
@@ -215,6 +217,7 @@ pub struct Process {
     pub fd_table: alloc::boxed::Box<fd_table::FdTable>,
     pub capability_mode: bool,
     pub signal_state: signal::SignalState,
+    pub native_signal: native_signal::State,
     pub trusted_display_service: bool,
     /// Set only by the kernel's embedded-path resolver for sunlight-swapd.
     pub trusted_swap_admin_service: bool,
@@ -552,6 +555,7 @@ impl Process {
             capability_mode: false,
             foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
+            native_signal: native_signal::State::default(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,
@@ -792,6 +796,7 @@ impl Process {
             capability_mode: false,
             foreground: foreground::Foreground::for_process(),
             signal_state: signal::SignalState::new(),
+            native_signal: native_signal::State::default(),
             trusted_display_service: false,
             trusted_swap_admin_service: false,
             trusted_zram_diagnostic: false,

@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-socket/abi/socket.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c:4:77: error: call to undeclared function 'close'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+    4 | int main(void){int f=socket(AF_INET,SOCK_STREAM,0); if(f<0)return 1; return close(f);}
+      |                                                                             ^
+1 error generated.
+
+exit=1

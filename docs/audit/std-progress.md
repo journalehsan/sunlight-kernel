@@ -3055,3 +3055,339 @@ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror docs/audit/probes/pt
 python3 tools/native-c/guest.py target/pthread.elf --cpus 2 --out <new-pthread-2cpu-dir>
 python3 tools/native-c/guest.py target/pthread.elf --cpus 4 --out <new-pthread-4cpu-dir>
 ```
+
+### Phase 16 — bounded native C synchronous signals (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-signal/`.
+Read Phase 14/15 and the unchanged `docs/audit/probes/signal.c` first. That
+probe requires only `sigaction(SIGUSR1)`, `sigemptyset` and synchronous `raise`.
+The worktree was clean on entry. Historical sources remain byte-for-byte
+unchanged; no commit, reset or cleanup was performed.
+
+**Scope and ABI.** This is an initial-native-thread, synchronous SIGUSR1/2
+subset, not general asynchronous POSIX signals. `<signal.h>` supplies signed
+32-bit `sig_atomic_t`, unsigned 64-bit `sigset_t`, a C handler function pointer,
+and a native 24-byte/alignment-8 `struct sigaction`: handler at 0, mask at 8,
+unsigned-long flags at 16. There is no Linux structure/restorer ABI claim.
+SIGUSR1=10 and SIGUSR2=12 agree with the inspected kernel enum. SIG_DFL=0,
+SIG_IGN=1 and SIG_ERR=-1 use the native pointer representation. SIGKILL=9 and
+SIGSTOP=19 are named but outside this C subset: action/raise/set membership
+reject them with EINVAL, so neither becomes catchable, ignorable or blockable.
+
+`sigaction`, `signal`, `raise`, `sigemptyset`, `sigfillset`, `sigaddset`,
+`sigdelset`, and `sigismember` are canonical C exports. The set helpers contain
+only supported signals; they do not install a thread mask. Only zero action
+masks and zero flags are accepted. Unsupported signal numbers/flags/masks and
+SIG_ERR as an installed handler fail with EINVAL. Invalid action, old-action,
+handler or trampoline mappings fail with EFAULT. `signal` returns the prior
+handler or SIG_ERR; other interfaces return 0/-1 (membership returns 0/1).
+Successful calls leave errno alone. A handler that changes errno must explicitly
+save/restore it; the test handler does so.
+
+New native syscall **174**, `NativeSignal`, has operations 0=action,
+1=self raise and 2=return. Arguments are the native rdi/rsi/rdx/r10/r8 register
+sequence; operation 0 takes signal/new/old/trampoline. Its status protocol is
+zero or a positive errno, decoded by this adapter independently of the older
+structured filesystem errors. Existing native 70/71/74 and Linux-personality
+signal entry points are not repurposed. `kill` and `sigprocmask` always return
+-1/ENOSYS. Workers and Linux-personality callers of 174 receive ENOSYS: no PID
+is silently interpreted as a TID, and there is no process-directed sender or
+pthread_kill contract. Installing/raising from workers, group disposition
+sharing, public masks/inheritance, different-signal nesting, timers, fault
+handlers, alternate stacks, siginfo, realtime signals and SA_RESTART are
+outside this phase.
+
+**Delivery and return.** Dispositions and pending state live in the kernel,
+not a libc callback registry. A self raise with a handler changes the syscall
+return context to enter that handler in user mode before `raise` returns.
+Default action terminates the native VM group through existing syscall-157
+cleanup; ignore returns immediately. A raise of the active signal is implicitly
+blocked, deferred and coalesced in one pending slot. Return drains that pending
+signal using the current disposition before resuming the original caller.
+Different-signal nesting is explicitly rejected with ENOSYS. There is at most
+one fallibly allocated saved context per task, independent of delivery count.
+Exec resets caught actions and pending/active state, preserving ignored actions.
+Reaping frees any saved context left by exit from a handler.
+
+The handler gets an RSP congruent to 8 modulo 16 and a return trampoline below
+the full 128-byte red zone. Only the return address is in user memory. All GPRs,
+original RIP/RFLAGS/RSP, FS base, and aligned FXSAVE64 state stay in a kernel
+allocation. Executable user mappings (including NX), user write permissions and
+address ranges are checked before installing/constructing the frame. The return
+operation requires an active context and the expected trampoline stack position.
+No user register frame, FP image, segment selector or privilege flags are copied
+back: a forged operation cannot supply a privileged RIP/RFLAGS. Invalid return,
+frame construction or allocation failure terminates the native group with 139.
+No arbitrary user handler is called on the kernel stack. Return restores FS_BASE
+and FXRSTOR64 through the existing non-SIMD kernel convention; the existing
+scheduler continues to preserve the handler's FP state while it runs. AVX is
+still disabled. The delivery adapter uses no ordinary libc locks. This does not
+establish a general POSIX async-signal-safe libc function inventory.
+
+**Blocking audit.** Existing poll/epoll and native futex waits serialize producer
+publication and registration with SCHEDULER, retain their deadlines and replay
+SYSCALL while blocked. Native waitpid parks on child completion and reports its
+existing EAGAIN protocol. `select` builds on native poll. Existing signal wakeups
+can make tasks runnable, but the old user-handler delivery path is unfinished;
+that machinery is deliberately not used to claim asynchronous C delivery here.
+The new synchronous subset cannot arrive while the same thread is blocked.
+Consequently it adds no EINTR result, restart, readiness consumption or wakeup to
+those waits. Interrupted-wait tests are NOT_RUN / outside this subset, not PASS.
+Pthread join still loops on its completion predicate and waits for syscall 156
+Reaped before freeing stack/TLS; mutex waits are unchanged. No handler frees an
+active worker's stack. General asynchronous delivery will require a separate
+wait-interruption/receipt design before it can be enabled.
+
+The focused contract exercises persistent handlers, prior dispositions, ignore,
+invalid action flags/masks/signal numbers, NX handler rejection, same-signal
+pending coalescing, rejected different-signal nesting and worker calls, TLS,
+explicit errno preservation, MXCSR, x87 control and XMM15 restoration, and 200
+additional deliveries. Direct syscall assembly tests FP preservation without
+confusing the C ABI's caller-saved XMM convention with signal restoration.
+Fatal default action (138), return without an active context (139), handler exit
+(31), and frame construction with an invalid stack (139) run in separate guest
+processes. No malformed context is allowed to take down the harness. Each case
+is accepted only after exit/output checks, Reaped state, zero PID-owned
+frames/descriptors/stack and restoration of physical-frame/page-table/file-data/
+VFS-handle snapshots. Guest RAM is explicitly 2048 MiB; QEMU is disposable TCG
+with no user disk or network. Each runner has bounded build/guest timeouts.
+
+Reproduce using fresh evidence directories (the retained driver logs contain
+fully expanded commands and exit codes):
+
+```sh
+python3 tools/native-c/tests/run_signal.py --out <signal-abi-dir>
+python3 tools/native-c/tests/run_pthread.py --out <pthread-abi-dir>
+python3 tools/native-c/tests/run_poll.py --out <poll-epoll-abi-dir>
+python3 tools/native-c/tests/run_unistd.py --out <host-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <suite-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <suite-4cpu-dir>
+python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/epoll-lifecycle.c -o target/phase16-epoll-lifecycle.elf
+python3 tools/native-c/guest.py target/phase16-epoll-lifecycle.elf --expect-exit 0 --cpus 2 --out <epoll-2cpu-dir>
+python3 tools/native-c/guest.py target/phase16-epoll-lifecycle.elf --expect-exit 0 --cpus 4 --out <epoll-4cpu-dir>
+cargo check -p sunlight-kernel
+cargo check --workspace
+bash tools/check_native_std.sh
+bash tools/test_native_std_foundation.sh
+```
+
+| Test domain | Phase 16 result | Evidence |
+| --- | --- | --- |
+| Native signal C11/C++17 ABI, feature modes/include orders and canonical exports | **12 PASS**, unchanged historical link | `abi-final/` |
+| Previous pthread ABI/export runner | **12 PASS** | `abi-pthread/`, `pthread-abi-driver.log` |
+| Previous poll/epoll ABI/export runner | **12 PASS** | `poll-abi/` |
+| Full native-C suite, 2 / 4 CPUs, 2048 MiB | **64/64 PASS / 64/64 PASS** | `final-2cpu/`, `final-4cpu/` |
+| Historical signal + focused contract, 2 / 4 CPUs | **PASS / PASS**, exit 0, empty stdout/stderr | both final directories |
+| Isolated fatal / invalid return / handler exit / bad stack, 2 / 4 CPUs | **PASS / PASS**, exits 138/139/31/139, clean reaping | both final directories |
+| Separate epoll lifecycle, 80 iterations, 2 / 4 CPUs | **PASS / PASS**, zero fault bytes | `epoll-lifecycle-{2,4}cpu/` |
+| Production libc host tests | **119 PASS**, two native-credential tests filtered | `host/libc.log` |
+| Kernel package check | **PASS** | `kernel-driver.log` |
+| Native Rust-std overlay check | **PASS** | `rust-std-driver.log` |
+| Native FP foundation, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, x87/XMM/MXCSR isolation, parser/raster | `fp-foundation-driver.log`, `native-std-fp-{2,4}cpu.log` |
+| Workspace check | **FAIL**, unchanged pre-existing kernel-target `serde_core` failure | `workspace-driver.log` |
+| Asynchronous signal/wait interruption, public mask inheritance, hardware acceptance | **NOT_RUN**, outside this bounded scope / hardware unavailable | no acceptance inferred |
+
+`acceptance-summary.json` independently verifies every accepted case's clean
+resource snapshots and both empty complete guest fault logs. Signal executable
+hashes agree between CPU configurations. Counts advance from Phase 15's 58 to
+64: the historical signal cell now passes and five focused signal modes are
+added. Historical 21 now have **17 PASS / 0 guest FAIL / 4 BUILD_FAIL and guest
+NOT_RUN**; original 18 have **14 PASS / 4 BUILD_FAIL**. Full pthread and epoll
+suite fixtures remain included. The earlier `suite-2cpu/` passed 62 cases but
+predates the added FP/lifecycle assertions and is not final acceptance evidence.
+`initial-link-before-runtime.log` records an early attempted link against the
+old archive; the undefined symbols disappeared after rebuilding the runtime.
+
+**Next single verified historical blocker: `socket.c`**, in the fresh unchanged
+sequence. Its strict compilation fails on undeclared `socket`, missing AF_INET,
+and undeclared `close`; see both final directories' `build-socket.log`. This
+phase does not claim native AF_INET socket creation. Termios, wchar and C++
+runtime remain the other historical build failures.
+
+`historical-preservation.json` records the unchanged historical source hashes
+and starting HEAD. `lockfile-preservation.json` records restoration of the two
+incidental standalone lockfile refreshes. Python compilation, formatting of the
+new Rust modules, and `git diff --check` pass. Incoming work was preserved; no
+commit was created. Future asynchronous work must extend the kernel delivery
+and wait protocols rather than routing external signals into this synchronous
+adapter or assuming that its declarations establish full POSIX support.
+
+### Phase 17 — native C IPv4 stream creation and lifetime (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-socket/`.
+Incoming Phase 16 changes were present on entry and preserved. No commit was
+created. Historical C/C++ probes were hashed before work and checked again at
+handoff; no probe was edited. This phase implements **creation-only AF_INET
+SOCK_STREAM**, not TCP connection or transfer acceptance.
+
+**Discovery and bounded scope.** The unchanged `docs/audit/probes/socket.c`
+only calls `socket(AF_INET, SOCK_STREAM, 0)` and `close`. Its prior build failed
+at undeclared `socket`/`AF_INET`; rebuilding after those additions exposed the
+also-missing public C `close` declaration/export (`abi/historical.log`). The
+existing Rust close wrapper and native syscall 41 already consume descriptors.
+The existing public socket header/export module previously supplied only
+AF_UNIX socketpair, send/recv, and epoll. Native syscalls 166/169/170 implement
+that pair transport using kernel pipe rings; Linux-personality socket/bind/
+connect/listen/accept implement separate AF_UNIX path endpoints. Neither path
+is an IPv4 transport bridge.
+
+Real networking exists: `sunlight-net/src/tcp.rs` uses smoltcp TCP buffers,
+generation-checked identities, owner badges, bounded slots, real connect/bind/
+listen/accept/send/recv, terminal-state cleanup and readiness. It executes in
+`services/net_server/src/main.rs`, not in the kernel descriptor table. That
+service initializes TcpManager/SocketSet, waits for a publishable NIC backend,
+acquires DHCP, and adds 127.0.0.1/8 to its interface. It services NetOp messages
+(including SHM transfer and bounded waits); UDP exchange is a separate service
+operation. Kernel virtio-net/VMXNET3 initialization and restricted frame proxy
+syscalls feed the service. Adding a loopback address there does not establish a
+working NIC-independent C loopback fixture. No native AF_INET fd-to-service
+identity, owner/lifetime bridge, or service-to-poll wakeup bridge was found.
+Existing network gates such as `tools/network_tls_gate.py` exercise service/
+backend networking, not this public C ABI. They are not substituted for C
+transfer evidence. Implementing a new transport bridge is unnecessary for this
+historical probe and remains future work.
+
+**Public ABI and errors.** `<sys/socket.h>` now declares canonical C-linkage
+`int socket(int,int,int)` and constants AF_INET=2, IPPROTO_TCP=6; existing
+SOCK_STREAM=1, SOCK_NONBLOCK=0x800 and SOCK_CLOEXEC=0x80000 are reused after
+inspection of descriptor flags. Protocol 0 and explicit TCP=6 select the same
+unconnected stream endpoint. Other families (including AF_UNIX for this new
+creation API), base types, protocols and unknown flags fail respectively with
+EAFNOSUPPORT, ESOCKTNOSUPPORT, EPROTONOSUPPORT and EINVAL. Existing AF_UNIX
+socketpair remains supported through its unchanged interface. No silent type,
+protocol or flag downgrade occurs. Successful creation preserves errno.
+
+`<unistd.h>` gains C `close` and `read`, using native consuming close and
+single-transfer read; existing write is reused. Null nonempty buffers fail
+EFAULT in C, negative fds fail EBADF, and read/write counts beyond signed size
+fail EINVAL. A zero-count read/write retains the existing native no-transfer
+contract and does not establish that an endpoint is connected. Send/recv on
+unconnected IPv4 endpoints, including zero-count calls, fail ENOTCONN, not EOF.
+Unknown message flag bits fail EINVAL; non-null invalid or overflowing buffer
+ranges on an unconnected endpoint return ENOTCONN before any memory access.
+No unconnected operation constructs a slice or dereferences those addresses.
+MSG_OOB/MSG_DONTWAIT cannot manufacture a connection or data.
+
+Native syscall **175**, NativeSocket, takes the native rdi/rsi/rdx integer
+arguments and returns an fd or a negative errno, decoded only by the new C
+adapter. It is separate from Linux socket dispatch and rejects Linux-personality
+callers with ENOSYS. Existing native I/O retains its structured error protocol,
+extended with MAX-13=ENOTCONN in kernel, libc and the Rust-std error adapter.
+The public errno header names the new creation/resource/connection errors.
+This is a native source ABI, not Linux binary compatibility. There are no
+address-taking operations in scope: sockaddr, sockaddr_in, sockaddr_storage,
+sa_family_t, socklen_t, netinet/arpa headers, byte-order helpers, address/port
+layout or host/network-order field representations are **not introduced or
+claimed**. Their ABI/offset tests are NOT_RUN because no such ABI is exposed.
+C11/C++17 checks cover the actual integer/ssize_t widths, constants, flag values,
+function signatures, feature modes, include orders and unique C exports.
+
+**Kernel objects, descriptors and readiness.** `process/inet_socket.rs` owns
+128 fixed-storage unconnected stream objects; each live slot tracks its backend
+reference count. No connection state, peer, payload, or success is simulated.
+FileHandle has a distinct IPv4 tag. Native fd allocation attaches READ/WRITE
+rights and the requested flags. Pool exhaustion returns ENOBUFS; descriptor
+exhaustion returns EMFILE and rolls back the allocated slot. Fixed storage
+requires no fallible per-socket heap allocation. Slots return to the pool on
+last close. Duplication, install/replace, inherited descriptor snapshots,
+close-on-exec, exit and reaping retain/release the same backend references.
+A focused 100-open-descriptor exit fixture verifies cleanup independently:
+the guest harness now brackets *every* case with total IPv4 references and
+requires the count to return to its baseline, in addition to the prior physical
+frames/page tables/file data/VFS handles and PID descriptor/stack checks.
+
+Read/write/send/recv never wait for data on an unconnected socket; both blocking
+and nonblocking descriptors report ENOTCONN. This introduces no spinning loop,
+wait registration or wakeup race. Native poll/epoll share descriptor_events,
+which reports POLLERR because I/O can immediately report an error; it does not
+advertise normal POLLOUT or readable stream data. Select's existing poll-based
+adapter maps the error into requested read/write sets. Existing epoll level,
+edge and one-shot rules apply; focused tests cover repeat level delivery,
+edge/one-shot suppression and explicit MOD rearming. There is no connected
+stream EOF, shutdown, peer-close or asynchronous network transition to test.
+Phase 16 synchronous signals remain unchanged; EINTR/SA_RESTART claims and
+asynchronous signal interruption tests remain outside scope.
+
+Pthread descriptor tables remain per-thread snapshots. Snapshot construction
+retains the underlying IPv4 object and open-file description; a worker can use
+and close an inherited socket without invalidating the parent's reference.
+The focused worker test verifies this and subsequent full pool recovery.
+Descriptors created after an existing worker's snapshot are not shared into
+that worker. This is not a POSIX shared descriptor-table claim and no descriptor
+model redesign was performed.
+
+**Fixture and reproduction.** The established guest runner uses disposable
+QEMU TCG, `-cpu max -m 2048M -smp 2` or `-smp 4`, `-nic none`, virtio RNG,
+no user disk and a bounded 90-second guest timeout (900-second build timeout).
+There is deliberately no network address, host port forwarding, external DNS
+or Internet dependency. This topology validates creation, lifetime and
+unconnected-error readiness only. Local/fixture TCP/UDP transfer, partial
+network I/O, peer shutdown, external network and hardware acceptance are
+NOT_RUN: no C transport bridge is implemented, and hardware is unavailable.
+Bind/connect/listen/accept, shutdown, sendto/recvfrom, socket options, datagrams,
+raw sockets, IPv6, AF_UNIX socket creation, and address conversion functions
+are unsupported by this new C creation interface; no success-returning stub
+for them was added.
+
+Commands (use fresh output directories):
+
+```sh
+python3 tools/native-c/tests/run_socket.py --out <socket-abi-dir>
+python3 tools/native-c/tests/run_signal.py --out <signal-abi-dir>
+python3 tools/native-c/tests/run_pthread.py --out <pthread-abi-dir>
+python3 tools/native-c/tests/run_poll.py --out <poll-abi-dir>
+python3 tools/native-c/tests/run_unistd.py --out <host-dir>
+python3 tools/native-c/guest.py --suite --cpus 2 --out <final-2cpu-dir>
+python3 tools/native-c/guest.py --suite --cpus 4 --out <final-4cpu-dir>
+cargo check -p sunlight-kernel
+cargo check --workspace
+bash tools/check_native_std.sh
+bash tools/test_native_std_foundation.sh
+```
+
+The full suite includes unchanged historical socket/signal/pthread/poll probes,
+focused IPv4 contracts, 300 socket/epoll iterations, 128-slot exhaustion and
+recovery, 256-fd exhaustion/rollback, invalid families/types/protocols/flags/fds/
+pointers, zero-count non-EOF behavior, inherited object lifetime, leaked-fd
+reaping, and the existing 80-iteration epoll-lifecycle fixture. Initial
+`suite-2cpu/` predates the final select and unknown-message-flag assertions;
+final acceptance uses only `final-{2,4}cpu/`. `abi/` intentionally retains the
+initial missing-close build failure; `abi-final/` is the accepted socket ABI.
+
+| Test domain | Phase 17 result | Evidence under socket results |
+| --- | --- | --- |
+| Socket C11/C++17 ABI, three feature modes, two include orders, canonical socket/close/read/pair/send/recv exports | **12 PASS**, unchanged historical link | `abi-final/`, `socket-abi-driver.log` |
+| Signal / pthread / poll-epoll ABI-export regressions | **12 / 12 / 12 PASS** | `signal-abi/`, `pthread-abi/`, `poll-abi/`, corresponding `*-driver.log` |
+| Full native-C suite, 2 / 4 CPUs, 2048 MiB each | **68/68 PASS / 68/68 PASS** | `final-2cpu/`, `final-4cpu/`, `suite-{2,4}cpu-driver.log` |
+| Historical socket creation/close, focused contract and leaked-fd reaping | **PASS / PASS** on both CPUs, exit 0, empty stdout/stderr | `socket.*`, `inet-socket-{contract,reap}.*` in both final directories |
+| Unconnected-error poll/select/epoll, level/edge/one-shot/rearm | **PASS / PASS** | focused contract in both final directories |
+| Existing epoll lifecycle (80 iterations) | **PASS / PASS**, exit 0 | `epoll-lifecycle.*` in both final directories |
+| Fault logs, physical resources, clean PID reaping, IPv4 reference accounting | **PASS / PASS**, zero fault bytes, all 68 case baselines restored | `serial.log`, `faults.log`, `acceptance-summary.json` |
+| Production libc host tests | **119 PASS**, two native-credential tests filtered | `host/libc.log`, `host-driver.log` |
+| Kernel package check | **PASS** (also repeated after final source changes) | `kernel-driver.log`, `kernel-final.log` |
+| Native Rust-std overlay | **PASS** | `overlay-driver.log` |
+| Native FP foundation, 2 / 4 CPUs, 2048 MiB | **PASS / PASS**, FP isolation and parser/raster verdicts, no exception/fault/panic markers | `foundation-driver.log`, `native-std-fp-{2,4}cpu.log` |
+| Workspace check | **FAIL**, pre-existing kernel-target std dependency failures, including serde_core (5829 diagnostics), also log/simd_adler32 | `workspace-driver.log` |
+| Address-structure ABI, connected C TCP/UDP transfer, network EOF/partial I/O/peer wakeups, async signal interruption, external network | **NOT_RUN**, outside creation-only implementation; transport/address bridge absent | no transfer acceptance inferred |
+| Hardware acceptance | **NOT_RUN**, hardware unavailable | no acceptance inferred |
+
+`acceptance-summary.json` independently checks both result matrices, exact
+stdout/stderr for the socket/lifecycle fixtures, empty complete fault logs,
+reaping for every case, IPv4 reference baselines, equal fixture ELF bytes across
+CPU configurations, and both FP verdicts. `historical-sha256.json` records all
+unchanged historical source hashes, checked against entry hashes and HEAD.
+The three historical build failures remain guest NOT_RUN, not PASS. Historical
+21 advance to **18 PASS / 0 guest FAIL / 3 BUILD_FAIL**; original 18 advance to
+**15 PASS / 3 BUILD_FAIL**. The next verified historical blocker is
+`docs/audit/probes/termios.c`: `<termios.h>` is absent (both final
+`build-termios.log` files). wchar and C++ runtime remain later blockers.
+
+Changed implementation files: socket/unistd/errno public headers and libc
+adapters, native syscall/error dispatch, the new IPv4 object pool, FileHandle/
+reference integration, scheduler cleanup and shared epoll readiness. Validation
+adds socket ABI/export and focused guest fixtures, integrates the existing
+epoll lifecycle fixture into the suite, and strengthens the guest cleanup
+predicate with IPv4 reference counts. Incoming signal implementation and audit
+were retained. Build-generated changes to two previously clean probe lockfiles
+were restored to their entry bytes. No incoming file was removed, no historical
+probe changed, no tests weakened, and no commit was created.

@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_signal.py --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-socket/signal-abi
+12 signal C/C++ ABI checks, exports, unchanged historical link: PASS
+
+exit=0

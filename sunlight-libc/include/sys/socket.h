@@ -6,6 +6,10 @@
 extern "C" {
 #endif
 #define AF_UNIX 1
+#define AF_INET 2
+/* Native creation-only IPv4 stream endpoint; protocol 0 or IPPROTO_TCP. */
+#define IPPROTO_TCP 6
+int socket(int domain, int type, int protocol);
 #define SOCK_STREAM 1
 #define SOCK_NONBLOCK 0x00000800
 #define SOCK_CLOEXEC  0x00080000

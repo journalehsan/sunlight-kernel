@@ -1,0 +1,33 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/memory/user.rs
+ M kernel/src/native_c_guest.rs
+ M kernel/src/process/epoll.rs
+ M kernel/src/process/fd_table.rs
+ M kernel/src/process/mod.rs
+ M kernel/src/sched/mod.rs
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/sys/socket.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/errno.rs
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/socket.rs
+ M sunlight-libc/src/std_runtime.rs
+ M sunlight-libc/src/sys.rs
+ M sunlight-libc/src/unistd.rs
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-11-signal/
+?? docs/audit/probes/native-foundation/results-2026-11-11-socket/
+?? kernel/src/process/inet_socket.rs
+?? kernel/src/process/native_signal.rs
+?? sunlight-libc/include/signal.h
+?? sunlight-libc/src/signal.rs
+?? tools/native-c/tests/inet-socket.c
+?? tools/native-c/tests/run_signal.py
+?? tools/native-c/tests/run_socket.py
+?? tools/native-c/tests/signal-abi.c
+?? tools/native-c/tests/signal.c
+?? tools/native-c/tests/socket-abi.c
+
+exit=0

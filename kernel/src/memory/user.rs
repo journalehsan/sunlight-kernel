@@ -452,6 +452,21 @@ pub fn validate_current_read(address: u64, len: usize) -> Result<(), UserMemoryE
     validate_process_read(scheduler.current_process(), hhdm, address, len)
 }
 
+/// Validate a mapped user instruction address, including the NX permission.
+pub fn validate_current_execute(address: u64) -> Result<(), UserMemoryError> {
+    let hhdm = current_hhdm()?;
+    let scheduler = crate::sched::SCHEDULER.lock();
+    let process = scheduler.current_process();
+    validate_process_read(process, hhdm, address, 1)?;
+    let page = Page::<Size4KiB>::containing_address(VirtAddr::new(address));
+    let (_, flags) = unsafe { process.address_space.lookup_entry(page, hhdm) }
+        .ok_or(UserMemoryError::Unmapped)?;
+    if flags.contains(PageTableFlags::NO_EXECUTE) {
+        return Err(UserMemoryError::NotUserAccessible);
+    }
+    Ok(())
+}
+
 pub fn copy_to_process_bytes(
     process: &Process,
     hhdm: VirtAddr,

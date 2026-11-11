@@ -1,7 +1,22 @@
-//! Native AF_UNIX stream sockets and epoll readiness.
+//! Native AF_UNIX pairs, unconnected IPv4 streams, and epoll readiness.
 use crate::{errno, sys};
 
 pub const AF_UNIX: i32 = 1;
+pub const AF_INET: i32 = 2;
+pub const IPPROTO_TCP: i32 = 6;
+
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn socket(domain: i32, kind: i32, protocol: i32) -> i32 {
+    let result =
+        unsafe { sys::syscall3(sys::SYS_SOCKET, domain as u64, kind as u64, protocol as u64) }
+            as i64;
+    if result < 0 {
+        errno::set_errno((-result) as i32);
+        -1
+    } else {
+        result as i32
+    }
+}
 pub const SOCK_STREAM: i32 = 1;
 pub const SOCK_NONBLOCK: i32 = 0x0000_0800;
 pub const SOCK_CLOEXEC: i32 = 0x0008_0000;

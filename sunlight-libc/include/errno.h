@@ -20,6 +20,12 @@ int *__errno_location(void);
 #define ENOSPC 28
 #define EPIPE 32
 #define ENOSYS 38
+#define EMFILE 24
+#define EPROTONOSUPPORT 93
+#define ESOCKTNOSUPPORT 94
+#define EAFNOSUPPORT 97
+#define ENOBUFS 105
+#define ENOTCONN 107
 #ifdef __cplusplus
 }
 #endif

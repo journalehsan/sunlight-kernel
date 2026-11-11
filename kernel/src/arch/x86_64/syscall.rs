@@ -23,6 +23,8 @@ pub enum SunlightSyscall {
     ThreadSpawn = 22,
     NativeFutex = 155,
     NativeThreadReaped = 156,
+    NativeSignal = 174,
+    NativeSocket = 175,
     NativeExitGroup = 157,
     NativeStdThreadSpawn = 158,
     NativePoll = 159,
@@ -297,6 +299,7 @@ pub unsafe extern "C" fn syscall_entry() {
 
 /// Saved register frame layout (matches push order in syscall_entry).
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct SyscallRegs {
     pub rax: u64,
     pub rbx: u64,
@@ -1018,6 +1021,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         171 => sys_native_epoll_create(frame),
         172 => sys_native_epoll_ctl(frame),
         173 => sys_native_epoll_wait(frame),
+        174 => sys_native_signal(frame),
+        175 => sys_native_socket(frame),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -1375,6 +1380,7 @@ const ERR_ERANGE: u64 = u64::MAX - 9;
 const ERR_EPIPE: u64 = u64::MAX - 10;
 const ERR_ENOSPC: u64 = u64::MAX - 11;
 const ERR_ENOMEM: u64 = u64::MAX - 12;
+const ERR_ENOTCONN: u64 = u64::MAX - 13;
 
 fn fs_error_raw(error: sunlight_fs::FsError) -> u64 {
     match error {
@@ -3506,6 +3512,7 @@ extern "C" fn enter_exec_image() -> ! {
             drop(scheduler);
             process_exit(code);
         }
+        process.native_signal.reset_for_exec();
         process.fx_state = crate::arch::x86_64::cpu::FxState::initial();
         unsafe { process.fx_state.restore() };
         (process.context_rsp, process.fs_base)
@@ -6028,6 +6035,8 @@ fn close_file_handle(handle: crate::process::fd_table::FileHandle) {
         crate::process::pipe::pipe_close_end(handle.pipe_index(), handle.pipe_is_write());
     } else if handle.is_socket() {
         crate::process::pipe::socket_close(handle.socket_index(), handle.socket_endpoint());
+    } else if handle.is_inet_socket() {
+        crate::process::inet_socket::release(handle.inet_socket_index());
     } else if handle.is_unix_socket() {
         crate::process::unix_socket::release(handle.unix_socket_index());
     } else if handle.is_epoll() {
@@ -8129,18 +8138,55 @@ fn create_socketpair_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
     }
 }
 
+/// Native socket creation (175), fd or negative errno; no Linux ABI dispatch.
+fn sys_native_socket(frame: &mut SyscallFrame) -> u64 {
+    use crate::process::fd_table::{CapRights, FileHandle};
+    if crate::sched::SCHEDULER.lock().current_process().is_linux_compat() {
+        return linux_errno(38);
+    }
+    if frame.rdi as i32 != 2 {
+        return linux_errno(97); // EAFNOSUPPORT
+    }
+    let kind = frame.rsi as u32;
+    if kind & 0xf != 1 {
+        return linux_errno(94); // ESOCKTNOSUPPORT
+    }
+    if kind & !(0xf | 0x800 | 0x80000) != 0 {
+        return linux_errno(22);
+    }
+    if !matches!(frame.rdx as i32, 0 | 6) {
+        return linux_errno(93); // EPROTONOSUPPORT
+    }
+    let Some(index) = crate::process::inet_socket::create() else {
+        return linux_errno(105); // ENOBUFS
+    };
+    let result = crate::sched::SCHEDULER.lock().current_shared_process_mut()
+        .fd_table.open(FileHandle::inet_socket(index),
+            CapRights::new(CapRights::READ | CapRights::WRITE), (kind & !0xf) | 2);
+    match result {
+        Ok(fd) => fd as u64,
+        Err(_) => {
+            crate::process::inet_socket::release(index);
+            linux_errno(24) // EMFILE
+        }
+    }
+}
+
 fn sys_native_send(frame: &mut SyscallFrame) -> u64 {
     let fd = frame.rdi as i32;
     let handle = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_socket() => entry.handle,
+            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => entry.handle,
             Some(_) => return ERR_EBADF,
             None => return ERR_EBADF,
         }
     };
     if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 {
         return ERR_EINVAL;
+    }
+    if handle.is_inet_socket() {
+        return ERR_ENOTCONN;
     }
     if frame.r10 & MSG_OOB != 0 {
         socket_send_oob(frame, handle, false)
@@ -8154,13 +8200,16 @@ fn sys_native_recv(frame: &mut SyscallFrame) -> u64 {
     let handle = {
         let sched = crate::sched::SCHEDULER.lock();
         match sched.current_shared_process().fd_table.get(fd) {
-            Some(entry) if entry.handle.is_socket() => entry.handle,
+            Some(entry) if entry.handle.is_socket() || entry.handle.is_inet_socket() => entry.handle,
             Some(_) => return ERR_EBADF,
             None => return ERR_EBADF,
         }
     };
     if frame.r10 & !(MSG_OOB | MSG_DONTWAIT) != 0 {
         return ERR_EINVAL;
+    }
+    if handle.is_inet_socket() {
+        return ERR_ENOTCONN;
     }
     if frame.r10 & MSG_OOB != 0 {
         socket_recv_oob(frame, handle, false)
@@ -9497,7 +9546,7 @@ fn sys_close(frame: &mut SyscallFrame) -> u64 {
     } else if handle.is_eventfd() {
         // FdTable::take already dropped this descriptor's eventfd reference.
         0
-    } else if handle.is_unix_socket() {
+    } else if handle.is_unix_socket() || handle.is_inet_socket() {
         close_file_handle(handle);
         0
     } else if handle.is_epoll() {
@@ -9559,6 +9608,9 @@ fn sys_read_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
     ) {
         Ok(()) => {
             if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle.is_inet_socket() {
+                    return ERR_ENOTCONN;
+                }
                 if fd_entry.handle.is_eventfd() {
                     use crate::process::eventfd::{self, EventError, EFD_NONBLOCK};
                     if count < 8 {
@@ -9837,6 +9889,9 @@ fn sys_write_with_nonblocking(frame: &mut SyscallFrame, dontwait: bool) -> u64 {
     ) {
         Ok(()) => {
             if let Some(&fd_entry) = sched.current_shared_process().fd_table.get(fd) {
+                if fd_entry.handle.is_inet_socket() {
+                    return ERR_ENOTCONN;
+                }
                 if fd_entry.handle.is_eventfd() {
                     use crate::process::eventfd::{self, EventError, EFD_NONBLOCK};
                     if count != 8 {
@@ -13511,4 +13566,177 @@ fn sys_fastlane_channel(frame: &mut SyscallFrame) -> u64 {
         Ok((value, generation)) => { frame.rsi = value; frame.rdx = generation; 0 }
         Err(error) => { frame.rsi = 0; frame.rdx = 0; error as u64 }
     }
+}
+
+/// Native synchronous signal ABI (174): status is a positive errno, or zero.
+/// op 0 = action (signal, new, old, trampoline), 1 = raise, 2 = return.
+/// Only initial native threads and SIGUSR1/2 are supported. No PID targeting.
+fn sys_native_signal(frame: &mut SyscallFrame) -> u64 {
+    if sched::with_scheduler(|s| {
+        s.current_process().is_linux_compat() || !s.current_process().owns_address_space
+    }) {
+        return 38; // ENOSYS: native worker/group semantics are not implemented.
+    }
+    // RSP immediately follows the saved GPRs in the assembly entry frame.
+    let rsp_slot = unsafe { (frame as *mut SyscallFrame).add(1).cast::<u64>() };
+    let rsp = unsafe { *rsp_slot };
+    if frame.rdi == 2 {
+        let valid = sched::with_scheduler(|s| {
+            s.current_process()
+                .native_signal
+                .saved
+                .as_ref()
+                .is_some_and(|saved| rsp == saved.return_rsp)
+        });
+        if !valid {
+            sys_native_exit_group(139);
+        }
+        let saved =
+            sched::with_scheduler(|s| s.current_process_mut().native_signal.saved.take()).unwrap();
+        *frame = saved.regs;
+        unsafe {
+            *rsp_slot = saved.rsp;
+        }
+        sched::with_scheduler(|s| {
+            s.current_process_mut().fs_base = saved.fs_base;
+            unsafe {
+                x86_64::registers::model_specific::Msr::new(0xC0000100).write(saved.fs_base);
+                saved.fp.restore();
+            }
+        });
+        drop(saved);
+        // Deliver a coalesced same-signal raise before returning to its caller.
+        let pending = sched::with_scheduler(|s| {
+            let state = &mut s.current_process_mut().native_signal;
+            let pending = state.pending;
+            state.pending = 0;
+            pending
+        });
+        if pending != 0 {
+            return native_signal_enter(frame, rsp_slot, pending as u32);
+        }
+        return frame.rax;
+    }
+    let sig = frame.rsi as u32;
+    if !matches!(sig, 10 | 12) || frame.rsi != sig as u64 {
+        return 22;
+    }
+    let index = if sig == 10 { 0 } else { 1 };
+    match frame.rdi {
+        0 => {
+            let mut action = [0u8; 24];
+            if frame.rdx != 0 {
+                if crate::memory::user::copy_from_current(frame.rdx, &mut action).is_err() {
+                    return 14;
+                }
+                let handler = u64::from_ne_bytes(action[0..8].try_into().unwrap());
+                let mask = u64::from_ne_bytes(action[8..16].try_into().unwrap());
+                let flags = u64::from_ne_bytes(action[16..24].try_into().unwrap());
+                if flags != 0 || mask != 0 || handler == u64::MAX {
+                    return 22;
+                }
+                if handler > 1
+                    && (crate::memory::user::validate_current_execute(handler).is_err()
+                        || crate::memory::user::validate_current_execute(frame.r8).is_err())
+                {
+                    return 14;
+                }
+            }
+            let old = sched::with_scheduler(|s| s.current_process().native_signal.actions[index]);
+            let mut wire = [0u8; 24];
+            for i in 0..3 {
+                wire[i * 8..i * 8 + 8].copy_from_slice(&old[i].to_ne_bytes());
+            }
+            if frame.r10 != 0 && crate::memory::user::copy_to_current(frame.r10, &wire).is_err() {
+                return 14;
+            }
+            if frame.rdx != 0 {
+                sched::with_scheduler(|s| {
+                    let state = &mut s.current_process_mut().native_signal;
+                    for i in 0..3 {
+                        state.actions[index][i] =
+                            u64::from_ne_bytes(action[i * 8..i * 8 + 8].try_into().unwrap());
+                    }
+                    state.trampoline = frame.r8;
+                });
+            }
+            0
+        }
+        1 => {
+            let active = sched::with_scheduler(|s| {
+                let state = &mut s.current_process_mut().native_signal;
+                if let Some(saved) = &state.saved {
+                    if saved.regs.rsi == sig as u64 {
+                        state.pending = sig as u64;
+                        return 1;
+                    }
+                    return 2;
+                }
+                0
+            });
+            if active == 1 {
+                return 0;
+            }
+            if active == 2 {
+                return 38;
+            } // cross-signal nesting unsupported
+            frame.rax = 0;
+            native_signal_enter(frame, rsp_slot, sig)
+        }
+        _ => 22,
+    }
+}
+
+fn native_signal_enter(frame: &mut SyscallFrame, rsp_slot: *mut u64, sig: u32) -> u64 {
+    use crate::process::native_signal::Saved;
+    let (handler, trampoline) = sched::with_scheduler(|s| {
+        let state = &s.current_process().native_signal;
+        (
+            state.actions[if sig == 10 { 0 } else { 1 }][0],
+            state.trampoline,
+        )
+    });
+    if handler == 0 {
+        sys_native_exit_group(128 + sig as i32);
+    }
+    if handler == 1 {
+        return frame.rax;
+    }
+    let rsp = unsafe { *rsp_slot };
+    // Preserve the entire x86-64 red zone; handler entry RSP is 8 mod 16.
+    let Some(stack) = rsp.checked_sub(128 + 16).map(|s| (s & !15) + 8) else {
+        sys_native_exit_group(139)
+    };
+    if crate::memory::user::validate_current_execute(handler).is_err()
+        || crate::memory::user::validate_current_execute(trampoline).is_err()
+        || crate::memory::user::copy_to_current(stack, &trampoline.to_ne_bytes()).is_err()
+    {
+        sys_native_exit_group(139);
+    }
+    let Ok(mut saved) = crate::process::thread_admission::try_box_uninit::<Saved>() else {
+        sys_native_exit_group(139)
+    };
+    let mut fp = crate::arch::x86_64::cpu::FxState::initial();
+    sched::with_scheduler(|s| {
+        unsafe {
+            fp.save();
+        }
+        let process = s.current_process_mut();
+        unsafe {
+            saved.as_mut_ptr().write(Saved {
+                regs: *frame,
+                rsp,
+                return_rsp: stack + 8,
+                fs_base: process.fs_base,
+                fp,
+            });
+            process.native_signal.saved = Some(saved.assume_init());
+        }
+    });
+    frame.rcx = handler;
+    frame.rdi = sig as u64;
+    unsafe {
+        *rsp_slot = stack;
+    }
+    0
 }

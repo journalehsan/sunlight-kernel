@@ -63,6 +63,9 @@ pub mod multiplex;
 /// Minimal POSIX threads over the native thread/futex ABI.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod pthread;
+/// Bounded synchronous native C signals.
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod signal;
 /// Native AF_UNIX stream sockets and epoll readiness.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod socket;

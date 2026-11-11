@@ -17,6 +17,7 @@ pub const SYS_WRITE: u64 = 43;
 pub const SYS_LSEEK: u64 = 44;
 pub const SYS_PIPE: u64 = 47;
 pub const SYS_POLL: u64 = 159;
+pub const SYS_SOCKET: u64 = 175;
 pub const SYS_SOCKETPAIR: u64 = 166;
 pub const SYS_SEND: u64 = 169;
 pub const SYS_RECV: u64 = 170;
@@ -79,6 +80,7 @@ pub const ERANGE_RAW: u64 = u64::MAX - 9;
 pub const EPIPE_RAW: u64 = u64::MAX - 10;
 pub const ENOSPC_RAW: u64 = u64::MAX - 11;
 pub const ENOMEM_RAW: u64 = u64::MAX - 12;
+pub const ENOTCONN_RAW: u64 = u64::MAX - 13;
 
 /// Largest count that can be represented by the public `ssize_t` result.
 /// Native SunlightOS is currently x86_64, but keep this tied to the Rust ABI
@@ -120,6 +122,7 @@ pub enum Errno {
     BrokenPipe,
     NoSpace,
     NoMemory,
+    NotConnected,
 }
 
 pub fn check(ret: u64) -> Result<u64, Errno> {
@@ -137,6 +140,7 @@ pub fn check(ret: u64) -> Result<u64, Errno> {
         EPIPE_RAW => Err(Errno::BrokenPipe),
         ENOSPC_RAW => Err(Errno::NoSpace),
         ENOMEM_RAW => Err(Errno::NoMemory),
+        ENOTCONN_RAW => Err(Errno::NotConnected),
         n => Ok(n),
     }
 }

@@ -178,6 +178,18 @@ impl FileHandle {
         ((self.0 >> 23) & 1) as usize
     }
 
+    pub fn inet_socket(index: u32) -> Self {
+        Self(0x0080_0000 | index)
+    }
+
+    pub fn is_inet_socket(self) -> bool {
+        self.0 & 0xff80_0000 == 0x0080_0000
+    }
+
+    pub fn inet_socket_index(self) -> u32 {
+        self.0 & 0x007f_ffff
+    }
+
     pub fn unix_socket(index: u32) -> Self {
         Self(Self::UNIX_FLAG | (index & 0x00FF_FFFF))
     }
@@ -215,13 +227,19 @@ fn release_eventfd(handle: FileHandle) {
     }
 }
 
-fn retain_unix_socket(handle: FileHandle) {
+fn retain_endpoint_socket(handle: FileHandle) {
+    if handle.is_inet_socket() {
+        super::inet_socket::retain(handle.inet_socket_index());
+    }
     if handle.is_unix_socket() {
         super::unix_socket::retain(handle.unix_socket_index());
     }
 }
 
-fn release_unix_socket(handle: FileHandle) {
+fn release_endpoint_socket(handle: FileHandle) {
+    if handle.is_inet_socket() {
+        super::inet_socket::release(handle.inet_socket_index());
+    }
     if handle.is_unix_socket() {
         super::unix_socket::release(handle.unix_socket_index());
     }
@@ -426,7 +444,7 @@ impl FdTable {
             retain_description(idx);
             retain_socket(handle);
             retain_pipe(handle);
-            retain_unix_socket(handle);
+            retain_endpoint_socket(handle);
             idx
         } else {
             new_description(flags)
@@ -586,10 +604,10 @@ impl FdTable {
         retain_eventfd(handle);
         retain_socket(handle);
         retain_pipe(handle);
-        retain_unix_socket(handle);
+        retain_endpoint_socket(handle);
         if let Some(displaced) = self.entries[fd as usize] {
             release_eventfd(displaced.handle);
-            release_unix_socket(displaced.handle);
+            release_endpoint_socket(displaced.handle);
             release_description(displaced.description);
             if displaced.handle.is_pipe() {
                 super::pipe::pipe_close_end(
@@ -630,7 +648,7 @@ impl FdTable {
         let entry = self.get_mut(fd).ok_or(FdError::InvalidFd)?;
         let displaced = entry.handle;
         release_eventfd(displaced);
-        release_unix_socket(displaced);
+        release_endpoint_socket(displaced);
         if displaced.is_pipe() {
             super::pipe::pipe_close_end(displaced.pipe_index(), displaced.pipe_is_write());
         } else if displaced.is_socket() {
@@ -744,7 +762,7 @@ impl FdTable {
         retain_eventfd(orig.handle);
         retain_socket(orig.handle);
         retain_pipe(orig.handle);
-        retain_unix_socket(orig.handle);
+        retain_endpoint_socket(orig.handle);
         retain_description(orig.description);
         let mut flags = orig.flags & !O_CLOEXEC;
         if cloexec {
@@ -778,7 +796,7 @@ impl FdTable {
                     retain_eventfd(entry.handle);
                     retain_socket(entry.handle);
                     retain_pipe(entry.handle);
-                    retain_unix_socket(entry.handle);
+                    retain_endpoint_socket(entry.handle);
                     retain_description(entry.description);
                 }
             }
@@ -811,7 +829,7 @@ impl FdTable {
             retain_eventfd(entry.handle);
             retain_socket(entry.handle);
             retain_pipe(entry.handle);
-            retain_unix_socket(entry.handle);
+            retain_endpoint_socket(entry.handle);
             retain_description(entry.description);
         }
     }

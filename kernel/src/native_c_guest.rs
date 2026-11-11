@@ -44,6 +44,7 @@ struct State {
     baseline: [u64; 3],
     names: usize,
     handles: usize,
+    inet_refs: usize,
 }
 static STATE: spin::Mutex<Option<State>> = spin::Mutex::new(None);
 
@@ -112,6 +113,7 @@ fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
     state.baseline = frames();
     state.names = tmp_names();
     state.handles = handles();
+    state.inet_refs = crate::process::inet_socket::references();
     // Transport bytes through the actual writable guest root, then load the
     // bytes read back from that file. PT_LOAD validation remains unchanged.
     let image = store(IMAGE, case.elf, 0o755);
@@ -207,6 +209,7 @@ pub fn boot(hhdm: VirtAddr) -> ! {
         baseline: [0; 3],
         names: 0,
         handles: 0,
+        inet_refs: 0,
     };
     crate::serial_println!(
         "[NATIVE-C-RUNNER] cases={} cpus={} entropy={}",
@@ -311,7 +314,10 @@ pub fn idle() {
     }
     remove(WORK);
     let after = frames();
-    let clean = after == state.baseline && tmp_names() == state.names && handles() == state.handles;
+    let inet_refs = crate::process::inet_socket::references();
+    crate::serial_println!("[NATIVE-C-INET] before={} after={}", state.inet_refs, inet_refs);
+    let clean = after == state.baseline && tmp_names() == state.names && handles() == state.handles
+        && inet_refs == state.inet_refs;
     crate::serial_println!("[NATIVE-C-RESULT] case={} exit={} stdout={} stderr={} clean={} file_before={} file_after={} private_before={} private_after={} pt_before={} pt_after={} handles_before={} handles_after={}", state.next, code, out.len(), err.len(), u8::from(clean), state.baseline[0], after[0], state.baseline[1], after[1], state.baseline[2], after[2], state.handles, handles());
     assert!(clean, "native C file/page/handle cleanup failed");
     state.next += 1;

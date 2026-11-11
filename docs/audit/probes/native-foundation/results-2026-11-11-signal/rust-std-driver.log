@@ -1,0 +1,11 @@
+$ bash tools/check_native_std.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+     Locking 5 packages to latest compatible versions
+    Updating sun-img v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sun-img) -> v0.2.7167-alpha.2
+      Adding sunlight-cert v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-cert)
+    Updating sunlight-ipc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/ipc) -> v0.2.7167-alpha.2
+    Updating sunlight-libc v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc) -> v0.2.7167-alpha.2
+    Updating sunlight-ui v0.2.4697-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-ui) -> v0.2.7167-alpha.2
+    Finished `release` profile [optimized] target(s) in 0.09s
+
+exit=0
