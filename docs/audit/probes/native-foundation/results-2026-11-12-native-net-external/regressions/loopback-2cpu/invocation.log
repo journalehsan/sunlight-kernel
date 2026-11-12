@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/netexternal-echo-2cpu-v2/tcp-echo-client.elf --net --service target/netexternal-build/tcp-echo-service.elf --cpus 2 --out target/netloopback-regress-2cpu-v2 --timeout 300 --arg 4040

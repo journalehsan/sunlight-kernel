@@ -1,0 +1,6 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/target/phase20/boundaries-2cpu
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'output 0 1 -9223372036854775808 9223372036854775807 18446744073709551615 18446744073709551615\nbounds -32768 32767 65535 -2147483648 2147483647 4294967295 -9223372036854775808 9223372036854775807 0\nABC\n'
+guest elf stderr: b'stderr\nclog\n'

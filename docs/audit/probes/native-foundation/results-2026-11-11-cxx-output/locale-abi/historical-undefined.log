@@ -1,0 +1,3 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/locale-abi/locale.elf
+
+exit=0

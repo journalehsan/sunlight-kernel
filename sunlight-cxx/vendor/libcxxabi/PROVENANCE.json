@@ -1,0 +1,21 @@
+{
+  "version": "llvmorg-21.1.0",
+  "url": "https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.0/libcxxabi-21.1.0.src.tar.xz",
+  "archive_sha256": "215943d26f38f9c66565951d25ce17638b7ecbeeb28aa1fa63576c29fbb3407a",
+  "files": {
+    "src/private_typeinfo.cpp": "25cad568b55d0d3e82354ebc9c27f5f80d8d737cfdea9ffadf1f843a877d899c",
+    "src/private_typeinfo.h": "308dd443446dfa0e6972e897f575c4e379f50bbf3aee3f5126f955f44768c803",
+    "src/stdlib_typeinfo.cpp": "5d0b584b9341eb49ea5e640a475dc690d44b0770712222e2667185b1e814367f",
+    "src/abort_message.h": "a5d95a89ae7013a171d3f7688f70f7b71e870ff85f2144c250782c399cff20de",
+    "include/cxxabi.h": "3c2ca8786f9419e1151a5fe92b8dbdcdadf0bde3011e7154d60b172b67ff4ebc",
+    "include/__cxxabi_config.h": "89b25940fbc47b64747e867cb0b023e04a4c9151a577cd45bf636d56b81a4422",
+    "LICENSE.TXT": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c",
+    "src/cxa_exception.cpp": "2f10876834983a623ab7f00d988ab644fb354a1d112bcad05272f44386be2f35",
+    "src/cxa_exception.h": "30226cd5cbfb05750f523da3ede9f231fb03bdb717f58e095a5bec7760f8024b",
+    "src/cxa_handlers.h": "2c87e313acb5a9e8a48374cd431da69c98fb2c9ad2c70be82fe7fbed122d00fe",
+    "src/cxa_personality.cpp": "034b11551af56efbdc0fdd70c1eaf393cac5df3412f6499255e2eb4b7a13eaea",
+    "src/fallback_malloc.h": "a9f725ecf2bfe34f482ead34e182b74013e48fc51902f55eba2a7e30866415b1",
+    "src/cxa_guard.cpp": "97dbc2a48acb2233301bd7c11717cda173b23c73e7da64eb1710332c3b19f54d",
+    "src/cxa_guard_impl.h": "0c77f1e80dd8115e7fae1674e7c539b239b72b2b9552b79aaab68fd454d82f6d"
+  }
+}

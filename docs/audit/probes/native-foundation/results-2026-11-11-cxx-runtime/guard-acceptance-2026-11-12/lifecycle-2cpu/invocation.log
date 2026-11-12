@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /tmp/cxx-lifecycle-final.elf --cpus 2 --timeout 180 --out /tmp/phase22-final-lifecycle-2

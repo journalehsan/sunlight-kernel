@@ -1,0 +1,6 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-run_poll/poll.o
+                 U memset
+                 U poll
+                 U select
+
+exit=0

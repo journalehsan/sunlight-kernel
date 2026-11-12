@@ -1,0 +1,3 @@
+native output headers/archive ownership/ELF dependencies: PASS
+historical cpp-runtime: BUILD_FAIL at <string>; guest NOT_RUN
+output runtime: NOT_RUN by this runner; use guest.py --suite on both CPU configurations

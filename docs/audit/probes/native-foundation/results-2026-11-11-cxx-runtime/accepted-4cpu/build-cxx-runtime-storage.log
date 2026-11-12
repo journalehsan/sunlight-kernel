@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-4cpu/cxx-runtime-storage.elf
+
+exit=0

@@ -1,0 +1,9 @@
+*
+!*.log
+!*.json
+!*.csv
+!*.txt
+!*.map
+!*.py
+!*/
+!.gitignore

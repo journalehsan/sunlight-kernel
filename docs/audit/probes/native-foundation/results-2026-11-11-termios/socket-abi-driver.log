@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_socket.py --out docs/audit/probes/native-foundation/results-2026-11-11-termios/socket-abi
+12 socket C/C++ ABI checks, exports, unchanged historical link: PASS
+
+exit=0

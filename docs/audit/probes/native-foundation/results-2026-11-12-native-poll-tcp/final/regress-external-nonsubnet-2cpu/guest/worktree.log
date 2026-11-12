@@ -1,0 +1,87 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M ipc/src/lib.rs
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/main.rs
+ M kernel/src/native_c_guest.rs
+ M services/net_server/src/main.rs
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/poll.h
+ M sunlight-libc/include/stdlib.h
+ M sunlight-libc/include/sys/socket.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/errno.rs
+ M sunlight-libc/src/fd.rs
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/locale.rs
+ M sunlight-libc/src/multiplex.rs
+ M sunlight-libc/src/socket.rs
+ M sunlight-libc/src/sys.rs
+ M sunlight-libc/src/unistd.rs
+ M sunlight-net/src/netop.rs
+ M tools/native-c/guest.py
+ M tools/native-c/user-space.ld
+?? docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/
+?? docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/
+?? docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/
+?? docs/audit/probes/native-foundation/results-2026-11-11-termios/
+?? docs/audit/probes/native-foundation/results-2026-11-11-wchar/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-net-external-nonsubnet/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-net-external/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-net/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/
+?? docs/audit/probes/results-2026-11-12-phase23/
+?? docs/networking/2026-11-12_NATIVE_C_TCP_BRIDGE.md
+?? docs/networking/2026-11-12_NATIVE_POLL_TCP_READINESS.md
+?? ipc/src/netop.rs
+?? sunlight-cxx/
+?? sunlight-libc/include/cstdlib
+?? sunlight-libc/include/exception
+?? sunlight-libc/include/iostream
+?? sunlight-libc/include/limits.h
+?? sunlight-libc/include/netinet/
+?? sunlight-libc/include/new
+?? sunlight-libc/include/stdexcept
+?? sunlight-libc/include/string
+?? sunlight-libc/include/sunlight_net.h
+?? sunlight-libc/include/termios.h
+?? sunlight-libc/include/thread
+?? sunlight-libc/include/typeinfo
+?? sunlight-libc/include/wchar.h
+?? sunlight-libc/src/net_bridge.rs
+?? sunlight-libc/src/termios.rs
+?? sunlight-libc/src/wchar.rs
+?? tools/build_native_cxx.sh
+?? tools/native-c/cxx.py
+?? tools/native-c/pcap_tcp.py
+?? tools/native-c/run_external_tcp.py
+?? tools/native-c/run_poll_tcp.py
+?? tools/native-c/tcp_host_peer.py
+?? tools/native-c/tests/cxx-backend.cpp
+?? tools/native-c/tests/cxx-exception-class.cpp
+?? tools/native-c/tests/cxx-lifecycle.cpp
+?? tools/native-c/tests/cxx-local-static.cpp
+?? tools/native-c/tests/cxx-output.cpp
+?? tools/native-c/tests/cxx-runtime-execution.cpp
+?? tools/native-c/tests/cxx-string-backend.cpp
+?? tools/native-c/tests/cxx-string-failure.cpp
+?? tools/native-c/tests/cxx-string.cpp
+?? tools/native-c/tests/run_cxx_classes.py
+?? tools/native-c/tests/run_cxx_exception_discovery.py
+?? tools/native-c/tests/run_cxx_output.py
+?? tools/native-c/tests/run_cxx_runtime.py
+?? tools/native-c/tests/run_cxx_string.py
+?? tools/native-c/tests/run_termios.py
+?? tools/native-c/tests/run_wchar.py
+?? tools/native-c/tests/tcp-echo-client.c
+?? tools/native-c/tests/tcp-echo-service.c
+?? tools/native-c/tests/tcp-poll-client.c
+?? tools/native-c/tests/tcp-poll-external-client.c
+?? tools/native-c/tests/tcp-poll-service.c
+?? tools/native-c/tests/tcp-stall-client.c
+?? tools/native-c/tests/termios-abi.c
+?? tools/native-c/tests/termios.c
+?? tools/native-c/tests/wchar-abi.c
+?? tools/native-c/tests/wchar-contract.c
+
+exit=0

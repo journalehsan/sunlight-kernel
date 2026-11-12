@@ -1,0 +1,3 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-stall-client.c -o /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-stall-2cpu-r2/tcp-stall-client.elf
+
+exit=0

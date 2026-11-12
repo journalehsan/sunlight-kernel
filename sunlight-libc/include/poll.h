@@ -14,8 +14,11 @@ extern "C" {
 #endif
 /* Up to 256 entries. Negative fds are ignored. Any negative timeout waits
  * indefinitely; positive timeouts use the native 10 ms scheduler clock.
- * Socket OOB data produces POLLPRI. Socket and epoll descriptors participate
- * in the same readiness scan as pipes, TTY input, eventfd and VFS files.
+ * AF_INET/SOCK_STREAM descriptors attached to net_server report real listener
+ * accept, stream read/EOF and write-capacity readiness. POLLERR/POLLHUP are
+ * unconditional; POLLNVAL remains the kernel descriptor-table result. Socket
+ * OOB data produces POLLPRI. Pipes, TTY input, eventfd, VFS files and epoll
+ * descriptors retain the kernel readiness scan. epoll is not bridged to TCP.
  * No signal interruption is implemented.
  * Invalid non-NULL user mappings retain the native EIO copy-error result. */
 int poll(struct pollfd *fds, nfds_t nfds, int timeout);

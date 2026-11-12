@@ -1,0 +1,192 @@
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:172:3: error: use of undeclared identifier 'abort'
+  172 |   _LIBUNWIND_ABORT("unsupported x86 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:216:3: error: use of undeclared identifier 'abort'
+  216 |   _LIBUNWIND_ABORT("unsupported x86 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:247:3: error: use of undeclared identifier 'abort'
+  247 |   _LIBUNWIND_ABORT("no x86 float registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:251:3: error: use of undeclared identifier 'abort'
+  251 |   _LIBUNWIND_ABORT("no x86 float registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:255:3: error: use of undeclared identifier 'abort'
+  255 |   _LIBUNWIND_ABORT("no x86 vector registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:259:3: error: use of undeclared identifier 'abort'
+  259 |   _LIBUNWIND_ABORT("no x86 vector registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:409:3: error: use of undeclared identifier 'abort'
+  409 |   _LIBUNWIND_ABORT("unsupported x86_64 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:470:3: error: use of undeclared identifier 'abort'
+  470 |   _LIBUNWIND_ABORT("unsupported x86_64 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:550:3: error: use of undeclared identifier 'abort'
+  550 |   _LIBUNWIND_ABORT("no x86_64 float registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:554:3: error: use of undeclared identifier 'abort'
+  554 |   _LIBUNWIND_ABORT("no x86_64 float registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:576:3: error: use of undeclared identifier 'abort'
+  576 |   _LIBUNWIND_ABORT("no x86_64 vector registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:586:3: error: use of undeclared identifier 'abort'
+  586 |   _LIBUNWIND_ABORT("no x86_64 vector registers");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:818:3: error: use of undeclared identifier 'abort'
+  818 |   _LIBUNWIND_ABORT("unsupported ppc register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:981:3: error: use of undeclared identifier 'abort'
+  981 |   _LIBUNWIND_ABORT("unsupported ppc register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:1387:3: error: use of undeclared identifier 'abort'
+ 1387 |   _LIBUNWIND_ABORT("unsupported ppc64 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:1537:3: error: use of undeclared identifier 'abort'
+ 1537 |   _LIBUNWIND_ABORT("unsupported ppc64 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:1916:3: error: use of undeclared identifier 'abort'
+ 1916 |   _LIBUNWIND_ABORT("unsupported arm64 register");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:1933:5: error: use of undeclared identifier 'abort'
+ 1933 |     _LIBUNWIND_ABORT("unsupported arm64 register");
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:22:
+target/phase22/source/libunwind-21.1.0.src/src/Registers.hpp:2100:3: error: use of undeclared identifier 'abort'
+ 2100 |   _LIBUNWIND_ABORT("no arm64 vector register support yet");
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libunwind-21.1.0.src/src/config.h:152:5: note: expanded from macro '_LIBUNWIND_ABORT'
+  152 |     abort();                                                                   \
+      |     ^~~~~
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.

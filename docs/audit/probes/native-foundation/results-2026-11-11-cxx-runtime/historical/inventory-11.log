@@ -1,0 +1,10 @@
+$ sh -c 'command -v x86_64-linux-musl-g++ musl-g++ clang++ g++ qemu-system-x86_64; ls /usr/lib/musl /usr/include/x86_64-linux-musl'
+/usr/bin/clang++
+/usr/bin/g++
+/usr/bin/qemu-system-x86_64
+ls: cannot access '/usr/include/x86_64-linux-musl': No such file or directory
+/usr/lib/musl:
+include
+lib
+
+exit=2

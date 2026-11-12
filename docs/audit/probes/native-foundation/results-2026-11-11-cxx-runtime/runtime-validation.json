@@ -1,0 +1,72 @@
+[
+  {
+    "name": "runtime-2cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "target/phase22/runtime-2cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "runtime-4cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "target/phase22/runtime-4cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "runtime-classes-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_classes.py",
+      "--out",
+      "target/phase22/runtime-classes-abi"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "runtime-output-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_output.py",
+      "--out",
+      "target/phase22/runtime-output-abi"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "runtime-string-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_string.py",
+      "--out",
+      "target/phase22/runtime-string-abi"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "runtime-exception_discovery-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_exception_discovery.py",
+      "--out",
+      "target/phase22/runtime-exception_discovery-abi"
+    ],
+    "exit": 1
+  }
+]

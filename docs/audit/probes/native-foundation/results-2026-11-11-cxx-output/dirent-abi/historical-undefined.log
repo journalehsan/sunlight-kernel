@@ -1,0 +1,3 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/dirent-abi/dirent.elf
+
+exit=0

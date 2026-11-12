@@ -1,0 +1,18 @@
+$ llvm-nm -g --defined-only /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a
+
+ostream.o:
+0000000000000000 W _ZNKSt7ostream4failEv
+00000000000000e0 T _ZNSt7ostream3putEc
+0000000000000280 T _ZNSt7ostream5flushEv
+0000000000000000 T _ZNSt7ostream5writeEPKcl
+0000000000000000 W _ZNSt7ostream8setstateEj
+0000000000000110 T _ZNSt7ostreamlsEPKc
+0000000000000220 T _ZNSt7ostreamlsEx
+0000000000000190 T _ZNSt7ostreamlsEy
+0000000000000008 D _ZSt4cerr
+0000000000000010 D _ZSt4clog
+0000000000000000 D _ZSt4cout
+00000000000002a0 T _ZSt4endlRSt7ostream
+00000000000002d0 T _ZSt5flushRSt7ostream
+
+exit=0

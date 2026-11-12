@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_runtime.py", line 48, in <module>
+    assert b'undefined symbol' in diag and b'file not found' not in diag
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,3 @@
+$ llvm-nm -u /tmp/phase22-final-runtime/historical.elf
+
+exit=0

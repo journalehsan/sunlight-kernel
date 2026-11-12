@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-stall-2cpu-r2/tcp-stall-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-stall-2cpu-r2/guest --timeout 300 --arg 34775 --arg 10.0.2.2 --arg external-stall-2cpu-r2

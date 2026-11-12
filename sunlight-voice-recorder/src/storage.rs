@@ -206,6 +206,7 @@ pub mod native {
             Errno::BrokenPipe => 32,
             Errno::NoSpace => 28,
             Errno::NoMemory => 12,
+            Errno::NotConnected => 107,
         })
     }
     impl File for NativeFile {

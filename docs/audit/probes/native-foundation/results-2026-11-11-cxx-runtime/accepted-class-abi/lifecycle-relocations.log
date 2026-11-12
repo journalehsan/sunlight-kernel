@@ -1,0 +1,203 @@
+$ llvm-readelf -S -s -r /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-class-abi/lifecycle.o
+There are 55 section headers, starting at offset 0x1270:
+
+Section Headers:
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .strtab           STRTAB          0000000000000000 000f30 00033d 00      0   0  1
+  [ 2] .text             PROGBITS        0000000000000000 000040 0001ce 00  AX  0   0 16
+  [ 3] .rela.text        RELA            0000000000000000 000a08 000270 18   I 54   2  8
+  [ 4] .group            GROUP           0000000000000000 0005a8 00000c 04     54  19  4
+  [ 5] .text._ZN7DerivedC2Ev PROGBITS    0000000000000000 000210 000034 00 AXG  0   0 16
+  [ 6] .rela.text._ZN7DerivedC2Ev RELA   0000000000000000 000c78 000030 18   G 54   5  8
+  [ 7] .group            GROUP           0000000000000000 0005b4 000008 04     54  24  4
+  [ 8] .text._ZNKSt9type_infoeqERKS_ PROGBITS 0000000000000000 000250 0000b8 00 AXG  0   0 16
+  [ 9] .group            GROUP           0000000000000000 0005bc 00000c 04     54  25  4
+  [10] .text._ZTW5local  PROGBITS        0000000000000000 000310 00001b 00 AXG  0   0 16
+  [11] .rela.text._ZTW5local RELA        0000000000000000 000ca8 000030 18   G 54  10  8
+  [12] .group            GROUP           0000000000000000 0005c8 000008 04     54  26  4
+  [13] .text._ZNKSt6string4sizeEv PROGBITS 0000000000000000 000330 000017 00 AXG  0   0 16
+  [14] .group            GROUP           0000000000000000 0005d0 00000c 04     54  27  4
+  [15] .text._ZN4BaseC2Ev PROGBITS       0000000000000000 000350 000024 00 AXG  0   0 16
+  [16] .rela.text._ZN4BaseC2Ev RELA      0000000000000000 000cd8 000018 18   G 54  15  8
+  [17] .group            GROUP           0000000000000000 0005dc 00000c 04     54  31  4
+  [18] .text._ZN7DerivedD2Ev PROGBITS    0000000000000000 000380 00001b 00 AXG  0   0 16
+  [19] .rela.text._ZN7DerivedD2Ev RELA   0000000000000000 000cf0 000018 18   G 54  18  8
+  [20] .group            GROUP           0000000000000000 0005e8 00000c 04     54  33  4
+  [21] .text._ZN7DerivedD0Ev PROGBITS    0000000000000000 0003a0 00002d 00 AXG  0   0 16
+  [22] .rela.text._ZN7DerivedD0Ev RELA   0000000000000000 000d08 000030 18   G 54  21  8
+  [23] .group            GROUP           0000000000000000 0005f4 000008 04     54  32  4
+  [24] .text._ZN4BaseD2Ev PROGBITS       0000000000000000 0003d0 00000f 00 AXG  0   0 16
+  [25] .group            GROUP           0000000000000000 0005fc 00000c 04     54  35  4
+  [26] .text._ZN4BaseD0Ev PROGBITS       0000000000000000 0003e0 00002d 00 AXG  0   0 16
+  [27] .rela.text._ZN4BaseD0Ev RELA      0000000000000000 000d38 000030 18   G 54  26  8
+  [28] .bss              NOBITS          0000000000000000 000410 000020 00  WA  0   0  8
+  [29] .rodata.str1.1    PROGBITS        0000000000000000 000410 000020 01 AMS  0   0  1
+  [30] .tbss             NOBITS          0000000000000000 000430 000021 00 WAT  0   0  8
+  [31] .group            GROUP           0000000000000000 000608 00000c 04     54  20  4
+  [32] .rodata._ZTI4Base PROGBITS        0000000000000000 000430 000010 00  AG  0   0  8
+  [33] .rela.rodata._ZTI4Base RELA       0000000000000000 000d68 000030 18   G 54  32  8
+  [34] .group            GROUP           0000000000000000 000614 000008 04     54  37  4
+  [35] .rodata._ZTS4Base PROGBITS        0000000000000000 000440 000006 00  AG  0   0  1
+  [36] .group            GROUP           0000000000000000 00061c 00000c 04     54  21  4
+  [37] .rodata._ZTI7Derived PROGBITS     0000000000000000 000448 000018 00  AG  0   0  8
+  [38] .rela.rodata._ZTI7Derived RELA    0000000000000000 000d98 000048 18   G 54  37  8
+  [39] .group            GROUP           0000000000000000 000628 000008 04     54  39  4
+  [40] .rodata._ZTS7Derived PROGBITS     0000000000000000 000460 000009 00  AG  0   0  1
+  [41] .group            GROUP           0000000000000000 000630 00000c 04     54  28  4
+  [42] .rodata._ZTV7Derived PROGBITS     0000000000000000 000470 000020 00  AG  0   0  8
+  [43] .rela.rodata._ZTV7Derived RELA    0000000000000000 000de0 000048 18   G 54  42  8
+  [44] .group            GROUP           0000000000000000 00063c 00000c 04     54  30  4
+  [45] .rodata._ZTV4Base PROGBITS        0000000000000000 000490 000020 00  AG  0   0  8
+  [46] .rela.rodata._ZTV4Base RELA       0000000000000000 000e28 000048 18   G 54  45  8
+  [47] .init_array       INIT_ARRAY      0000000000000000 0004b0 000008 00  WA  0   0  8
+  [48] .rela.init_array  RELA            0000000000000000 000e70 000018 18   I 54  47  8
+  [49] .comment          PROGBITS        0000000000000000 0004b8 000016 01  MS  0   0  1
+  [50] .note.GNU-stack   PROGBITS        0000000000000000 0004ce 000000 00      0   0  1
+  [51] .eh_frame         X86_64_UNWIND   0000000000000000 0004d0 0000d8 00   A  0   0  8
+  [52] .rela.eh_frame    RELA            0000000000000000 000e88 000090 18   I 54  51  8
+  [53] .llvm_addrsig     LLVM_ADDRSIG    0000000000000000 000f18 000018 00   E 54   0  1
+  [54] .symtab           SYMTAB          0000000000000000 000648 0003c0 18      1  10  8
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  R (retain), l (large), p (processor specific)
+
+Relocation section '.rela.text' at offset 0xa08 contains 26 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000006  0000000a00000001 R_X86_64_64            0000000000000000 initialized + 0
+0000000000000010  0000000900000001 R_X86_64_64            0000000000000000 .rodata.str1.1 + 0
+0000000000000019  0000000b00000004 R_X86_64_PLT32         0000000000000000 _ZNSt6stringC1EPKc - 4
+000000000000001f  0000000c00000001 R_X86_64_64            0000000000000000 _ZNSt6stringD1Ev + 0
+0000000000000029  0000000a00000001 R_X86_64_64            0000000000000000 initialized + 0
+0000000000000033  0000000d00000001 R_X86_64_64            0000000000000000 __dso_handle + 0
+000000000000003c  0000000e00000004 R_X86_64_PLT32         0000000000000000 __cxa_atexit - 4
+0000000000000060  0000000f00000017 R_X86_64_TPOFF32       0000000000000000 local + 0
+0000000000000065  000000090000000a R_X86_64_32            0000000000000000 .rodata.str1.1 + 19
+000000000000006a  0000000b00000004 R_X86_64_PLT32         0000000000000000 _ZNSt6stringC1EPKc - 4
+000000000000007a  0000000f00000017 R_X86_64_TPOFF32       0000000000000000 local + 0
+000000000000007f  0000000c0000000a R_X86_64_32            0000000000000000 _ZNSt6stringD1Ev + 0
+0000000000000084  0000000d0000000a R_X86_64_32            0000000000000000 __dso_handle + 0
+0000000000000089  0000001000000004 R_X86_64_PLT32         0000000000000000 __cxa_thread_atexit - 4
+00000000000000a5  0000001200000004 R_X86_64_PLT32         0000000000000000 _Znwm - 4
+00000000000000b1  0000001300000004 R_X86_64_PLT32         0000000000000000 _ZN7DerivedC2Ev - 4
+00000000000000d1  0000001400000001 R_X86_64_64            0000000000000000 _ZTI4Base + 0
+00000000000000db  0000001500000001 R_X86_64_64            0000000000000000 _ZTI7Derived + 0
+00000000000000e8  0000001600000004 R_X86_64_PLT32         0000000000000000 __dynamic_cast - 4
+0000000000000118  0000001700000004 R_X86_64_PLT32         0000000000000000 __cxa_bad_typeid - 4
+0000000000000129  0000001500000001 R_X86_64_64            0000000000000000 _ZTI7Derived + 0
+0000000000000132  0000001800000004 R_X86_64_PLT32         0000000000000000 _ZNKSt9type_infoeqERKS_ - 4
+000000000000016c  0000001900000004 R_X86_64_PLT32         0000000000000000 _ZTW5local - 4
+0000000000000174  0000001a00000004 R_X86_64_PLT32         0000000000000000 _ZNKSt6string4sizeEv - 4
+00000000000001af  0000000800000017 R_X86_64_TPOFF32       0000000000000020 __tls_guard + 0
+00000000000001c2  0000000800000017 R_X86_64_TPOFF32       0000000000000020 __tls_guard + 0
+
+Relocation section '.rela.text._ZN7DerivedC2Ev' at offset 0xc78 contains 2 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000015  0000001b00000004 R_X86_64_PLT32         0000000000000000 _ZN4BaseC2Ev - 4
+000000000000001f  0000001c00000001 R_X86_64_64            0000000000000000 _ZTV7Derived + 0
+
+Relocation section '.rela.text._ZTW5local' at offset 0xca8 contains 2 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000005  0000001d00000004 R_X86_64_PLT32         00000000000001a0 _ZTH5local - 4
+0000000000000015  0000000f00000017 R_X86_64_TPOFF32       0000000000000000 local + 0
+
+Relocation section '.rela.text._ZN4BaseC2Ev' at offset 0xcd8 contains 1 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+000000000000000f  0000001e00000001 R_X86_64_64            0000000000000000 _ZTV4Base + 0
+
+Relocation section '.rela.text._ZN7DerivedD2Ev' at offset 0xcf0 contains 1 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000011  0000002000000004 R_X86_64_PLT32         0000000000000000 _ZN4BaseD2Ev - 4
+
+Relocation section '.rela.text._ZN7DerivedD0Ev' at offset 0xd08 contains 2 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000015  0000001f00000004 R_X86_64_PLT32         0000000000000000 _ZN7DerivedD2Ev - 4
+0000000000000023  0000002200000004 R_X86_64_PLT32         0000000000000000 _ZdlPvm - 4
+
+Relocation section '.rela.text._ZN4BaseD0Ev' at offset 0xd38 contains 2 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000015  0000002000000004 R_X86_64_PLT32         0000000000000000 _ZN4BaseD2Ev - 4
+0000000000000023  0000002200000004 R_X86_64_PLT32         0000000000000000 _ZdlPvm - 4
+
+Relocation section '.rela.rodata._ZTI4Base' at offset 0xd68 contains 2 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000000  0000002400000001 R_X86_64_64            0000000000000000 _ZTVN10__cxxabiv117__class_type_infoE + 10
+0000000000000008  0000002500000001 R_X86_64_64            0000000000000000 _ZTS4Base + 0
+
+Relocation section '.rela.rodata._ZTI7Derived' at offset 0xd98 contains 3 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000000  0000002600000001 R_X86_64_64            0000000000000000 _ZTVN10__cxxabiv120__si_class_type_infoE + 10
+0000000000000008  0000002700000001 R_X86_64_64            0000000000000000 _ZTS7Derived + 0
+0000000000000010  0000001400000001 R_X86_64_64            0000000000000000 _ZTI4Base + 0
+
+Relocation section '.rela.rodata._ZTV7Derived' at offset 0xde0 contains 3 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000008  0000001500000001 R_X86_64_64            0000000000000000 _ZTI7Derived + 0
+0000000000000010  0000001f00000001 R_X86_64_64            0000000000000000 _ZN7DerivedD2Ev + 0
+0000000000000018  0000002100000001 R_X86_64_64            0000000000000000 _ZN7DerivedD0Ev + 0
+
+Relocation section '.rela.rodata._ZTV4Base' at offset 0xe28 contains 3 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000008  0000001400000001 R_X86_64_64            0000000000000000 _ZTI4Base + 0
+0000000000000010  0000002000000001 R_X86_64_64            0000000000000000 _ZN4BaseD2Ev + 0
+0000000000000018  0000002300000001 R_X86_64_64            0000000000000000 _ZN4BaseD0Ev + 0
+
+Relocation section '.rela.init_array' at offset 0xe70 contains 1 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000000  0000000200000001 R_X86_64_64            0000000000000000 .text + 190
+
+Relocation section '.rela.eh_frame' at offset 0xe88 contains 6 entries:
+    Offset             Info             Type               Symbol's Value  Symbol's Name + Addend
+0000000000000020  0000000200000002 R_X86_64_PC32          0000000000000000 .text + 0
+0000000000000040  0000000200000002 R_X86_64_PC32          0000000000000000 .text + 50
+0000000000000060  0000000200000002 R_X86_64_PC32          0000000000000000 .text + 90
+0000000000000080  0000000500000002 R_X86_64_PC32          0000000000000000 .text._ZTW5local + 0
+00000000000000a0  0000000200000002 R_X86_64_PC32          0000000000000000 .text + 190
+00000000000000c0  0000000200000002 R_X86_64_PC32          0000000000000000 .text + 1a0
+
+Symbol table '.symtab' contains 40 entries:
+   Num:    Value          Size Type    Bind   Vis       Ndx Name
+     0: 0000000000000000     0 NOTYPE  LOCAL  DEFAULT   UND 
+     1: 0000000000000000     0 FILE    LOCAL  DEFAULT   ABS lifecycle.cpp
+     2: 0000000000000000     0 SECTION LOCAL  DEFAULT     2 .text
+     3: 0000000000000000    66 FUNC    LOCAL  DEFAULT     2 __cxx_global_var_init
+     4: 0000000000000050    63 FUNC    LOCAL  DEFAULT     2 __cxx_global_var_init.1
+     5: 0000000000000000     0 SECTION LOCAL  DEFAULT    10 .text._ZTW5local
+     6: 0000000000000190    11 FUNC    LOCAL  DEFAULT     2 _GLOBAL__sub_I_lifecycle.cpp
+     7: 00000000000001a0    46 FUNC    LOCAL  DEFAULT     2 __tls_init
+     8: 0000000000000020     1 TLS     LOCAL  DEFAULT    30 __tls_guard
+     9: 0000000000000000     0 SECTION LOCAL  DEFAULT    29 .rodata.str1.1
+    10: 0000000000000000    32 OBJECT  GLOBAL DEFAULT    28 initialized
+    11: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _ZNSt6stringC1EPKc
+    12: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _ZNSt6stringD1Ev
+    13: 0000000000000000     0 NOTYPE  GLOBAL HIDDEN    UND __dso_handle
+    14: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND __cxa_atexit
+    15: 0000000000000000    32 TLS     GLOBAL DEFAULT    30 local
+    16: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND __cxa_thread_atexit
+    17: 0000000000000090   248 FUNC    GLOBAL DEFAULT     2 main
+    18: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _Znwm
+    19: 0000000000000000    52 FUNC    WEAK   DEFAULT     5 _ZN7DerivedC2Ev
+    20: 0000000000000000    16 OBJECT  WEAK   DEFAULT    32 _ZTI4Base
+    21: 0000000000000000    24 OBJECT  WEAK   DEFAULT    37 _ZTI7Derived
+    22: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND __dynamic_cast
+    23: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND __cxa_bad_typeid
+    24: 0000000000000000   184 FUNC    WEAK   DEFAULT     8 _ZNKSt9type_infoeqERKS_
+    25: 0000000000000000    27 FUNC    WEAK   HIDDEN     10 _ZTW5local
+    26: 0000000000000000    23 FUNC    WEAK   DEFAULT    13 _ZNKSt6string4sizeEv
+    27: 0000000000000000    36 FUNC    WEAK   DEFAULT    15 _ZN4BaseC2Ev
+    28: 0000000000000000    32 OBJECT  WEAK   DEFAULT    42 _ZTV7Derived
+    29: 00000000000001a0    46 FUNC    GLOBAL DEFAULT     2 _ZTH5local
+    30: 0000000000000000    32 OBJECT  WEAK   DEFAULT    45 _ZTV4Base
+    31: 0000000000000000    27 FUNC    WEAK   DEFAULT    18 _ZN7DerivedD2Ev
+    32: 0000000000000000    15 FUNC    WEAK   DEFAULT    24 _ZN4BaseD2Ev
+    33: 0000000000000000    45 FUNC    WEAK   DEFAULT    21 _ZN7DerivedD0Ev
+    34: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _ZdlPvm
+    35: 0000000000000000    45 FUNC    WEAK   DEFAULT    26 _ZN4BaseD0Ev
+    36: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _ZTVN10__cxxabiv117__class_type_infoE
+    37: 0000000000000000     6 OBJECT  WEAK   DEFAULT    35 _ZTS4Base
+    38: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT   UND _ZTVN10__cxxabiv120__si_class_type_infoE
+    39: 0000000000000000     9 OBJECT  WEAK   DEFAULT    40 _ZTS7Derived
+
+exit=0

@@ -1,0 +1,69 @@
+{
+  "mode": "echo",
+  "cpus": 4,
+  "memory_mib": 2048,
+  "run_id": "external-echo-4cpu-v2",
+  "commands": [
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-echo-client.c -o /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-4cpu-v2/tcp-echo-client.elf",
+    "/usr/bin/python3 tools/native-c/tcp_host_peer.py --mode echo --deadline 120",
+    "/usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-4cpu-v2/tcp-echo-client.elf --net --cpus 4 --out /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-4cpu-v2/guest --timeout 300 --arg 44185 --arg 10.0.2.2 --arg external-echo-4cpu-v2"
+  ],
+  "checks": {
+    "native_archive": true,
+    "client_build": true,
+    "host_peer_ready": true,
+    "guest_runner": true,
+    "host_peer_exit": true,
+    "guest_pass_line": true,
+    "guest_clean": true,
+    "guest_done": true,
+    "host_peer_pass_line": true,
+    "tcp_frames_present": true,
+    "outbound_stream_exact": true,
+    "inbound_stream_exact": true,
+    "arp_for_gateway": true
+  },
+  "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=44185",
+  "host_port": 44185,
+  "guest_destination": "10.0.2.2:44185",
+  "host_peer_exit": 0,
+  "guest_stdout": "tcp-echo: run=external-echo-4cpu-v2 dest=10.0.2.2:44185\ntcp-echo: refused errno=111\ntcp-echo: nonblocking-connect errno=95\ntcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+  "guest_pass_line": "tcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+  "guest_clean": true,
+  "guest_done": true,
+  "dhcp_lease": {
+    "address": "10.0.2.15",
+    "prefix": 24,
+    "gateway": "10.0.2.2"
+  },
+  "host_peer_pass_line": "HOST-PEER PASS mode=echo exchanges=5 bytes=1371",
+  "pcap": {
+    "frames": 41,
+    "arp": 2,
+    "ipv4": 39,
+    "tcp": 35,
+    "udp": 4
+  },
+  "arp": [
+    {
+      "opcode": 1,
+      "sender": "10.0.2.15",
+      "target": "10.0.2.2"
+    },
+    {
+      "opcode": 2,
+      "sender": "10.0.2.2",
+      "target": "10.0.2.15"
+    }
+  ],
+  "tcp_segments": 35,
+  "reconstructed": {
+    "outbound_bytes": 1395,
+    "outbound_sha256": "47a9ea4aa44f1a4c6fab1982557cfea60efce87f55c49d9c41888a47e33e11bf",
+    "inbound_bytes": 1391,
+    "inbound_sha256": "acd17ec6a05c03d57191eb4a8e03b92b1aa18109134a30fbce50ad0accf5fd89",
+    "expected_outbound_sha256": "47a9ea4aa44f1a4c6fab1982557cfea60efce87f55c49d9c41888a47e33e11bf",
+    "expected_inbound_sha256": "acd17ec6a05c03d57191eb4a8e03b92b1aa18109134a30fbce50ad0accf5fd89"
+  },
+  "result": "PASS"
+}

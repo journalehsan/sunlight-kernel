@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "tcp-poll: reuse old=5 new=4\ntcp-poll: FAIL step=close-reuse errno=22\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

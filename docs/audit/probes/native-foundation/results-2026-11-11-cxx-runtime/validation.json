@@ -1,0 +1,298 @@
+[
+  {
+    "name": "final-2cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--out",
+      "target/phase22/final-2cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "final-4cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--out",
+      "target/phase22/final-4cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "output-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_output.py",
+      "--out",
+      "target/phase22/output-abi"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "string-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_string.py",
+      "--out",
+      "target/phase22/string-abi"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "discovery",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_exception_discovery.py",
+      "--out",
+      "target/phase22/discovery"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "historical",
+    "command": [
+      "python3",
+      "docs/audit/probes/run.py",
+      "--out",
+      "target/phase22/historical"
+    ],
+    "exit": 2
+  },
+  {
+    "name": "run_dirent",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_dirent.py",
+      "--out",
+      "target/phase22/run_dirent"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_dlfcn",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_dlfcn.py",
+      "--out",
+      "target/phase22/run_dlfcn"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_langinfo",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_langinfo.py",
+      "--out",
+      "target/phase22/run_langinfo"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_locale",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_locale.py",
+      "--out",
+      "target/phase22/run_locale"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_math",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_math.py",
+      "--out",
+      "target/phase22/run_math"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_mman",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_mman.py",
+      "--out",
+      "target/phase22/run_mman"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_poll",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_poll.py",
+      "--out",
+      "target/phase22/run_poll"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_pthread",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_pthread.py",
+      "--out",
+      "target/phase22/run_pthread"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_random",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_random.py",
+      "--out",
+      "target/phase22/run_random"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_signal",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_signal.py",
+      "--out",
+      "target/phase22/run_signal"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_socket",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_socket.py",
+      "--out",
+      "target/phase22/run_socket"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_termios",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_termios.py",
+      "--out",
+      "target/phase22/run_termios"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_time",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_time.py",
+      "--out",
+      "target/phase22/run_time"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_unistd",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_unistd.py",
+      "--out",
+      "target/phase22/run_unistd"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_wchar",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_wchar.py",
+      "--out",
+      "target/phase22/run_wchar"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "run_stdio",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_stdio.py",
+      "--out",
+      "target/phase22/run_stdio"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "kernel",
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-kernel"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "overlay",
+    "command": [
+      "bash",
+      "tools/check_native_std.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "workspace",
+    "command": [
+      "cargo",
+      "check",
+      "--workspace"
+    ],
+    "exit": 101
+  },
+  {
+    "name": "foundation",
+    "command": [
+      "bash",
+      "tools/test_native_std_foundation.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "mem-proof",
+    "command": [
+      "bash",
+      "tools/test-mem-string-proof.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "alloc-proof",
+    "command": [
+      "bash",
+      "tools/test-alloc-proof.sh"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "alloc-base-build",
+    "command": [
+      "rustc",
+      "--test",
+      "tools/alloc-proof.rs",
+      "-o",
+      "target/phase22/alloc-base"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "alloc-base",
+    "command": [
+      "target/phase22/alloc-base",
+      "--test-threads=1"
+    ],
+    "exit": 0
+  }
+]

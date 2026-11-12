@@ -1,0 +1,3 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -fsyntax-only -x c++ -
+
+exit=0

@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/target/phase22/lifecycle-4cpu
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'global-init\nworker:TLS\nTLS-done\nmain:global:TLS\nTLS-done\natexit\nglobal-done\n'

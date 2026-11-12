@@ -1,0 +1,11 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-contract.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/wchar-contract.elf
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-contract.c:25:107: error: suspicious concatenation of string literals in an array initialization; did you mean to separate the elements with a comma? [-Werror,-Wstring-concatenation]
+   25 |     const char *bad[]={"\x80","\xc0\x80","\xe0\x80","\xed\xa0","\xf0\x80","\xf4\x90","\xf5","\xff","\xc2" "A"};
+      |                                                                                                           ^
+      |                                                                                                          ,
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-contract.c:25:100: note: place parentheses around the string literal to silence warning
+   25 |     const char *bad[]={"\x80","\xc0\x80","\xe0\x80","\xed\xa0","\xf0\x80","\xf4\x90","\xf5","\xff","\xc2" "A"};
+      |                                                                                                    ^
+1 error generated.
+
+exit=1

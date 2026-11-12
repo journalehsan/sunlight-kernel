@@ -1,0 +1,3 @@
+$ rg -n 'SYS_(FTRUNCATE|FSYNC|SELECT|STATX|MREMAP|ALARM|GETRLIMIT|PRLIMIT64|RT_SIGRETURN)' compat-linux/src/lib.rs compat-linux/src/abi.rs
+
+exit=1

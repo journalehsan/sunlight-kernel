@@ -1,0 +1,4 @@
+$ rg -n '/proc/self|/dev/null|/dev/urandom|/dev/tty' kernel/src sunlight-fs/src services/vfs_server/src
+kernel/src/launch_trace.md:77:   yes > /dev/null &
+
+exit=0

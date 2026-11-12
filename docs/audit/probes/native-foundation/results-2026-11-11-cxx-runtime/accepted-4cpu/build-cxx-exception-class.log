@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-exception-class.cpp -o /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-4cpu/cxx-exception-class.elf
+
+exit=0

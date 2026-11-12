@@ -1,0 +1,11 @@
+$ python3 tools/native-c/tests/run_cxx_classes.py --out target/phase22/runtime-classes-abi
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_classes.py", line 49, in <module>
+    run('lifecycle-link',['python3','tools/native-c/cxx.py',out/'lifecycle.o','-o',out/'lifecycle.elf'],1)
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_classes.py", line 19, in run
+    assert r.returncode == expected, name
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: lifecycle-link
+
+exit=1

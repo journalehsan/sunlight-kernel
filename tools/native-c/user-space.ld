@@ -35,6 +35,19 @@ SECTIONS
 
     . = ALIGN(4096);
 
+    .eh_frame : ALIGN(8) {
+        __eh_frame_start = .;
+        KEEP(*(.eh_frame))
+        __eh_frame_end = .;
+    }
+    .eh_frame_hdr : ALIGN(8) {
+        __eh_frame_hdr_start = .;
+        KEEP(*(.eh_frame_hdr))
+        __eh_frame_hdr_end = .;
+    }
+    .gcc_except_table : ALIGN(8) { KEEP(*(.gcc_except_table .gcc_except_table.*)) }
+    . = ALIGN(4096);
+
     /* Static TLS image. The runtime copies [tdata_start, tdata_end) to
        thread_pointer - block_size and zeroes the remainder. */
     .tdata : {
@@ -56,6 +69,12 @@ SECTIONS
 
     .data : {
         *(.data .data.*)
+    }
+    .init_array : ALIGN(8) {
+        __sl_init_array_start = .;
+        KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))
+        KEEP(*(.init_array))
+        __sl_init_array_end = .;
     }
 
     . = ALIGN(4096);

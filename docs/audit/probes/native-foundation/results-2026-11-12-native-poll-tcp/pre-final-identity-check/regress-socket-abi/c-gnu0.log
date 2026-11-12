@@ -1,0 +1,3 @@
+$ clang --target=x86_64-unknown-none-elf -std=c11 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -D_GNU_SOURCE -x c -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/socket-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/final/regress-socket-abi/c-gnu0.o
+
+exit=0

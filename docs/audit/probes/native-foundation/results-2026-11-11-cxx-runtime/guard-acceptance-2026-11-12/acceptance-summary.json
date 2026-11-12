@@ -1,0 +1,26 @@
+{
+  "2": {
+    "ram_mib": 2048,
+    "built_native_cases": 93,
+    "native_pass": 93,
+    "local_static_guards": "PASS",
+    "configured_historical": "PASS",
+    "original_command": "LINK_FAIL; runtime NOT_RUN",
+    "lifecycle": "PASS exact output",
+    "faults": "none"
+  },
+  "4": {
+    "ram_mib": 2048,
+    "built_native_cases": 93,
+    "native_pass": 93,
+    "local_static_guards": "PASS",
+    "configured_historical": "PASS",
+    "original_command": "LINK_FAIL; runtime NOT_RUN",
+    "lifecycle": "PASS exact output",
+    "faults": "none"
+  },
+  "historical_integrity": {
+    "files": 26,
+    "result": "PASS"
+  }
+}

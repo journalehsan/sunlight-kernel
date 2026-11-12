@@ -1,0 +1,11 @@
+$ python3 tools/native-c/cxx.py /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-runtime-abi/local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-runtime-abi/local-static.elf
+ld.lld: error: undefined symbol: __cxa_guard_acquire
+>>> referenced by local-static.cpp
+>>>               /tmp/local-static-93c40d.o:(f())
+
+ld.lld: error: undefined symbol: __cxa_guard_release
+>>> referenced by local-static.cpp
+>>>               /tmp/local-static-93c40d.o:(f())
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

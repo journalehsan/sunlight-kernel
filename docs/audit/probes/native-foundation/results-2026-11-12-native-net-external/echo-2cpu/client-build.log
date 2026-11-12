@@ -1,0 +1,3 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-echo-client.c -o /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-2cpu-v2/tcp-echo-client.elf
+
+exit=0

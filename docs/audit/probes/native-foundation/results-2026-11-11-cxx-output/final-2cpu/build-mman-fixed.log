@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase20/final-2cpu/mman-fixed.elf
+
+exit=0

@@ -1,0 +1,31 @@
+{
+  "preservation": "PASS",
+  "historical_unchanged": true,
+  "cpu": {
+    "2": {
+      "native_pass": 80,
+      "historical_pass": 20,
+      "historical_build_fail": 1,
+      "cpp_runtime": "NOT_RUN",
+      "clean_primary_reaps": 80,
+      "total_reaps": 103,
+      "faults": 0,
+      "fp": "PASS"
+    },
+    "4": {
+      "native_pass": 80,
+      "historical_pass": 20,
+      "historical_build_fail": 1,
+      "cpp_runtime": "NOT_RUN",
+      "clean_primary_reaps": 80,
+      "total_reaps": 103,
+      "faults": 0,
+      "fp": "PASS"
+    }
+  },
+  "separate_failures": {
+    "workspace": "FAIL",
+    "legacy_stdio": "BLOCKED: missing host harness module",
+    "allocator_global_proof": "BUILD_FAIL: host cfg excludes GLOBAL_ALLOC"
+  }
+}

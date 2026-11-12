@@ -1,0 +1,14 @@
+clang version 23.1.4
+Target: x86_64-unknown-none-elf
+Thread model: posix
+InstalledDir: /usr/bin
+ "/usr/bin/clang-23" -cc1 -triple x86_64-unknown-none-elf -emit-obj -dumpdir target/phase20/historical.elf- -disable-free -clear-ast-before-backend -disable-llvm-verifier -discard-value-names -main-file-name cpp-runtime.cpp -mrelocation-model static -mframe-pointer=all -fmath-errno -ffp-contract=on -fno-rounding-math -mconstructor-aliases -nostdsysteminc -target-cpu x86-64 -tune-cpu generic -debugger-tuning=gdb -fdebug-compilation-dir=/home/ehsantor/Projects/sunlightos-kernel -v -fcoverage-compilation-dir=/home/ehsantor/Projects/sunlightos-kernel -nostdsysteminc -nobuiltininc -resource-dir /usr/lib/clang/23 -I sunlight-libc/include -fdeprecated-macro -ferror-limit 19 -fgnuc-version=4.2.1 -fskip-odr-check-in-gmf -fcxx-exceptions -fexceptions -fno-color-diagnostics -faddrsig -fdwarf2-cfi-asm -o /tmp/cpp-runtime-08cf27.o -x c++ docs/audit/probes/cpp-runtime.cpp
+clang -cc1 version 23.1.4 based upon LLVM 23.1.4 default target x86_64-pc-linux-gnu
+#include "..." search starts here:
+#include <...> search starts here:
+ sunlight-libc/include
+End of search list.
+docs/audit/probes/cpp-runtime.cpp:1:10: fatal error: 'iostream' file not found
+    1 | #include <iostream>
+      |          ^~~~~~~~~~
+1 error generated.

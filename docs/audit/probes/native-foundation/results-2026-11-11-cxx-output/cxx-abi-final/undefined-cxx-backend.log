@@ -1,0 +1,3 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/cxx-abi-final/cxx-backend.elf
+
+exit=0

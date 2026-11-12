@@ -13,7 +13,7 @@ use sunlight_ipc::{
     shm_map, CapabilityToken, DevicedMsg, DriverCaps, DriverKind, DriverState, EndpointId, IpcMsg,
     NetworkdMsg, ResolvedMsg, VfsMsg,
 };
-use sunlight_net::netop::{NetDiagnostic, NetOp, NetStatus};
+use sunlight_net::netop::{NetDiagnostic, NetOp, NetStatus, NetWait};
 use sunlight_net::{ProxyNetDevice, SocketIdentity, TcpError};
 
 use linked_list_allocator::LockedHeap;
@@ -55,7 +55,10 @@ struct SocketWaiter {
     completion_token: u64,
     owner_pid: u64,
     identities: alloc::vec::Vec<SocketIdentity>,
-    interest: u32,
+    /// One interest mask per identity. Legacy WAIT repeats one mask; the
+    /// per-identity extension stores the caller's masks.
+    interests: alloc::vec::Vec<u32>,
+    per_identity_interest: bool,
     deadline_ms: u64,
 }
 
@@ -1144,6 +1147,31 @@ fn first_ready(
     None
 }
 
+/// Strict per-identity wait: wake only for bits the caller explicitly asked
+/// for. `poll` requests terminal bits explicitly, so `events == 0` does not
+/// wake repeatedly on a persistent EOF/READ bit it will not report.
+fn first_ready_per_identity(
+    owner_pid: u64,
+    identities: &[SocketIdentity],
+    interests: &[u32],
+    sockets: &SocketSet<'static>,
+) -> Option<(SocketIdentity, u32)> {
+    unsafe {
+        let tcp = TCP_MANAGER.as_ref()?;
+        for (identity, interest) in identities.iter().zip(interests.iter()) {
+            match tcp.ready(owner_pid, *identity, sockets) {
+                Ok(ready) if ready.bits() & interest != 0 => {
+                    return Some((*identity, ready.bits()))
+                }
+                Ok(_) | Err(TcpError::WouldBlock) => {}
+                Err(TcpError::InvalidSocket) => {}
+                Err(error) => return Some((*identity, socket_ready_error(error))),
+            }
+        }
+    }
+    None
+}
+
 fn socket_ready_error(error: TcpError) -> u32 {
     match error {
         TcpError::Reset => sunlight_net::SocketReady::RESET,
@@ -1175,6 +1203,7 @@ fn wait_reply(status: u64, identity: SocketIdentity, ready_bits: u32) -> IpcMsg 
 fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> {
     let count = (msg.words[0] as usize).min(MAX_WAIT_SET);
     let timeout_ms = msg.words[1];
+    let per_identity_interest = msg.words[3] & NetWait::PER_IDENTITY_INTEREST != 0;
     let interest = if msg.words[2] == 0 {
         u32::MAX
     } else {
@@ -1198,6 +1227,19 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
             .map(SocketIdentity)
             .collect::<alloc::vec::Vec<_>>()
     };
+    let interests = if per_identity_interest {
+        unsafe {
+            core::slice::from_raw_parts(
+                page.add(NetWait::INTEREST_OFFSET) as *const u32,
+                count,
+            )
+        }
+        .iter()
+        .map(|interest| interest & 0x7f)
+        .collect::<alloc::vec::Vec<_>>()
+    } else {
+        alloc::vec![interest; count]
+    };
     let _ = shm_free(msg.caps[0]);
     if identities
         .iter()
@@ -1209,8 +1251,26 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
             0,
         ));
     }
-    if let Some((identity, ready)) = first_ready(msg.badge, &identities, interest, sockets) {
+    let ready = if per_identity_interest {
+        first_ready_per_identity(msg.badge, &identities, &interests, sockets)
+    } else {
+        first_ready(msg.badge, &identities, interest, sockets)
+    };
+    if let Some((identity, ready)) = ready {
         return Some(wait_reply(NetStatus::OK, identity, ready));
+    }
+    if !identities
+        .iter()
+        .any(|identity| identity_resolves(msg.badge, *identity, sockets))
+    {
+        // Every requested socket was reaped. Report the terminal connection
+        // status even for a zero-timeout snapshot; otherwise a poll snapshot
+        // would silently show idle for a descriptor whose peer is gone.
+        return Some(wait_reply(
+            NetStatus::NOT_CONNECTED,
+            identities[0],
+            0,
+        ));
     }
     if timeout_ms == 0 {
         return Some(wait_reply(
@@ -1245,7 +1305,8 @@ fn handle_wait(msg: IpcMsg, sockets: &mut SocketSet<'static>) -> Option<IpcMsg> 
             completion_token,
             owner_pid: msg.badge,
             identities,
-            interest,
+            interests,
+            per_identity_interest,
             deadline_ms: monotonic_millis().saturating_add(timeout_ms),
         });
     }
@@ -1261,12 +1322,22 @@ fn complete_waiters(sockets: &mut SocketSet<'static>) {
         if !ipc_deferred_reply_is_live(waiter.completion_token) {
             continue;
         }
-        let reply = if let Some((identity, ready)) = first_ready(
-            waiter.owner_pid,
-            &waiter.identities,
-            waiter.interest,
-            sockets,
-        ) {
+        let ready = if waiter.per_identity_interest {
+            first_ready_per_identity(
+                waiter.owner_pid,
+                &waiter.identities,
+                &waiter.interests,
+                sockets,
+            )
+        } else {
+            first_ready(
+                waiter.owner_pid,
+                &waiter.identities,
+                waiter.interests.first().copied().unwrap_or(u32::MAX),
+                sockets,
+            )
+        };
+        let reply = if let Some((identity, ready)) = ready {
             Some(wait_reply(NetStatus::OK, identity, ready))
         } else if !waiter
             .identities

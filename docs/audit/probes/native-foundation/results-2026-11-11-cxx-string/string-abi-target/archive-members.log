@@ -1,0 +1,5 @@
+$ llvm-ar t /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a
+ostream.o
+string.o
+
+exit=0

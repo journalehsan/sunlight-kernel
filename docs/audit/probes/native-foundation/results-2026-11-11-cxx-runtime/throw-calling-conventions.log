@@ -1,0 +1,56 @@
+
+target/phase22/accepted-discovery/throw.o:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000000000 <main()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 30                  	subq	$0x30, %rsp
+       8: bf 10 00 00 00               	movl	$0x10, %edi
+       d: e8 00 00 00 00               	callq	0x12 <main()+0x12>
+		000000000000000e:  R_X86_64_PLT32	__cxa_allocate_exception-0x4
+      12: 48 89 c7                     	movq	%rax, %rdi
+      15: 48 89 7d e0                  	movq	%rdi, -0x20(%rbp)
+      19: be 00 00 00 00               	movl	$0x0, %esi
+		000000000000001a:  R_X86_64_32	.rodata.str1.1
+      1e: e8 00 00 00 00               	callq	0x23 <main()+0x23>
+		000000000000001f:  R_X86_64_PLT32	std::runtime_error::runtime_error(char const*)-0x4
+      23: 48 8b 7d e0                  	movq	-0x20(%rbp), %rdi
+      27: be 00 00 00 00               	movl	$0x0, %esi
+		0000000000000028:  R_X86_64_32	typeinfo for std::runtime_error
+      2c: ba 00 00 00 00               	movl	$0x0, %edx
+		000000000000002d:  R_X86_64_32	std::runtime_error::~runtime_error()
+      31: e8 00 00 00 00               	callq	0x36 <main()+0x36>
+		0000000000000032:  R_X86_64_PLT32	__cxa_throw-0x4
+      36: eb 57                        	jmp	0x8f <main()+0x8f>
+      38: 48 89 c1                     	movq	%rax, %rcx
+      3b: 89 d0                        	movl	%edx, %eax
+      3d: 48 89 4d f8                  	movq	%rcx, -0x8(%rbp)
+      41: 89 45 f4                     	movl	%eax, -0xc(%rbp)
+      44: 8b 45 f4                     	movl	-0xc(%rbp), %eax
+      47: b9 01 00 00 00               	movl	$0x1, %ecx
+      4c: 39 c8                        	cmpl	%ecx, %eax
+      4e: 75 36                        	jne	0x86 <main()+0x86>
+      50: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      54: e8 00 00 00 00               	callq	0x59 <main()+0x59>
+		0000000000000055:  R_X86_64_PLT32	__cxa_begin_catch-0x4
+      59: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+      5d: 48 8b 7d e8                  	movq	-0x18(%rbp), %rdi
+      61: 48 8b 07                     	movq	(%rdi), %rax
+      64: ff 50 10                     	callq	*0x10(%rax)
+      67: 0f be 00                     	movsbl	(%rax), %eax
+      6a: 83 f8 65                     	cmpl	$0x65, %eax
+      6d: 0f 95 c0                     	setne	%al
+      70: 24 01                        	andb	$0x1, %al
+      72: 0f b6 c0                     	movzbl	%al, %eax
+      75: 89 45 dc                     	movl	%eax, -0x24(%rbp)
+      78: e8 00 00 00 00               	callq	0x7d <main()+0x7d>
+		0000000000000079:  R_X86_64_PLT32	__cxa_end_catch-0x4
+      7d: 8b 45 dc                     	movl	-0x24(%rbp), %eax
+      80: 48 83 c4 30                  	addq	$0x30, %rsp
+      84: 5d                           	popq	%rbp
+      85: c3                           	retq
+      86: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      8a: e8 00 00 00 00               	callq	0x8f <main()+0x8f>
+		000000000000008b:  R_X86_64_PLT32	_Unwind_Resume-0x4

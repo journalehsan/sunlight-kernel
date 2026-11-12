@@ -4,6 +4,13 @@ use core::ffi::{c_int, c_void};
 
 #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
 pub unsafe extern "C" fn write(fd: c_int, ptr: *const c_void, len: usize) -> isize {
+    if fd >= 0 && crate::net_bridge::lookup(fd).is_some() {
+        if len > sys::MAX_IO_COUNT {
+            errno::set_errno(errno::EINVAL);
+            return -1;
+        }
+        return crate::net_bridge::send(fd, ptr.cast(), len, 0);
+    }
     write_with(fd, ptr, len, |fd, ptr, len| crate::write_raw(fd, ptr, len))
 }
 
@@ -46,6 +53,9 @@ pub extern "C" fn close(fd: c_int) -> c_int {
         errno::set_errno(errno::EBADF);
         return -1;
     }
+    // Release the net_server attachment before the kernel descriptor is
+    // consumed. A no-op for descriptors that were never bridged.
+    crate::net_bridge::close(fd);
     match crate::close(Fd(fd as u32)) {
         Ok(()) => 0,
         Err(error) => {
@@ -57,6 +67,13 @@ pub extern "C" fn close(fd: c_int) -> c_int {
 
 #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
 pub unsafe extern "C" fn read(fd: c_int, ptr: *mut c_void, len: usize) -> isize {
+    if fd >= 0 && crate::net_bridge::lookup(fd).is_some() {
+        if len > sys::MAX_IO_COUNT {
+            errno::set_errno(errno::EINVAL);
+            return -1;
+        }
+        return crate::net_bridge::recv(fd, ptr.cast(), len, 0);
+    }
     write_with(fd, ptr, len, |fd, ptr, len| {
         sys::check_io_count(
             sys::syscall3(sys::SYS_READ, fd.0 as u64, ptr as u64, len as u64),

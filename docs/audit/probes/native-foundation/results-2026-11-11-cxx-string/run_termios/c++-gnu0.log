@@ -1,0 +1,3 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -D_GNU_SOURCE -x c++ -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/termios-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase21/run_termios/c++-gnu0.o
+
+exit=0

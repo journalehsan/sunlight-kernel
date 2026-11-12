@@ -1,0 +1,4 @@
+$ rg -n 'symlink|readlink|mtime|eq_ignore_ascii_case' sunlight-fs/src sunlight-fat/src
+sunlight-fat/src/fat.rs:273:            if entry.display_name[..entry.display_len as usize].eq_ignore_ascii_case(component) {
+
+exit=0

@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_stdio.py --out target/phase22/run_stdio
+host-fd-vfs: FAIL (exit 101, expected 0); see /home/ehsantor/Projects/sunlightos-kernel/target/phase22/run_stdio/host-fd-vfs.log
+
+exit=1

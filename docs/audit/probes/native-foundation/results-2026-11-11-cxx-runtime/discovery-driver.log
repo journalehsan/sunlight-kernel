@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_cxx_exception_discovery.py --out target/phase22/discovery
+Discovery PASS; historical BUILD_FAIL <thread>; class linkage BLOCKED; runtime NOT_RUN
+
+exit=0

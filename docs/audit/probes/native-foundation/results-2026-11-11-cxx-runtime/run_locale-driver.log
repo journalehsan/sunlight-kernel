@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_locale.py --out target/phase22/run_locale
+12 native C/C++ ABI checks, unique export and unchanged historical link: PASS
+
+exit=0

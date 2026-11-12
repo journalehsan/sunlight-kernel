@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase21/accepted-4cpu/pthread-abi.elf
+
+exit=0

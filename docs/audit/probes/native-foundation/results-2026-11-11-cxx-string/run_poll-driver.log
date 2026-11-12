@@ -1,0 +1,2 @@
+$ python3 tools/native-c/tests/run_poll.py --out target/phase21/run_poll
+12 native C/C++ ABI checks, unique export and unchanged historical link: PASS

@@ -1,0 +1,9 @@
+ld.lld: error: undefined symbol: socket
+>>> referenced by socket.c
+>>>               /tmp/socket-a1f681.o:(main)
+
+ld.lld: error: undefined symbol: close
+>>> referenced by socket.c
+>>>               /tmp/socket-a1f681.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+exit=1

@@ -1,0 +1,28 @@
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.03s
+sunlight-cxx/src/eh_support.cpp:12:3: error: 'noreturn' attribute does not appear on the first declaration
+   12 | [[noreturn]] void __terminate(terminate_handler handler) noexcept {
+      |   ^
+sunlight-cxx/vendor/libcxxabi/src/cxa_handlers.h:28:1: note: previous declaration is here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+sunlight-cxx/src/eh_support.cpp:16:3: error: 'noreturn' attribute does not appear on the first declaration
+   16 | [[noreturn]] void __unexpected(unexpected_handler handler) {
+      |   ^
+sunlight-cxx/vendor/libcxxabi/src/cxa_handlers.h:24:1: note: previous declaration is here
+   24 | __unexpected(unexpected_handler func);
+      | ^
+2 errors generated.

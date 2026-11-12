@@ -1,0 +1,8 @@
+$ bash tools/build_native_cxx.sh  # twice
+$ sha256sum target/native-c/sysroot/lib/libsunlight_cxx.a target/native-c/sysroot/lib/libsunlight_eh.a
+032bcef4c34746a9685d72f9963a11b7e369770c8f15e1388ea08f87818377d1  target/native-c/sysroot/lib/libsunlight_cxx.a
+cc703d02d9c13b08aeb3b9dafbc9f40e2078c2a500860b7f48ca626f4d28b512  target/native-c/sysroot/lib/libsunlight_eh.a
+--- second build ---
+032bcef4c34746a9685d72f9963a11b7e369770c8f15e1388ea08f87818377d1  target/native-c/sysroot/lib/libsunlight_cxx.a
+cc703d02d9c13b08aeb3b9dafbc9f40e2078c2a500860b7f48ca626f4d28b512  target/native-c/sysroot/lib/libsunlight_eh.a
+diff: PASS

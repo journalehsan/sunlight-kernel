@@ -1,0 +1,36 @@
+$ bash tools/test-alloc-proof.sh
+error[E0425]: cannot find value `GLOBAL_ALLOC` in this scope
+    --> /home/ehsantor/Projects/sunlightos-kernel/tools/../sunlight-libc/src/alloc.rs:1054:29
+     |
+1054 |                 let value = GLOBAL_ALLOC.alloc(layout);
+     |                             ^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `GLOBAL_ALLOC` in this scope
+    --> /home/ehsantor/Projects/sunlightos-kernel/tools/../sunlight-libc/src/alloc.rs:1057:17
+     |
+1057 |                 GLOBAL_ALLOC.dealloc(value, layout);
+     |                 ^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `GLOBAL_ALLOC` in this scope
+    --> /home/ehsantor/Projects/sunlightos-kernel/tools/../sunlight-libc/src/alloc.rs:1086:25
+     |
+1086 |             let value = GLOBAL_ALLOC.alloc(actual);
+     |                         ^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `GLOBAL_ALLOC` in this scope
+    --> /home/ehsantor/Projects/sunlightos-kernel/tools/../sunlight-libc/src/alloc.rs:1091:31
+     |
+1091 |             let replacement = GLOBAL_ALLOC.realloc(value, incorrect_old_layout, 32);
+     |                               ^^^^^^^^^^^^ not found in this scope
+
+error[E0425]: cannot find value `GLOBAL_ALLOC` in this scope
+    --> /home/ehsantor/Projects/sunlightos-kernel/tools/../sunlight-libc/src/alloc.rs:1094:13
+     |
+1094 |             GLOBAL_ALLOC.dealloc(replacement, Layout::from_size_align(32, 16).unwrap());
+     |             ^^^^^^^^^^^^ not found in this scope
+
+error: aborting due to 5 previous errors
+
+For more information about this error, try `rustc --explain E0425`.
+
+exit=1

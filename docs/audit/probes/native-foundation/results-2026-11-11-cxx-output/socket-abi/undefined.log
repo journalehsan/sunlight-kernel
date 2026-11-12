@@ -1,0 +1,3 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/socket-abi/socket.elf
+
+exit=0

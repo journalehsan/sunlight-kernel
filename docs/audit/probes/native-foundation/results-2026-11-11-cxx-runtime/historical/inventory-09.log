@@ -1,0 +1,4 @@
+$ musl-gcc -print-file-name=libc.a
+/usr/lib/gcc/x86_64-pc-linux-gnu/16/../../../../lib/libc.a
+
+exit=0

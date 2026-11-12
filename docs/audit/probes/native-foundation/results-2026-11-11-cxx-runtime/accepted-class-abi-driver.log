@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_cxx_classes.py --out target/phase22/accepted-class-abi
+Class target headers/linkage/ownership and upstream integrity PASS; native execution requires guest suite. EH/thread/historical runtime NOT_RUN.
+
+exit=0

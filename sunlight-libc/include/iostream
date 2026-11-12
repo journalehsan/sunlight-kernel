@@ -1,0 +1,3 @@
+// Compatibility include for the historical -I sunlight-libc/include command.
+// Implementation and ownership live in the separate native C++ library.
+#include "../../sunlight-cxx/include/iostream"

@@ -1,0 +1,5 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/math-abi/math.o
+                 U fabs
+                 U sqrt
+
+exit=0

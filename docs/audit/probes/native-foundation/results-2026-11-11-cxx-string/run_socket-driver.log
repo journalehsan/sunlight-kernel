@@ -1,0 +1,2 @@
+$ python3 tools/native-c/tests/run_socket.py --out target/phase21/run_socket
+12 socket C/C++ ABI checks, exports, unchanged historical link: PASS

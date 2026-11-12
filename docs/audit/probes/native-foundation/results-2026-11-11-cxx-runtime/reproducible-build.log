@@ -1,0 +1,55 @@
++ set -euo pipefail
+++ dirname tools/build_native_cxx.sh
++ cd tools/..
++ bash tools/build_native_c.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.03s
++ mkdir -p target/native-cxx
++ python3 tools/native-c/cc.py -std=c++17 -Wall -Wextra -Werror -I sunlight-cxx/include -c sunlight-cxx/src/ostream.cpp -o target/native-cxx/ostream.o
++ python3 tools/native-c/cc.py -std=c++17 -Wall -Wextra -Werror -I sunlight-cxx/include -c sunlight-cxx/src/string.cpp -o target/native-cxx/string.o
++ python3 tools/native-c/cc.py -std=c++17 -Wall -Wextra -Werror -I sunlight-cxx/include -c sunlight-cxx/src/exception.cpp -o target/native-cxx/exception.o
++ abi=sunlight-cxx/vendor/libcxxabi
++ for source in private_typeinfo stdlib_typeinfo
++ python3 tools/native-c/cc.py -std=c++17 -fno-exceptions -I sunlight-cxx/include -I sunlight-cxx/abi-include -I sunlight-cxx/vendor/libcxxabi/include -c sunlight-cxx/vendor/libcxxabi/src/private_typeinfo.cpp -o target/native-cxx/private_typeinfo.o
++ for source in private_typeinfo stdlib_typeinfo
++ python3 tools/native-c/cc.py -std=c++17 -fno-exceptions -I sunlight-cxx/include -I sunlight-cxx/abi-include -I sunlight-cxx/vendor/libcxxabi/include -c sunlight-cxx/vendor/libcxxabi/src/stdlib_typeinfo.cpp -o target/native-cxx/stdlib_typeinfo.o
++ python3 tools/native-c/cc.py -std=c++17 -Wall -Wextra -Werror -I sunlight-cxx/include -c sunlight-cxx/src/abi_support.cpp -o target/native-cxx/abi_support.o
++ llvm-ar rcs target/native-c/sysroot/lib/libsunlight_cxx.a target/native-cxx/ostream.o target/native-cxx/string.o target/native-cxx/exception.o target/native-cxx/private_typeinfo.o target/native-cxx/stdlib_typeinfo.o target/native-cxx/abi_support.o
++ ln -sfn /home/ehsantor/Projects/sunlightos-kernel/sunlight-cxx/include target/native-c/sysroot/include-c++
++ unwind=sunlight-cxx/vendor/libunwind
++ for source in cxa_exception cxa_personality
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/abi-include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libunwind/include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libcxxabi/src/cxa_exception.cpp -o target/native-cxx/cxa_exception.o
++ for source in cxa_exception cxa_personality
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/abi-include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libunwind/include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libcxxabi/src/cxa_personality.cpp -o target/native-cxx/cxa_personality.o
++ for source in eh_support entry new lifecycle
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libcxxabi/src -I sunlight-cxx/vendor/libunwind/include -c sunlight-cxx/src/eh_support.cpp -o target/native-cxx/eh_support.o
++ for source in eh_support entry new lifecycle
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libcxxabi/src -I sunlight-cxx/vendor/libunwind/include -c sunlight-cxx/src/entry.cpp -o target/native-cxx/entry.o
++ for source in eh_support entry new lifecycle
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libcxxabi/src -I sunlight-cxx/vendor/libunwind/include -c sunlight-cxx/src/new.cpp -o target/native-cxx/new.o
++ for source in eh_support entry new lifecycle
++ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -I sunlight-cxx/vendor/libcxxabi/include -I sunlight-cxx/vendor/libcxxabi/src -I sunlight-cxx/vendor/libunwind/include -c sunlight-cxx/src/lifecycle.cpp -o target/native-cxx/lifecycle.o
++ for source in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c UnwindRegistersRestore.S UnwindRegistersSave.S
++ python3 tools/native-c/cc.py -O2 -fexceptions -DNDEBUG -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_NO_HEAP -I sunlight-cxx/vendor/libunwind/include -I sunlight-cxx/abi-include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libunwind/src/libunwind.cpp -o target/native-cxx/libunwind.cpp.o
++ for source in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c UnwindRegistersRestore.S UnwindRegistersSave.S
++ python3 tools/native-c/cc.py -O2 -fexceptions -DNDEBUG -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_NO_HEAP -I sunlight-cxx/vendor/libunwind/include -I sunlight-cxx/abi-include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libunwind/src/UnwindLevel1.c -o target/native-cxx/UnwindLevel1.c.o
++ for source in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c UnwindRegistersRestore.S UnwindRegistersSave.S
++ python3 tools/native-c/cc.py -O2 -fexceptions -DNDEBUG -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_NO_HEAP -I sunlight-cxx/vendor/libunwind/include -I sunlight-cxx/abi-include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libunwind/src/UnwindLevel1-gcc-ext.c -o target/native-cxx/UnwindLevel1-gcc-ext.c.o
++ for source in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c UnwindRegistersRestore.S UnwindRegistersSave.S
++ python3 tools/native-c/cc.py -O2 -fexceptions -DNDEBUG -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_NO_HEAP -I sunlight-cxx/vendor/libunwind/include -I sunlight-cxx/abi-include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libunwind/src/UnwindRegistersRestore.S -o target/native-cxx/UnwindRegistersRestore.S.o
++ for source in libunwind.cpp UnwindLevel1.c UnwindLevel1-gcc-ext.c UnwindRegistersRestore.S UnwindRegistersSave.S
++ python3 tools/native-c/cc.py -O2 -fexceptions -DNDEBUG -D_LIBUNWIND_IS_BAREMETAL -D_LIBUNWIND_NO_HEAP -I sunlight-cxx/vendor/libunwind/include -I sunlight-cxx/abi-include -include sunlight-cxx/abi-include/native_unwind.h -c sunlight-cxx/vendor/libunwind/src/UnwindRegistersSave.S -o target/native-cxx/UnwindRegistersSave.S.o
++ llvm-ar rcs target/native-c/sysroot/lib/libsunlight_eh.a target/native-cxx/cxa_exception.o target/native-cxx/cxa_personality.o target/native-cxx/eh_support.o target/native-cxx/entry.o target/native-cxx/new.o target/native-cxx/lifecycle.o target/native-cxx/libunwind.cpp.o target/native-cxx/UnwindLevel1.c.o target/native-cxx/UnwindLevel1-gcc-ext.c.o target/native-cxx/UnwindRegistersRestore.S.o target/native-cxx/UnwindRegistersSave.S.o

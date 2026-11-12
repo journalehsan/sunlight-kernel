@@ -1,0 +1,4 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/guard-controls/host-atexit
+atexit OK
+
+exit=0

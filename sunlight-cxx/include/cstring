@@ -1,0 +1,13 @@
+#ifndef SUNLIGHT_CXX_CSTRING
+#define SUNLIGHT_CXX_CSTRING
+// Bounded C++ spelling of the native C string surface. No host C++ header is
+// consulted; the declarations come from the native libc.
+#include <string.h>
+namespace std {
+using ::memcpy;
+using ::memmove;
+using ::memset;
+using ::memcmp;
+using ::strlen;
+}
+#endif

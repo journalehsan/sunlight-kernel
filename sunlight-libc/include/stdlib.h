@@ -4,6 +4,8 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+size_t __sunlight_mb_cur_max(void);
+#define MB_CUR_MAX (__sunlight_mb_cur_max())
 /* Creates a mode-0600 read/write file. Replace six trailing X characters in
  * a writable NUL-terminated template. Caller must close and unlink the file. */
 int mkstemp(char *path_template);

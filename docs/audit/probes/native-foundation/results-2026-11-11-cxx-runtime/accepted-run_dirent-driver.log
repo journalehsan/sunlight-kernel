@@ -1,0 +1,5 @@
+$ python3 tools/native-c/tests/run_dirent.py --out target/phase22/accepted-run_dirent
+libc host tests, 12 C/C++ ABI checks and unique native exports: PASS
+unchanged historical source: native compile/link PASS; host execution NOT_RUN
+
+exit=0

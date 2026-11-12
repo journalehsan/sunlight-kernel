@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_cxx_exception_discovery.py --out target/phase22/accepted-discovery
+Discovery PASS; historical LINK_FAIL (original command supplies no native libraries); class object ABI references recorded; native linkage uses class runner; runtime NOT_RUN
+
+exit=0

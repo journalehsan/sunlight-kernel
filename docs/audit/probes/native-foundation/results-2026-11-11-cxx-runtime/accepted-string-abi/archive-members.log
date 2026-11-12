@@ -1,0 +1,9 @@
+$ llvm-ar t /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a
+ostream.o
+string.o
+exception.o
+private_typeinfo.o
+stdlib_typeinfo.o
+abi_support.o
+
+exit=0

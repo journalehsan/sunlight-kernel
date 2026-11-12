@@ -3391,3 +3391,1373 @@ predicate with IPv4 reference counts. Incoming signal implementation and audit
 were retained. Build-generated changes to two previously clean probe lockfiles
 were restored to their entry bytes. No incoming file was removed, no historical
 probe changed, no tests weakened, and no commit was created.
+
+### Phase 18 — native C termios source ABI and capability boundary (2026-11-11)
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-termios/`.
+This is a **bounded header/speed-object/descriptor-error implementation**.
+It unblocks the unchanged historical `termios.c`, which accepts either a
+successful `tcgetattr(0,&t)` or ENOTTY. It does **not** implement successful
+terminal attribute queries or updates. No native terminal mode is advertised as
+working, and no success-returning terminal stub was added.
+
+**Discovery.** `kernel/src/native_c_guest.rs` replaces all three serial defaults
+with real VFS capture files. Thus descriptor 0 in this probe is an open
+non-terminal; ENOTTY is its correct result. Numeric descriptor identity is not
+terminal identity. `process/fd_table.rs` distinguishes tagged tab stdin/stdout
+handles from VFS, pipe, socket, eventfd and epoll handles. Duplicate descriptors
+retain the tagged handle. Untagged serial defaults are logging endpoints, not a
+verified bidirectional terminal. The native API now fixes `isatty`'s previous
+hard-coded success for descriptors 0, 1 and 2.
+
+`process/tty_io.rs` owns fixed per-tab rings (1024 input / 8192 output bytes),
+separate spin locks, bounded short transfers, and scheduler read/write wakeups.
+Reads remove available bytes, blocking when empty unless nonblocking. Writes
+only enqueue bytes. Pulling output is not proof of display or UART transmission.
+`clear_tab` clears both queues at foreground transitions; it does not implement
+POSIX input/output flush selectors or drain completion. Geometry has a
+separate generation-qualified broker cache; there is no corresponding native
+attribute cache or protocol. `services/pty_server` and `ipc/src/pty.rs` provide
+an existing capability/session/generation-based byte broker, not a native C
+PTY descriptor or termios control protocol. No new PTY subsystem was added.
+
+`services/tty_server/src/main.rs` has local shell editing/echo, distinct from
+foreground key routing (which changes Enter LF to CR). `sunshell` also forwards
+broker input into kernel rings. These upstream behaviors cannot be disabled by
+setting flags in a kernel-only struct. Linux ioctl TCGETS/TCGETS2 and setters
+in `arch/x86_64/syscall.rs` use Linux-personality per-process settings, including
+cooked defaults and a mode bridge. Those values do not describe authoritative
+native terminal-object state and are deliberately not reused. `serial.rs`
+initializes a locked 16550 backend and sends log bytes; no native descriptor
+baud/flow/break/drain control contract was verified. Keyboard routing, shell
+editing, byte rings, broker state and UART state are distinct layers.
+
+**Public ABI.** New `sunlight-libc/include/termios.h` supplies C/C++ declarations
+and a native source ABI: tcflag_t and speed_t unsigned 32-bit, cc_t unsigned
+8-bit, NCCS=2 (VMIN=0, VTIME=1). Struct size 28, alignment 4; flag offsets
+0/4/8/12, c_cc=16, two explicit reserved bytes=18, c_ispeed=20, c_ospeed=24.
+There is no implicit padding and no Linux binary-layout claim. ICANON=1,
+ECHO=2 and ISIG=4 are exposed **request values only**, all rejected on apply.
+No input/output/control processing flags, flow-control bits, character-size
+bits, VEOF/editing characters or cfmakeraw extension are claimed.
+
+cfgetispeed/cfgetospeed read a valid userspace object. cfsetispeed/cfsetospeed
+edit only that object and preserve errno on success. Native selectors B0=0,
+B9600=1, B19200=2, B38400=3, B115200=4 are not literal rates or Linux selectors.
+cfsetispeed(B0) copies the current output selector; unsupported selectors return
+-1/EINVAL without changing the object. Null setter objects return -1/EFAULT.
+Getters require valid pointers, as do non-null speed setters; arbitrary invalid
+object addresses are not a kernel-copy API. B0 does not cause a hardware hangup:
+all settings application is unsupported. Pure host and guest tests verify
+round trips, zero-input-speed semantics, unchanged state after invalid edits,
+null setter rejection and preservation of errno on successful edits.
+
+**Descriptor operations.** Native syscall 176 (NativeTerminal) accepts fd in
+rdi and operation in rsi: 0 identity, 1 query, 2 apply, 3 drain, 4 flush, 5 flow,
+6 break. It uses the scheduler lock and current descriptor table to inspect the
+actual FileHandle; Linux-personality callers receive ENOSYS. It never receives
+or dereferences an attribute pointer. There are **no new ioctl request numbers**,
+no Linux ioctl alias, and no changes to other devices' ioctl dispatch.
+
+Identity succeeds only for tagged terminal handles. Missing/closed descriptors
+return EBADF; other open handles return ENOTTY. On tagged handles, every
+attribute/queue/flow/break operation returns EOPNOTSUPP (ENOTSUP=95). No settings
+are stored in libc, no terminal state is created or changed, and rejected
+operations leave the actual terminal untouched. Duplicates resolve the same
+terminal identity, including after closing the original descriptor. There is
+no new mutable attribute state whose lifetime could diverge between duplicates
+or survive terminal/session reuse. isatty returns 1 preserving errno on tagged
+handles, otherwise 0 with the kernel error.
+
+The exported tcgetattr/tcsetattr/tcdrain/tcflush/tcflow/tcsendbreak entry points
+are explicit rejection adapters, **not successful operation support**.
+TCSANOW=0/TCSADRAIN=1/TCSAFLUSH=2 are accepted action selectors but all fail on
+terminals. Invalid actions return EINVAL before descriptor lookup; likewise
+invalid flush (outside 0..2) and flow (outside 0..3) selectors. Valid selectors
+on invalid/nonterminal descriptors retain EBADF/ENOTTY. Since no structure is
+copied for unsupported operations, null, unmapped and overflowing pointers are
+never accessed; descriptor/capability errors take precedence over EFAULT.
+This phase introduces no drain wait, polling loop, queue discard, software or
+hardware flow, break transmission, signal generation or interruption behavior.
+
+**Coverage and fixture.** `tools/native-c/tests/run_termios.py` performs 12
+C11/C++17 feature-macro/include-order compilations, ABI size/alignment/offset
+checks, exact single-symbol export checks, historical-source equality with HEAD,
+and strict unchanged historical link with no unresolved symbols.
+`termios.c` adds 100 repetitions across VFS captures, sockets and a duplicated
+socket, invalid/closed fds, invalid actions/selectors, hostile pointer values,
+object-preservation and speed-function tests. The second mode uses the opt-in
+guest harness to install a real tagged stdin-ring handle at fd3, tab255, solely
+for identity and unsupported-operation testing; stdout/stderr remain VFS
+captures. It checks duplication, close lifetime, ENOTSUP on every operation,
+and unchanged output objects. This fixture has no broker/frontend or injected
+input and makes no interactive terminal-acceptance claim. No test-only C API
+or production input injection was introduced. No terminal attributes are
+changed, so there is no restore path or risk to serial audit formatting.
+
+Actual canonical editing/EOF, echo, transformations, VMIN/VTIME timing, raw
+mode, terminal-generated signals, hardware speed changes, drain/flush/flow and
+break behavior are **NOT_RUN: no such native behavior is implemented**. A
+successful real-terminal attribute query/update test is likewise NOT_RUN;
+claiming that a declaration or Linux-personality setting proved support would
+be incorrect. Completing configurable termios requires an authoritative
+terminal-object attribute protocol spanning the broker/frontend and kernel
+rings, with observable behavior and lifetime/serialization tests. Session,
+job-control/process-group signals and asynchronous interruption remain deferred.
+
+Reproduction (fresh directories, root-relative paths):
+
+```sh
+E=docs/audit/probes/native-foundation/results-2026-11-11-termios
+python3 tools/native-c/tests/run_termios.py --out "$E/abi"
+python3 tools/native-c/tests/run_unistd.py --out "$E/host"
+python3 tools/native-c/tests/run_socket.py --out "$E/socket-abi"
+python3 tools/native-c/tests/run_signal.py --out "$E/signal-abi"
+python3 tools/native-c/tests/run_pthread.py --out "$E/pthread-abi"
+python3 tools/native-c/tests/run_poll.py --out "$E/poll-abi"
+python3 tools/native-c/guest.py --suite --cpus 2 --out "$E/acceptance-2cpu"
+python3 tools/native-c/guest.py --suite --cpus 4 --out "$E/acceptance-4cpu"
+cargo check -p sunlight-kernel
+bash tools/check_native_std.sh
+cargo check --workspace
+bash tools/test_native_std_foundation.sh
+```
+
+Both native-C configurations use 2048 MiB, headless TCG, no NIC/user disk,
+bounded 90-second guest execution and the established independent cleanup/
+reaping predicates. The initial `final-2cpu/` run passed 70 cases but predates
+the terminal-identity fixture; final acceptance is in `acceptance-{2,4}cpu/`.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Termios C/C++ header, layout, unique exports, unchanged historical link | **12 PASS**, exports/link PASS | `abi/` |
+| Full native-C, 2 CPUs / 4 CPUs, 2048 MiB | **71/71 PASS / 71/71 PASS** | `acceptance-2cpu/`, `acceptance-4cpu/` |
+| Historical termios + speed/error contract + tagged terminal identity | **PASS / PASS**, exit 0, empty stdout/stderr | both acceptance directories |
+| Fault logs, cleanup, reaping, IPv4 references | **PASS / PASS**, zero fault bytes, 71 clean reaps | both acceptance directories |
+| Existing epoll lifecycle, 80 iterations | **PASS / PASS** | `epoll-lifecycle.*` in both directories |
+| Socket / signal / pthread / poll C/C++ ABI-export runners | **12 PASS each**, exports/link PASS | `*-abi/`, `*-driver.log` |
+| Production libc host tests | **120 PASS**, two native-credential tests filtered | `host/libc.log` |
+| Kernel package check | **PASS** | `kernel-driver.log` |
+| Native Rust-std overlay | **PASS** | `overlay-driver.log` |
+| Workspace check | **FAIL**, known kernel-target dependency failures including serde_core, 5829 diagnostics | `workspace-driver.log` |
+| Successful real-terminal attributes and actual input/output modes | **NOT_RUN**, native broker/frontend attribute protocol absent | explicit unsupported operations |
+| Hardware serial configuration/flow/break/drain | **NOT_RUN**, backend contract and hardware acceptance unavailable | no hardware claim |
+
+Historical 21: **19 PASS / 0 guest FAIL / 2 BUILD_FAIL with guest NOT_RUN**.
+Original 18: **16 PASS / 2 BUILD_FAIL**. The next verified historical blocker
+is **`docs/audit/probes/wchar.c`: missing `<wchar.h>`**, established by both
+fresh unchanged sequences (`build-wchar.log`). The later C++ runtime probe
+still fails at missing `<iostream>` (`build-cpp-runtime.log`).
+
+Changed implementation files: `sunlight-libc/include/{termios,errno,unistd}.h`,
+`sunlight-libc/src/{termios,errno,fd,lib,sys}.rs`, native syscall dispatch in
+`kernel/src/arch/x86_64/syscall.rs`. Test changes: the isolated identity fixture
+in `kernel/src/native_c_guest.rs`, two new suite entries in
+`tools/native-c/guest.py`, and `tools/native-c/tests/{termios.c,termios-abi.c,run_termios.py}`.
+No existing test acceptance predicate or historical probe was changed.
+
+Native FP foundation: **PASS on 2 CPUs and PASS on 4 CPUs**, 2048 MiB each,
+x87/XMM/MXCSR isolation and parser/raster verdicts, no fault/exception/panic
+markers. See `foundation-driver.log` (exit 0) and the copied fresh
+`native-std-fp-{2,4}cpu.log` files. `verify.py` and
+`acceptance-summary.json` independently verify both complete matrices, all
+primary case/exit reaps plus clean child reap markers, empty fault logs,
+restored resource/IPv4 baselines, fixture stdout/stderr, equal termios ELF
+bytes across CPU configurations, and both FP verdicts.
+
+`preservation.json` records the entry status (clean) and all historical source
+hashes; the verifier checks these against both entry bytes and HEAD.
+`lockfile-preservation.json` records restoration of the two previously clean
+standalone probe lockfiles refreshed by the existing build gates. Python
+compilation, formatting of the new Rust module, and `git diff --check` pass.
+Incoming work was preserved, historical probes remain byte-for-byte unchanged,
+and no commit was created. This phase closes the missing-header historical
+blocker, with successful native terminal attributes/modes explicitly deferred.
+
+## Phase 19 — native restartable wchar decoding (2026-11-11)
+
+Scope was established from the unchanged `docs/audit/probes/wchar.c`: it selects
+C and decodes one ASCII A with mbrtowc and a NULL state. This phase implements
+only **mbrtowc, mbrlen, mbsinit**, plus the MB_CUR_MAX query. No unsupported API
+is declared or supplied as a successful stub. Wide strings/memory (all wcs*/
+wmem*), wcrtomb, bulk conversions, legacy mbtowc/wctomb/mbstowcs/wcstombs,
+btowc/wctob, formatted wide I/O, orientation, classification and collation are
+explicitly deferred. Tests for those unimplemented operations are **NOT_RUN**,
+because they are outside the verified prerequisite and no exports exist.
+
+Discovery found no stddef.h/stdint.h/limits.h in libc: the driver uses Clang's
+freestanding resource headers. Those supply size_t, C wchar_t and WCHAR_MIN/MAX
+(in stdint.h). Clang's native target macros select signed int wchar_t, 4 bytes,
+range INT32_MIN..INT32_MAX; C++ retains its builtin wchar_t. New wchar.h includes
+stddef.h/stdint.h rather than redeclaring those types. Native wint_t deliberately
+uses unsigned int, 4 bytes, WEOF=UINT32_MAX, distinct from all supported Unicode
+scalars (the compiler's default __WINT_TYPE__ is signed int; wint_t is a library
+choice). No Linux binary layout is assumed. mbstate_t is 8 bytes, alignment 4,
+two opaque unsigned words. The Rust repr(C) object matches it; zero initialization
+is the initial state. The public members must not be inspected or edited except
+by initialization/copying a valid state. ABI tests cover size/alignment, signedness,
+compiler wchar agreement, limits and WEOF in C11/C++17, feature macro variants
+and include orders. Each of the four new exports has exactly one definition.
+
+Wide results are Unicode scalar numbers in signed 32-bit wchar_t. This does
+not make the default locale UTF-8: initial C/POSIX remains **ASCII**, rejecting
+bytes >=128 with EILSEQ=84. Existing C.UTF-8 and en_US.UTF-8 LC_CTYPE selections
+now enable strict UTF-8 decoding; locale selection logic/defaults are unchanged.
+MB_CUR_MAX is 1 in C and 4 in both UTF-8 selections; new limits.h wraps the
+compiler's integer limits and defines MB_LEN_MAX=4, the installed maximum.
+No prior C multibyte functions existed to reconcile. Existing internal Rust
+UTF-8 string/path utilities are separate from C locale conversion. This is a
+bounded locale subset, without comprehensive locale behavior or normalization.
+
+Decoding distinguishes NUL (0), success (current call's bytes consumed),
+incomplete ((size_t)-2), invalid ((size_t)-1/EILSEQ). Partial sequences persist
+in explicit state. Overlong encodings, invalid leads/continuations, surrogates
+and values above U+10FFFF are rejected as soon as malformed input is known;
+valid noncharacters are accepted. NUL input pointer acts as decoding an empty
+string with ignored output, including EILSEQ when a partial sequence cannot
+consume that NUL. Zero length returns incomplete without consuming input.
+Errors leave state unspecified: reinitialize before reuse. No recovery guarantee
+is advertised. Successful calls preserve errno. Caller buffers must be valid
+for the input examined and optional output; no general invalid-pointer handling
+is promised.
+
+NULL ps uses one shared internal state per API, protected by an atomic lock:
+no unsynchronized mutable global, no new TLS layout. These states are **not
+independent streams per thread**; concurrent streams use explicit states, as
+in the pthread tests. Explicit state objects need caller synchronization when
+shared. Like setlocale itself, changes of locale must be externally serialized
+against conversion, and conversion states must be initial when changing locale.
+No locale subsystem or asynchronous state reset was added.
+
+Focused tests use ASCII source with explicit UTF-8 bytes (including Persian
+U+0641 and supplementary U+1F600), every split boundary and byte-at-a-time
+conversion, NUL/zero length, NULL input, incomplete state, invalid UTF-8, C versus
+both UTF-8 locales, and two pthread workers with independent explicit states.
+The production Rust unit test checks **every Unicode scalar at every split
+boundary** against Rust's scalar-to-UTF-8 encoding with standard-derived return
+counts, including noncharacters; host locale is not an implicit oracle.
+
+Evidence root: `docs/audit/probes/native-foundation/results-2026-11-11-wchar/`.
+Reproduction (each --out directory must be new):
+
+```sh
+E=docs/audit/probes/native-foundation/results-2026-11-11-wchar
+python3 tools/native-c/tests/run_wchar.py --out "$E/abi-final"
+python3 tools/native-c/tests/run_unistd.py --out "$E/host-final"
+python3 tools/native-c/tests/run_termios.py --out "$E/termios-abi"
+python3 tools/native-c/tests/run_socket.py --out "$E/socket-abi"
+python3 tools/native-c/tests/run_signal.py --out "$E/signal-abi"
+python3 tools/native-c/tests/run_pthread.py --out "$E/pthread-abi"
+python3 tools/native-c/tests/run_poll.py --out "$E/poll-abi"
+python3 tools/native-c/guest.py --suite --cpus 2 --out "$E/acceptance-final-2cpu"
+python3 tools/native-c/guest.py --suite --cpus 4 --out "$E/acceptance-final-4cpu"
+cargo check -p sunlight-kernel
+bash tools/check_native_std.sh
+cargo check --workspace
+bash tools/test_native_std_foundation.sh
+```
+
+Guest runs use 2048 MiB, bounded 90-second execution, headless TCG and disposable
+media with the unchanged stdout/stderr, exit, fault, resource and reaping
+acceptance predicates. The preliminary `acceptance-2cpu/` exposed a feature-gate
+mistake (fixed by matching locale's native-C/test gate). `final-2cpu/` predates
+a warning fix in the new focused C source and is not final acceptance. No test
+was weakened to address either issue.
+
+| Gate | Result | Evidence relative to root above |
+| --- | --- | --- |
+| wchar C/C++ ABI/header variants, unique exports, unchanged historical link | **12 PASS**, exports/link PASS | `abi-final/` |
+| Full native-C, 2 / 4 CPUs, 2048 MiB | **73/73 PASS / 73/73 PASS** | `acceptance-final-{2,4}cpu/results.{csv,json}` |
+| Historical wchar and focused wchar contract | **PASS / PASS** on each configuration; exit 0, empty stdout/stderr | both acceptance directories |
+| Faults, physical-frame cleanup, reaping, IPv4 references | **PASS / PASS**, empty fault logs, 73 accepted clean reaps each | both `serial.log`, `faults.log` |
+| Epoll lifecycle, 80 iterations; pthread/signal/socket/termios regressions | **PASS / PASS** | both acceptance directories |
+| Termios/socket/signal/pthread/poll ABI and exports | **12 PASS each**, exports/link PASS | `*-abi/`, `*-driver.log` |
+| Production libc host tests | **121 PASS**, two existing native-credential tests filtered | `host-final/libc.log` |
+| Kernel check | **PASS** after feature-gate fix | `kernel-final-driver.log` |
+| Native Rust-std overlay | **PASS** | `overlay-final-driver.log` |
+| Workspace check | **FAIL**, known serde_core/kernel-target dependencies, 5829 errors | `workspace-driver.log` |
+
+Both unchanged historical sequences now report **20 PASS / 0 guest FAIL /
+1 BUILD_FAIL with guest NOT_RUN**. The next verified blocker is
+`docs/audit/probes/cpp-runtime.cpp`, missing **<iostream>**, in both fresh
+`build-cpp-runtime.log` files. Basic wchar decoding is complete within the
+specified subset; this does not claim the remainder of wchar.h or C++ runtime
+support. Socket transport, pthread descriptor snapshots, synchronous signal
+limits and unsupported terminal modes retain the Phase 18 limitations.
+
+Changed implementation: `sunlight-libc/include/{wchar,limits}.h`,
+`sunlight-libc/include/{stdlib,errno}.h`, `sunlight-libc/src/{wchar,errno,lib}.rs`,
+and the locale module's scope comment. Tests: new
+`tools/native-c/tests/{wchar-contract.c,wchar-abi.c,run_wchar.py}` and one added
+suite entry in `tools/native-c/guest.py`. No kernel implementation was changed
+by Phase 19. Compiler macros are recorded in `compiler-macros.log`.
+
+Entry hashes in `preservation.json`, `historical.json` and the checked
+`preservation-verdict.json` confirm incoming modifications/untracked files were
+preserved (accounting for the explicit additive edits in shared files), and all
+historical sources match entry bytes and HEAD. The two previously clean probe
+Cargo.lock files refreshed by build gates were restored to their entry/HEAD
+bytes. No commit was created. `git diff --check` and Rust formatting pass.
+
+Native FP foundation: **PASS on 2 CPUs and PASS on 4 CPUs**, 2048 MiB each,
+with both x87/XMM/MXCSR isolation and parser/raster verdicts and no FP failure,
+exception or kernel panic markers. Evidence: `foundation-driver.log` (exit 0),
+`native-std-fp-{2,4}cpu.log`. `acceptance-summary.json` independently checks all
+73 primary positive-frame reaps and all 96 clean reap records per configuration,
+empty faults, focused/historical/epoll outputs and equal wchar ELF bytes across
+CPU configurations. No pending validation remains within this phase's scope.
+
+## Phase 20 — bounded native C++ output (2026-11-11)
+
+**The historical `<iostream>` header blocker is resolved within a compiled,
+bounded native output subset. The complete historical C++ runtime probe is
+still BUILD_FAIL / guest NOT_RUN, now at `<string>`.** This is not full iostream,
+C++ standard-library, exception, RTTI or thread acceptance.
+
+### Discovery and selected layer
+
+The byte-identical `docs/audit/probes/cpp-runtime.cpp` requires owning strings,
+dynamic global initialization/destruction, a nontrivial thread_local string,
+C atexit, polymorphic new/delete, dynamic_cast/typeid, exception allocation,
+throw/catch with std::runtime_error and std::exception, std::thread/join, and
+narrow string/character output. Merely supplying output cannot fulfill it.
+The exact existing guest-suite command is retained:
+
+```sh
+clang++ --target=x86_64-unknown-none-elf -nostdinc \
+  -I"$PWD/sunlight-libc/include" -nostdlib -fuse-ld=lld \
+  docs/audit/probes/cpp-runtime.cpp -o OUTPUT
+```
+
+The earlier audit runner additionally supplies Clang resource headers with
+`-isystem RESOURCE/include`; neither historical variant supplies startup or
+native libraries. No command/probe requirement was relaxed, and exceptions and
+RTTI were not disabled. `discovery.log` records the original missing iostream
+and the actual Clang 23.1.4 native include search. `compiler-{macros,search}.log`,
+`include-search.log`, `required-abi.log` and `abi-sections.log` record the target
+and compiler evidence. Native x86-64 uses SysV LP64, static relocation and TLS;
+C++17 language-feature emission was inspected independently of library headers.
+It requests real `__cxa_*` exception/guard/atexit/thread-atexit symbols,
+`__dso_handle`, `__dynamic_cast`, typeinfo/vtables, operator new,
+`__gxx_personality_v0` and `_Unwind_Resume`. Its object contains initialization,
+TLS and unwind metadata. These are library/runtime dependencies, not evidence
+that their implementation exists.
+
+There is no checked-in target libc++/libstdc++ source tree, port/build recipe,
+ABI library or unwind implementation. Installed GCC 16 C++ headers/libraries
+are Linux-targeted; MinGW libraries are Windows-targeted, and installed unwind
+libraries are host libraries. None is copied or linked. The native sysroot
+previously contained only libc headers and libsunlight_native_c.a. Rust std's
+existing native panic-abort configuration supplies no C++ exception ABI.
+Canonical startup initializes native TLS/environment then calls main; it does
+not walk `.init_array` or `.fini_array`. C atexit is implemented, but neither
+`__cxa_atexit` nor C++ TLS destructor registration/guard runtime is present.
+No existing target operator new/delete, sized/aligned allocation, RTTI ABI,
+pure-virtual runtime or exception/unwind exports were found.
+
+Selected strategy: a separate `sunlight-cxx` compiled library with a documented
+bounded narrow output contract, rather than placing C++ machinery in libc.
+There is no established target standard-library implementation to integrate.
+An upstream library port is deferred: headers alone cannot supply its ABI,
+unwind, startup/thread-exit lifecycle or missing native platform configuration;
+a smallest working port for the full historical probe would require all of
+those independently verified facilities. Reusing host objects was rejected as
+ABI/OS-incompatible. A syntax-recognizing header-only shim, abort-only unwind
+placeholders, and silently disabling exceptions/RTTI were rejected.
+
+### Implementation and limitations
+
+`sunlight-cxx/include/iostream` and `src/ostream.cpp` implement constant-initialized
+cout (fd 1), cerr/clog (fd 2), native fd-bound ostream, char/C-string and decimal
+bool/short/int/long/long-long insertion, all corresponding unsigned integer
+variants, write/put, endl/flush, and sticky good/bad/fail state with clear/setstate.
+Signed minimum formatting uses unsigned subtraction, avoiding overflow; native
+long and long long retain all 64 bits. Positive short writes retry; zero progress
+or backend errors preserve the prefix and set badbit. Failed streams suppress
+further writes until cleared. The backend does not expose EINTR, so negative
+errors terminate output. NULL strings/nonzero NULL ranges and negative sizes
+set badbit. Signed/unsigned char currently promote to integers; use char for
+character output. No formatting flags, exception masks or ISO object-layout
+compatibility are promised.
+
+Output is unbuffered: all successful bytes reach native write before return.
+Flush has no pending bytes and preserves state; it is neither fsync/durability
+nor descriptor validation. Exact A/flush/direct-write-B/C ordering and syscall
+counts validate that contract. No exit flush/destructor is necessary for these
+constant-initialized, trivially destructible stream objects. Sharing streams
+between threads requires external serialization; concurrent insertion/state
+access has not been accepted.
+
+`tools/build_native_cxx.sh` builds the canonical C runtime and separate native
+`libsunlight_cxx.a`; `include-c++` is a sysroot link to its authoritative headers.
+The three-line `sunlight-libc/include/iostream` forwarding include preserves the
+historical include path without giving libc ownership of C++ implementation.
+`tools/native-c/cxx.py` adds only the native C++ archive before canonical libc.
+It uses hosted C++ language rules (`-fhosted`) because Clang's freestanding C++
+mode mangles main, while preserving native target, no-red-zone/static codegen,
+resource-only fundamental headers, `-nostdinc`, `-nostdlib`, linker script,
+no-undefined linking and native startup. This driver is used only by the new
+focused tests; the historical compiler command is unchanged.
+
+There is **no cin/input support**, full streambuf/manipulator interface, wide
+stream or locale-aware formatting. C++ dynamic global constructors and normal
+C++ exit/TLS destructors remain unsupported: existing startup has not been
+changed. No new/delete variants, throwing allocation failure handling,
+`__cxa_atexit`, dso/guard functions, exceptions/unwind, RTTI runtime or pure-virtual
+failure implementation is exposed. Corresponding runtime acceptance tests are
+**NOT_RUN: no implementation**, not passes inferred from output or compilation.
+The compiler still enables exception/RTTI language features; programs needing
+unimplemented runtime symbols cannot link. C atexit, C pthread/TLS and allocator
+contracts remain as previously verified; they do not imply std::thread, owning
+strings or C++ lifecycle support. Full contracts and commands are in
+`sunlight-cxx/README.md`.
+
+### Reproduction and evidence
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/`.
+Generated ELFs/media remain under ignored `target/phase20/`; evidence contains
+logs, exact commands, output captures, link maps, hashes and verdicts only.
+
+```sh
+E=docs/audit/probes/native-foundation/results-2026-11-11-cxx-output
+# Use fresh output directories on rerun.
+bash tools/build_native_cxx.sh
+python3 tools/native-c/tests/run_cxx_output.py --out NEW-cxx-abi
+python3 tools/native-c/guest.py --suite --cpus 2 --out NEW-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 --out NEW-4cpu
+# Every existing run_*.py runner was invoked with --out NEW-directory;
+# exact commands are in each runner's logs and *-driver.log.
+cargo check -p sunlight-kernel
+bash tools/check_native_std.sh
+cargo check --workspace
+bash tools/test_native_std_foundation.sh
+python3 "$E/verify.py"
+```
+
+The suite adds only the two focused C++ cases and a separate output-library
+build. Historical sources, historical compiler commands, and existing acceptance
+predicates remain unchanged. Both disposable headless TCG guest configurations
+use 2048 MiB and bounded 90-second execution, actual native loader/backend,
+fault detection, resource comparison and scheduler reaping. `cxx-backend` alone
+uses linker write wrapping to force two-byte transfers, zero progress and a real
+bad-descriptor error, forwarding accepted prefixes to the native backend.
+Production output has no injected behavior.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| C++14/17/20 headers; exception/RTTI enabled; historical include-path header | PASS | `cxx-abi-final/` |
+| Unique C++ stream exports, no C/libc ownership overlap, no final undefined symbols/PT_INTERP/DT_NEEDED or host libraries | PASS | `cxx-abi-final/*symbols.log`, `*elf*.log`, link maps |
+| Full native suite, 2 / 4 CPUs | **75/75 PASS / 75/75 PASS** buildable cases | `final-{2,4}cpu/results.{csv,json}` |
+| Historical sequence, each configuration | **20 PASS, 1 BUILD_FAIL / guest NOT_RUN** | both `build-cpp-runtime.log`, at `<string>` |
+| Output separation, 64-bit extrema, ordering, sticky backend errors; injected partial/zero/error writes | PASS / PASS | both `cxx-{output,backend}.*.txt` and results |
+| Expanded boundary output for every supported signed/unsigned integer width, bool 0/1 | PASS / PASS | `boundaries-{2,4}cpu/`, `exact-output.json` |
+| Faults, frame/descriptor/IPv4 baselines and clean reaping | PASS / PASS | empty `faults.log`, serial and verifier summary |
+| Epoll lifecycle (80 iterations), pthread/signal/socket/wchar/termios and all historical C regressions | PASS / PASS | both full suites |
+| Production libc host tests | **121 PASS**, 2 existing native-credential tests filtered | `host/libc.log` |
+| All established ABI/export runners: unistd, wchar, termios, socket, signal, pthread, poll, math, locale, langinfo, dlfcn, dirent, mman, time, random | PASS | corresponding directories and driver logs |
+| Additional legacy stdio runner | **FAIL** before stdio checks: host fd-description harness lacks inet_socket module, E0433 | `stdio-abi/host-fd-vfs.log` |
+| Downstream checks in that legacy stdio runner | **NOT_RUN**, runner stops at above harness build failure | `stdio-abi-driver.log`; native stdio separately PASS in both suites |
+| Kernel check / native Rust-std overlay | PASS / PASS | `kernel-driver.log`, `overlay-driver.log` |
+| Workspace check | **FAIL**, existing target dependency failure including serde_core | `workspace-driver.log` |
+| Native FP foundation, 2 / 4 CPUs, 2048 MiB | PASS / PASS, x87/XMM/MXCSR isolation and parser/raster | `foundation-driver.log`, `native-std-fp-{2,4}cpu.log` |
+
+The expanded boundary fixture was added after both full suites had passed;
+only that focused fixture was rebuilt and rerun on both configurations afterward.
+Its exact-output assertions are recorded in `boundaries-*/exact-output.json`;
+`run-boundaries.py` records the supplemental orchestration. No production source
+changed between full suites and supplemental runs. The unrelated legacy
+fd-description failure was discovered by expanding regression coverage; no inert
+inet_socket retain/release stubs were added to conceal it.
+
+### Follow-up acceptance categories
+
+**A. Historical blockers:** the next verified blocker is `<string>` in the
+unchanged cpp-runtime.cpp sequence on both CPU configurations. Later required
+headers/runtime dependencies listed above remain unaccepted; their order is not
+claimed verified beyond that first diagnostic.
+
+**B. Deferred functional gaps:** complete the **missing C socket transport
+bridge**, then verify actual native networking and a deterministic topology.
+Existing AF_INET stream creation/lifetime support does not implement real
+bind/listen/accept/connect or bidirectional transfer. Connected TCP/UDP transfer,
+external networking, shared pthread descriptor tables, asynchronous signals,
+terminal modes, and the wider wchar/conversion surface remain deferred. Historical
+probe progress must not conceal these gaps. Pthread descriptors remain per-thread
+snapshots and signals remain a bounded synchronous subset.
+
+**C. Final practical C integration milestone (future, NOT_RUN):** build a useful
+small native C diagnostic/echo service and companion client or deterministic host
+fixture after the transport prerequisites are implemented. Acceptance must include
+real bind/listen/accept/connect and bidirectional transfer; payload integrity across
+fragmented/partial reads and writes; nonblocking socket I/O with epoll level,
+edge and one-shot tests; multiple simultaneous connections; pthread workers that
+respect the actual descriptor visibility model; EOF/disconnect/backpressure/error
+handling; repeated teardown with descriptor/resource recovery; C _Thread_local
+isolation and selected supported libc functionality; clean bounded shutdown using
+implemented mechanisms; useful per-feature diagnostics and reproducible results.
+Use real loopback if supported, otherwise an isolated guest/host network fixture;
+never external Internet services. Do not assume UDP, asynchronous signals,
+shared pthread descriptor tables or functional termios modes. Unsupported parts
+must remain visibly UNSUPPORTED/NOT_RUN. This application complements focused
+probes, cannot replace them, and does not establish complete POSIX compatibility.
+Phase 20 records this acceptance milestone without implementing the application.
+
+**D. Hardware acceptance:** remains separate and NOT_RUN; virtual guest output
+and FP tests do not establish hardware or network-device acceptance.
+
+Incoming modified/untracked work was preserved. `preservation.json` records entry
+hashes; `verify.py` checks all of them, reconstructing only the additive guest
+runner edits and checking the unchanged audit prefix. Historical sources match
+entry hashes and HEAD. Three previously clean standalone Cargo.lock files
+refreshed by build gates were restored to HEAD/entry bytes. No historical source,
+existing test predicate, kernel implementation or libc implementation was edited
+by Phase 20. Python compilation and `git diff --check` pass. **No commit created.**
+
+## Phase 21: owning native C++ byte strings, historical blocker moved to `<stdexcept>`
+
+### Existing implementation inspected first
+
+The existing implementation is **Rust C-string code**, not an owning C++ string:
+`sunlight-libc/src/string.rs`, declared with C linkage in
+`sunlight-libc/include/string.h`. It exports strlen/strnlen, strcmp/strncmp,
+strchr/strrchr; callers supply valid borrowed NUL-terminated storage. It neither
+allocates nor owns that storage. Comparisons use unsigned bytes; bounded
+operations stop at their bounds or NUL. `sunlight-libc/src/mem.rs` supplies the
+length-aware memory primitives. Existing C/native consumers include the
+unchanged `docs/audit/probes/string.c` and C/C++ memory/string proof consumers.
+Existing host tests and codegen/ABI proofs exercise these implementations, and
+the unchanged string probe passes natively on both CPU configurations below.
+
+The owning native allocator already exists in `sunlight-libc/src/alloc.rs`:
+header-tracked malloc/free pairs, checked allocation sizing, NULL on allocation
+failure, and reclamation/coalescing. Its C exports belong exclusively to
+`libsunlight_native_c.a`. The string layer uses those exports directly rather
+than introducing another allocator or crossing a Rust object ABI.
+
+Other existing string abstractions were evaluated:
+
+* Rust `alloc::string::String`, used by `kernel/src/process/env.rs` and many
+  other kernel/services modules, owns a growable Vec of UTF-8 bytes. Its Rust
+  layout, UTF-8 invariant, allocation API and absence of a trailing-NUL
+  guarantee do not implement C++ byte-string semantics. The installed Rust
+  source location is recorded in `discovery.log`; native Rust allocation uses
+  `tools/native-std/overlay/alloc/sunlightos.rs`. Rust consumers provide native
+  use, not evidence of C++ object ABI compatibility.
+* `heapless-0.8.0/src/string.rs` in the local Cargo registry, consumed by
+  `compat-linux/src/lib.rs` and kernel capability/path code, owns an inline
+  `Vec<u8,N>` with fixed capacity, UTF-8 validation and `Result` on overflowing
+  push/append. Its source has unit tests. Using it behind std::string would
+  impose the prohibited hidden fixed-size limit and still need an ABI adapter.
+* `third_party/sbase/minilibc.c` and its `include/string.h` are C utilities for
+  the separate Linux-syscall compatibility fixture, not a SunlightOS C++
+  runtime. Their direct Linux syscall numbers make them unsuitable here.
+* Installed `/usr/include/c++/16/bits/basic_string.h` and host libstdc++ objects
+  are Linux-targeted. No target libc++/libstdc++ source, owning custom C++ string,
+  ABI library, or target build/port recipe was located. Search covered repository
+  source, hidden/ignored non-target source paths, vendor/third_party, relevant
+  Cargo dependencies, installed C++ headers, native recipes and sysroot. Source
+  copies in old evidence are not independent native implementations.
+
+Thus this was a missing C++ owning API/header and library integration, not
+merely an include-directory omission. Reusing C primitives is sound; exposing
+Rust String, heapless String or borrowed C functions directly as std::string is
+not. Selected strategy: **new bounded C++ ownership/value-semantics layer over
+existing native string/memory and malloc/free implementations**. No alternate
+C memory engine, allocator, host library or third-party string source is copied.
+Existing Rust/heapless licensing (MIT/Apache-2.0) and sbase's checked-in LICENSE
+were considered; none of their source is imported into the C++ layer, and no
+new third-party license/dependency is introduced.
+
+### Implementation, contract, and runtime prerequisites
+
+`sunlight-cxx/include/string` and `sunlight-cxx/src/string.cpp` provide a
+library-specific `std::string` class, **not std::basic_string or an upstream
+standard-library ABI**. Do not mix it with libc++ or libstdc++. Supported:
+
+* Empty/default, C-string, `(pointer,length)`, copy and move construction;
+  destruction; copy/move/C-string assignment, including self-copy/self-move
+  and assignment from an interior C-string pointer. Copies own independent
+  storage; moved-from objects are empty, NUL-terminated and reusable.
+* size/length/empty/capacity/max_size/c_str/data and unchecked indexing. Index
+  must be at most size; at size only NUL may be written. C++17/20 mutable data
+  and C++14 const-only data signatures are checked. There is no throwing at().
+* append(string), append(C-string), append(pointer,length), += with string,
+  C-string or char; string + string with implicit C-string conversions.
+  Supported source ranges may alias the object's own valid bytes, including
+  its terminator; self/interior append works with and without reallocation.
+* compare(string), ==/!=/</>/<=/>=, ordered by unsigned bytes and then length.
+  Explicit-length operations, copying and comparisons preserve embedded NULs.
+  Every object has a readable trailing NUL, including empty and moved-from ones.
+* String stream insertion calls the Phase 20 write(data,size), preserving
+  embedded NULs, short-write retries, zero/error termination and sticky state.
+  Existing integer/character/C-string insertion and exact output remain tested.
+
+Nonempty storage grows geometrically with native malloc; empty storage uses an
+object-local NUL. There is no hidden fixed buffer limit or silent truncation.
+Checked addition and capacity sizing enforce max_size=LONG_MAX-1, keeping the
+allocation's extra terminator and signed stream length representable. The real
+allocator can exhaust earlier. Reallocation copies before freeing old storage,
+so aliases stay live; non-growing append uses memmove. Destruction uses the
+matching native free. NULL explicit-length input is accepted only for length 0;
+C-string inputs must be valid terminated strings, and all nonempty source
+ranges must be readable. This is byte storage, not a Unicode string API.
+
+All string operations are noexcept, with an explicit **native fail-fast policy**:
+allocation failure, length overflow or invalid nonempty NULL input invokes raw
+sl_std_exit(134), without unwinding or C atexit callbacks. It is not the ISO
+throwing bad_alloc/length_error contract. Isolated native processes test each
+failure path with exact output and status, including absence of post-failure
+work/callback output. Allocation injection is linker-local to the test ELF.
+General operator new/new[], delete/delete[], sized/aligned variants, exceptions,
+RTTI and unwind support are not prerequisites of this malloc/free-based layer
+and are not implemented. No throwing new returns NULL or exception placeholder
+reports success. Archive and final-ELF checks reject unwind/exception/allocation
+operator dependencies and conflicting C/C++ symbol ownership.
+
+The first native link correctly exposed implicit exception-cleanup dependencies:
+C declarations and stream methods lacked nonthrowing contracts. Private C ABI
+declarations in the compiled C++ layer now express the real native no-unwind
+contract, and output/state operations in iostream are explicitly noexcept.
+C++17 has a nonthrowing manipulator-pointer insertion overload for endl/flush.
+Compiler exceptions and RTTI remain enabled; no historical flags changed.
+Potentially throwing custom manipulators/calls can still require unavailable
+unwind symbols. Default native C++17 runtime is accepted; C++14/20 header
+compatibility is checked, not runtime acceptance of arbitrary programs.
+
+`tools/build_native_cxx.sh` adds the native string.o to the existing separate
+libsunlight_cxx.a. The existing include-c++ sysroot link exposes the authoritative
+headers; `sunlight-libc/include/string` only forwards historical includes and
+owns no C++ code. Build uses the unchanged canonical native compiler target,
+startup, libc and linker script. Only native ostream.o/string.o are in the C++
+archive, both x86-64 ELF; maps and final ELF checks find no host libraries,
+PT_INTERP, DT_NEEDED or unresolved symbols. No new/delete or ABI symbol ownership
+is borrowed from host objects. `sunlight-cxx/README.md` records the full contract.
+
+### Reproduction and results
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/`.
+ELFs, objects, ISOs and disposable guest build trees remain under ignored
+`target/phase21/`; evidence retains commands, logs, hashes, maps and verdicts.
+Each runner requires a fresh output directory. Commands executed from repo root:
+
+```sh
+bash tools/build_native_cxx.sh
+python3 tools/native-c/tests/run_cxx_string.py --out target/phase21/string-abi-target
+python3 tools/native-c/tests/run_cxx_output.py --out target/phase21/output-abi-final
+python3 tools/native-c/guest.py --suite --cpus 2 --out target/phase21/accepted-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 --out target/phase21/accepted-4cpu
+python3 docs/audit/probes/run.py --out docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/historical
+# Each existing run_*.py C runner: python3 tools/native-c/tests/run_NAME.py
+# --out target/phase21/run_NAME (exact invocations in regressions.py/driver logs).
+cargo check -p sunlight-kernel
+bash tools/check_native_std.sh
+cargo check --workspace
+bash tools/test_native_std_foundation.sh
+bash tools/test-mem-string-proof.sh
+bash tools/test-alloc-proof.sh
+rustc --test tools/alloc-proof.rs -o target/phase21/alloc-base-tests
+target/phase21/alloc-base-tests --test-threads=1
+python3 docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/verify.py
+```
+
+The full native suites use disposable headless TCG guests, 2048 MiB, 90-second
+bounded guest execution, and actual native loader/backend. Final suites were
+serialized against other builds of the shared native archives. An earlier
+concurrent build rewrote an archive during a link, producing a linker crash;
+that incomplete run was not accepted. An initial new string-backend expectation
+incorrectly used `zo` for the first two bytes of `zero`; corrected to `ze` and
+rerun on both configurations. Existing tests/acceptance predicates were not
+weakened. Initial diagnostic logs remain in `target/phase21/`.
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Native C++14/17/20 headers, include order, data signatures, historical include path | PASS | `string-abi-target/` |
+| Archive members/ELF architecture, unique string/stream exports, C/libc ownership, no host/unwind/new dependencies | PASS | `string-abi-target/`, maps, archive and final ELF logs |
+| Phase 20 focused headers, ABI/exports and exact output regressions | PASS | `output-abi-final/`, both accepted suites |
+| Full native suite, 2 / 4 CPUs, 2048 MiB | **80/80 PASS / 80/80 PASS** buildable cases | `accepted-{2,4}cpu/results.{csv,json}` |
+| Historical guest sequence, each configuration | **20 PASS, 1 BUILD_FAIL / runtime NOT_RUN** | both `build-cpp-runtime.log`, missing `<stdexcept>` |
+| String empty/short/growth, deep copy, moves/reuse, assignments, aliasing, comparisons, data/terminators and binary output | PASS / PASS | both `cxx-string.*.txt`, results; 2000 cycles of growth through 4097 bytes and copy/destruction, balanced allocation/free counts |
+| String partial/zero/error writes and sticky suppression | PASS / PASS | both `cxx-string-backend.*.txt`, exact binary prefix |
+| Allocation/overflow/invalid-range fail-fast, status 134, no callbacks | PASS / PASS | both `cxx-string-{allocation,overflow,null}.*.txt`, results |
+| Fault logs, primary reaping, frame/descriptor/IPv4 recovery | PASS / PASS | empty faults.log, serial, `acceptance-summary.json` |
+| Epoll lifecycle (80 iterations), pthread/signal/socket and all prior C cases | PASS / PASS | both accepted suites |
+| Production libc host tests | **121 PASS**, 2 existing native-credential tests filtered | `run_unistd/libc.log` |
+| C ABI/export runners: dirent/dlfcn/langinfo/locale/math/mman/poll/pthread/random/signal/socket/termios/time/unistd/wchar | PASS | corresponding run_NAME directories and `regressions.json` |
+| Kernel check / native Rust-std overlay | PASS / PASS | kernel/overlay driver logs |
+| Native FP foundation, 2 / 4 CPUs, 2048 MiB | PASS / PASS | foundation driver and native-std-fp-{2,4}cpu.log; x87/XMM/MXCSR isolation and parser/raster |
+| Memory/string host logic and native C/C++ ABI/codegen proof | PASS | mem-string-driver.log |
+| Base allocator proof harness (no global-alloc feature) | **9 PASS** | alloc-base.log |
+| Additional allocator script with global-alloc enabled | **BUILD_FAIL**, runtime NOT_RUN | alloc-driver.log: existing host cfg excludes GLOBAL_ALLOC although five test references require it |
+| Workspace check | **FAIL**, existing target dependency/std failure including serde_core | workspace-driver.log |
+| Additional legacy stdio runner | **BLOCKED before stdio checks**, downstream NOT_RUN | run_stdio/host-fd-vfs.log and run_stdio-driver.log |
+
+The legacy stdio failure is a **stale host harness module integration**:
+`tools/tests/fd-description/src/lib.rs` imports the real kernel fd_table but
+provides no sibling inet_socket module. `kernel/src/process/fd_table.rs` now calls
+super::inet_socket::{retain,release}; the real module exists at
+`kernel/src/process/inet_socket.rs`. It is not a missing checkout, include search
+path, or generated file. E0433 occurs during host harness compilation, before
+guest execution, and is not evidence of guest networking failure. No fake module
+was supplied, no coverage removed, and the unrelated harness was left intact.
+Native stdio and epoll remain separately accepted on both CPU configurations.
+
+The unchanged older `run.py` was also rerun for host/Helios/native configurations;
+its `historical/results.csv` retains the runner's literal UNKNOWN guest field
+where no external runner is configured. Such guest executions are **NOT_RUN**,
+not passes. Its historical native C++ compile command still fails at stdexcept;
+the actual native guest results above come from the disposable guest suites.
+Host/Helios execution is not native guest evidence. The older runner reports
+host: 18 builds, 16 runtime PASS and 2 FAIL (socket exit 1, stdio exit 9);
+Helios: 17 builds, 14 host-execution PASS and 3 FAIL (dlfcn/socket exit 1,
+stdio exit 9), with C++ BUILD_FAIL because x86_64-linux-musl-g++ is absent.
+Native: 17 C builds PASS and C++ BUILD_FAIL. Host socket failure has no captured
+errno and is not diagnosed as a guest transport fault. The stdio exit 9 checks
+invalid-whence ferror/EINVAL behavior in the historical source, not C++ strings;
+these control failures remain recorded without altering the source or predicates.
+The exact historical command is unchanged:
+
+```sh
+clang++ --target=x86_64-unknown-none-elf -nostdinc \
+  -I"$PWD/sunlight-libc/include" -nostdlib -fuse-ld=lld \
+  docs/audit/probes/cpp-runtime.cpp -o OUTPUT
+```
+
+The older audit variant adds only `-isystem RESOURCE/include`, as before. Both
+variants now identify **`<stdexcept>` as the next verified historical blocker**.
+Historical cpp-runtime is BUILD_FAIL and runtime NOT_RUN, not BUILD_PASS and not
+runtime PASS. No claims are made for exception classes, throw/catch, RTTI,
+polymorphic new/delete, std::thread, global constructor/destructor traversal,
+nontrivial TLS initialization/destruction, input streams, traits/allocators,
+iterators or full standard-library conformance. Those remain unavailable and
+corresponding runtime checks remain NOT_RUN for lack of implementations.
+
+### Preserved practical native C milestone and handoff
+
+The practical native C service/client milestone remains deferred: it needs the
+C socket transport bridge, real connection establishment and bidirectional
+transfer, deterministic loopback or isolated guest/host networking, nonblocking
+I/O and epoll integration, pthread use consistent with actual descriptor
+visibility, clean shutdown, repeated teardown and resource recovery. Passing
+existing synthetic/native socket and epoll lifecycle cases and advancing C++
+headers does not satisfy those functional prerequisites. This phase implements
+neither that bridge nor the complete application.
+
+Incoming modified/untracked work was recorded before edits. Preservation checks
+reconstruct the small intentional integrations in incoming Phase 20 files and
+verify every other incoming file byte-for-byte; the audit is append-only.
+Historical root probes and native-foundation entry/write/exit probes remain
+byte-for-byte identical to HEAD. No commit was created.
+
+## Phase 22 partial implementation (not accepted)
+
+Follow-up discovery: `python3 tools/native-c/tests/run_cxx_exception_discovery.py
+--out target/phase22-review/discovery` PASS. This new bounded diagnostic preserves
+the original probe and flags and records its SHA-256, exact missing `<thread>`
+diagnostic, class undefined symbols, and a separate throw/catch object's emitted
+dependencies and section table. It does not replace or weaken existing gates.
+The compiler emits __cxa_allocate_exception, __cxa_throw, __cxa_begin_catch,
+__cxa_end_catch and __gxx_personality_v0 for the required operation. Providing
+the classes alone cannot resolve this layer. No target ABI/unwind source or
+build recipe was found in the repository. Host libraries were not imported.
+The native linker script has no explicit EH table bounds, retention or runtime
+registration. Its lack of a discard rule for EH sections is not proof of runtime
+discovery. The pthread callback passes through Rust extern-C pthread_trampoline;
+unwinding across that boundary is unsupported and no C++ boundary wrapper exists.
+The reference-counted classes remain incoming work, preserved without alteration.
+No class runtime, 2/4 CPU guest runs or regression gates were executed in this
+follow-up: all are NOT_RUN, and Phase 22 remains incomplete. Prior separate
+failure classifications and deferred C networking acceptance remain unchanged;
+the discovery result provides no new allocator, TLS or guest acceptance evidence.
+
+The unchanged cpp-runtime.cpp includes iostream/string/stdexcept/thread/typeinfo/
+cstdlib. It constructs runtime_error from a literal, throws it, catches through
+const exception&, and calls what(). It does not explicitly copy exceptions,
+rethrow, use catch(...), or place a destructor-bearing local in the throwing
+scope. It additionally requires new/delete, dynamic_cast/typeid, std::thread,
+global string initialization and nontrivial TLS lifecycle.
+
+Added exception and runtime_error classes only, with immutable allocated message
+storage, atomic reference counting, nonallocating noexcept copies and virtual
+what/destruction. Message allocation fails through sl_std_exit(134); string
+policy is unchanged. No truncation or success-returning ABI stubs were added.
+The archive build includes exception.o but native linkage remains blocked by
+_ZTVN10__cxxabiv117__class_type_infoE,
+_ZTVN10__cxxabiv120__si_class_type_infoE and _ZdlPvm. No ABI/unwind implementation
+was integrated. Class runtime acceptance and exception execution are NOT_RUN;
+TLS bookkeeping and foreign-frame unwind boundaries remain unimplemented.
+
+Executed: native cc.py C++17 -Wall -Wextra -Werror compilation of exception.cpp
+PASS; nm -u /tmp/phase22-exception.o exposed the above dependencies. Unchanged
+original clang++ --target=x86_64-unknown-none-elf -nostdinc
+-I sunlight-libc/include -nostdlib -fuse-ld=lld cpp-runtime.cpp command: BUILD_FAIL
+at `<thread>`, runtime NOT_RUN. This does not establish throw/catch support.
+
+All requested guest configurations, class behavior/cleanup checks, ABI ownership
+checks and regression gates are NOT_RUN in this attempt. Previous Phase 21
+results are historical evidence only. Existing workspace dependency failure,
+legacy stdio host harness missing inet_socket integration, global-alloc proof
+harness cfg failure, and host/Helios failures retain their preceding recorded
+classifications; no new regression conclusion is drawn. Existing runner
+expectations for the old header blocker require follow-up.
+
+The practical C service/client milestone remains deferred, including C socket
+transport, verified bidirectional connection transfer, deterministic topology,
+epoll and pthread descriptor-snapshot constraints. Incoming edits were retained,
+historical probe files were not edited, and no commit was created. This phase
+is incomplete and must not be treated as native acceptance.
+
+## Phase 22 native ABI/unwind execution follow-up (INCOMPLETE overall)
+
+This entry supersedes the preceding Phase 22 NOT_RUN state only for the newly
+executed gates below. Phase 20/21 evidence is not carried forward as validation.
+No Phase 23 is introduced. The historical source is unchanged.
+
+### Whole historical probe inventory and dependency matrix
+
+The entire 22-line cpp-runtime.cpp and both original build variants were read.
+Headers: iostream, string, stdexcept, thread, typeinfo, cstdlib. Operations:
+cout insertion of strings/characters, owning string literal construction,
+runtime_error literal construction/throw/catch via const exception&/virtual what,
+new Derived, pointer dynamic_cast, polymorphic typeid and type_info inequality,
+virtual delete, one nullary lambda std::thread and join, global string startup,
+worker thread_local string initialization/destruction, and std::atexit(done).
+The thread object is a local; its destructor runs after join. The probe has no
+explicit thread move, detach, ids, this_thread, rethrow, catch-all, exception
+copy/assignment, primitive throw, or general dynamically initialized function
+local static. Its static done is a function, not a guarded local static object.
+Those EH/move/error operations needed to validate the subset are separate tests.
+
+| Feature | Existing implementation before follow-up | Missing prerequisite | Implemented approach / remaining boundary | Runtime acceptance |
+| --- | --- | --- | --- | --- |
+| iostream and owning string | Phase 20/21 native library | regression after ABI changes | reuse unchanged output/string implementations | exact output, binary strings, errors, 2000 lifecycle cycles |
+| exception/runtime_error classes | incoming refcounted message classes compiled only | real class/si typeinfo vtables, deleting destructors, sized delete | upstream LLVM typeinfo ownership; native paired free; length-aware string message construction | long message, copies/assignment/self-assignment, retained what lifetime, virtual dispatch/delete, embedded NUL, 2000 balanced cycles |
+| typed/base/catch-all EH, cleanup | no runtime | cxa allocation/throw/catch/rethrow, LSDA personality, unwinder, TLS | matched LLVM libc++abi/libunwind with native adapters | 1500 repeated catches, automatic cleanup, nested rethrow and object lifetime; class and int catches |
+| new Derived / virtual delete | native malloc/free only | throwing new, bad_alloc, delete variants | scalar/array allocation, bad_alloc on heap failure; sized/unsized free | forced new failure and bad_alloc catch, deleting destructor pairing |
+| RTTI | compiler enabled only | real type_info hierarchy, __dynamic_cast, bad_typeid | LLVM implementation and bounded native type_info API | successful/failed pointer casts, typeid equality, null typeid throws bad_typeid |
+| std::thread(lambda), join/destruction | native pthread already exists | callable ownership, C++ catch boundary, failure cleanup | nullary callable-object layer; exact typed thunk; reuse native pthread reaped-before-free lifecycle | move/joinable, 40 repeated lifecycles, move-only callable lifetime, failed create injection, isolated destructor/worker termination |
+| global string initialization | no C++ traversal | init-array retention/traversal after native TLS startup | driver entry wrapper, sorted .init_array, C++ catch boundary | unchanged historical exact output; destructor registry drained at native C exit |
+| global destruction/atexit(done) | native C atexit only | __cxa_atexit and static-image token | native locked destructor list, one native atexit callback, single static image | historical done output at exit; destructor nodes reclaimed |
+| thread_local string | native trivial variant-II TLS only | __cxa_thread_atexit and C++ worker/main exit hooks | native per-thread destructor list, explicit C++ wrapper cleanup before return to pthread | historical TLS OK and 42 independent TLS destructor witnesses |
+| local static init | no guarded object in historical probe | __cxa_guard_acquire/release for additional programs | explicitly unsupported; negative diagnostic retained | LINK_FAIL for separate local-static TU, runtime NOT_RUN |
+| cstdlib | C declarations only | std::atexit namespace exposure, historical no-resource include rule | bounded declarations using compiler builtin size type | historical compile progresses beyond all six headers |
+| original archive-free build command | no startup/archive arguments | native runtime and image linkage | command preserved verbatim for diagnostics; canonical native driver separately links required libraries | original LINK_FAIL/runtime NOT_RUN; configured unchanged source tested separately |
+
+### ABI/unwind strategy and reproducibility
+
+Choose a matched LLVM libc++abi + LLVM libunwind **21.1.0** source port, Apache
+2.0 with LLVM exception. Sources and license are under sunlight-cxx/vendor/.
+PROVENANCE.json in each directory records release URLs, archive SHA-256, version,
+and individual unmodified source hashes. The runtime runner verifies every
+vendored file. No Linux or MinGW ABI/unwind object was used. Local Rust toolchain
+libunwind sources were inspected but the integrated components use the same
+pinned upstream release. Initial port diagnostics remain evidence, not final
+acceptance failures; temporary adapters under target/phase22/port-include were
+not installed or used by the final build.
+
+Build: bash tools/build_native_cxx.sh. It invokes the canonical native C build,
+then cc.py for every source using x86_64-unknown-none-elf, SysV AMD64 LP64,
+static non-PIE, no red zone. Clang 23 emits the Itanium/DWARF zero-cost model;
+target object relocations show __cxa_* calls and __gxx_personality_v0, LSDA and
+.eh_frame, not SJLJ/SEH. cxx.py leaves client exceptions and RTTI enabled and
+uses hosted main linkage. It links libsunlight_cxx.a, libsunlight_eh.a and
+libsunlight_native_c.a only, with --wrap=main and --eh-frame-hdr. Headers never
+search host C++ libraries. Build recipe and compiler inventory are in evidence.
+
+C++ archive ownership: existing output/string/exception objects, upstream
+private_typeinfo.cpp and stdlib_typeinfo.cpp, native delete/pure-virtual/fatal
+support. EH archive ownership: upstream cxa_exception.cpp/cxa_personality.cpp,
+libunwind.cpp, UnwindLevel1.c, UnwindLevel1-gcc-ext.c, register save/restore
+assembly, plus native EH storage/termination, allocation, startup and lifecycle.
+No libc++ stdexcept/string implementation is mixed with native class layouts.
+Private adapters provide compiler atomic reference-count addition, native
+assert/fatal behavior, LP64 format macros and cstddef/cstdint aliases.
+
+libunwind uses bare-metal static-ELF section discovery, NO_HEAP to suppress FDE
+cache additions, and real native pthread mutexes for both reader/writer locks.
+HAS_NO_THREADS is NOT enabled in production. Internal rwlock adapters serialize
+all accesses; no unsupported public pthread rwlock API is advertised. Runtime
+frame registration, dynamically loaded C++ images and JIT frames are unsupported.
+The linker explicitly KEEP's .eh_frame/.gcc_except_table and .eh_frame_hdr,
+exports all four discovery bounds, and retains sorted .init_array. Final image
+readelf, symbol maps and llvm-dwarfdump --eh-frame inspect real CIE/FDE records.
+No PT_INTERP, DT_NEEDED, unresolved symbol, or host library path is permitted.
+Strong symbol ownership is checked across all three archives. Header-defined
+weak string size/data accessors have expected COMDAT duplicates; compiled string
+operations and all final strong runtime exports remain unique.
+
+The class implementations preserve noexcept what/copy/assignment/destruction.
+std::runtime_error(string) now copies size bytes rather than strlen(c_str()),
+retaining embedded NUL payloads without truncation. Message storage is immutable
+and atomically reference counted. Existing string and message-constructor
+allocation failure remains native fail-fast status 134. General scalar/array
+new allocates at least one byte for zero size and throws std::bad_alloc on NULL;
+it never returns NULL as successful throwing new. Sized/unsized scalar/array
+delete use the paired native free. No aligned/nothrow variants, new_handler API,
+or complete array-new-length support are claimed.
+
+Exception allocation is upstream __cxa_allocate_exception over native 16-byte
+aligned malloc, without an emergency pool; exhaustion terminates as required
+instead of producing a NULL exception object. Upstream bookkeeping/catch counts,
+rethrow and destructor cleanup are used. Native trivial thread_local
+__cxa_eh_globals supplies independent catch stacks/uncaught counts. The native
+termination handler is fixed and invokes sl_std_exit(134), which already uses
+native exit-group syscall 157, including when called from a worker. It does not
+merely exit the borrower thread. Handler customization and exception_ptr API
+are not provided. Upstream internal personality paths get the fixed real
+termination/unexpected policy; no fake personality or typeinfo table exists.
+
+No unwinding through Rust is supported. __wrap_main catches exceptions from
+constructors and user main before returning into Rust startup. std::thread's
+correctly typed void*(void*) noexcept thunk catches escaping user exceptions,
+releases callable storage and terminates the group. Callable cleanup and TLS
+destructors finish before returning into Rust pthread_trampoline. Native pthread
+join remains the sole owner of reaped-before-stack/TLS-free behavior. Raw pthread
+callbacks using C++ nontrivial TLS need their own equivalent boundary/cleanup;
+pthread_exit/cancellation from a C++ worker is outside this subset. Native file
+descriptor tables remain per-thread snapshots, not shared POSIX tables.
+
+The thread layer supports default construction, nullary callable objects
+(including move-only captures), move construction/assignment, joinable, join and
+required destructor termination. No argument pack, function-reference decay,
+reference_wrapper, detach, ids or this_thread API is supplied. Constructor/join
+failures throw runtime_error, explicitly NOT conforming std::system_error.
+A linker-local pthread_create fault injection verifies failed-construction
+cleanup without changing the production backend or claiming OS exhaustion.
+
+C++ main startup registers one C atexit callback before traversing constructors;
+it consumes one of native C's 32 callback slots. __cxa_atexit stores destructor
+records under a native mutex and drains them in reverse order outside the lock.
+__cxa_thread_atexit uses private native TLS lists. Records are freed before
+invoking callbacks; thrown destructors terminate. A single static-image
+__dso_handle identifies this image; DSO-specific finalize/unload is unavailable.
+Main-return and std::thread-return hooks drain thread destructors. Explicit C
+exit from arbitrary worker functions, throwing C atexit callbacks, nontrivial
+TLS in raw pthread callbacks, custom .fini_array functions and general local
+static guards are not accepted lifecycle contracts.
+
+### Fresh validation and remaining acceptance
+
+Evidence: `docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/`.
+Ignored build/ELF/ISO artifacts remain under `target/phase22/`. All results in
+this table were freshly executed for this follow-up. Intermediate class-only
+and port-attempt logs remain under target; they are not final acceptance.
+
+| Gate | Fresh result | Evidence |
+| --- | --- | --- |
+| Layer A class headers C++14/17/20, linkage, ownership, message lifetime/copy/assignment/virtual deletion | PASS; native PASS on 2 and 4 CPUs | accepted-class-abi, both accepted suites |
+| Layer B typed class/int catch, base catch, catch-all, RAII cleanup, nested rethrow, 1500 repetitions and exception reclamation | PASS / PASS | cxx-runtime-execution streams/status in accepted-{2,4}cpu |
+| Per-thread catch stacks, overlapping handlers and rethrow; TLS destructors | PASS / PASS | same execution case, two simultaneous handlers; 42 TLS destructor witnesses |
+| Throwing new failure and exception-storage allocation failure | PASS / PASS | bad_alloc catch in execution; storage isolated status 134 |
+| Layer C start/join, moves/joinable, move-only callable storage, 40 lifecycles and failed-create cleanup | PASS / PASS | execution, linker-local malloc/free/pthread_create wrapping |
+| Uncaught main, joinable destructor, worker uncaught, exception-storage exhaustion | 4/4 PASS / 4/4 PASS; exact status 134 and armed-only output | both suites; no callbacks or unexpected faults |
+| Native configured unchanged cpp-runtime.cpp | PASS / PASS; exact output, exit 0, clean reaping | cpp-runtime-native in both suites |
+| Original standalone historical command (no resource headers, startup or archives) | **LINK_FAIL; runtime NOT_RUN** | accepted-output-abi/historical.log, accepted-runtime-abi/historical-original.log |
+| Original older run.py native command (adds compiler resource include only) | **LINK_FAIL; runtime NOT_RUN**; 17 C builds PASS | accepted-historical/native-cpp-runtime-build.log |
+| Full native suite, 2 / 4 CPUs, 2048 MiB, bounded 180 seconds | **87/87 PASS / 87/87 PASS** buildable cases; original command retained as separate LINK_FAIL row | accepted-{2,4}cpu/results.csv, serial and empty faults.log |
+| Separate global/TLS/atexit lifecycle and zero outstanding wrapped allocations at final destructor | PASS / PASS; exact seven-line output, status 0 | lifecycle-{2,4}cpu and acceptance-summary.json |
+| Phase 20 output and Phase 21 string runtime/regressions | PASS / PASS; all prior predicates retained | both suites, accepted-output-abi, accepted-string-abi |
+| ABI ownership, target-only linking, upstream file hashes, retained final CIE/FDE/LSDA/index | PASS | accepted-runtime-abi, throw-calling-conventions/relocations/tables, native-eh-tls.log |
+| C/C++ export/header checks for dirent/dlfcn/langinfo/locale/math/mman/poll/pthread/random/signal/socket/termios/time/unistd/wchar | PASS | accepted-run_NAME logs |
+| Production libc host tests | **121 PASS**, same two native-credential tests filtered | accepted-run_unistd/libc.log |
+| Kernel check / native Rust-std overlay | PASS / PASS | accepted-kernel/overlay driver logs |
+| Native FP foundation, 2 / 4 CPUs, 2048 MiB | PASS / PASS | accepted-foundation-driver.log, native-std-fp-{2,4}cpu.log |
+| Epoll 80-cycle lifecycle, native allocator/TLS/pthread reaping | PASS / PASS | both suites, accepted-run_pthread; frame/fd/IPv4 recovery |
+| Memory/string native ABI/codegen and host logic | PASS | accepted-mem-proof-driver.log |
+| Base allocator harness | **9 PASS** | accepted-alloc-base-driver.log |
+| Global-allocator proof script | **BUILD_FAIL; runtime NOT_RUN** | accepted-alloc-proof-driver.log; same five GLOBAL_ALLOC cfg errors |
+| Workspace check | **FAIL** | accepted-workspace-driver.log; target std/prelude dependency failures, including serde_core |
+| Legacy stdio host harness | **BUILD_FAIL before stdio checks; downstream NOT_RUN** | accepted-run_stdio/host-fd-vfs.log; same missing sibling inet_socket integration |
+
+Separate failure investigation: no allocator, Rust workspace dependency, or
+host-harness source was changed. GLOBAL_ALLOC is still cfg-excluded for the host
+proof build while five references require it; no allocator-proof PASS is claimed.
+fd-description imports the actual kernel fd_table, whose retain/release calls
+require its real sibling inet_socket module; the harness does not integrate it.
+This is a host E0433 build failure, not a missing downloaded file or a guest
+network failure. No fake harness module was added. Native stdio remains accepted.
+Workspace E0463 std/prelude failures occur in target dependencies and remain
+separate from the C++ source-built runtime. Production libc host tests and the
+native allocator/TLS/pthread gates pass independently of those failed harnesses.
+
+The old host/Helios controls also reproduced: host 18 builds, 16 host runs PASS,
+socket exit 1 and stdio exit 9 FAIL; Helios 17 builds, 14 host runs PASS,
+dlfcn/socket exit 1 and stdio exit 9 FAIL, C++ BUILD_FAIL because the musl C++
+compiler is absent. No guest runner is configured in old run.py, so its literal
+UNKNOWN guest cells mean **NOT_RUN**, not PASS. Those host failures are not
+reclassified as guest-network failures; the stdio source tests invalid-whence
+ferror/EINVAL behavior and socket failure captures no errno. Fresh configured
+native guest evidence comes from the disposable suites instead.
+
+Commands, from repository root (fresh output directories are required):
+
+```sh
+bash tools/build_native_cxx.sh
+python3 tools/native-c/tests/run_cxx_classes.py --out NEW-class-abi
+python3 tools/native-c/tests/run_cxx_runtime.py --out NEW-runtime-abi
+python3 tools/native-c/tests/run_cxx_output.py --out NEW-output-abi
+python3 tools/native-c/tests/run_cxx_string.py --out NEW-string-abi
+python3 tools/native-c/tests/run_cxx_exception_discovery.py --out NEW-discovery
+python3 tools/native-c/guest.py --suite --cpus 2 --timeout 180 --out NEW-2cpu
+python3 tools/native-c/guest.py --suite --cpus 4 --timeout 180 --out NEW-4cpu
+python3 tools/native-c/cxx.py docs/audit/probes/cpp-runtime.cpp -o NEW.elf
+python3 tools/native-c/guest.py NEW.elf --cpus 2 --expect-exit 0 --out NEW-historical
+python3 tools/native-c/cxx.py tools/native-c/tests/cxx-lifecycle.cpp \
+  -Wl,--wrap=malloc,--wrap=free -o NEW-lifecycle.elf
+python3 tools/native-c/guest.py NEW-lifecycle.elf --cpus 2 --out NEW-life-2cpu
+python3 tools/native-c/guest.py NEW-lifecycle.elf --cpus 4 --out NEW-life-4cpu
+# Each existing run_NAME.py C ABI/export runner, kernel, overlay, FP and proofs:
+# exact commands and statuses are retained in validate-accepted.py and driver logs.
+```
+
+The original archive-free command is still executed unchanged in diagnostics:
+
+```sh
+clang++ --target=x86_64-unknown-none-elf -nostdinc \
+  -I"$PWD/sunlight-libc/include" -nostdlib -fuse-ld=lld \
+  docs/audit/probes/cpp-runtime.cpp -o OUTPUT
+```
+
+It now passes header compilation and fails at linking std::cout, class/ABI,
+thread and startup/library dependencies because no native archives were supplied.
+This is distinguished from the configured native driver PASS; no historical
+build requirement, flag or source was silently replaced. The separate native
+case uses exactly the unchanged historical source with the canonical native
+startup/archive/linker configuration. The old command's runtime is NOT_RUN.
+
+Accepted RTTI is limited to tested simple pointer casts and typeid operations;
+multiple/virtual inheritance adjustments, additional primitive/pointer EH
+matches and full type_info APIs are not inferred from class/base catch PASS.
+The local-static negative TU newly verifies missing __cxa_guard_acquire/release.
+Guarded-local-static runtime, nontrivial raw-pthread TLS lifecycle, arbitrary
+C++-throwing C callbacks, DSO/JIT/foreign-frame unwind, custom terminate handlers,
+aligned/nothrow new, full std::thread and unlisted standard-library APIs remain
+unsupported or NOT_RUN. These are explicit scope limits, not invented ABI stubs.
+
+
+Phase 22 is not declared complete. Completion of the requested execution subset
+requires the Layer A/B/C/D and regression results to be explicitly reviewed,
+and the original build-command limitation must remain visible. This is a
+bounded native C++ runtime, not a full standard library or full ABI/RTTI/lifecycle
+conformance claim. Guarded local statics remain the next separately verified
+unsupported feature; the unchanged configured historical probe no longer has
+a missing runtime symbol. The old standalone command still needs explicit
+native startup/archive/linker integration. Do not hide that by changing it.
+
+The practical native C service/client milestone stays deferred: C socket
+transport bridge, deterministic real bidirectional networking acceptance,
+nonblocking/epoll integration, descriptor-snapshot-aware pthread use and repeatable
+shutdown/resource recovery are still required. C++ progress supplies none of
+those missing application prerequisites.
+
+Preservation verification recorded 4542 incoming files before edits. All incoming files outside the intentional C++ implementation/build/runner/documentation integrations match their recorded SHA-256. The incoming audit remains an exact prefix; the incoming README is retained verbatim between its new current-status notice and appended runtime notes. All 26 tracked historical C/C++ probe and runner sources match HEAD byte-for-byte. Three previously clean Cargo.lock files changed by regression harness builds were restored to their exact original tracked bytes; no incoming lockfile edits were overwritten. No commit was created. Full baseline hashes and the explicit intentional integration list are retained in preservation.json.
+
+## Phase 22 local-static guards and completion decision (2026-11-12)
+
+This entry supersedes only the preceding Phase 22 guard limitation. The
+historical probe sources, historical command fixtures, and earlier Phase 20/21
+evidence remain unchanged. No Phase 23 is introduced.
+
+### Remaining acceptance checklist and disposition
+
+| Requirement | Disposition |
+| --- | --- |
+| Target-built LLVM ABI/unwind, typed/base/catch-all EH, rethrow, cleanup | Implemented; re-executed PASS on 2 and 4 CPUs |
+| Allocation, throwing new/bad_alloc, sized/unsized delete | Implemented; re-executed PASS |
+| Bounded std::thread, moves/joinable/join, failure cleanup | Implemented; re-executed PASS |
+| Global constructors, `__cxa_atexit`, `__dso_handle`, TLS destructors | Implemented; lifecycle PASS on 2 and 4 CPUs |
+| General function-local static guards | Implemented in this entry; six focused runtime cases PASS on 2 and 4 CPUs |
+| Guard exception retry and destructor registration | Implemented; retry case verifies one successful construction, one destruction, no failed-object destructor |
+| Recursive local-static initialization diagnostic | Detected by thread identity; isolated process exits 134 with the upstream diagnostic |
+| Original archive-free historical command | Intrinsic LINK_FAIL; runtime NOT_RUN. Bare `-nostdlib` supplies no native startup/archive/linker script |
+| Supported native-driver historical probe | PASS; exact four-line output, exit 0, clean reaping on 2 and 4 CPUs |
+| Raw-pthread nontrivial TLS, throwing C callbacks, DSO/JIT/foreign-frame unwind, custom terminate handlers, aligned/nothrow new, full std::thread/RTTI/library conformance | Explicitly outside the bounded subset; not claimed |
+
+### Historical command versus native driver
+
+The original command is executed verbatim in diagnostics:
+
+```sh
+clang++ --target=x86_64-unknown-none-elf -nostdinc \
+  -I"$PWD/sunlight-libc/include" -nostdlib -fuse-ld=lld \
+  docs/audit/probes/cpp-runtime.cpp -o OUTPUT
+```
+
+It is an intentionally bare link. It supplies no native startup, archive,
+linker script, or image configuration, so it remains **LINK_FAIL; runtime
+NOT_RUN**. The fresh diagnostic records 20 unresolved symbols, including
+`std::cout`, `std::string`, `std::runtime_error`, `__cxa_*`, `_Unwind_Resume`,
+`__dynamic_cast`, `operator new`, and `pthread_create`. This is an intrinsic
+limitation of the old invocation, not a missing supported-driver capability.
+The supported driver (`tools/native-c/cxx.py`) supplies the native startup,
+`libsunlight_cxx.a`, `libsunlight_eh.a`, `libsunlight_native_c.a`, the native
+linker script, and `--wrap=main`; it runs the unchanged source with exact output
+`exception OK`, `TLS OK`, `static initialization OK`, `atexit OK`.
+
+### Guard implementation and ownership
+
+The unmodified upstream LLVM 21.1.0 `libcxxabi/src/cxa_guard.cpp` and
+`cxa_guard_impl.h` are now vendored under `sunlight-cxx/vendor/libcxxabi/` and
+recorded in `PROVENANCE.json`, under the same Apache-2.0 with LLVM exception
+license as the existing vendor tree. No competing `__cxa_guard_*` implementation
+was added. The upstream futex implementation is selected with
+`-D_LIBCXXABI_USE_FUTEX`; `_LIBCXXABI_HAS_NO_THREADS` is not defined.
+
+Private target-only adapters:
+
+- `sunlight-cxx/abi-include/sys/syscall.h` maps the two syscall-shaped
+  operations used by the upstream platform layer. `SYS_gettid` returns a
+  per-thread identity; `SYS_futex` wait/wake map onto native syscall 155.
+  Unknown numbers return -1. This is not a public libc `syscall()` API.
+- `sunlight-cxx/abi-include/__thread/support.h` supplies the libc++ threading
+  type subset. The unselected GlobalMutex condition-variable entry points are
+  declared but not defined, so selecting that path fails at link rather than
+  silently degrading.
+- `sunlight-cxx/src/guard_support.cpp` implements the native futex wait/wake
+  and a constant-initialized TLS thread identity. It allocates no memory and
+  cannot recurse through the allocator or guard runtime.
+- `sunlight-cxx/include/cstring` is a bounded forwarding header that exposes
+  the native libc `memcpy` family under `std::`; no host C++ header is used.
+- `sunlight-cxx/abi-include/include/atomic_support.h` now supplies the
+  libc++ load/store/exchange/compare-exchange order names over compiler
+  builtins. A release/acq_rel compare-exchange failure order is strengthened
+  to acquire, which is valid for the failing load path.
+
+The compiler emits the 8-byte Itanium guard layout. Generated code references
+`__cxa_guard_acquire`, `__cxa_guard_release`, and `__cxa_guard_abort`; successful
+local-static destructors register through `__cxa_atexit` with `__dso_handle`.
+Compiler flags retain exceptions, RTTI, and thread-safe statics; no
+`-fno-threadsafe-statics`, `-fno-exceptions`, or `-fno-rtti` is used for client
+code. The guard-variable symbols are 8 bytes and the object relocations show the
+three guard entry points, including the abort path in the throwing initializer.
+The guard byte is published with release/acquire ordering. Waiters block in the
+native futex, no global mutex is held across user initialization, and
+`__cxa_guard_abort` resets ownership after a throwing initializer so a later
+call can retry. Recursive initialization of the same guard is detected by
+thread identity and terminates the process group with status 134 and the
+upstream diagnostic.
+
+Archive ordering is deterministic: `tools/build_native_cxx.sh` removes the two
+C++ archives before recreating them, so member order and reproducibility do not
+depend on a previous build. `libsunlight_cxx.a` owns the guard objects and the
+private adapter; `libsunlight_eh.a` retains the personality/unwinder/lifecycle
+ownership. No host ABI/unwind object or libc C++ symbol is linked.
+
+Two consecutive builds produced identical archive SHA-256 values; the hashes
+are recorded in `guard-acceptance-2026-11-12/reproducibility.log`.
+
+### Fresh validation
+
+Evidence:
+`docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/guard-acceptance-2026-11-12/`.
+
+| Gate | Fresh result |
+| --- | --- |
+| Full native suite, 2 CPUs, 2048 MiB, 180 s | **93/93 buildable cases PASS**; original historical row remains LINK_FAIL |
+| Full native suite, 4 CPUs, 2048 MiB, 180 s | **93/93 buildable cases PASS**; original historical row remains LINK_FAIL |
+| Local-static basic, concurrent, retry, nested, order | PASS on both CPU configurations; exact stdout and destructor order |
+| Local-static recursive diagnostic | PASS; isolated exit 134, `recursive:armed`, upstream stderr diagnostic, no kernel fault |
+| Separate global/TLS/atexit lifecycle | PASS on both; exact seven-line output, status 0 |
+| Configured historical `cpp-runtime.cpp` | PASS on both; exact output, exit 0, clean reaping |
+| `run_cxx_classes.py`, `run_cxx_runtime.py`, `run_cxx_output.py`, `run_cxx_string.py`, `run_cxx_exception_discovery.py` | PASS; guard symbols linked, no undefined symbols, archive order and upstream hashes verified |
+| C/C++ ABI/export runners | 15 PASS; `run_stdio.py` retains the known host-harness E0433 failure |
+| Production libc host tests | **121 PASS**, 2 filtered, 0 failed |
+| Kernel check / native Rust-std overlay | PASS / PASS |
+| Native FP foundation, 2 and 4 CPUs | PASS / PASS |
+| Memory/string proof | PASS; base allocator harness 9 PASS |
+| Global-allocator proof | **BUILD_FAIL; runtime NOT_RUN**; same five `GLOBAL_ALLOC` cfg errors |
+| Workspace check | **FAIL**; same target std/prelude dependency failures, including `serde_core` |
+| Old host/Helios controls | host 16 PASS, socket/stdio FAIL; Helios 14 PASS, dlfcn/socket/stdio FAIL, C++ BUILD_FAIL; guest cells remain NOT_RUN |
+
+The local-static test source is `tools/native-c/tests/cxx-local-static.cpp`.
+The suite invokes six fresh processes: `basic`, `concurrent`, `retry`,
+`nested`, `order`, and `recursive`. The concurrent and retry cases use a
+four-thread arrival barrier outside the initializer, so contention is
+deliberate; the barrier uses already-initialized atomics and bounded
+`nanosleep`. Every concurrent and retry caller checks the returned object's
+published contents. The retry case verifies exactly two attempts, one successful
+construction, one final destruction, and no destructor for the failed object.
+
+### Phase 22 decision and next probe
+
+Phase 22 is **COMPLETE for the bounded supported subset** documented here. The
+original archive-free command remains LINK_FAIL because it is an intentionally
+bare invocation; that limitation is retained and is not reclassified as a
+supported-driver failure. The explicitly unsupported features above remain
+outside the subset and are not claimed.
+
+The next unchanged historical probe in the established order is `socket.c`.
+Its socket creation/lifetime already passes in the native guest
+(`inet-socket-contract`, `inet-socket-reap`). The first verified blocker for
+the practical native C service/client milestone is therefore not socket
+creation but the absent connected TCP/UDP transport bridge and deterministic
+networking acceptance. C++ work does not validate networking. No new broad
+implementation phase was started.
+
+Incoming uncommitted work is preserved; historical probe sources and command
+fixtures are byte-for-byte unchanged; no commit was created.
+
+## Phase 23 native C TCP transport bridge (2026-11-12)
+
+This entry supersedes only the Phase 22 "next probe" note. Historical probe
+sources, historical command fixtures and every earlier Phase 20/21/22 evidence
+directory remain unchanged. Incoming uncommitted work is preserved and no
+commit was created.
+
+### First verified historical socket-probe blocker
+
+`docs/audit/probes/socket.c` is unchanged and only calls
+`socket(AF_INET, SOCK_STREAM, 0)` then `close()`. Socket creation and descriptor
+lifetime already passed (`inet-socket-contract`, `inet-socket-reap`). The first
+actual unsupported operation for a *useful* service was therefore not socket
+creation but the **absent connected transport attachment**: native
+`read`/`write`/`send`/`recv` on an `inet_socket` returned `ENOTCONN`, and
+`bind`/`connect`/`listen`/`accept` did not exist in native libc at all.
+
+### Implemented slice and reused infrastructure
+
+TCP was selected over UDP because `net_server` already owns a mature smoltcp
+TCP manager (listeners, backlog, half-close, owner reaping, wait sets), while
+UDP only exposes a one-shot `UDP_EXCHANGE`. The slice bridges the existing
+`NetOp` capability protocol; no parallel stack was added.
+
+- `ipc/src/netop.rs` (new) is the canonical opcode/status/readiness table;
+  `sunlight-net/src/netop.rs` re-exports it.
+- `sunlight-libc/src/net_bridge.rs` (new) maps fd -> net_server socket id in a
+  fixed 256-entry table, honours `MSG_DONTWAIT` and `O_NONBLOCK` for data
+  transfer, and uses bounded `NetOp::WAIT` deadlines (connect/accept 10 s,
+  I/O 10 s). The table spinlock is never held across an IPC call.
+- Native libc gains `bind`, `connect`, `listen`, `accept`, `getsockname`,
+  `getpeername`, `sendto`, `recvfrom`, `shutdown`, `htons`/`htonl`/
+  `ntohs`/`ntohl`, `netinet/in.h`, and a non-standard
+  `sunlight_net_diagnostic()` accessor for the fixtures.
+- `close()` releases the net_server attachment before the kernel descriptor is
+  consumed; `socket()` clears stale mappings for reused fd numbers.
+- Explicitly unsupported and rejected, never silently successful:
+  `shutdown()` -> `EOPNOTSUPP`; `connect`/`accept` on a nonblocking descriptor
+  -> `EOPNOTSUPP`; `sendto` with a destination on a connected socket ->
+  `EISCONN`; `MSG_OOB` -> `EOPNOTSUPP`. `poll`/`select`/`epoll` are not bridged;
+  the kernel reports `POLLERR` for `inet_socket`, never false readiness.
+- `INADDR_LOOPBACK` was corrected to the BSD host-order constant
+  `0x7f000001`; the earlier `0x0100007f` value double-swapped the address.
+
+The kernel headless runner gained opt-in networking support: `WANTS_NETWORK`
+initializes the frame backend early, support PIDs 3/4 run `net_server` and the
+service through the SysV `exec_into_process` path, the service exit status is
+latched at reap time, and the networking fixture process is marked as a
+trusted kernel fixture (`system_allocation`) because it has no session broker
+for the NetOp shared-page transport. No other case changes privilege.
+
+### Service, client and topology
+
+- Service: `tools/native-c/tests/tcp-echo-service.c` (bounded 15 s bind/listen
+  readiness retry, length-prefixed echo, zero-length terminator, listener
+  closed after accept).
+- Client: `tools/native-c/tests/tcp-echo-client.c` (15 s connect readiness
+  retry, nonblocking no-data, endpoint validation, 1/7/64/255/1024-byte
+  payloads with embedded NULs, partial read/write framing, `sendto`/
+  `recvfrom` peer validation, refused connect, nonblocking-connect rejection,
+  `shutdown` rejection, peer EOF, live-counter check).
+- Topology: one disposable QEMU TCG guest, 2048 MiB, 2 or 4 CPUs,
+  `virtio-net-pci` over QEMU user-mode networking with a `filter-dump` pcap.
+  The loopback data path is guest-internal `127.0.0.1:4040`; its pcap contains
+  only DHCP/UDP frames and zero TCP frames. The external data path is
+  `10.0.2.15 -> 10.0.2.2` through the same production stack to a host peer.
+  Guest-to-guest remains untested.
+
+### Fresh validation
+
+Evidence:
+`docs/audit/probes/native-foundation/results-2026-11-12-native-net/`.
+
+| Gate | Fresh result |
+| --- | --- |
+| Native TCP echo, 2 CPUs, 2048 MiB | **PASS** `exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0`, `clean=1`, service exit 0 |
+| Native TCP echo, 4 CPUs, 2048 MiB | **PASS**, identical output and cleanup |
+| Repeat run, 2 CPUs | **PASS**, identical output |
+| Packet capture | 4 frames, all IPv4/UDP DHCP; **0 TCP frames** |
+| Historical `socket.c`, original bare command | **LINK_FAIL** (exit 1, `undefined symbol: close`); the 2026-11-11 run failed earlier at `'sys/socket.h' file not found` |
+| Historical `socket.c`, supported driver | build/link PASS, no undefined symbols; guest exit 0 on 2 CPUs |
+| `run_socket.py` ABI/exports/unchanged link | PASS (12 checks) |
+| Full native suite, 2 CPUs | **93/93 buildable PASS**; preserved `cpp-runtime` LINK_FAIL row; no faults |
+| Full native suite, 4 CPUs | **93/93 buildable PASS**; preserved `cpp-runtime` LINK_FAIL row; no faults |
+| Production libc host tests | **121 PASS**, 2 filtered, 0 failed |
+| Kernel check | PASS |
+| Native Rust-std overlay | PASS |
+| Native FP foundation, 2 / 4 CPUs | PASS / PASS |
+| Memory/string proof | PASS (24 tests) |
+| Base allocator proof | **9 PASS** |
+| Global-allocator proof | **BUILD_FAIL**, runtime NOT_RUN (retained `GLOBAL_ALLOC` cfg errors) |
+| Workspace check | **FAIL**; host-lib check passed, then pre-existing `sunlight-voice-recorder` `Errno::NotConnected` non-exhaustive match (present at HEAD, unrelated to networking) |
+| `run_stdio.py` host harness | **FAIL** (retained E0433 `fd-description-tests` integration failure) |
+| C++ runners + lifecycle 2/4 CPUs | PASS |
+| Host/Helios controls | host 17 PASS / 1 FAIL (`stdio`); Helios 15 PASS / 2 FAIL (`dlfcn`, `stdio`) / 1 BUILD_FAIL (`cpp-runtime`); `socket.c` now passes on both in this environment |
+
+### External guest-to-host acceptance (2026-11-12)
+
+This is a separate milestone from guest loopback. The QEMU backend is the
+default `-netdev user,id=net0` (no explicit subnet or `hostfwd`). The guest's
+DHCP log records `address=10.0.2.15/24 gateway=10.0.2.2 dns=10.0.2.3`, and the
+pcap contains an ARP request/reply for `10.0.2.2`, confirming neighbor
+resolution. The host peer binds `127.0.0.1:0` and announces the selected port;
+slirp forwards guest connections to `10.0.2.2:<port>` to that listener. The
+host-observed peer is `127.0.0.1:<ephemeral>`, not the guest address.
+
+Evidence:
+`docs/audit/probes/native-foundation/results-2026-11-12-native-net-external/`.
+
+| Gate | Fresh result |
+| --- | --- |
+| External echo, 2 CPUs, 2048 MiB | **PASS** guest 5 exchanges/1371 bytes, host 5 framed exchanges, `socket_live=0 listener_live=0 stream_live=0` |
+| External echo, 4 CPUs, 2048 MiB | **PASS**, identical |
+| External echo repeat, 2 CPUs | **PASS**, identical |
+| External stalled peer, 2 CPUs | **PASS** `recv` `errno=110` (`ETIMEDOUT`) after 10000 ms; host read one frame and withheld response |
+| External stalled peer, 4 CPUs | **PASS**, same 10000 ms deadline |
+| Connection refusal | **PASS** `connect` after listener close -> `errno=111` (`ECONNREFUSED`) |
+| Asynchronous connect rejection | **PASS** `SOCK_NONBLOCK` connect -> `errno=95` (`EOPNOTSUPP`) |
+| NIC TCP capture | **PASS** 35-38 TCP frames for echo (2 ARP, 4 DHCP UDP); 9 TCP for stall |
+| Endpoint byte integrity | **PASS** outbound 1395 bytes, inbound 1391 bytes; reconstructed SHA-256 matched independent expectations on every echo run |
+| External cleanup | **PASS** kernel `[NATIVE-C-INET] before=0 after=0`, reap `owned_frames=0 fds=0`, host peer exit 0, no QEMU/host-peer residue |
+| Loopback regression, 2/4 CPUs | **PASS**, unchanged PASS line; loopback pcaps still contain zero TCP frames |
+| Full native suite, 2/4 CPUs | **93/93 buildable PASS**; preserved historical `cpp-runtime` LINK_FAIL/NOT_RUN |
+| Socket ABI/exports/historical link | **PASS** (12 checks) |
+| Kernel check / native Rust-std overlay | **PASS / PASS** |
+| Production libc host logic | **121 PASS**, 0 failed, 2 filtered via `run_unistd.py`; the unfiltered parallel hang at the credential-calling `secret_store` test remains preserved |
+
+The external endpoints are recorded per run in each `external-summary.json`
+(for example 2 CPUs `10.0.2.15 -> 10.0.2.2:46163`, host
+`127.0.0.1:46163`). The first two stall orchestrations were marked FAIL only by
+the checker's treatment of the intentionally empty host-to-guest payload
+stream; the guest and host endpoints had already passed. Those summaries are
+retained as `regressions/stall-checker-first-attempt-*.json`; the corrected
+checker treats zero inbound payload as the intended stall outcome.
+
+### Capability summary
+
+Full matrix: `docs/networking/2026-11-12_NATIVE_C_TCP_BRIDGE.md`.
+
+| Operation | Transport | Blocking/nonblocking | Readiness | Tested topology |
+| --- | --- | --- | --- | --- |
+| socket/bind/listen | IPv4 TCP | blocking, bounded IPC | n/a | loopback |
+| accept/connect | IPv4 TCP | blocking, 10 s `WAIT`; nonblocking -> EOPNOTSUPP | `WAIT` ACCEPT/WRITE | loopback; external connect |
+| send/recv/read/write | IPv4 TCP | blocking with deadline; `MSG_DONTWAIT`/`O_NONBLOCK` -> EAGAIN | `WAIT` READ/WRITE/EOF | loopback; external; stalled peer -> ETIMEDOUT |
+| sendto/recvfrom | IPv4 TCP | connected only | same as send/recv | loopback; external |
+| getsockname/getpeername | IPv4 TCP | bounded IPC | n/a | loopback; external |
+| shutdown | IPv4 TCP | immediate EOPNOTSUPP | n/a | loopback (rejected) |
+| close | IPv4 TCP | bounded IPC | n/a | loopback and external, counters return to 0 |
+| poll/select/epoll | IPv4 TCP | not bridged (`POLLERR`) | not bridged | not tested |
+
+### Decision and next probe
+
+The bounded loopback TCP milestone and the separate guest-to-host TCP milestone
+are **complete** for their stated acceptance criteria: real data transfer
+through the production stack, 2 and 4 CPUs, deterministic topology, explicit
+failure paths, byte-exact endpoint reconstruction, and clean ownership. This is
+**not** complete BSD sockets, complete TCP/UDP support, or production network
+security.
+
+Remaining blockers: UDP/`SOCK_DGRAM`, asynchronous connect and nonblocking
+accept, `shutdown` half-close, poll/select/epoll integration, `dup`/`fork`
+attachment transfer, `bind`-then-`connect`, non-default QEMU user-mode
+subnets, and guest-to-guest topology. The next smallest useful step is the same
+external exchange under an explicit non-default slirp subnet to prove the path
+follows the DHCP-advertised gateway rather than a hardcoded alias.

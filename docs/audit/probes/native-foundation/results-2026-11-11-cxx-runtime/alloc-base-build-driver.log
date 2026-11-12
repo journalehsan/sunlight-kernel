@@ -1,0 +1,3 @@
+$ rustc --test tools/alloc-proof.rs -o target/phase22/alloc-base
+
+exit=0

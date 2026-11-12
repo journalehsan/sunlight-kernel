@@ -1,0 +1,12 @@
+#ifndef SUNLIGHT_CXX_CSTDLIB
+#define SUNLIGHT_CXX_CSTDLIB
+// Builtin size type preserves the historical -nostdinc command, which has
+// no compiler resource include path. Declarations match native stdlib.h.
+extern "C" {
+void* malloc(__SIZE_TYPE__);
+void free(void*);
+int atexit(void (*)());
+[[noreturn]] void exit(int);
+}
+namespace std { using ::atexit; using ::exit; using ::malloc; using ::free; }
+#endif

@@ -1,0 +1,21 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/target/phase20/output-2cpu
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 306, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 179, in main
+    add('elf', opts.elf, opts.expect_exit, opts.arg,
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        opts.stdin_file.read_bytes() if opts.stdin_file else b'',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        environment=(b'TMPDIR=/tmp', *(entry.encode() for entry in opts.env)))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 75, in add
+    data = elf.read_bytes()
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 777, in read_bytes
+    with self.open(mode='rb', buffering=0) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/ehsantor/Projects/sunlightos-kernel/target/phase20/cxx-output.elf'

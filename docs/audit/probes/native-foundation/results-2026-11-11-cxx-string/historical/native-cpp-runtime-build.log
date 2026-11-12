@@ -1,0 +1,7 @@
+$ clang++ --target=x86_64-unknown-none-elf -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/historical/native-cpp-runtime -nostdlib -fuse-ld=lld
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp:3:10: fatal error: 'stdexcept' file not found
+    3 | #include <stdexcept>
+      |          ^~~~~~~~~~~
+1 error generated.
+
+exit=1

@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /tmp/cpp-runtime-native.elf --cpus 4 --timeout 180 --expect-exit 0 --out /tmp/phase22-historical-4-guards

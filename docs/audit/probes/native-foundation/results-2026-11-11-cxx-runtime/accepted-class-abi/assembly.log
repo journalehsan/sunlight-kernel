@@ -1,0 +1,357 @@
+$ llvm-objdump -dr --demangle /home/ehsantor/Projects/sunlightos-kernel/target/native-cxx/exception.o
+
+/home/ehsantor/Projects/sunlightos-kernel/target/native-cxx/exception.o:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000000000 <std::exception::~exception()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 83 c4 08                  	addq	$0x8, %rsp
+       d: 5d                           	popq	%rbp
+       e: c3                           	retq
+       f: 90                           	nop
+
+0000000000000010 <std::exception::~exception()>:
+      10: 55                           	pushq	%rbp
+      11: 48 89 e5                     	movq	%rsp, %rbp
+      14: 48 83 ec 10                  	subq	$0x10, %rsp
+      18: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+      1c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      20: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+      24: e8 00 00 00 00               	callq	0x29 <std::exception::~exception()+0x19>
+		0000000000000025:  R_X86_64_PLT32	std::exception::~exception()-0x4
+      29: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+      2d: be 08 00 00 00               	movl	$0x8, %esi
+      32: e8 00 00 00 00               	callq	0x37 <std::exception::~exception()+0x27>
+		0000000000000033:  R_X86_64_PLT32	operator delete(void*, unsigned long)-0x4
+      37: 48 83 c4 10                  	addq	$0x10, %rsp
+      3b: 5d                           	popq	%rbp
+      3c: c3                           	retq
+      3d: 90                           	nop
+      3e: 66 90                        	nop
+
+0000000000000040 <std::exception::what() const>:
+      40: 55                           	pushq	%rbp
+      41: 48 89 e5                     	movq	%rsp, %rbp
+      44: 50                           	pushq	%rax
+      45: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+      49: 48 b8 00 00 00 00 00 00 00 00	movabsq	$0x0, %rax
+		000000000000004b:  R_X86_64_64	.rodata.str1.1
+      53: 48 83 c4 08                  	addq	$0x8, %rsp
+      57: 5d                           	popq	%rbp
+      58: c3                           	retq
+      59: 90                           	nop
+      5a: 66 0f 1f 44 00 00            	nopw	(%rax,%rax)
+
+0000000000000060 <std::runtime_error::runtime_error(char const*, unsigned long)>:
+      60: 55                           	pushq	%rbp
+      61: 48 89 e5                     	movq	%rsp, %rbp
+      64: 48 83 ec 20                  	subq	$0x20, %rsp
+      68: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+      6c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+      70: 48 89 55 e8                  	movq	%rdx, -0x18(%rbp)
+      74: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      78: 48 89 7d e0                  	movq	%rdi, -0x20(%rbp)
+      7c: e8 00 00 00 00               	callq	0x81 <std::runtime_error::runtime_error(char const*, unsigned long)+0x21>
+		000000000000007d:  R_X86_64_PLT32	std::exception::exception()-0x4
+      81: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      85: 48 b9 00 00 00 00 00 00 00 00	movabsq	$0x0, %rcx
+		0000000000000087:  R_X86_64_64	vtable for std::runtime_error
+      8f: 48 83 c1 10                  	addq	$0x10, %rcx
+      93: 48 89 08                     	movq	%rcx, (%rax)
+      96: 48 c7 40 08 00 00 00 00      	movq	$0x0, 0x8(%rax)
+      9e: 48 83 7d f0 00               	cmpq	$0x0, -0x10(%rbp)
+      a3: 75 0a                        	jne	0xaf <std::runtime_error::runtime_error(char const*, unsigned long)+0x4f>
+      a5: bf 86 00 00 00               	movl	$0x86, %edi
+      aa: e8 00 00 00 00               	callq	0xaf <std::runtime_error::runtime_error(char const*, unsigned long)+0x4f>
+		00000000000000ab:  R_X86_64_PLT32	sl_std_exit-0x4
+      af: 48 83 7d e8 f6               	cmpq	$-0xa, -0x18(%rbp)
+      b4: 76 0a                        	jbe	0xc0 <std::runtime_error::runtime_error(char const*, unsigned long)+0x60>
+      b6: bf 86 00 00 00               	movl	$0x86, %edi
+      bb: e8 00 00 00 00               	callq	0xc0 <std::runtime_error::runtime_error(char const*, unsigned long)+0x60>
+		00000000000000bc:  R_X86_64_PLT32	sl_std_exit-0x4
+      c0: 48 8b 7d e8                  	movq	-0x18(%rbp), %rdi
+      c4: 48 83 c7 08                  	addq	$0x8, %rdi
+      c8: 48 83 c7 01                  	addq	$0x1, %rdi
+      cc: e8 00 00 00 00               	callq	0xd1 <std::runtime_error::runtime_error(char const*, unsigned long)+0x71>
+		00000000000000cd:  R_X86_64_PLT32	malloc-0x4
+      d1: 48 89 c1                     	movq	%rax, %rcx
+      d4: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      d8: 48 89 48 08                  	movq	%rcx, 0x8(%rax)
+      dc: 48 83 78 08 00               	cmpq	$0x0, 0x8(%rax)
+      e1: 75 0a                        	jne	0xed <std::runtime_error::runtime_error(char const*, unsigned long)+0x8d>
+      e3: bf 86 00 00 00               	movl	$0x86, %edi
+      e8: e8 00 00 00 00               	callq	0xed <std::runtime_error::runtime_error(char const*, unsigned long)+0x8d>
+		00000000000000e9:  R_X86_64_PLT32	sl_std_exit-0x4
+      ed: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      f1: 48 8b 48 08                  	movq	0x8(%rax), %rcx
+      f5: 48 c7 01 01 00 00 00         	movq	$0x1, (%rcx)
+      fc: 48 8b 78 08                  	movq	0x8(%rax), %rdi
+     100: 48 83 c7 08                  	addq	$0x8, %rdi
+     104: 48 8b 75 f0                  	movq	-0x10(%rbp), %rsi
+     108: 48 8b 55 e8                  	movq	-0x18(%rbp), %rdx
+     10c: e8 00 00 00 00               	callq	0x111 <std::runtime_error::runtime_error(char const*, unsigned long)+0xb1>
+		000000000000010d:  R_X86_64_PLT32	memcpy-0x4
+     111: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+     115: 48 8b 40 08                  	movq	0x8(%rax), %rax
+     119: 48 8b 4d e8                  	movq	-0x18(%rbp), %rcx
+     11d: c6 44 08 08 00               	movb	$0x0, 0x8(%rax,%rcx)
+     122: 48 83 c4 20                  	addq	$0x20, %rsp
+     126: 5d                           	popq	%rbp
+     127: c3                           	retq
+     128: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+
+0000000000000130 <std::runtime_error::runtime_error(char const*)>:
+     130: 55                           	pushq	%rbp
+     131: 48 89 e5                     	movq	%rsp, %rbp
+     134: 48 83 ec 30                  	subq	$0x30, %rsp
+     138: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     13c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+     140: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+     144: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+     148: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+     14c: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+     150: 48 83 7d f0 00               	cmpq	$0x0, -0x10(%rbp)
+     155: 74 0f                        	je	0x166 <std::runtime_error::runtime_error(char const*)+0x36>
+     157: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+     15b: e8 00 00 00 00               	callq	0x160 <std::runtime_error::runtime_error(char const*)+0x30>
+		000000000000015c:  R_X86_64_PLT32	strlen-0x4
+     160: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+     164: eb 08                        	jmp	0x16e <std::runtime_error::runtime_error(char const*)+0x3e>
+     166: 31 c0                        	xorl	%eax, %eax
+     168: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+     16c: eb 00                        	jmp	0x16e <std::runtime_error::runtime_error(char const*)+0x3e>
+     16e: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+     172: 48 8b 7d e0                  	movq	-0x20(%rbp), %rdi
+     176: 48 8b 55 d8                  	movq	-0x28(%rbp), %rdx
+     17a: e8 00 00 00 00               	callq	0x17f <std::runtime_error::runtime_error(char const*)+0x4f>
+		000000000000017b:  R_X86_64_PLT32	std::runtime_error::runtime_error(char const*, unsigned long)-0x4
+     17f: 48 83 c4 30                  	addq	$0x30, %rsp
+     183: 5d                           	popq	%rbp
+     184: c3                           	retq
+     185: 90                           	nop
+     186: 66 2e 0f 1f 84 00 00 00 00 00	nopw	%cs:(%rax,%rax)
+
+0000000000000190 <std::runtime_error::runtime_error(std::string const&)>:
+     190: 55                           	pushq	%rbp
+     191: 48 89 e5                     	movq	%rsp, %rbp
+     194: 48 83 ec 20                  	subq	$0x20, %rsp
+     198: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     19c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+     1a0: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+     1a4: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+     1a8: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+     1ac: e8 00 00 00 00               	callq	0x1b1 <std::runtime_error::runtime_error(std::string const&)+0x21>
+		00000000000001ad:  R_X86_64_PLT32	std::string::data() const-0x4
+     1b1: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+     1b5: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+     1b9: e8 00 00 00 00               	callq	0x1be <std::runtime_error::runtime_error(std::string const&)+0x2e>
+		00000000000001ba:  R_X86_64_PLT32	std::string::size() const-0x4
+     1be: 48 8b 7d e0                  	movq	-0x20(%rbp), %rdi
+     1c2: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+     1c6: 48 89 c2                     	movq	%rax, %rdx
+     1c9: e8 00 00 00 00               	callq	0x1ce <std::runtime_error::runtime_error(std::string const&)+0x3e>
+		00000000000001ca:  R_X86_64_PLT32	std::runtime_error::runtime_error(char const*, unsigned long)-0x4
+     1ce: 48 83 c4 20                  	addq	$0x20, %rsp
+     1d2: 5d                           	popq	%rbp
+     1d3: c3                           	retq
+     1d4: 66 66 66 2e 0f 1f 84 00 00 00 00 00  	nopw	%cs:(%rax,%rax)
+
+00000000000001e0 <std::runtime_error::runtime_error(std::runtime_error const&)>:
+     1e0: 55                           	pushq	%rbp
+     1e1: 48 89 e5                     	movq	%rsp, %rbp
+     1e4: 48 83 ec 30                  	subq	$0x30, %rsp
+     1e8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     1ec: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+     1f0: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+     1f4: 48 89 7d d8                  	movq	%rdi, -0x28(%rbp)
+     1f8: 48 8b 75 f0                  	movq	-0x10(%rbp), %rsi
+     1fc: e8 00 00 00 00               	callq	0x201 <std::runtime_error::runtime_error(std::runtime_error const&)+0x21>
+		00000000000001fd:  R_X86_64_PLT32	std::exception::exception(std::exception const&)-0x4
+     201: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+     205: 48 c7 00 00 00 00 00         	movq	$0x0, (%rax)
+		0000000000000208:  R_X86_64_32S	vtable for std::runtime_error+0x10
+     20c: 48 8b 4d f0                  	movq	-0x10(%rbp), %rcx
+     210: 48 8b 49 08                  	movq	0x8(%rcx), %rcx
+     214: 48 89 48 08                  	movq	%rcx, 0x8(%rax)
+     218: 48 8b 48 08                  	movq	0x8(%rax), %rcx
+     21c: 48 c7 45 e8 01 00 00 00      	movq	$0x1, -0x18(%rbp)
+     224: 48 8b 45 e8                  	movq	-0x18(%rbp), %rax
+     228: f0                           	lock
+     229: 48 0f c1 01                  	xaddq	%rax, (%rcx)
+     22d: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+     231: 48 83 7d e0 ff               	cmpq	$-0x1, -0x20(%rbp)
+     236: 75 0a                        	jne	0x242 <std::runtime_error::runtime_error(std::runtime_error const&)+0x62>
+     238: bf 86 00 00 00               	movl	$0x86, %edi
+     23d: e8 00 00 00 00               	callq	0x242 <std::runtime_error::runtime_error(std::runtime_error const&)+0x62>
+		000000000000023e:  R_X86_64_PLT32	sl_std_exit-0x4
+     242: 48 83 c4 30                  	addq	$0x30, %rsp
+     246: 5d                           	popq	%rbp
+     247: c3                           	retq
+     248: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+
+0000000000000250 <std::runtime_error::operator=(std::runtime_error const&)>:
+     250: 55                           	pushq	%rbp
+     251: 48 89 e5                     	movq	%rsp, %rbp
+     254: 48 83 ec 30                  	subq	$0x30, %rsp
+     258: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     25c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+     260: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+     264: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+     268: 48 3b 45 f0                  	cmpq	-0x10(%rbp), %rax
+     26c: 74 32                        	je	0x2a0 <std::runtime_error::operator=(std::runtime_error const&)+0x50>
+     26e: 48 8b 75 f0                  	movq	-0x10(%rbp), %rsi
+     272: 48 8d 7d e0                  	leaq	-0x20(%rbp), %rdi
+     276: e8 00 00 00 00               	callq	0x27b <std::runtime_error::operator=(std::runtime_error const&)+0x2b>
+		0000000000000277:  R_X86_64_PLT32	std::runtime_error::runtime_error(std::runtime_error const&)-0x4
+     27b: 48 8b 45 d0                  	movq	-0x30(%rbp), %rax
+     27f: 48 8b 48 08                  	movq	0x8(%rax), %rcx
+     283: 48 89 4d d8                  	movq	%rcx, -0x28(%rbp)
+     287: 48 8b 4d e8                  	movq	-0x18(%rbp), %rcx
+     28b: 48 89 48 08                  	movq	%rcx, 0x8(%rax)
+     28f: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+     293: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+     297: 48 8d 7d e0                  	leaq	-0x20(%rbp), %rdi
+     29b: e8 00 00 00 00               	callq	0x2a0 <std::runtime_error::operator=(std::runtime_error const&)+0x50>
+		000000000000029c:  R_X86_64_PLT32	std::runtime_error::~runtime_error()-0x4
+     2a0: 48 8b 45 d0                  	movq	-0x30(%rbp), %rax
+     2a4: 48 83 c4 30                  	addq	$0x30, %rsp
+     2a8: 5d                           	popq	%rbp
+     2a9: c3                           	retq
+     2aa: 66 0f 1f 44 00 00            	nopw	(%rax,%rax)
+
+00000000000002b0 <std::runtime_error::~runtime_error()>:
+     2b0: 55                           	pushq	%rbp
+     2b1: 48 89 e5                     	movq	%rsp, %rbp
+     2b4: 48 83 ec 20                  	subq	$0x20, %rsp
+     2b8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     2bc: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+     2c0: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+     2c4: 48 c7 00 00 00 00 00         	movq	$0x0, (%rax)
+		00000000000002c7:  R_X86_64_32S	vtable for std::runtime_error+0x10
+     2cb: 48 8b 50 08                  	movq	0x8(%rax), %rdx
+     2cf: 48 c7 45 f0 01 00 00 00      	movq	$0x1, -0x10(%rbp)
+     2d7: 48 8b 4d f0                  	movq	-0x10(%rbp), %rcx
+     2db: 48 89 c8                     	movq	%rcx, %rax
+     2de: 48 f7 d8                     	negq	%rax
+     2e1: f0                           	lock
+     2e2: 48 0f c1 02                  	xaddq	%rax, (%rdx)
+     2e6: 48 29 c8                     	subq	%rcx, %rax
+     2e9: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+     2ed: 48 83 7d e8 00               	cmpq	$0x0, -0x18(%rbp)
+     2f2: 75 0d                        	jne	0x301 <std::runtime_error::~runtime_error()+0x51>
+     2f4: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+     2f8: 48 8b 78 08                  	movq	0x8(%rax), %rdi
+     2fc: e8 00 00 00 00               	callq	0x301 <std::runtime_error::~runtime_error()+0x51>
+		00000000000002fd:  R_X86_64_PLT32	free-0x4
+     301: 48 8b 7d e0                  	movq	-0x20(%rbp), %rdi
+     305: e8 00 00 00 00               	callq	0x30a <std::runtime_error::~runtime_error()+0x5a>
+		0000000000000306:  R_X86_64_PLT32	std::exception::~exception()-0x4
+     30a: 48 83 c4 20                  	addq	$0x20, %rsp
+     30e: 5d                           	popq	%rbp
+     30f: c3                           	retq
+
+0000000000000310 <std::runtime_error::~runtime_error()>:
+     310: 55                           	pushq	%rbp
+     311: 48 89 e5                     	movq	%rsp, %rbp
+     314: 48 83 ec 10                  	subq	$0x10, %rsp
+     318: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     31c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+     320: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+     324: e8 00 00 00 00               	callq	0x329 <std::runtime_error::~runtime_error()+0x19>
+		0000000000000325:  R_X86_64_PLT32	std::runtime_error::~runtime_error()-0x4
+     329: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+     32d: be 10 00 00 00               	movl	$0x10, %esi
+     332: e8 00 00 00 00               	callq	0x337 <std::runtime_error::~runtime_error()+0x27>
+		0000000000000333:  R_X86_64_PLT32	operator delete(void*, unsigned long)-0x4
+     337: 48 83 c4 10                  	addq	$0x10, %rsp
+     33b: 5d                           	popq	%rbp
+     33c: c3                           	retq
+     33d: 90                           	nop
+     33e: 66 90                        	nop
+
+0000000000000340 <std::runtime_error::what() const>:
+     340: 55                           	pushq	%rbp
+     341: 48 89 e5                     	movq	%rsp, %rbp
+     344: 50                           	pushq	%rax
+     345: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+     349: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+     34d: 48 8b 40 08                  	movq	0x8(%rax), %rax
+     351: 48 83 c0 08                  	addq	$0x8, %rax
+     355: 48 83 c4 08                  	addq	$0x8, %rsp
+     359: 5d                           	popq	%rbp
+     35a: c3                           	retq
+
+Disassembly of section .text._ZNSt9exceptionC2Ev:
+
+0000000000000000 <std::exception::exception()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+       d: 48 b9 00 00 00 00 00 00 00 00	movabsq	$0x0, %rcx
+		000000000000000f:  R_X86_64_64	vtable for std::exception
+      17: 48 83 c1 10                  	addq	$0x10, %rcx
+      1b: 48 89 08                     	movq	%rcx, (%rax)
+      1e: 48 83 c4 08                  	addq	$0x8, %rsp
+      22: 5d                           	popq	%rbp
+      23: c3                           	retq
+
+Disassembly of section .text._ZNKSt6string4dataEv:
+
+0000000000000000 <std::string::data() const>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 18                  	subq	$0x18, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+      10: 48 89 45 f0                  	movq	%rax, -0x10(%rbp)
+      14: 48 83 38 00                  	cmpq	$0x0, (%rax)
+      18: 74 0d                        	je	0x27 <std::string::data() const+0x27>
+      1a: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+      1e: 48 8b 00                     	movq	(%rax), %rax
+      21: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+      25: eb 0c                        	jmp	0x33 <std::string::data() const+0x33>
+      27: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+      2b: 48 83 c0 18                  	addq	$0x18, %rax
+      2f: 48 89 45 e8                  	movq	%rax, -0x18(%rbp)
+      33: 48 8b 45 e8                  	movq	-0x18(%rbp), %rax
+      37: 48 83 c4 18                  	addq	$0x18, %rsp
+      3b: 5d                           	popq	%rbp
+      3c: c3                           	retq
+
+Disassembly of section .text._ZNKSt6string4sizeEv:
+
+0000000000000000 <std::string::size() const>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+       d: 48 8b 40 08                  	movq	0x8(%rax), %rax
+      11: 48 83 c4 08                  	addq	$0x8, %rsp
+      15: 5d                           	popq	%rbp
+      16: c3                           	retq
+
+Disassembly of section .text._ZNSt9exceptionC2ERKS_:
+
+0000000000000000 <std::exception::exception(std::exception const&)>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 10                  	subq	$0x10, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+      10: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+      14: 48 b9 00 00 00 00 00 00 00 00	movabsq	$0x0, %rcx
+		0000000000000016:  R_X86_64_64	vtable for std::exception
+      1e: 48 83 c1 10                  	addq	$0x10, %rcx
+      22: 48 89 08                     	movq	%rcx, (%rax)
+      25: 48 83 c4 10                  	addq	$0x10, %rsp
+      29: 5d                           	popq	%rbp
+      2a: c3                           	retq
+
+exit=0

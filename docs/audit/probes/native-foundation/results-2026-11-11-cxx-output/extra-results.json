@@ -1,0 +1,11 @@
+{
+  "math": 0,
+  "locale": 0,
+  "langinfo": 0,
+  "dlfcn": 0,
+  "dirent": 0,
+  "mman": 0,
+  "time": 0,
+  "stdio": 1,
+  "random": 0
+}

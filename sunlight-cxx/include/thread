@@ -1,0 +1,65 @@
+#ifndef SUNLIGHT_CXX_THREAD
+#define SUNLIGHT_CXX_THREAD
+#include <pthread.h>
+#include <new>
+#include <stdexcept>
+extern "C" void __sl_cxx_tls_finalize() noexcept;
+namespace std {
+namespace __sl_thread {
+template<class T> struct remove_reference { using type = T; };
+template<class T> struct remove_reference<T&> { using type = T; };
+template<class T> struct remove_reference<T&&> { using type = T; };
+template<class T> struct remove_cv { using type = T; };
+template<class T> struct remove_cv<const T> { using type = T; };
+template<class T> struct remove_cv<volatile T> { using type = T; };
+template<class T> struct remove_cv<const volatile T> { using type = T; };
+template<class F> struct storage {
+    F callable;
+    template<class T> explicit storage(T&& f) : callable(static_cast<T&&>(f)) {}
+    static void* enter(void* raw) noexcept {
+        storage* p = static_cast<storage*>(raw);
+        try { p->callable(); }
+        catch (...) { delete p; terminate(); }
+        delete p;
+        __sl_cxx_tls_finalize();
+        return nullptr;
+    }
+};
+}
+// Bounded native subset: nullary callable objects only; no argument pack,
+// detach, thread ids, this_thread, reference_wrapper or function-type decay.
+// Creation/join errors throw runtime_error, not ISO system_error.
+class thread {
+    pthread_t handle_ = nullptr;
+public:
+    thread() noexcept = default;
+    thread(const thread&) = delete;
+    thread& operator=(const thread&) = delete;
+    thread(thread&& other) noexcept : handle_(other.handle_) { other.handle_ = nullptr; }
+    thread& operator=(thread&& other) noexcept {
+        if (joinable()) terminate();
+        handle_ = other.handle_;
+        other.handle_ = nullptr;
+        return *this;
+    }
+    template<class F> explicit thread(F&& callable) {
+        using Plain = typename __sl_thread::remove_cv<typename __sl_thread::remove_reference<F>::type>::type;
+        using Storage = __sl_thread::storage<Plain>;
+        Storage* p = new Storage(static_cast<F&&>(callable));
+        int result = pthread_create(&handle_, nullptr, &Storage::enter, p);
+        if (result) {
+            delete p;
+            handle_ = nullptr;
+            throw runtime_error("native pthread_create failed");
+        }
+    }
+    ~thread() noexcept { if (joinable()) terminate(); }
+    bool joinable() const noexcept { return handle_ != nullptr; }
+    void join() {
+        if (!joinable() || pthread_join(handle_, nullptr))
+            throw runtime_error("native pthread_join failed");
+        handle_ = nullptr;
+    }
+};
+}
+#endif

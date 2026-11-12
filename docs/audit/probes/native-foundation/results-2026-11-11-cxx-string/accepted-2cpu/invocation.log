@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 2 --out target/phase21/accepted-2cpu

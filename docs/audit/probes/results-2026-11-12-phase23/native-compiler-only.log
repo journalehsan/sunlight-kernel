@@ -1,0 +1,3 @@
+$ clang --target=x86_64-unknown-none-elf -std=c11 -ffreestanding -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/compiler.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/results-2026-11-12-phase23/compiler.o
+
+exit=0

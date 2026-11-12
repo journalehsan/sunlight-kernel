@@ -1,0 +1,2 @@
+// C++ compatibility forwarding header; implementation belongs to sunlight-cxx.
+#include "../../sunlight-cxx/include/string"

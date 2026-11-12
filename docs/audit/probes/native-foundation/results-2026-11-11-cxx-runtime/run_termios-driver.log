@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_termios.py --out target/phase22/run_termios
+12 termios C/C++ ABI checks, exports, unchanged historical link: PASS
+
+exit=0

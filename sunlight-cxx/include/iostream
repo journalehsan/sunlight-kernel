@@ -1,0 +1,42 @@
+#ifndef SUNLIGHT_CXX_IOSTREAM
+#define SUNLIGHT_CXX_IOSTREAM
+// Bounded native output API. Not a complete ISO C++ standard library.
+// No input, streambuf, locale, exceptions, field formatting or wide streams.
+namespace std {
+class ostream {
+    int fd_;
+    unsigned state_;
+public:
+    enum { goodbit = 0, badbit = 1, failbit = 2 };
+    constexpr explicit ostream(int fd) noexcept : fd_(fd), state_(0) {}
+    bool good() const noexcept { return state_ == goodbit; }
+    bool bad() const noexcept { return (state_ & badbit) != 0; }
+    bool fail() const noexcept { return state_ != goodbit; }
+    explicit operator bool() const noexcept { return !fail(); }
+    unsigned rdstate() const noexcept { return state_; }
+    void clear(unsigned state = goodbit) noexcept { state_ = state; }
+    void setstate(unsigned state) noexcept { state_ |= state; }
+    ostream& write(const char*, long) noexcept;
+    ostream& put(char) noexcept;
+    ostream& flush() noexcept;
+    ostream& operator<<(const char*) noexcept;
+    ostream& operator<<(char c) noexcept { return put(c); }
+    ostream& operator<<(bool v) noexcept { return *this << static_cast<unsigned long long>(v); }
+    ostream& operator<<(short v) noexcept { return *this << static_cast<long long>(v); }
+    ostream& operator<<(unsigned short v) noexcept { return *this << static_cast<unsigned long long>(v); }
+    ostream& operator<<(int v) noexcept { return *this << static_cast<long long>(v); }
+    ostream& operator<<(unsigned v) noexcept { return *this << static_cast<unsigned long long>(v); }
+    ostream& operator<<(long v) noexcept { return *this << static_cast<long long>(v); }
+    ostream& operator<<(unsigned long v) noexcept { return *this << static_cast<unsigned long long>(v); }
+    ostream& operator<<(long long) noexcept;
+    ostream& operator<<(unsigned long long) noexcept;
+#if __cplusplus >= 201703L
+    ostream& operator<<(ostream& (*f)(ostream&) noexcept) noexcept { return f(*this); }
+#endif
+    ostream& operator<<(ostream& (*f)(ostream&)) { return f(*this); }
+};
+extern ostream cout, cerr, clog;
+ostream& endl(ostream&) noexcept;
+ostream& flush(ostream&) noexcept;
+}
+#endif

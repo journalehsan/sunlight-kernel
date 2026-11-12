@@ -1,0 +1,3 @@
+$ llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-runtime-abi/historical.elf
+
+exit=0

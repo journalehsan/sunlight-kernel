@@ -1,5 +1,5 @@
 //! Bounded native locale selection. Names describe the installed C/UTF-8
-//! metadata subset, not a promise of collation, catalogs or conversion APIs.
+//! metadata subset and restartable wchar decoding, not collation or catalogs.
 //! Like POSIX setlocale, callers must serialize use of the returned LC_ALL
 //! composite string against subsequent setlocale calls.
 use core::cell::UnsafeCell;

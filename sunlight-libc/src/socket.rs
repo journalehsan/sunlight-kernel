@@ -14,6 +14,8 @@ pub extern "C" fn socket(domain: i32, kind: i32, protocol: i32) -> i32 {
         errno::set_errno((-result) as i32);
         -1
     } else {
+        // A reused descriptor must never inherit a stale transport mapping.
+        crate::net_bridge::forget(result as i32);
         result as i32
     }
 }
@@ -85,6 +87,9 @@ pub unsafe extern "C" fn send(fd: i32, buf: *const u8, len: usize, flags: i32) -
     if len != 0 && buf.is_null() {
         return fail(errno::EFAULT);
     }
+    if crate::net_bridge::lookup(fd).is_some() {
+        return crate::net_bridge::send(fd, buf, len, flags);
+    }
     match sys::check(sys::syscall4(
         sys::SYS_SEND,
         fd as u64,
@@ -106,6 +111,9 @@ pub unsafe extern "C" fn send(fd: i32, buf: *const u8, len: usize, flags: i32) -
 pub unsafe extern "C" fn recv(fd: i32, buf: *mut u8, len: usize, flags: i32) -> isize {
     if len != 0 && buf.is_null() {
         return fail(errno::EFAULT);
+    }
+    if crate::net_bridge::lookup(fd).is_some() {
+        return crate::net_bridge::recv(fd, buf, len, flags);
     }
     match sys::check(sys::syscall4(
         sys::SYS_RECV,
@@ -179,5 +187,90 @@ pub unsafe extern "C" fn epoll_wait(
             errno::set_from_errno(error);
             -1
         }
+    }
+}
+
+/// Attach an AF_INET/SOCK_STREAM descriptor to the `net` service.
+///
+/// # Safety
+/// `addr` must designate `len` readable bytes.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn connect(fd: i32, addr: *const u8, len: u32) -> i32 {
+    crate::net_bridge::connect(fd, addr, len)
+}
+
+/// # Safety
+/// `addr` must designate `len` readable bytes.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn bind(fd: i32, addr: *const u8, len: u32) -> i32 {
+    crate::net_bridge::bind(fd, addr, len)
+}
+
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn listen(fd: i32, backlog: i32) -> i32 {
+    crate::net_bridge::listen(fd, backlog)
+}
+
+/// # Safety
+/// `addr`/`len_ptr` are optional writable out-parameters.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn accept(fd: i32, addr: *mut u8, len_ptr: *mut u32) -> i32 {
+    crate::net_bridge::accept(fd, addr, len_ptr)
+}
+
+/// # Safety
+/// `addr` must designate at least 16 writable bytes and `len_ptr` a writable
+/// `socklen_t`.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn getsockname(fd: i32, addr: *mut u8, len_ptr: *mut u32) -> i32 {
+    crate::net_bridge::getsockname(fd, addr, len_ptr)
+}
+
+/// # Safety
+/// See `getsockname`.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn getpeername(fd: i32, addr: *mut u8, len_ptr: *mut u32) -> i32 {
+    crate::net_bridge::getpeername(fd, addr, len_ptr)
+}
+
+/// # Safety
+/// `buf` must designate `len` readable bytes when `len != 0`.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn sendto(
+    fd: i32,
+    buf: *const u8,
+    len: usize,
+    flags: i32,
+    addr: *const u8,
+    addr_len: u32,
+) -> isize {
+    crate::net_bridge::sendto(fd, buf, len, flags, addr, addr_len)
+}
+
+/// # Safety
+/// See `recv` and `getpeername`.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn recvfrom(
+    fd: i32,
+    buf: *mut u8,
+    len: usize,
+    flags: i32,
+    addr: *mut u8,
+    addr_len: *mut u32,
+) -> isize {
+    crate::net_bridge::recvfrom(fd, buf, len, flags, addr, addr_len)
+}
+
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn shutdown(fd: i32, how: i32) -> i32 {
+    crate::net_bridge::shutdown(fd, how)
+}
+
+/// Non-standard bounded diagnostic accessor for native networking fixtures.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn sunlight_net_diagnostic(selector: i32) -> i64 {
+    match crate::net_bridge::diagnostic(selector as u64) {
+        Some(value) => value as i64,
+        None => -1,
     }
 }

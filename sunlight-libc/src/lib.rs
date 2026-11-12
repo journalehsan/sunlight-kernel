@@ -40,6 +40,7 @@ pub mod env;
 pub mod errno;
 /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
+pub mod termios;
 /// Shared file-manager copy/move operations (requires an application allocator).
 #[cfg(any(test, feature = "file-ops"))]
 pub mod file_ops;
@@ -60,6 +61,7 @@ pub mod power;
 /// Native C poll/select ABI over syscall 159.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod multiplex;
+pub mod net_bridge;
 /// Minimal POSIX threads over the native thread/futex ABI.
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod pthread;
@@ -930,3 +932,6 @@ pub fn exit(code: u64) -> ! {
         core::hint::spin_loop();
     }
 }
+
+#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+pub mod wchar;

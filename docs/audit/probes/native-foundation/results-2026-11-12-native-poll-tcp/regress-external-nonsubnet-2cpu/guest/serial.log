@@ -1,0 +1,267 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 14
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64e0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=unknown
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x1ca8108 (7337 frames, 28 MiB)
+[PMM] 1937/1965 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=0 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64e0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe238a
+[ACPI] Found table: FACP at 0x7ffe2236
+[ACPI] Found table: APIC at 0x7ffe22aa
+[ACPI] Found table: HPET at 0x7ffe232a
+[ACPI] Found table: WAET at 0x7ffe2362
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6520 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11908 end_count=7906 elapsed_counts=4002 tsc_delta=8325641 tsc_hz=2482260114
+[TIME] TSC calibrated ~2482260114 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff81251de8 ist_df=0xffffffff81371318 ist_nmi=0xffffffff819aaf50
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63009700 lapic_initial_count=630097 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2482260114
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x12 hour=0x13 minute=0x02 second=0x05 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-12T13:02:05Z assumed_basis=UTC
+wall: utc=2026-11-12T13:02:05Z unix=1794488525 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff800723a4
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff815b6f50..0xffffffff815c6f50
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff800723a4
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff81251f68 ist_df=0xffffffff815c6f50 ist_nmi=0xffffffff819aef50
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[VMXNET3-AUDIT] initialize_network_backend entered
+[VMXNET3] stage=NotProbed
+[PCI] bdf=00:04.0 class=020000 vendor=1af4 device=1000
+[PCI]  BAR0=0x0000c021 BAR1=0xfebd2000 BAR2=0x00000000 BAR3=0x00000000 BAR4=0x00000000 BAR5=0x00000000
+[PCI]  interrupt line=11 MSI=false MSI-X=true matched driver=virtio-net
+[VMXNET3-AUDIT] 15ad:07b0 absent from PCI enumeration
+[VMXNET3-AUDIT] probe call site reached, invoking probe_vmxnet3
+[VMXNET3] pci device 15ad:07b0 not present
+[VMXNET3] verify ethernet0.virtualDev = "vmxnet3"
+[VMXNET3-AUDIT] 15ad:07b0 absent — probe returned None, falling back to VirtIO scan
+[NET] matched backend=virtio-net
+[NET]  VirtIO-Net activated at PCI 00:04.0
+[NET]  native guest frame backend registered
+[NATIVE-C-RUNNER] cases=1 cpus=2 entropy=true
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=526d memsz=526d prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400e20, stack=0x7fffffffefa0
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bdf memsz=1bdf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400410, stack=0x7fffffffefa0
+[SCHED] CREATED process #2 'rand_service' idx=1 burst_score=256 tier=High
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=25035 memsz=25035 prot=ReadExec
+[ELF] PT_LOAD off=27000 vaddr=426000 filesz=27e0 memsz=27e0 prot=Read
+[ELF] PT_LOAD off=297e0 vaddr=4287e0 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=2a000 vaddr=429000 filesz=d7ec memsz=10eca8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x409330, stack=0x7fffffffefa0
+[SCHED] CREATED process #3 'net_server' idx=2 burst_score=256 tier=High
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff900087b0
+[RAND] Starting rand_service
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[CAP] Created endpoint 1 for pid=2
+[init] nameserver registry integrity tests: OK
+[init] Registered kernel spawn endpoint
+[SYSCALL] spawn: load failed: UnsupportedPersonality
+[FSTAB] REQUIRED FAILURE: boot degraded; inspect storagectl diagnostics
+[init] FAILED to launch base service
+[RAND] Registered as 'rand'
+[CAP] Created endpoint 2 for pid=3
+[NATIVE-C-SUPPORT] nameserver=production rand=production receive_wait=ready
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=6698 memsz=6698 prot=ReadExec
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=b000 vaddr=40a000 filesz=0 memsz=9b8 prot=ReadWrite
+[EXEC] Stack: argc=4 envc=1 auxv=2 rsp=0x7fffffffef40
+[EXEC] Loaded ELF entry=0x40372c, stack=0x7fffffffef40
+[SCHED] CREATED process #4 'elf' idx=3 burst_score=256 tier=High
+[NATIVE-C-START] case=0 name=elf pid=100 bytes=54424 owned_frames=523 uid=1000
+[SYSCALL] mmap(0x0, 0x1000) -> 0x1000000000
+[NET]  Registered as 'net' with init
+[NET] active backend query returned VirtioNet
+[NET] generic frame backend registered kind=VirtioNet mac=52:54:00:12:34:56
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[NET]  deviced registration failed
+[NET] interface publication failed at deviced registration
+[NET]  NetOp handlers registered
+[NET] backend MAC=52:54:00:12:34:56
+[NET] frame-proxy MAC=52:54:00:12:34:56
+[NET] smoltcp MAC=52:54:00:12:34:56
+[DHCP] discover sent
+[DHCP] tx summary src=52:54:00:12:34:56 dst=ff:ff:ff:ff:ff:ff ethertype=0x0800 udp=68->67 len=304
+[DHCP] offer received
+[DHCP] request sent
+[DHCP] ACK received
+[init] FAILED to launch base service
+[DNS] /etc/hosts loaded into resolver chain
+[NET]  Ethernet backend link up
+[DHCP] lease acquired address=10.0.3.15/24 gateway=10.0.3.2 dns=10.0.3.3
+[NET]  smoltcp interface up over kernel frame proxy
+[SHM]  alloc_shared_page: OK
+[init] FAILED to launch base service
+[NET-TCP] socket=0x100000001 owner=100 remote=10.0.3.2:41701 state=Closed->SynSent elapsed_ms=0
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[init] FAILED to launch base service
+[NET-TCP] socket=0x100000001 owner=100 remote=10.0.3.2:41701 state=SynSent->Established elapsed_ms=10
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[init] FAILED to launch base service
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  shm_free: page unmapped OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[init] FAILED to launch base service
+[SHM]  map_shared_page: OK
+[SHM]  alloc_shared_page: OK
+[SHM]  map_shared_page: OK
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[NET-TCP] socket=0x100000001 owner=100 remote=10.0.3.2:41701 state=Established->CloseWait elapsed_ms=70
+[NET-TCP] terminal socket=0x100000001 owner=100 remote=none state=CloseWait->Closed elapsed_ms=70 cause=unavailable
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[init] base service spawn pass complete
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=100 name='elf' reason=exit code=0
+[SCHED] terminating pid=100 name='elf' reason=exit
+[SCHED] FINISHED process pid=100 name='elf'
+[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=0 exit=0 user_frames=524 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=100 name='elf' user_frames=524 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=100 frames=524 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=100 cleared_msgs=0
+[NATIVE-C-STREAM] case=0 fd=1 hex=7463702d6563686f3a2072756e3d726567726573732d65787465726e616c2d6e6f6e7375626e65742d3263707520646573743d31302e302e332e323a34313730310a7463702d6563686f3a2072656675736564206572726e6f3d3131310a7463702d6563686f3a206e6f6e626c6f636b696e672d636f6e6e656374206572726e
+[NATIVE-C-STREAM] case=0 fd=1 hex=6f3d39350a7463702d6563686f3a20504153532065786368616e6765733d352062797465733d3133373120736f636b65745f6c6976653d30206c697374656e65725f6c6976653d302073747265616d5f6c6976653d300a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=0 exit=0 stdout=215 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2
+[NATIVE-C-DONE] cases=1

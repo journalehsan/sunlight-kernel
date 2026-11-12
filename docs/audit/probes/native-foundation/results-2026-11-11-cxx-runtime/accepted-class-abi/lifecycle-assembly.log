@@ -1,0 +1,341 @@
+$ llvm-objdump -dr --demangle /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-class-abi/lifecycle.o
+
+/home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-class-abi/lifecycle.o:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000000000 <__cxx_global_var_init>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 bf 00 00 00 00 00 00 00 00	movabsq	$0x0, %rdi
+		0000000000000006:  R_X86_64_64	initialized
+       e: 48 be 00 00 00 00 00 00 00 00	movabsq	$0x0, %rsi
+		0000000000000010:  R_X86_64_64	.rodata.str1.1
+      18: e8 00 00 00 00               	callq	0x1d <__cxx_global_var_init+0x1d>
+		0000000000000019:  R_X86_64_PLT32	std::string::string(char const*)-0x4
+      1d: 48 bf 00 00 00 00 00 00 00 00	movabsq	$0x0, %rdi
+		000000000000001f:  R_X86_64_64	std::string::~string()
+      27: 48 be 00 00 00 00 00 00 00 00	movabsq	$0x0, %rsi
+		0000000000000029:  R_X86_64_64	initialized
+      31: 48 ba 00 00 00 00 00 00 00 00	movabsq	$0x0, %rdx
+		0000000000000033:  R_X86_64_64	__dso_handle
+      3b: e8 00 00 00 00               	callq	0x40 <__cxx_global_var_init+0x40>
+		000000000000003c:  R_X86_64_PLT32	__cxa_atexit-0x4
+      40: 5d                           	popq	%rbp
+      41: c3                           	retq
+      42: 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00    	nopw	%cs:(%rax,%rax)
+
+0000000000000050 <__cxx_global_var_init.1>:
+      50: 55                           	pushq	%rbp
+      51: 48 89 e5                     	movq	%rsp, %rbp
+      54: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+      5d: 48 8d b8 00 00 00 00         	leaq	(%rax), %rdi
+		0000000000000060:  R_X86_64_TPOFF32	local
+      64: be 00 00 00 00               	movl	$0x0, %esi
+		0000000000000065:  R_X86_64_32	.rodata.str1.1+0x19
+      69: e8 00 00 00 00               	callq	0x6e <__cxx_global_var_init.1+0x1e>
+		000000000000006a:  R_X86_64_PLT32	std::string::string(char const*)-0x4
+      6e: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+      77: 48 8d b0 00 00 00 00         	leaq	(%rax), %rsi
+		000000000000007a:  R_X86_64_TPOFF32	local
+      7e: bf 00 00 00 00               	movl	$0x0, %edi
+		000000000000007f:  R_X86_64_32	std::string::~string()
+      83: ba 00 00 00 00               	movl	$0x0, %edx
+		0000000000000084:  R_X86_64_32	__dso_handle
+      88: e8 00 00 00 00               	callq	0x8d <__cxx_global_var_init.1+0x3d>
+		0000000000000089:  R_X86_64_PLT32	__cxa_thread_atexit-0x4
+      8d: 5d                           	popq	%rbp
+      8e: c3                           	retq
+      8f: 90                           	nop
+
+0000000000000090 <main>:
+      90: 55                           	pushq	%rbp
+      91: 48 89 e5                     	movq	%rsp, %rbp
+      94: 48 83 ec 50                  	subq	$0x50, %rsp
+      98: c7 45 fc 00 00 00 00         	movl	$0x0, -0x4(%rbp)
+      9f: bf 08 00 00 00               	movl	$0x8, %edi
+      a4: e8 00 00 00 00               	callq	0xa9 <main+0x19>
+		00000000000000a5:  R_X86_64_PLT32	operator new(unsigned long)-0x4
+      a9: 48 89 c7                     	movq	%rax, %rdi
+      ac: 48 89 7d d8                  	movq	%rdi, -0x28(%rbp)
+      b0: e8 00 00 00 00               	callq	0xb5 <main+0x25>
+		00000000000000b1:  R_X86_64_PLT32	Derived::Derived()-0x4
+      b5: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+      b9: 48 89 45 f0                  	movq	%rax, -0x10(%rbp)
+      bd: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+      c1: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+      c5: 48 83 f8 00                  	cmpq	$0x0, %rax
+      c9: 74 27                        	je	0xf2 <main+0x62>
+      cb: 48 8b 7d e0                  	movq	-0x20(%rbp), %rdi
+      cf: 48 be 00 00 00 00 00 00 00 00	movabsq	$0x0, %rsi
+		00000000000000d1:  R_X86_64_64	typeinfo for Base
+      d9: 48 ba 00 00 00 00 00 00 00 00	movabsq	$0x0, %rdx
+		00000000000000db:  R_X86_64_64	typeinfo for Derived
+      e3: 31 c0                        	xorl	%eax, %eax
+      e5: 89 c1                        	movl	%eax, %ecx
+      e7: e8 00 00 00 00               	callq	0xec <main+0x5c>
+		00000000000000e8:  R_X86_64_PLT32	__dynamic_cast-0x4
+      ec: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+      f0: eb 08                        	jmp	0xfa <main+0x6a>
+      f2: 31 c0                        	xorl	%eax, %eax
+      f4: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+      f8: eb 00                        	jmp	0xfa <main+0x6a>
+      fa: 48 8b 4d d0                  	movq	-0x30(%rbp), %rcx
+      fe: 31 c0                        	xorl	%eax, %eax
+     100: 48 83 f9 00                  	cmpq	$0x0, %rcx
+     104: 88 45 cf                     	movb	%al, -0x31(%rbp)
+     107: 74 30                        	je	0x139 <main+0xa9>
+     109: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+     10d: 48 89 45 c0                  	movq	%rax, -0x40(%rbp)
+     111: 48 83 f8 00                  	cmpq	$0x0, %rax
+     115: 75 05                        	jne	0x11c <main+0x8c>
+     117: e8 00 00 00 00               	callq	0x11c <main+0x8c>
+		0000000000000118:  R_X86_64_PLT32	__cxa_bad_typeid-0x4
+     11c: 48 8b 45 c0                  	movq	-0x40(%rbp), %rax
+     120: 48 8b 00                     	movq	(%rax), %rax
+     123: 48 8b 78 f8                  	movq	-0x8(%rax), %rdi
+     127: 48 be 00 00 00 00 00 00 00 00	movabsq	$0x0, %rsi
+		0000000000000129:  R_X86_64_64	typeinfo for Derived
+     131: e8 00 00 00 00               	callq	0x136 <main+0xa6>
+		0000000000000132:  R_X86_64_PLT32	std::type_info::operator==(std::type_info const&) const-0x4
+     136: 88 45 cf                     	movb	%al, -0x31(%rbp)
+     139: 8a 45 cf                     	movb	-0x31(%rbp), %al
+     13c: 24 01                        	andb	$0x1, %al
+     13e: 88 45 ef                     	movb	%al, -0x11(%rbp)
+     141: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+     145: 48 89 45 b8                  	movq	%rax, -0x48(%rbp)
+     149: 48 83 f8 00                  	cmpq	$0x0, %rax
+     14d: 74 0a                        	je	0x159 <main+0xc9>
+     14f: 48 8b 7d b8                  	movq	-0x48(%rbp), %rdi
+     153: 48 8b 07                     	movq	(%rdi), %rax
+     156: ff 50 08                     	callq	*0x8(%rax)
+     159: 80 7d ef 00                  	cmpb	$0x0, -0x11(%rbp)
+     15d: 0f 95 c0                     	setne	%al
+     160: 34 ff                        	xorb	$-0x1, %al
+     162: 24 01                        	andb	$0x1, %al
+     164: 0f b6 c0                     	movzbl	%al, %eax
+     167: 48 89 45 b0                  	movq	%rax, -0x50(%rbp)
+     16b: e8 00 00 00 00               	callq	0x170 <main+0xe0>
+		000000000000016c:  R_X86_64_PLT32	thread-local wrapper routine for local-0x4
+     170: 48 89 c7                     	movq	%rax, %rdi
+     173: e8 00 00 00 00               	callq	0x178 <main+0xe8>
+		0000000000000174:  R_X86_64_PLT32	std::string::size() const-0x4
+     178: 48 89 c1                     	movq	%rax, %rcx
+     17b: 48 8b 45 b0                  	movq	-0x50(%rbp), %rax
+     17f: 48 01 c8                     	addq	%rcx, %rax
+     182: 48 83 c4 50                  	addq	$0x50, %rsp
+     186: 5d                           	popq	%rbp
+     187: c3                           	retq
+     188: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+
+0000000000000190 <_GLOBAL__sub_I_lifecycle.cpp>:
+     190: 55                           	pushq	%rbp
+     191: 48 89 e5                     	movq	%rsp, %rbp
+     194: e8 67 fe ff ff               	callq	0x0 <__cxx_global_var_init>
+     199: 5d                           	popq	%rbp
+     19a: c3                           	retq
+     19b: 0f 1f 44 00 00               	nopl	(%rax,%rax)
+
+00000000000001a0 <__tls_init>:
+     1a0: 55                           	pushq	%rbp
+     1a1: 48 89 e5                     	movq	%rsp, %rbp
+     1a4: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+     1ad: 8a 80 00 00 00 00            	movb	(%rax), %al
+		00000000000001af:  R_X86_64_TPOFF32	__tls_guard
+     1b3: 3c 00                        	cmpb	$0x0, %al
+     1b5: 75 15                        	jne	0x1cc <__tls_init+0x2c>
+     1b7: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+     1c0: c6 80 00 00 00 00 01         	movb	$0x1, (%rax)
+		00000000000001c2:  R_X86_64_TPOFF32	__tls_guard
+     1c7: e8 84 fe ff ff               	callq	0x50 <__cxx_global_var_init.1>
+     1cc: 5d                           	popq	%rbp
+     1cd: c3                           	retq
+
+Disassembly of section .text._ZN7DerivedC2Ev:
+
+0000000000000000 <Derived::Derived()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 10                  	subq	$0x10, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      10: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+      14: e8 00 00 00 00               	callq	0x19 <Derived::Derived()+0x19>
+		0000000000000015:  R_X86_64_PLT32	Base::Base()-0x4
+      19: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+      1d: 48 b9 00 00 00 00 00 00 00 00	movabsq	$0x0, %rcx
+		000000000000001f:  R_X86_64_64	vtable for Derived
+      27: 48 83 c1 10                  	addq	$0x10, %rcx
+      2b: 48 89 08                     	movq	%rcx, (%rax)
+      2e: 48 83 c4 10                  	addq	$0x10, %rsp
+      32: 5d                           	popq	%rbp
+      33: c3                           	retq
+
+Disassembly of section .text._ZNKSt9type_infoeqERKS_:
+
+0000000000000000 <std::type_info::operator==(std::type_info const&) const>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 38                  	subq	$0x38, %rsp
+       8: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+       c: 48 89 75 e8                  	movq	%rsi, -0x18(%rbp)
+      10: 48 8b 45 f0                  	movq	-0x10(%rbp), %rax
+      14: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+      18: 48 3b 45 e8                  	cmpq	-0x18(%rbp), %rax
+      1c: 74 12                        	je	0x30 <std::type_info::operator==(std::type_info const&) const+0x30>
+      1e: 48 8b 45 d0                  	movq	-0x30(%rbp), %rax
+      22: 48 8b 40 08                  	movq	0x8(%rax), %rax
+      26: 48 8b 4d e8                  	movq	-0x18(%rbp), %rcx
+      2a: 48 3b 41 08                  	cmpq	0x8(%rcx), %rax
+      2e: 75 06                        	jne	0x36 <std::type_info::operator==(std::type_info const&) const+0x36>
+      30: c6 45 ff 01                  	movb	$0x1, -0x1(%rbp)
+      34: eb 77                        	jmp	0xad <std::type_info::operator==(std::type_info const&) const+0xad>
+      36: 48 8b 45 d0                  	movq	-0x30(%rbp), %rax
+      3a: 48 8b 40 08                  	movq	0x8(%rax), %rax
+      3e: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+      42: 48 8b 45 e8                  	movq	-0x18(%rbp), %rax
+      46: 48 8b 40 08                  	movq	0x8(%rax), %rax
+      4a: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+      4e: 48 8b 4d e0                  	movq	-0x20(%rbp), %rcx
+      52: 31 c0                        	xorl	%eax, %eax
+      54: 80 39 00                     	cmpb	$0x0, (%rcx)
+      57: 88 45 cf                     	movb	%al, -0x31(%rbp)
+      5a: 74 16                        	je	0x72 <std::type_info::operator==(std::type_info const&) const+0x72>
+      5c: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      60: 0f be 00                     	movsbl	(%rax), %eax
+      63: 48 8b 4d d8                  	movq	-0x28(%rbp), %rcx
+      67: 0f be 09                     	movsbl	(%rcx), %ecx
+      6a: 39 c8                        	cmpl	%ecx, %eax
+      6c: 0f 94 c0                     	sete	%al
+      6f: 88 45 cf                     	movb	%al, -0x31(%rbp)
+      72: 8a 45 cf                     	movb	-0x31(%rbp), %al
+      75: a8 01                        	testb	$0x1, %al
+      77: 75 02                        	jne	0x7b <std::type_info::operator==(std::type_info const&) const+0x7b>
+      79: eb 1a                        	jmp	0x95 <std::type_info::operator==(std::type_info const&) const+0x95>
+      7b: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      7f: 48 83 c0 01                  	addq	$0x1, %rax
+      83: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+      87: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+      8b: 48 83 c0 01                  	addq	$0x1, %rax
+      8f: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+      93: eb b9                        	jmp	0x4e <std::type_info::operator==(std::type_info const&) const+0x4e>
+      95: 48 8b 45 e0                  	movq	-0x20(%rbp), %rax
+      99: 0f be 00                     	movsbl	(%rax), %eax
+      9c: 48 8b 4d d8                  	movq	-0x28(%rbp), %rcx
+      a0: 0f be 09                     	movsbl	(%rcx), %ecx
+      a3: 39 c8                        	cmpl	%ecx, %eax
+      a5: 0f 94 c0                     	sete	%al
+      a8: 24 01                        	andb	$0x1, %al
+      aa: 88 45 ff                     	movb	%al, -0x1(%rbp)
+      ad: 8a 45 ff                     	movb	-0x1(%rbp), %al
+      b0: 24 01                        	andb	$0x1, %al
+      b2: 48 83 c4 38                  	addq	$0x38, %rsp
+      b6: 5d                           	popq	%rbp
+      b7: c3                           	retq
+
+Disassembly of section .text._ZTW5local:
+
+0000000000000000 <thread-local wrapper routine for local>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: e8 00 00 00 00               	callq	0x9 <thread-local wrapper routine for local+0x9>
+		0000000000000005:  R_X86_64_PLT32	thread-local initialization routine for local-0x4
+       9: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+      12: 48 8d 80 00 00 00 00         	leaq	(%rax), %rax
+		0000000000000015:  R_X86_64_TPOFF32	local
+      19: 5d                           	popq	%rbp
+      1a: c3                           	retq
+
+Disassembly of section .text._ZNKSt6string4sizeEv:
+
+0000000000000000 <std::string::size() const>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+       d: 48 8b 40 08                  	movq	0x8(%rax), %rax
+      11: 48 83 c4 08                  	addq	$0x8, %rsp
+      15: 5d                           	popq	%rbp
+      16: c3                           	retq
+
+Disassembly of section .text._ZN4BaseC2Ev:
+
+0000000000000000 <Base::Base()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+       d: 48 b9 00 00 00 00 00 00 00 00	movabsq	$0x0, %rcx
+		000000000000000f:  R_X86_64_64	vtable for Base
+      17: 48 83 c1 10                  	addq	$0x10, %rcx
+      1b: 48 89 08                     	movq	%rcx, (%rax)
+      1e: 48 83 c4 08                  	addq	$0x8, %rsp
+      22: 5d                           	popq	%rbp
+      23: c3                           	retq
+
+Disassembly of section .text._ZN7DerivedD2Ev:
+
+0000000000000000 <Derived::~Derived()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 10                  	subq	$0x10, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      10: e8 00 00 00 00               	callq	0x15 <Derived::~Derived()+0x15>
+		0000000000000011:  R_X86_64_PLT32	Base::~Base()-0x4
+      15: 48 83 c4 10                  	addq	$0x10, %rsp
+      19: 5d                           	popq	%rbp
+      1a: c3                           	retq
+
+Disassembly of section .text._ZN7DerivedD0Ev:
+
+0000000000000000 <Derived::~Derived()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 10                  	subq	$0x10, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      10: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+      14: e8 00 00 00 00               	callq	0x19 <Derived::~Derived()+0x19>
+		0000000000000015:  R_X86_64_PLT32	Derived::~Derived()-0x4
+      19: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+      1d: be 08 00 00 00               	movl	$0x8, %esi
+      22: e8 00 00 00 00               	callq	0x27 <Derived::~Derived()+0x27>
+		0000000000000023:  R_X86_64_PLT32	operator delete(void*, unsigned long)-0x4
+      27: 48 83 c4 10                  	addq	$0x10, %rsp
+      2b: 5d                           	popq	%rbp
+      2c: c3                           	retq
+
+Disassembly of section .text._ZN4BaseD2Ev:
+
+0000000000000000 <Base::~Base()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 50                           	pushq	%rax
+       5: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       9: 48 83 c4 08                  	addq	$0x8, %rsp
+       d: 5d                           	popq	%rbp
+       e: c3                           	retq
+
+Disassembly of section .text._ZN4BaseD0Ev:
+
+0000000000000000 <Base::~Base()>:
+       0: 55                           	pushq	%rbp
+       1: 48 89 e5                     	movq	%rsp, %rbp
+       4: 48 83 ec 10                  	subq	$0x10, %rsp
+       8: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+       c: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+      10: 48 89 7d f0                  	movq	%rdi, -0x10(%rbp)
+      14: e8 00 00 00 00               	callq	0x19 <Base::~Base()+0x19>
+		0000000000000015:  R_X86_64_PLT32	Base::~Base()-0x4
+      19: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+      1d: be 08 00 00 00               	movl	$0x8, %esi
+      22: e8 00 00 00 00               	callq	0x27 <Base::~Base()+0x27>
+		0000000000000023:  R_X86_64_PLT32	operator delete(void*, unsigned long)-0x4
+      27: 48 83 c4 10                  	addq	$0x10, %rsp
+      2b: 5d                           	popq	%rbp
+      2c: c3                           	retq
+
+exit=0

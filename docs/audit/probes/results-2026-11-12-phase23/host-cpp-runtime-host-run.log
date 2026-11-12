@@ -1,0 +1,7 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/results-2026-11-12-phase23/host-cpp-runtime
+exception OK
+TLS OK
+static initialization OK
+atexit OK
+
+exit=0

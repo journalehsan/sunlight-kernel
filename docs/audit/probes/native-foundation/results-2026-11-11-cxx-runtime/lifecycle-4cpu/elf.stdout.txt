@@ -1,0 +1,7 @@
+global-init
+worker:TLS
+TLS-done
+main:global:TLS
+TLS-done
+atexit
+global-done

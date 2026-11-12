@@ -1,0 +1,4 @@
+exception OK
+TLS OK
+static initialization OK
+atexit OK

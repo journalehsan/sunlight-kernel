@@ -1,0 +1,8 @@
+In file included from target/phase22/source/libunwind-21.1.0.src/src/libunwind.cpp:30:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/AddressSpace.hpp:23:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/EHHeaderParser.hpp:17:
+In file included from target/phase22/source/libunwind-21.1.0.src/src/DwarfParser.hpp:15:
+/usr/lib/clang/23/include/inttypes.h:24:15: fatal error: 'inttypes.h' file not found
+   24 | #include_next <inttypes.h>
+      |               ^~~~~~~~~~~~
+1 error generated.

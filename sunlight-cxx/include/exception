@@ -1,0 +1,22 @@
+#ifndef SUNLIGHT_CXX_EXCEPTION
+#define SUNLIGHT_CXX_EXCEPTION
+namespace std {
+using terminate_handler = void (*)();
+using unexpected_handler = void (*)();
+terminate_handler get_terminate() noexcept;
+unexpected_handler get_unexpected() noexcept;
+[[noreturn]] void terminate() noexcept;
+class exception {
+public:
+    exception() noexcept = default;
+    exception(const exception&) noexcept = default;
+    exception& operator=(const exception&) noexcept = default;
+    virtual ~exception() noexcept;
+    virtual const char* what() const noexcept;
+};
+class bad_exception : public exception {
+public:
+    const char* what() const noexcept override { return "std::bad_exception"; }
+};
+}
+#endif

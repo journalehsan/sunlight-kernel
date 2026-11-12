@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 4 --out target/phase21/accepted-4cpu

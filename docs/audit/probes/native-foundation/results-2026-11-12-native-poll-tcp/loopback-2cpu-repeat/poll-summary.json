@@ -1,0 +1,27 @@
+{
+  "mode": "loopback",
+  "cpus": 2,
+  "memory_mib": 2048,
+  "run_id": "poll-loopback-2cpu-repeat",
+  "net_subnet": null,
+  "host_alias": "10.0.2.2",
+  "commands": [
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-poll-service.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/loopback-2cpu-repeat/tcp-poll-service.elf",
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-poll-client.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/loopback-2cpu-repeat/tcp-poll-client.elf",
+    "/usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/loopback-2cpu-repeat/tcp-poll-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/loopback-2cpu-repeat/guest --timeout 300 --service /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/loopback-2cpu-repeat/tcp-poll-service.elf"
+  ],
+  "checks": {
+    "service_build": true,
+    "client_build": true,
+    "guest_runner": true,
+    "guest_pass_line": true,
+    "guest_clean": true,
+    "guest_done": true
+  },
+  "guest_stdout": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0\n",
+  "guest_pass_line": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0",
+  "guest_clean": true,
+  "guest_done": true,
+  "nic_capture": "frames=4\nipv4-proto-17=4\n",
+  "result": "PASS"
+}

@@ -41,12 +41,20 @@ const OUTPUT_LIMIT: usize = 1024 * 1024;
 struct State {
     next: usize,
     slot: Option<usize>,
+    network: bool,
+    finished: bool,
+    finish_ticks: u32,
     baseline: [u64; 3],
     names: usize,
     handles: usize,
     inet_refs: usize,
 }
 static STATE: spin::Mutex<Option<State>> = spin::Mutex::new(None);
+/// Exit status of the optional native C service support process. `i64::MIN`
+/// means "not reaped yet"; the process table entry can be reused before the
+/// last case finishes, so the status is latched here at reap time.
+static SERVICE_EXIT: core::sync::atomic::AtomicI64 =
+    core::sync::atomic::AtomicI64::new(i64::MIN);
 
 fn frames() -> [u64; 3] {
     [Class::RamFsFileData, Class::UserPrivate, Class::PageTable].map(class_frame_count)
@@ -110,6 +118,10 @@ fn remove(path: &str) {
 fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
     let number = state.next;
     let case = &CASES[number];
+    // A network case runs alongside support services whose heap and sockets are
+    // outside the case's ownership. Its own descriptors/frames are still checked
+    // by `after_reap`; net_server live counters are checked by the client.
+    state.network = WANTS_NETWORK;
     state.baseline = frames();
     state.names = tmp_names();
     state.handles = handles();
@@ -137,6 +149,13 @@ fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
     let mut process = unsafe { Process::new(PID + number, 0, case.name, &mut pmm, hhdm) };
     process.uid = 1000;
     process.gid = 1000;
+    // Trusted kernel fixture policy: this headless case has no session broker or
+    // account membership, so the NetOp shared-page transport (`shm_alloc`) would
+    // be refused with EINVAL. Only the networking fixture opts in; every other
+    // case keeps the unprivileged default.
+    if state.network {
+        process.system_allocation = true;
+    }
     process.fd_table.take_all_handles(); // discard the three serial defaults
     for (fd, handle) in streams.into_iter().enumerate() {
         let rights = if fd == 0 {
@@ -154,6 +173,17 @@ fn launch(sched: &mut Scheduler, state: &mut State, hhdm: VirtAddr) {
                 )
                 .unwrap(),
             fd as i32
+        );
+    }
+    // Opt-in identity fixture only. Standard streams remain VFS captures; no
+    // keyboard injection, broker, attributes or UART configuration is simulated.
+    if case.name == "termios-terminal-identity" {
+        assert_eq!(
+            process
+                .fd_table
+                .open(FileHandle::tty_stdin(255), CapRights::new(CapRights::READ), 0)
+                .unwrap(),
+            3
         );
     }
     let argv: Vec<&[u8]> = core::iter::once(IMAGE.as_bytes())
@@ -191,11 +221,12 @@ fn support(sched: &mut Scheduler, hhdm: VirtAddr, pid: usize, name: &str, bytes:
     let mut pmm = crate::PMM.lock();
     let mut process = unsafe { Process::new(pid, 0, name, &mut pmm, hhdm) };
     process.system_allocation = true;
-    let entry = crate::process::elf_loader::load_elf(bytes, &mut process, &mut pmm, hhdm)
-        .expect("native C support ELF");
-    crate::process::spawn::map_user_stack(&mut process, &mut pmm, hhdm).unwrap();
-    process.init_context(entry, crate::process::layout::USER_STACK_TOP);
-    process.set_initial_args(0, 0, 0, 0);
+    // Native C services read argc/argv from the SysV stack, so use the same
+    // exec image builder as the case runner rather than a bare load.
+    let mut argv = Vec::new();
+    argv.push(name.as_bytes());
+    crate::process::spawn::exec_into_process(bytes, &mut process, &mut pmm, hhdm, &argv, &[], false)
+        .unwrap_or_else(|error| panic!("native C support ELF {}: {:?}", name, error));
     drop(pmm);
     let slot = sched.add_process(process);
     sched.enqueue_ready(slot);
@@ -206,6 +237,9 @@ pub fn boot(hhdm: VirtAddr) -> ! {
     let state = State {
         next: 0,
         slot: None,
+        network: false,
+        finished: false,
+        finish_ticks: 0,
         baseline: [0; 3],
         names: 0,
         handles: 0,
@@ -223,6 +257,12 @@ pub fn boot(hhdm: VirtAddr) -> ! {
     crate::sched::with_scheduler(|s| {
         support(s, hhdm, 1, "init", INIT_ELF);
         support(s, hhdm, 2, "rand_service", RAND_ELF);
+        if !NET_ELF.is_empty() {
+            support(s, hhdm, 3, "net_server", NET_ELF);
+        }
+        if !SERVICE_ELF.is_empty() {
+            support(s, hhdm, 4, "tcp-echo-service", SERVICE_ELF);
+        }
     });
     *STATE.lock() = Some(state);
     crate::sched::enter_first_process()
@@ -241,6 +281,19 @@ pub fn before_reap(p: &Process) {
     );
 }
 pub fn after_reap(p: &Process, stats: &ReclaimStats) {
+    if p.pid == 3 || p.pid == 4 {
+        if p.pid == 4 {
+            SERVICE_EXIT.store(p.exit_code as i64, core::sync::atomic::Ordering::Release);
+        }
+        crate::serial_println!(
+            "[NATIVE-C-SUPPORT-REAP] pid={} name={} exit={} owned_frames={}",
+            p.pid,
+            p.name_str(),
+            p.exit_code,
+            crate::PMM.lock().owned_frame_count(p.pid as u32)
+        );
+        return;
+    }
     if p.pid < PID || p.pid >= PID + CASES.len() {
         return;
     }
@@ -301,6 +354,10 @@ pub fn idle() {
         }
         return;
     };
+    if state.finished {
+        wait_for_service(state);
+        return;
+    }
     if sched.processes[slot].state != ProcessState::Reaped {
         return;
     }
@@ -316,17 +373,53 @@ pub fn idle() {
     let after = frames();
     let inet_refs = crate::process::inet_socket::references();
     crate::serial_println!("[NATIVE-C-INET] before={} after={}", state.inet_refs, inet_refs);
-    let clean = after == state.baseline && tmp_names() == state.names && handles() == state.handles
-        && inet_refs == state.inet_refs;
-    crate::serial_println!("[NATIVE-C-RESULT] case={} exit={} stdout={} stderr={} clean={} file_before={} file_after={} private_before={} private_after={} pt_before={} pt_after={} handles_before={} handles_after={}", state.next, code, out.len(), err.len(), u8::from(clean), state.baseline[0], after[0], state.baseline[1], after[1], state.baseline[2], after[2], state.handles, handles());
-    assert!(clean, "native C file/page/handle cleanup failed");
+    let names_after = tmp_names();
+    let handles_after = handles();
+    let clean = names_after == state.names
+        && handles_after == state.handles
+        && (state.network || (after == state.baseline && inet_refs == state.inet_refs));
+    crate::serial_println!("[NATIVE-C-RESULT] case={} exit={} stdout={} stderr={} clean={} file_before={} file_after={} private_before={} private_after={} pt_before={} pt_after={} handles_before={} handles_after={} names_before={} names_after={}", state.next, code, out.len(), err.len(), u8::from(clean), state.baseline[0], after[0], state.baseline[1], after[1], state.baseline[2], after[2], state.handles, handles_after, state.names, names_after);
+    assert!(
+        clean,
+        "native C file/page/handle cleanup failed: names {}->{}, handles {}->{}, frames {:?}->{:?}, inet {}->{}",
+        state.names, names_after, state.handles, handles_after, state.baseline, after, state.inet_refs, inet_refs
+    );
     state.next += 1;
     if state.next == CASES.len() {
-        crate::serial_println!("[NATIVE-C-DONE] cases={}", CASES.len());
-        quit(true);
+        // The last case is fully accounted. Only the optional echo service
+        // support process remains to be observed.
+        state.finished = true;
+        wait_for_service(state);
+        return;
     }
     let hhdm = VirtAddr::new(crate::HHDM_REQ.response().unwrap().offset);
     launch(&mut sched, state, hhdm);
+}
+
+/// Wait for the optional native C service to be reaped and report its exit
+/// status. net_server is a long-lived daemon and is intentionally not awaited.
+fn wait_for_service(state: &mut State) {
+    if SERVICE_ELF.is_empty() {
+        crate::serial_println!("[NATIVE-C-DONE] cases={}", CASES.len());
+        quit(true);
+    }
+    let code = SERVICE_EXIT.load(core::sync::atomic::Ordering::Acquire);
+    if code != i64::MIN {
+        crate::serial_println!("[NATIVE-C-SERVICE-EXIT] code={}", code);
+        if code != 0 {
+            quit(false);
+        }
+        crate::serial_println!("[NATIVE-C-DONE] cases={}", CASES.len());
+        quit(true);
+    }
+    state.finish_ticks = state.finish_ticks.saturating_add(1);
+    if state.finish_ticks > 2000 {
+        crate::serial_println!(
+            "[NATIVE-C-SUPPORT-TIMEOUT] service_reaped=0 ticks={}",
+            state.finish_ticks
+        );
+        quit(false);
+    }
 }
 fn quit(success: bool) -> ! {
     unsafe {

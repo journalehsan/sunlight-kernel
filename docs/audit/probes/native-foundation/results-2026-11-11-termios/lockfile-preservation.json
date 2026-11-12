@@ -1,0 +1,4 @@
+{
+  "tools/hayro-native-probe/Cargo.lock": "90a40d37ab68069766467faeac86cd7a48fc3cd2382aa85b99df8cb85a09f9ce",
+  "tools/native-std-probe/Cargo.lock": "86642110093b74c7603c2b554ed94cfa919fc7817bde0433aa86c41f9874dd52"
+}

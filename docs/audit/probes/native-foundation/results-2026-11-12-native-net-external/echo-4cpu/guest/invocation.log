@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-4cpu-v2/tcp-echo-client.elf --net --cpus 4 --out /home/ehsantor/Projects/sunlightos-kernel/target/netexternal-echo-4cpu-v2/guest --timeout 300 --arg 44185 --arg 10.0.2.2 --arg external-echo-4cpu-v2

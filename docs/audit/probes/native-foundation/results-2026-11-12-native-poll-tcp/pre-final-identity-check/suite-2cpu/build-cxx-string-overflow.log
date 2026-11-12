@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/final/suite-2cpu/cxx-string-overflow.elf
+
+exit=0

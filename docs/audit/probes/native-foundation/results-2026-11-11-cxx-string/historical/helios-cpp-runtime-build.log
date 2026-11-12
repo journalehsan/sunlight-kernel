@@ -1,0 +1,3 @@
+$ x86_64-linux-musl-g++ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -static -no-pie -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/historical/helios-cpp-runtime -pthread -lm -ldl
+[Errno 2] No such file or directory: 'x86_64-linux-musl-g++'
+exit=125

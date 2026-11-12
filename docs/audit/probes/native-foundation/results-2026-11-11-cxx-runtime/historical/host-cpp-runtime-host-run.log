@@ -1,0 +1,7 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/historical/host-cpp-runtime
+exception OK
+TLS OK
+static initialization OK
+atexit OK
+
+exit=0

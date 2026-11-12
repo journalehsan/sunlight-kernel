@@ -1,0 +1,4 @@
+$ ld.lld --version
+LLD 23.1.4 (compatible with GNU linkers)
+
+exit=0

@@ -10,6 +10,7 @@ pub mod telemetry;
 pub mod display_metrics;
 pub mod display_modes;
 pub mod measurement_clock;
+pub mod netop;
 pub mod pty;
 pub mod resource_ledger;
 pub mod session_completion;

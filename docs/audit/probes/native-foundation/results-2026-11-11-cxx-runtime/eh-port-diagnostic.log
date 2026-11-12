@@ -1,0 +1,59 @@
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:17:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:52:10: error: no type named 'unexpected_handler' in namespace 'std'
+   52 |     std::unexpected_handler unexpectedHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:53:10: error: no type named 'terminate_handler' in namespace 'std'
+   53 |     std::terminate_handler  terminateHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:90:10: error: no type named 'unexpected_handler' in namespace 'std'
+   90 |     std::unexpected_handler unexpectedHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:91:10: error: no type named 'terminate_handler' in namespace 'std'
+   91 |     std::terminate_handler terminateHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:115:15: error: static assertion expression is not an integral constant expression
+  115 | static_assert(sizeof(_Unwind_Exception) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+  116 |                       offsetof(__cxa_exception, unwindHeader) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  117 |                   sizeof(__cxa_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:119:15: error: static assertion expression is not an integral constant expression
+  119 | static_assert(sizeof(_Unwind_Exception) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+  120 |                       offsetof(__cxa_dependent_exception, unwindHeader) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  121 |                   sizeof(__cxa_dependent_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:134:15: error: static assertion expression is not an integral constant expression
+  134 | static_assert(offsetof(__cxa_exception, adjustedPtr) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |                       sizeof(_Unwind_Exception) + sizeof(void*) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |                   sizeof(__cxa_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~
+/usr/lib/clang/23/include/__stddef_offsetof.h:16:24: note: expanded from macro 'offsetof'
+   16 | #define offsetof(t, d) __builtin_offsetof(t, d)
+      |                        ^
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:17:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:138:15: error: static assertion expression is not an integral constant expression
+  138 | static_assert(offsetof(__cxa_dependent_exception, adjustedPtr) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  139 |                       sizeof(_Unwind_Exception) + sizeof(void*) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  140 |                   sizeof(__cxa_dependent_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/lib/clang/23/include/__stddef_offsetof.h:16:24: note: expanded from macro 'offsetof'
+   16 | #define offsetof(t, d) __builtin_offsetof(t, d)
+      |                        ^
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:18:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:24:14: error: unknown type name 'unexpected_handler'
+   24 | __unexpected(unexpected_handler func);
+      |              ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:13: error: unknown type name 'terminate_handler'
+   28 | __terminate(terminate_handler func) noexcept;
+      |             ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:20:10: fatal error: 'include/atomic_support.h' file not found
+   20 | #include "include/atomic_support.h" // from libc++
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~
+11 errors generated.

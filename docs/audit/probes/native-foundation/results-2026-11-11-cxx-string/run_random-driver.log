@@ -1,0 +1,3 @@
+$ python3 tools/native-c/tests/run_random.py --out target/phase21/run_random
+libc host tests, 12 C/C++ ABI checks and unique native exports: PASS
+unchanged historical source: native compile/link PASS; host execution NOT_RUN

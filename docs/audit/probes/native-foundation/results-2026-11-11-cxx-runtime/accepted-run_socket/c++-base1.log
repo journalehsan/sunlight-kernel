@@ -1,0 +1,3 @@
+$ clang++ --target=x86_64-unknown-none-elf -std=c++17 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -DREVERSE_INCLUDES -x c++ -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/socket-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/target/phase22/accepted-run_socket/c++-base1.o
+
+exit=0

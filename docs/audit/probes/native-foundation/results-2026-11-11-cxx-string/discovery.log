@@ -1,0 +1,567 @@
+$ rg --files --hidden --no-ignore -g !target/** -g !.git/** -g !*evidence*/**
+sunlight-libc/include/string.h
+sunlight-cxx/src/string.cpp
+sunlight-libc/src/string.rs
+third_party/sbase/include/string.h
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-4cpu/build-string.log
+tools/native-c/tests/run_cxx_string.py
+tools/native-c/tests/cxx-string.cpp
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-cxx-output/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-wchar/acceptance-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-termios/acceptance-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-termios/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-termios/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-termios/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-socket/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/suite-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/suite-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-socket/suite-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-socket/suite-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-socket/suite-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-signal/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/suite-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/suite-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-signal/suite-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-signal/suite-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-signal/suite-2cpu/build-string.log
+docs/audit/probes/string.c
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-stdio-final/regression-mem-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-final/regression-mem-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-final/string.o
+docs/audit/probes/native-foundation/results-2026-11-10-final/string.s
+docs/audit/probes/native-foundation/results-2026-11-10-final/string.i
+docs/audit/probes/native-foundation/results-2026-11-10-final/before-string.log
+docs/audit/probes/native-foundation/results-2026-11-10/string.o
+docs/audit/probes/native-foundation/results-2026-11-10/string.s
+docs/audit/probes/native-foundation/results-2026-11-10/string.i
+docs/audit/probes/native-foundation/results-2026-11-10/before-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted2-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-initial/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-initial/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-initial/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-initial/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-initial/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-tmpfile-final/regression-mem-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-services/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-services/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-services/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-services/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-services/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-regressions/memory-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-regressions/memory-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-regressions/mem-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-random-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-random-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-random-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-random-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-v2-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-regressions/mem-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-initial-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-initial-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-isolated-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-acceptance/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-guest-acceptance/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-accepted-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-initial-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-initial-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-unistd-initial-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-acceptance/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-guest-acceptance/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-guest-acceptance/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/complete-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-pthread/complete-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dlfcn-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/guest-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-epoll/verified-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-poll/accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-langinfo-accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-mman-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-10-time-final-v2-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-mman-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-poll/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-10-dirent-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-4cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-4cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-4cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-4cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-4cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/accepted-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/initial-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-poll/initial-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-poll/initial-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/initial-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-poll/initial-2cpu/string.stdout.txt
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-locale/native-c-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-2cpu/elf-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-2cpu/string.elf
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-2cpu/build-string.log
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-2cpu/string.stderr.txt
+docs/audit/probes/native-foundation/results-2026-11-11-math/final-2cpu/string.stdout.txt
+exit=0
+$ rg -n class (String|string)|struct (String|string)|basic_string --glob *.{h,hpp,cpp,cc,cxx} -g !target/** -g !docs/audit/probes/** -g !sunlight-cxx/**
+
+exit=1
+$ rg -n strlen|memcpy|malloc|free sunlight-libc/src/string.rs sunlight-libc/src/mem.rs sunlight-libc/src/alloc.rs sunlight-libc/include/string.h
+sunlight-libc/include/string.h:10:void *memcpy(void *dest, const void *src, size_t n);
+sunlight-libc/include/string.h:16:size_t strlen(const char *s);
+sunlight-libc/src/string.rs:1://! Freestanding C string primitives (`strlen`, `strnlen`, `strcmp`, `strncmp`,
+sunlight-libc/src/string.rs:7://! compiler-generated code, C ABI consumers, and freestanding runtimes.
+sunlight-libc/src/string.rs:8://! `compiler_builtins` already provides a weak `strlen`; our strong symbol
+sunlight-libc/src/string.rs:15://! proof script inspects optimized freestanding code for such dependencies.
+sunlight-libc/src/string.rs:23://! - `strlen`: `s` must point to a readable NUL-terminated sequence.
+sunlight-libc/src/string.rs:34://! C `#[no_mangle]` exports are freestanding-only (`none` or `sunlightos`) so host unit tests do not
+sunlight-libc/src/string.rs:44:pub unsafe fn strlen_bytes(s: *const u8) -> usize {
+sunlight-libc/src/string.rs:55:/// `s` must be readable for `min(max_len, strlen(s)+1)` bytes.
+sunlight-libc/src/string.rs:150:/// C11 `size_t strlen(const char *s);`
+sunlight-libc/src/string.rs:158:pub unsafe extern "C" fn strlen(s: *const u8) -> usize {
+sunlight-libc/src/string.rs:159:    strlen_bytes(s)
+sunlight-libc/src/string.rs:240:            #[link_name = "strlen"]
+sunlight-libc/src/string.rs:241:            pub fn strlen(s: *const u8) -> usize;
+sunlight-libc/src/string.rs:256:    fn strlen_basic() {
+sunlight-libc/src/string.rs:258:            assert_eq!(strlen(b"\0".as_ptr()), 0);
+sunlight-libc/src/string.rs:259:            assert_eq!(strlen(b"a\0".as_ptr()), 1);
+sunlight-libc/src/string.rs:260:            assert_eq!(strlen(b"hello\0".as_ptr()), 5);
+sunlight-libc/src/string.rs:261:            assert_eq!(strlen(b"hello\0world\0".as_ptr()), 5);
+sunlight-libc/src/string.rs:353:            assert_eq!(strlen(s.as_ptr()), strlen_bytes(s.as_ptr()));
+sunlight-libc/src/string.rs:386:        let strlen_fp: StrlenFn = strlen;
+sunlight-libc/src/string.rs:395:            assert_eq!(strlen_fp(b"probe\0".as_ptr()), 5);
+sunlight-libc/src/string.rs:437:                assert_eq!(strlen(left.as_ptr()), host::strlen(left.as_ptr()));
+sunlight-libc/src/mem.rs:1://! Freestanding memory primitives (`memcpy`, `memmove`, `memset`, `memcmp`,
+sunlight-libc/src/mem.rs:7://! hidden implementations supplied by `compiler_builtins` for freestanding
+sunlight-libc/src/mem.rs:15://! symbols. Generated assembly is verified not to call `memcpy`/`memmove`/
+sunlight-libc/src/mem.rs:24://! - for `memcpy` only, source and destination ranges do not overlap
+sunlight-libc/src/mem.rs:25://!   (overlap is undefined behavior for `memcpy`; use `memmove`).
+sunlight-libc/src/mem.rs:32://! C `#[no_mangle]` exports are emitted only on freestanding SunlightOS
+sunlight-libc/src/mem.rs:43:pub unsafe fn memcpy_bytes(dst: *mut u8, src: *const u8, n: usize) {
+sunlight-libc/src/mem.rs:44:    // Forward byte copy. No `core::ptr::copy*` — those can lower to `memcpy`.
+sunlight-libc/src/mem.rs:133:/// C11 `void *memcpy(void *dest, const void *src, size_t n);`
+sunlight-libc/src/mem.rs:144:pub unsafe extern "C" fn memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+sunlight-libc/src/mem.rs:145:    memcpy_bytes(dest, src, n);
+sunlight-libc/src/mem.rs:244:            #[link_name = "memcpy"]
+sunlight-libc/src/mem.rs:245:            pub fn memcpy(dst: *mut u8, src: *const u8, n: usize) -> *mut u8;
+sunlight-libc/src/mem.rs:283:    fn memcpy_length_zero_no_access() {
+sunlight-libc/src/mem.rs:287:            let ret = memcpy(dst.as_mut_ptr(), src.as_ptr(), 0);
+sunlight-libc/src/mem.rs:294:    fn memcpy_lengths_and_alignment() {
+sunlight-libc/src/mem.rs:309:                        let ret = memcpy(dst_ptr, src_ptr, len);
+sunlight-libc/src/mem.rs:335:    fn memcpy_same_pointer_zero_and_one() {
+sunlight-libc/src/mem.rs:337:        // overlapping (UB for memcpy) — we only exercise n==0 here.
+sunlight-libc/src/mem.rs:341:            assert_eq!(memcpy(p, p, 0), p);
+sunlight-libc/src/mem.rs:530:            assert_eq!(memcpy(null, core::ptr::null(), 0), null);
+sunlight-libc/src/mem.rs:544:            memcpy(d1.as_mut_ptr(), src.as_ptr(), 4);
+sunlight-libc/src/mem.rs:545:            memcpy_bytes(d2.as_mut_ptr(), src.as_ptr(), 4);
+sunlight-libc/src/mem.rs:573:        let memcpy_fp: MemcpyFn = memcpy;
+sunlight-libc/src/mem.rs:583:                memcpy_fp(dst.as_mut_ptr(), src.as_ptr(), 8),
+sunlight-libc/src/mem.rs:640:            assert_eq!(crate::string::strlen(end), 2);
+sunlight-libc/src/mem.rs:671:                memcpy(
+sunlight-libc/src/mem.rs:676:                host::memcpy(
+sunlight-libc/src/mem.rs:684:                "memcpy len={len} src_off={src_off} dst_off={dst_off}"
+sunlight-libc/src/alloc.rs:4://! That header records the raw free-list block used for the allocation, so C
+sunlight-libc/src/alloc.rs:5://! `free` and `realloc` do not need a Rust `Layout` argument.
+sunlight-libc/src/alloc.rs:48:/// Stored at the start of every free block.  The list is sorted by address so
+sunlight-libc/src/alloc.rs:57:/// block layout returned by the internal free-list allocator; the user layout
+sunlight-libc/src/alloc.rs:61:/// double-free detection after reuse or a use-after-free write.
+sunlight-libc/src/alloc.rs:85:/// A fixed-size, allocation-free view of the native allocator's state.
+sunlight-libc/src/alloc.rs:88:/// free-list totals into this value. It never formats, allocates, or performs
+sunlight-libc/src/alloc.rs:95:    pub free_bytes: usize,
+sunlight-libc/src/alloc.rs:96:    pub largest_free_block: usize,
+sunlight-libc/src/alloc.rs:98:    pub free_count: u64,
+sunlight-libc/src/alloc.rs:103:    pub free_list_block_count: usize,
+sunlight-libc/src/alloc.rs:171:    unsafe fn free_list_summary(&self) -> (usize, usize, usize) {
+sunlight-libc/src/alloc.rs:176:        let mut free_bytes = 0usize;
+sunlight-libc/src/alloc.rs:177:        let mut largest_free_block = 0usize;
+sunlight-libc/src/alloc.rs:178:        let mut free_list_block_count = 0usize;
+sunlight-libc/src/alloc.rs:182:            free_bytes = free_bytes.saturating_add(size);
+sunlight-libc/src/alloc.rs:183:            largest_free_block = cmp::max(largest_free_block, size);
+sunlight-libc/src/alloc.rs:184:            free_list_block_count = free_list_block_count.saturating_add(1);
+sunlight-libc/src/alloc.rs:187:        (free_bytes, largest_free_block, free_list_block_count)
+sunlight-libc/src/alloc.rs:249:                // the allocation metadata so it is returned on free.
+sunlight-libc/src/alloc.rs:261:                // existing free block; retain it and link its possible tail.
+sunlight-libc/src/alloc.rs:296:        // An overlap means a duplicate/invalid free.  C makes that undefined,
+sunlight-libc/src/alloc.rs:504:/// The free-list traversal is performed while holding the existing heap lock;
+sunlight-libc/src/alloc.rs:507:    let (free_bytes, largest_free_block, free_list_block_count) = {
+sunlight-libc/src/alloc.rs:509:        unsafe { guard.heap().free_list_summary() }
+sunlight-libc/src/alloc.rs:515:        free_bytes,
+sunlight-libc/src/alloc.rs:516:        largest_free_block,
+sunlight-libc/src/alloc.rs:518:        free_count: FREE_COUNT.load(Ordering::Relaxed),
+sunlight-libc/src/alloc.rs:523:        free_list_block_count,
+sunlight-libc/src/alloc.rs:534:    // The raw block must leave future free-block starts correctly aligned.
+sunlight-libc/src/alloc.rs:551:/// malformed allocator metadata without touching the free list.
+sunlight-libc/src/alloc.rs:672:// Export the C names only on freestanding SunlightOS (`none` or `sunlightos`).
+sunlight-libc/src/alloc.rs:674:// not interpose glibc `malloc`/`free` — that replaces the process heap with
+sunlight-libc/src/alloc.rs:675:// the bounded Sunlight free-list and hangs or OOMs the test harness.
+sunlight-libc/src/alloc.rs:683:pub unsafe extern "C" fn malloc(size: usize) -> *mut u8 {
+sunlight-libc/src/alloc.rs:687:/// Release a pointer returned by this allocator. `free(NULL)` is a no-op.
+sunlight-libc/src/alloc.rs:692:pub unsafe extern "C" fn free(ptr: *mut u8) {
+sunlight-libc/src/alloc.rs:705:    let allocation = malloc(total);
+sunlight-libc/src/alloc.rs:721:        return malloc(new_size);
+sunlight-libc/src/alloc.rs:724:        free(ptr);
+sunlight-libc/src/alloc.rs:730:    let replacement = malloc(new_size);
+sunlight-libc/src/alloc.rs:735:    free(ptr);
+sunlight-libc/src/alloc.rs:818:            let first = malloc(64);
+sunlight-libc/src/alloc.rs:819:            let middle = malloc(96);
+sunlight-libc/src/alloc.rs:820:            let last = malloc(64);
+sunlight-libc/src/alloc.rs:822:            free(middle);
+sunlight-libc/src/alloc.rs:823:            free(first);
+sunlight-libc/src/alloc.rs:824:            let reused = malloc(128);
+sunlight-libc/src/alloc.rs:826:            free(last);
+sunlight-libc/src/alloc.rs:827:            free(reused);
+sunlight-libc/src/alloc.rs:836:                let small = malloc(7);
+sunlight-libc/src/alloc.rs:837:                let medium = malloc(129);
+sunlight-libc/src/alloc.rs:838:                let large = malloc(1023);
+sunlight-libc/src/alloc.rs:840:                free(medium);
+sunlight-libc/src/alloc.rs:841:                free(large);
+sunlight-libc/src/alloc.rs:842:                free(small);
+sunlight-libc/src/alloc.rs:852:            let value = malloc(96);
+sunlight-libc/src/alloc.rs:863:            free(value);
+sunlight-libc/src/alloc.rs:878:        assert_eq!(recovered.free_count, baseline.free_count + 1);
+sunlight-libc/src/alloc.rs:886:            // the combined previous block and the free tail (both sides).
+sunlight-libc/src/alloc.rs:887:            let first = malloc(64);
+sunlight-libc/src/alloc.rs:888:            let middle = malloc(64);
+sunlight-libc/src/alloc.rs:889:            let last = malloc(64);
+sunlight-libc/src/alloc.rs:891:            free(first);
+sunlight-libc/src/alloc.rs:892:            free(middle);
+sunlight-libc/src/alloc.rs:893:            free(last);
+sunlight-libc/src/alloc.rs:896:            // Here the next block is free while the previous block remains
+sunlight-libc/src/alloc.rs:897:            // allocated, so the middle free is a next-neighbor merge only.
+sunlight-libc/src/alloc.rs:898:            let first = malloc(64);
+sunlight-libc/src/alloc.rs:899:            let middle = malloc(64);
+sunlight-libc/src/alloc.rs:900:            let last = malloc(64);
+sunlight-libc/src/alloc.rs:902:            free(last);
+sunlight-libc/src/alloc.rs:903:            free(middle);
+sunlight-libc/src/alloc.rs:904:            free(first);
+sunlight-libc/src/alloc.rs:912:            assert!(malloc(0).is_null());
+sunlight-libc/src/alloc.rs:918:            free(zeroed);
+sunlight-libc/src/alloc.rs:932:            free(ptr::null_mut());
+sunlight-libc/src/alloc.rs:941:            let aligned = malloc(1);
+sunlight-libc/src/alloc.rs:943:            free(aligned);
+sunlight-libc/src/alloc.rs:945:            let value = malloc(32);
+sunlight-libc/src/alloc.rs:950:            free(value);
+sunlight-libc/src/alloc.rs:977:    fn free_list_exact_fit_unsplittable_tail_and_full_recovery() {
+sunlight-libc/src/alloc.rs:990:            let exact = malloc(exact_user_size);
+sunlight-libc/src/alloc.rs:992:            free(exact);
+sunlight-libc/src/alloc.rs:997:            // header; free must recover the entire heap.
+sunlight-libc/src/alloc.rs:999:            let tail = malloc(tail_user_size);
+sunlight-libc/src/alloc.rs:1001:            free(tail);
+sunlight-libc/src/alloc.rs:1004:            let recovered = malloc(exact_user_size);
+sunlight-libc/src/alloc.rs:1006:            free(recovered);
+
+exit=0
+$ rg -n heapless|alloc::string|String< compat-linux/src/lib.rs kernel/src/process/env.rs tools/native-std/overlay/alloc/sunlightos.rs
+kernel/src/process/env.rs:7:use alloc::string::String;
+compat-linux/src/lib.rs:21:use heapless::{LinearMap, String, Vec};
+compat-linux/src/lib.rs:101:    pub allowed_prefix: String<64>,
+compat-linux/src/lib.rs:125:    metadata: Vec<(String<64>, PathMetadata), 16>,
+compat-linux/src/lib.rs:220:    pub allowed_prefix: String<64>,
+
+exit=0
+Rust owned String source: /home/ehsantor/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/string.rs
+heapless source: /home/ehsantor/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/heapless-0.8.0/src/string.rs

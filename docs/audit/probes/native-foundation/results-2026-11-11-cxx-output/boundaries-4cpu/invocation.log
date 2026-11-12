@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/phase20/cxx-abi-final/cxx-output.elf --cpus 4 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/target/phase20/boundaries-4cpu

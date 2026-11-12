@@ -1,0 +1,7 @@
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_personality.cpp:295:9: error: use of undeclared identifier 'abort'
+  295 |         abort();
+      |         ^~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_personality.cpp:318:9: error: use of undeclared identifier 'abort'
+  318 |         abort();
+      |         ^~~~~
+2 errors generated.

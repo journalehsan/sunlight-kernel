@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "global-init\nworker:TLS\nTLS-done\nmain:global:TLS\nTLS-done\natexit\nglobal-done\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

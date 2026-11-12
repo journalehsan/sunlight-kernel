@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/poll-regress/tcp-echo-client.elf --net --service target/poll-regress/tcp-echo-service.elf --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/final/regress-loopback-tcp-2cpu --timeout 300 --arg 4040

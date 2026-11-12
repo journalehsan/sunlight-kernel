@@ -1,0 +1,6 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/phase20/poll-abi/poll.o
+                 U memset
+                 U poll
+                 U select
+
+exit=0

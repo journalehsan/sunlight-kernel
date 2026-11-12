@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/netphase-build/tcp-echo-client.elf --net --service target/netphase-build/tcp-echo-service.elf --cpus 2 --out target/netphase-run-2cpu-repeat --timeout 300 --arg 4040

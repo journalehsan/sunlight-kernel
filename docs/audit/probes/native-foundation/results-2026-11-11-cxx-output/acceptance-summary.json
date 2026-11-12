@@ -1,0 +1,24 @@
+{
+  "incoming_preserved": 2320,
+  "historical_unchanged": true,
+  "cpu": {
+    "2": {
+      "buildable_pass": 75,
+      "historical_pass": 20,
+      "historical_build_fail": 1,
+      "clean_primary_reaps": 75,
+      "faults": 0,
+      "output_boundaries": "PASS",
+      "fp": "PASS"
+    },
+    "4": {
+      "buildable_pass": 75,
+      "historical_pass": 20,
+      "historical_build_fail": 1,
+      "clean_primary_reaps": 75,
+      "faults": 0,
+      "output_boundaries": "PASS",
+      "fp": "PASS"
+    }
+  }
+}

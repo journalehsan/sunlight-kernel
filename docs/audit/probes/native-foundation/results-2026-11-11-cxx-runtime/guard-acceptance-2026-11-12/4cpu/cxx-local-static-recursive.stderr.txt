@@ -1,0 +1,1 @@
+__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?

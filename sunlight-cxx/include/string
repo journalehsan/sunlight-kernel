@@ -1,0 +1,54 @@
+#ifndef SUNLIGHT_CXX_STRING
+#define SUNLIGHT_CXX_STRING
+#include <iostream>
+// Native owning byte string subset. ABI belongs exclusively to sunlight-cxx.
+// All allocation/size failures terminate the process (status 134), without unwind.
+namespace std {
+class string {
+public:
+    using size_type = __SIZE_TYPE__;
+private:
+    char* bytes_;
+    size_type length_, capacity_;
+    char empty_;
+    void release() noexcept;
+public:
+    constexpr string() noexcept : bytes_(nullptr), length_(0), capacity_(0), empty_(0) {}
+    string(const char*) noexcept;
+    string(const char*, size_type) noexcept;
+    string(const string&) noexcept;
+    string(string&&) noexcept;
+    ~string() noexcept;
+    string& operator=(const string&) noexcept;
+    string& operator=(string&&) noexcept;
+    string& operator=(const char*) noexcept;
+    size_type size() const noexcept { return length_; }
+    size_type length() const noexcept { return length_; }
+    size_type capacity() const noexcept { return capacity_; }
+    bool empty() const noexcept { return length_ == 0; }
+    static constexpr size_type max_size() noexcept { return __LONG_MAX__ - 1UL; }
+    const char* c_str() const noexcept { return data(); }
+    const char* data() const noexcept { return bytes_ ? bytes_ : &empty_; }
+#if __cplusplus >= 201703L
+    char* data() noexcept { return bytes_ ? bytes_ : &empty_; }
+#endif
+    const char& operator[](size_type i) const noexcept { return data()[i]; }
+    char& operator[](size_type i) noexcept { return (bytes_ ? bytes_ : &empty_)[i]; }
+    string& append(const char*, size_type) noexcept;
+    string& append(const char*) noexcept;
+    string& append(const string& other) noexcept { return append(other.data(), other.size()); }
+    string& operator+=(const string& other) noexcept { return append(other); }
+    string& operator+=(const char* other) noexcept { return append(other); }
+    string& operator+=(char c) noexcept { return append(&c, 1); }
+    int compare(const string&) const noexcept;
+};
+string operator+(const string&, const string&) noexcept;
+bool operator==(const string&, const string&) noexcept;
+bool operator!=(const string&, const string&) noexcept;
+bool operator<(const string&, const string&) noexcept;
+bool operator>(const string&, const string&) noexcept;
+bool operator<=(const string&, const string&) noexcept;
+bool operator>=(const string&, const string&) noexcept;
+ostream& operator<<(ostream&, const string&) noexcept;
+}
+#endif

@@ -1,0 +1,2 @@
+programs: =/usr/bin:/usr/bin
+libraries: =/usr/lib/clang/23:/usr/bin/../lib/clang-runtimes/x86_64-unknown-none-elf/lib

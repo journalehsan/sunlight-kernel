@@ -1,0 +1,4 @@
+4e3efb53a172666505159e95e1b7f557c2a093a62e706fafc5eae3ef44babb2d
+#define _GNU_SOURCE
+#include <langinfo.h>
+int main(void){return nl_langinfo(CODESET)==0;}

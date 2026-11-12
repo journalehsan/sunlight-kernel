@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -isystem /usr/lib/clang/23/include -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-string/historical/native-signal -nostdlib -fuse-ld=lld
+
+exit=0

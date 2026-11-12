@@ -1,0 +1,27 @@
+$ rg -n 'dlopen|dlsym|pthread_create|setlocale|nl_langinfo|__cxa_throw|__cxa_atexit' sunlight-libc tools/native-std third_party
+sunlight-libc/include/locale.h:14:char *setlocale(int category, const char *locale);
+sunlight-libc/include/langinfo.h:15:char *nl_langinfo(nl_item item);
+sunlight-libc/include/pthread.h:5: * pthread_t is an opaque handle. pthread_create uses the native thread spawn
+sunlight-libc/include/pthread.h:9: * lazily by a later pthread_create or pthread_join.
+sunlight-libc/include/pthread.h:32:int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+sunlight-libc/include/dlfcn.h:12:void *dlopen(const char *path, int flags);
+sunlight-libc/include/dlfcn.h:13:void *dlsym(void *handle, const char *name);
+sunlight-libc/src/wchar.rs:147:            assert!(!crate::locale::setlocale(0, c"C.UTF-8".as_ptr()).is_null());
+sunlight-libc/src/wchar.rs:174:            crate::locale::setlocale(0, c"C".as_ptr());
+sunlight-libc/src/pthread.rs:3://! `pthread_create` allocates a control block, stores the entry point and
+sunlight-libc/src/pthread.rs:11://! control blocks are reclaimed lazily by the next `pthread_create` or
+sunlight-libc/src/pthread.rs:204:pub unsafe extern "C" fn pthread_create(
+sunlight-libc/src/pthread.rs:339:/// `thread` must be a live handle created by `pthread_create`.
+sunlight-libc/src/locale.rs:3://! Like POSIX setlocale, callers must serialize use of the returned LC_ALL
+sunlight-libc/src/locale.rs:4://! composite string against subsequent setlocale calls.
+sunlight-libc/src/locale.rs:155:pub unsafe extern "C" fn setlocale(category: c_int, locale: *const c_char) -> *mut c_char {
+sunlight-libc/src/langinfo.rs:14:pub extern "C" fn nl_langinfo(item: c_int) -> *mut c_char {
+sunlight-libc/src/langinfo.rs:34:        let pointer = nl_langinfo(CODESET);
+sunlight-libc/src/langinfo.rs:36:        assert_eq!(pointer, nl_langinfo(CODESET));
+sunlight-libc/src/langinfo.rs:41:        let pointer = nl_langinfo(CODESET);
+sunlight-libc/src/langinfo.rs:43:            assert_eq!(unsafe { CStr::from_ptr(nl_langinfo(item)) }.to_bytes(), b"");
+sunlight-libc/src/dlfcn.rs:17:pub extern "C" fn dlopen(path: *const c_char, flags: c_int) -> *mut c_void {
+sunlight-libc/src/dlfcn.rs:45:pub unsafe extern "C" fn dlsym(handle: *mut c_void, name: *const c_char) -> *mut c_void {
+sunlight-libc/src/tls.rs:24:    /// pthread control block for threads created by `pthread_create`.
+
+exit=0

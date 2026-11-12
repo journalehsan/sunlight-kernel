@@ -1,0 +1,114 @@
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:17:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:52:10: error: no type named 'unexpected_handler' in namespace 'std'
+   52 |     std::unexpected_handler unexpectedHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:53:10: error: no type named 'terminate_handler' in namespace 'std'
+   53 |     std::terminate_handler  terminateHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:90:10: error: no type named 'unexpected_handler' in namespace 'std'
+   90 |     std::unexpected_handler unexpectedHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:91:10: error: no type named 'terminate_handler' in namespace 'std'
+   91 |     std::terminate_handler terminateHandler;
+      |     ~~~~~^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:115:15: error: static assertion expression is not an integral constant expression
+  115 | static_assert(sizeof(_Unwind_Exception) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+  116 |                       offsetof(__cxa_exception, unwindHeader) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  117 |                   sizeof(__cxa_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:119:15: error: static assertion expression is not an integral constant expression
+  119 | static_assert(sizeof(_Unwind_Exception) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+  120 |                       offsetof(__cxa_dependent_exception, unwindHeader) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  121 |                   sizeof(__cxa_dependent_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:134:15: error: static assertion expression is not an integral constant expression
+  134 | static_assert(offsetof(__cxa_exception, adjustedPtr) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  135 |                       sizeof(_Unwind_Exception) + sizeof(void*) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  136 |                   sizeof(__cxa_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~
+/usr/lib/clang/23/include/__stddef_offsetof.h:16:24: note: expanded from macro 'offsetof'
+   16 | #define offsetof(t, d) __builtin_offsetof(t, d)
+      |                        ^
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:17:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.h:138:15: error: static assertion expression is not an integral constant expression
+  138 | static_assert(offsetof(__cxa_dependent_exception, adjustedPtr) +
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  139 |                       sizeof(_Unwind_Exception) + sizeof(void*) ==
+      |                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  140 |                   sizeof(__cxa_dependent_exception),
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/usr/lib/clang/23/include/__stddef_offsetof.h:16:24: note: expanded from macro 'offsetof'
+   16 | #define offsetof(t, d) __builtin_offsetof(t, d)
+      |                        ^
+In file included from target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:18:
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:24:14: error: unknown type name 'unexpected_handler'
+   24 | __unexpected(unexpected_handler func);
+      |              ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:13: error: unknown type name 'terminate_handler'
+   28 | __terminate(terminate_handler func) noexcept;
+      |             ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:171:18: error: static assertion failed due to requirement 'offset == 0 || alignof(_Unwind_Exception) < alignment': offset is non-zero only if _Unwind_Exception isn't aligned
+  171 |   static_assert((offset == 0 || alignof(_Unwind_Exception) < alignment),
+      |                  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:192:14: error: no member named 'terminate' in namespace 'std'; did you mean '__terminate'?
+  192 |         std::terminate();
+      |              ^~~~~~~~~
+      |              __terminate
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:1: note: '__terminate' declared here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:218:46: error: no member named 'get_unexpected' in namespace 'std'; did you mean '__unexpected'?
+  218 |   exception_header->unexpectedHandler = std::get_unexpected();
+      |                                              ^~~~~~~~~~~~~~
+      |                                              __unexpected
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:24:1: note: '__unexpected' declared here
+   24 | __unexpected(unexpected_handler func);
+      | ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:219:45: error: no member named 'get_terminate' in namespace 'std'; did you mean '__terminate'?
+  219 |   exception_header->terminateHandler = std::get_terminate();
+      |                                             ^~~~~~~~~~~~~
+      |                                             __terminate
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:1: note: '__terminate' declared here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:235:14: error: no member named 'terminate' in namespace 'std'; did you mean '__terminate'?
+  235 |         std::terminate();
+      |              ^~~~~~~~~
+      |              __terminate
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:1: note: '__terminate' declared here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:493:14: error: no member named 'terminate' in namespace 'std'; did you mean '__terminate'?
+  493 |         std::terminate();
+      |              ^~~~~~~~~
+      |              __terminate
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:1: note: '__terminate' declared here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:522:17: error: static assertion expression is not an integral constant expression
+  522 |   static_assert(__builtin_offsetof(__cxa_exception, referenceCount) ==
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  523 |                     __builtin_offsetof(__cxa_dependent_exception,
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  524 |                                        primaryException),
+      |                                        ~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:527:17: error: static assertion expression is not an integral constant expression
+  527 |   static_assert(__builtin_offsetof(__cxa_exception, handlerCount) ==
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  528 |                     __builtin_offsetof(__cxa_dependent_exception, handlerCount),
+      |                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_exception.cpp:594:8: error: no member named 'terminate' in namespace 'std'; did you mean '__terminate'?
+  594 |   std::terminate();
+      |        ^~~~~~~~~
+      |        __terminate
+target/phase22/source/libcxxabi-21.1.0.src/src/cxa_handlers.h:28:1: note: '__terminate' declared here
+   28 | __terminate(terminate_handler func) noexcept;
+      | ^
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+20 errors generated.

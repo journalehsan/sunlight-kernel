@@ -1,0 +1,16 @@
+{
+  "2": {
+    "passed": 73,
+    "fault_bytes": 0,
+    "primary_reaps": 73,
+    "total_clean_reaps": 96,
+    "ram_mib": 2048
+  },
+  "4": {
+    "passed": 73,
+    "fault_bytes": 0,
+    "primary_reaps": 73,
+    "total_clean_reaps": 96,
+    "ram_mib": 2048
+  }
+}

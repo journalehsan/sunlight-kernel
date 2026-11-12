@@ -1,0 +1,312 @@
+[
+  {
+    "name": "accepted-2cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--timeout",
+      "180",
+      "--cpus",
+      "2",
+      "--out",
+      "target/phase22/accepted-2cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-4cpu",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--timeout",
+      "180",
+      "--cpus",
+      "4",
+      "--out",
+      "target/phase22/accepted-4cpu"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-output-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_output.py",
+      "--out",
+      "target/phase22/accepted-output-abi"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-string-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_string.py",
+      "--out",
+      "target/phase22/accepted-string-abi"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-discovery",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_exception_discovery.py",
+      "--out",
+      "target/phase22/accepted-discovery"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-historical",
+    "command": [
+      "python3",
+      "docs/audit/probes/run.py",
+      "--out",
+      "docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/accepted-historical"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_dirent",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_dirent.py",
+      "--out",
+      "target/phase22/accepted-run_dirent"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_dlfcn",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_dlfcn.py",
+      "--out",
+      "target/phase22/accepted-run_dlfcn"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_langinfo",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_langinfo.py",
+      "--out",
+      "target/phase22/accepted-run_langinfo"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_locale",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_locale.py",
+      "--out",
+      "target/phase22/accepted-run_locale"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_math",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_math.py",
+      "--out",
+      "target/phase22/accepted-run_math"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_mman",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_mman.py",
+      "--out",
+      "target/phase22/accepted-run_mman"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_poll",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_poll.py",
+      "--out",
+      "target/phase22/accepted-run_poll"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_pthread",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_pthread.py",
+      "--out",
+      "target/phase22/accepted-run_pthread"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_random",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_random.py",
+      "--out",
+      "target/phase22/accepted-run_random"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_signal",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_signal.py",
+      "--out",
+      "target/phase22/accepted-run_signal"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_socket",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_socket.py",
+      "--out",
+      "target/phase22/accepted-run_socket"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_termios",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_termios.py",
+      "--out",
+      "target/phase22/accepted-run_termios"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_time",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_time.py",
+      "--out",
+      "target/phase22/accepted-run_time"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_unistd",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_unistd.py",
+      "--out",
+      "target/phase22/accepted-run_unistd"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_wchar",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_wchar.py",
+      "--out",
+      "target/phase22/accepted-run_wchar"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-run_stdio",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_stdio.py",
+      "--out",
+      "target/phase22/accepted-run_stdio"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "accepted-kernel",
+    "command": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-kernel"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-overlay",
+    "command": [
+      "bash",
+      "tools/check_native_std.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-workspace",
+    "command": [
+      "cargo",
+      "check",
+      "--workspace"
+    ],
+    "exit": 101
+  },
+  {
+    "name": "accepted-foundation",
+    "command": [
+      "bash",
+      "tools/test_native_std_foundation.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-mem-proof",
+    "command": [
+      "bash",
+      "tools/test-mem-string-proof.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-alloc-proof",
+    "command": [
+      "bash",
+      "tools/test-alloc-proof.sh"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "accepted-alloc-base-build",
+    "command": [
+      "rustc",
+      "--test",
+      "tools/alloc-proof.rs",
+      "-o",
+      "target/phase22/alloc-base"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-alloc-base",
+    "command": [
+      "target/phase22/alloc-base",
+      "--test-threads=1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "accepted-class-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_classes.py",
+      "--out",
+      "target/phase22/accepted-class-abi"
+    ],
+    "exit": 0
+  }
+]

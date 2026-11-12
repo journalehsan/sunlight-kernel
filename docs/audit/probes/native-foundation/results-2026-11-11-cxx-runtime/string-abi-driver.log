@@ -1,0 +1,8 @@
+$ python3 tools/native-c/tests/run_cxx_string.py --out target/phase22/string-abi
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_string.py", line 37, in <module>
+    assert all(count == 1 for symbol,count in counts.items() if 'St6string' in symbol), 'duplicate string symbol'
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: duplicate string symbol
+
+exit=1

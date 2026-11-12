@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/target/phase20/final-2cpu

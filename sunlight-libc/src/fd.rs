@@ -55,15 +55,8 @@ pub unsafe extern "C" fn fstat(fd: i32, out: *mut Stat) -> i32 {
     }
 }
 
-/// Test whether an open file descriptor refers to a terminal.
-/// Phase 1: fds 0 / 1 / 2 (stdin / stdout / stderr) are console-connected and
-/// report as terminals.  All other fds return 0 (not a terminal).
+/// Resolve the kernel terminal handle, including duplicated descriptors.
 #[cfg_attr(any(target_os = "none", target_os = "sunlightos"), no_mangle)]
 pub unsafe extern "C" fn isatty(fd: i32) -> i32 {
-    if fd == 0 || fd == 1 || fd == 2 {
-        1
-    } else {
-        set_errno(EINVAL);
-        0
-    }
+    i32::from(crate::termios::terminal_operation(fd, 0) == 0)
 }

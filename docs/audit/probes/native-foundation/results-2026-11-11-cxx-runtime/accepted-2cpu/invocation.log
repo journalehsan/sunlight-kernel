@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --timeout 180 --cpus 2 --out target/phase22/accepted-2cpu

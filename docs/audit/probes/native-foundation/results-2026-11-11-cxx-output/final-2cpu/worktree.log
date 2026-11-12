@@ -1,0 +1,35 @@
+$ git status --short
+ M docs/audit/std-progress.md
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/native_c_guest.rs
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/stdlib.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/errno.rs
+ M sunlight-libc/src/fd.rs
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/locale.rs
+ M sunlight-libc/src/sys.rs
+ M tools/hayro-native-probe/Cargo.lock
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-11-termios/
+?? docs/audit/probes/native-foundation/results-2026-11-11-wchar/
+?? sunlight-cxx/
+?? sunlight-libc/include/iostream
+?? sunlight-libc/include/limits.h
+?? sunlight-libc/include/termios.h
+?? sunlight-libc/include/wchar.h
+?? sunlight-libc/src/termios.rs
+?? sunlight-libc/src/wchar.rs
+?? tools/build_native_cxx.sh
+?? tools/native-c/cxx.py
+?? tools/native-c/tests/cxx-backend.cpp
+?? tools/native-c/tests/cxx-output.cpp
+?? tools/native-c/tests/run_termios.py
+?? tools/native-c/tests/run_wchar.py
+?? tools/native-c/tests/termios-abi.c
+?? tools/native-c/tests/termios.c
+?? tools/native-c/tests/wchar-abi.c
+?? tools/native-c/tests/wchar-contract.c
+
+exit=0

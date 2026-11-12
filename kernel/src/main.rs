@@ -827,6 +827,24 @@ pub extern "C" fn _start() -> ! {
 
     #[cfg(feature = "native_c_guest")]
     if option_env!("SUNLIGHT_NATIVE_C_MANIFEST").is_some() {
+        // Networking fixtures need the kernel-owned Layer-2 backend before the
+        // headless runner starts net_server. Normal boots keep the later
+        // initialization site below unchanged.
+        if native_c_guest::WANTS_NETWORK && ACTIVE_NET_DEVICE.lock().is_none() {
+            match initialize_network_backend(&mut vmm, &mut PMM.lock(), hhdm_offset) {
+                Some(dev) => {
+                    *ACTIVE_NET_DEVICE.lock() = Some(dev);
+                    NET_BACKEND_STATE.store(
+                        sunlight_net::NetBackendState::Registered as u64,
+                        core::sync::atomic::Ordering::Release,
+                    );
+                    serial_println!("[NET]  native guest frame backend registered");
+                }
+                None => {
+                    serial_println!("[NET]  native guest frame backend unavailable");
+                }
+            }
+        }
         native_c_guest::boot(hhdm_offset);
     }
 

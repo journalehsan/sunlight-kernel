@@ -25,6 +25,7 @@ pub enum SunlightSyscall {
     NativeThreadReaped = 156,
     NativeSignal = 174,
     NativeSocket = 175,
+    NativeTerminal = 176,
     NativeExitGroup = 157,
     NativeStdThreadSpawn = 158,
     NativePoll = 159,
@@ -1023,6 +1024,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         173 => sys_native_epoll_wait(frame),
         174 => sys_native_signal(frame),
         175 => sys_native_socket(frame),
+        176 => sys_native_terminal(frame),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -8135,6 +8137,27 @@ fn create_socketpair_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
                 u64::MAX
             }
         }
+    }
+}
+
+/// Native terminal identity/configuration boundary. No userspace pointer is
+/// dereferenced: the broker has no native attribute protocol yet. In particular
+/// Linux per-process termios is not authoritative for these terminal objects.
+fn sys_native_terminal(frame: &mut SyscallFrame) -> u64 {
+    let sched = crate::sched::SCHEDULER.lock();
+    if sched.current_process().is_linux_compat() {
+        return linux_errno(38);
+    }
+    let Some(entry) = sched.current_shared_process().fd_table.get(frame.rdi as i32) else {
+        return linux_errno(9);
+    };
+    if !entry.handle.is_tty_stdin() && !entry.handle.is_tty_stdout() {
+        return linux_errno(25);
+    }
+    match frame.rsi {
+        0 => 0, // Identity only: does not claim configurable termios support.
+        1..=6 => linux_errno(95), // EOPNOTSUPP, no attribute/queue/break bridge.
+        _ => linux_errno(22),
     }
 }
 

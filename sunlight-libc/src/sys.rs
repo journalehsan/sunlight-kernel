@@ -18,6 +18,7 @@ pub const SYS_LSEEK: u64 = 44;
 pub const SYS_PIPE: u64 = 47;
 pub const SYS_POLL: u64 = 159;
 pub const SYS_SOCKET: u64 = 175;
+pub const SYS_TERMINAL: u64 = 176;
 pub const SYS_SOCKETPAIR: u64 = 166;
 pub const SYS_SEND: u64 = 169;
 pub const SYS_RECV: u64 = 170;

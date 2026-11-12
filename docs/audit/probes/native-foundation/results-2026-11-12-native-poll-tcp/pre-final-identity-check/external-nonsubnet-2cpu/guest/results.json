@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "poll-external: run=final-external-nonsubnet-2cpu dest=10.0.3.2:34017\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

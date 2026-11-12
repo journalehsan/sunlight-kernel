@@ -1,0 +1,4 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/target/phase22/execution-2cpu
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None

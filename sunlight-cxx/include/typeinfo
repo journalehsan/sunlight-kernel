@@ -1,0 +1,37 @@
+#ifndef SUNLIGHT_CXX_TYPEINFO
+#define SUNLIGHT_CXX_TYPEINFO
+#include <exception>
+namespace std {
+// Itanium layout consumed by the LLVM 21.1.0 type matching implementation.
+// Static executables coalesce compiler-generated typeinfo; no DSO loading.
+class type_info {
+    const char* name_;
+protected:
+    explicit type_info(const char* name) noexcept : name_(name) {}
+public:
+    virtual ~type_info();
+    const char* name() const noexcept { return name_; }
+    bool operator==(const type_info& other) const noexcept {
+        if (this == &other || name_ == other.name_) return true;
+        const char* a = name_; const char* b = other.name_;
+        while (*a && *a == *b) { ++a; ++b; }
+        return *a == *b;
+    }
+    bool operator!=(const type_info& other) const noexcept { return !(*this == other); }
+    type_info(const type_info&) = delete;
+    type_info& operator=(const type_info&) = delete;
+};
+class bad_cast : public exception {
+public:
+    bad_cast() noexcept;
+    ~bad_cast() noexcept override;
+    const char* what() const noexcept override;
+};
+class bad_typeid : public exception {
+public:
+    bad_typeid() noexcept;
+    ~bad_typeid() noexcept override;
+    const char* what() const noexcept override;
+};
+}
+#endif

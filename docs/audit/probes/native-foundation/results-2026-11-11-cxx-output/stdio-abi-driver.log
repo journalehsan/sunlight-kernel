@@ -1,0 +1,1 @@
+host-fd-vfs: FAIL (exit 101, expected 0); see /home/ehsantor/Projects/sunlightos-kernel/target/phase20/stdio-abi/host-fd-vfs.log

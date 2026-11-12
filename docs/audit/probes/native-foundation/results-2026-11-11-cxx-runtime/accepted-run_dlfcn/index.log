@@ -1,0 +1,1 @@
+ET_EXEC, zero load bias; four exact linked symbol addresses in read-only PT_LOAD; all targets in RX PT_LOAD. PASS

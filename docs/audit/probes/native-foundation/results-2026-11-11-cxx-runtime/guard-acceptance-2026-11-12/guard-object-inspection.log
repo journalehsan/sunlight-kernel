@@ -1,0 +1,93 @@
+$ python3 tools/native-c/cc.py -std=c++17 -O2 -I sunlight-cxx/include -c tools/native-c/tests/cxx-local-static.cpp -o /tmp/cxx-local-static.o
+
+=== guard data symbols (size 8, Itanium 64-bit layout) ===
+                                  U __cxa_guard_abort
+                                  U __cxa_guard_acquire
+                                  U __cxa_guard_release
+00000000000000a0 0000000000000008 b _ZGVZL10concurrentvE6object
+0000000000000040 0000000000000008 b _ZGVZL5basicvE6object
+0000000000000110 0000000000000008 b _ZGVZL5firstvE6object
+00000000000000f0 0000000000000008 b _ZGVZL5innervE6object
+0000000000000100 0000000000000008 b _ZGVZL5outervE6object
+00000000000000d8 0000000000000008 b _ZGVZL5retryvE6object
+0000000000000120 0000000000000008 b _ZGVZL6secondvE6object
+0000000000000130 0000000000000008 b _ZGVZL9recursivevE5value
+
+=== guard ABI relocations ===
+		00000000000006c2:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		00000000000006f8:  R_X86_64_32	__dso_handle
+		00000000000006fd:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000707:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000716:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		000000000000074c:  R_X86_64_32	__dso_handle
+		0000000000000751:  R_X86_64_PLT32	__cxa_atexit-0x4
+		000000000000075b:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		00000000000007be:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		00000000000007df:  R_X86_64_32	__dso_handle
+		00000000000007e4:  R_X86_64_PLT32	__cxa_atexit-0x4
+		00000000000007ee:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000851:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000872:  R_X86_64_32	__dso_handle
+		0000000000000877:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000881:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000890:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		00000000000008b7:  R_X86_64_32	__dso_handle
+		00000000000008bc:  R_X86_64_PLT32	__cxa_atexit-0x4
+		00000000000008c6:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		00000000000008d5:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		00000000000008f6:  R_X86_64_32	__dso_handle
+		00000000000008fb:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000905:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000914:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000935:  R_X86_64_32	__dso_handle
+		000000000000093a:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000944:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000953:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000974:  R_X86_64_32	__dso_handle
+		0000000000000979:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000983:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		00000000000009a9:  R_X86_64_PLT32	__cxa_guard_abort-0x4
+		0000000000000a5b:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000a78:  R_X86_64_32	__dso_handle
+		0000000000000a7d:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000a87:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000a96:  R_X86_64_PLT32	__cxa_guard_abort-0x4
+		0000000000000b04:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000b21:  R_X86_64_32	__dso_handle
+		0000000000000b26:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000b30:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000b42:  R_X86_64_PLT32	__cxa_guard_abort-0x4
+		0000000000000b9e:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000bbd:  R_X86_64_PLT32	__cxa_guard_release-0x4
+		0000000000000bca:  R_X86_64_PLT32	__cxa_guard_abort-0x4
+		0000000000000bef:  R_X86_64_32	__dso_handle
+		0000000000000bf5:  R_X86_64_PLT32	__cxa_atexit-0x4
+		000000000000002b:  R_X86_64_PLT32	__cxa_guard_acquire-0x4
+		0000000000000051:  R_X86_64_32	__dso_handle
+		0000000000000056:  R_X86_64_PLT32	__cxa_atexit-0x4
+		0000000000000060:  R_X86_64_PLT32	__cxa_guard_release-0x4
+
+=== final ELF guard runtime disassembly ===
+  405333: e8 28 01 00 00               	callq	0x405460 <__sl_cxx_guard_thread_id>
+  405374: e8 e7 00 00 00               	callq	0x405460 <__sl_cxx_guard_thread_id>
+  4053b9: e8 a2 63 00 00               	callq	0x40b760 <memcpy>
+  4053d0: e8 0b fe ff ff               	callq	0x4051e0 <_ZL7syscalllz>
+  4053fe: e8 2d fd ff ff               	callq	0x405130 <__abort_message>
+
+=== native futex adapter disassembly ===
+  4054ad: 49 c7 c2 ff ff ff ff         	movq	$-0x1, %r10
+  4054b4: 0f 05                        	syscall
+  4054cc: 0f 05                        	syscall
+
+=== .bss section alignment ===
+  [52] .bss              NOBITS          0000000000000000 0011c0 000138 00  WA  0   0 32
+
+=== guard symbol offsets (8-byte objects, 8-aligned) ===
+     8: 0000000000000040     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL5basicvE6object
+    11: 00000000000000a0     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL10concurrentvE6object
+    15: 00000000000000d8     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL5retryvE6object
+    20: 00000000000000f0     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL5innervE6object
+    22: 0000000000000100     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL5outervE6object
+    26: 0000000000000110     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL5firstvE6object
+    28: 0000000000000120     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL6secondvE6object
+    67: 0000000000000130     8 OBJECT  LOCAL  DEFAULT    52 _ZGVZL9recursivevE5value

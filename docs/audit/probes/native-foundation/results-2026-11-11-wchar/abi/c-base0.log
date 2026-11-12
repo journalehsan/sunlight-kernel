@@ -1,0 +1,19 @@
+$ clang --target=x86_64-unknown-none-elf -std=c11 -Wall -Wextra -Werror -ffreestanding -nostdinc -isystem /usr/lib/clang/23/include -I /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -x c -c /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-wchar/abi/c-base0.o
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-abi.c:22:29: error: static assertion failed due to requirement '(int)-1 > 0': wint
+   22 | ASSERT(sizeof(wint_t)==4 && (wint_t)-1>0,"wint");
+      |                             ^~~~~~~~~~~~
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-abi.c:22:39: note: expression evaluates to '-1 > 0'
+   22 | ASSERT(sizeof(wint_t)==4 && (wint_t)-1>0,"wint");
+      |                             ~~~~~~~~~~^~
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-abi.c:23:8: error: static assertion failed due to requirement '((int)-1) > 1114111': sentinel
+   23 | ASSERT(WEOF>0x10ffff,"sentinel");
+      |        ^~~~~~~~~~~~~
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/wchar.h:6:14: note: expanded from macro 'WEOF'
+    6 | #define WEOF ((wint_t)-1)
+      |              ^
+/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-abi.c:23:12: note: expression evaluates to '-1 > 1114111'
+   23 | ASSERT(WEOF>0x10ffff,"sentinel");
+      |        ~~~~^~~~~~~~~
+2 errors generated.
+
+exit=1

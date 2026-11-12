@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "tcp-poll: FAIL step=multi-descriptor errno=22\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

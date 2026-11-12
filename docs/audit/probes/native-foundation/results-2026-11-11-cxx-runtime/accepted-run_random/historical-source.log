@@ -1,0 +1,4 @@
+00f337b1a796f90005aa8d65569deef53d4bc8c722322a639a17637aa7b0c5f1  docs/audit/probes/getrandom.c
+#define _GNU_SOURCE
+#include <sys/random.h>
+int main(void){char b[16]; return getrandom(b,sizeof b,0)!=sizeof b;}

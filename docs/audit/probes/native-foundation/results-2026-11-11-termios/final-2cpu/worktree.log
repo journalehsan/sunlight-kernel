@@ -1,0 +1,17 @@
+$ git status --short
+ M kernel/src/arch/x86_64/syscall.rs
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/errno.rs
+ M sunlight-libc/src/fd.rs
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/sys.rs
+ M tools/native-c/guest.py
+?? docs/audit/probes/native-foundation/results-2026-11-11-termios/
+?? sunlight-libc/include/termios.h
+?? sunlight-libc/src/termios.rs
+?? tools/native-c/tests/run_termios.py
+?? tools/native-c/tests/termios-abi.c
+?? tools/native-c/tests/termios.c
+
+exit=0

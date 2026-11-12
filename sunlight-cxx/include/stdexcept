@@ -1,0 +1,19 @@
+#ifndef SUNLIGHT_CXX_STDEXCEPT
+#define SUNLIGHT_CXX_STDEXCEPT
+#include <exception>
+#include <string>
+namespace std {
+class runtime_error : public exception {
+    struct message;
+    message* message_;
+    runtime_error(const char*, __SIZE_TYPE__) noexcept;
+public:
+    explicit runtime_error(const char*) noexcept;
+    explicit runtime_error(const string&) noexcept;
+    runtime_error(const runtime_error&) noexcept;
+    runtime_error& operator=(const runtime_error&) noexcept;
+    ~runtime_error() noexcept override;
+    const char* what() const noexcept override;
+};
+}
+#endif

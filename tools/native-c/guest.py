@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 import uuid
@@ -28,6 +29,35 @@ STDOUT = (b'stdio: native -42 42 0x2a -1234567890 7 %\n'
 
 def rust_bytes(value):
     return '&[' + ','.join(map(str, value)) + ']'
+
+
+def summarize_pcap(path):
+    """Count link-layer/IP protocols in the QEMU filter-dump capture.
+
+    Loopback TCP is expected to appear as zero TCP frames because the guest
+    stack never transmits it to the virtual NIC.
+    """
+    data = path.read_bytes()
+    if len(data) < 24 or data[:4] != b'\xd4\xc3\xb2\xa1':
+        return 'unreadable pcap\n'
+    offset = 24
+    counts = {}
+    while offset + 16 <= len(data):
+        _, _, incl, _ = struct.unpack('<IIII', data[offset:offset + 16])
+        offset += 16
+        frame = data[offset:offset + incl]
+        offset += incl
+        if len(frame) < 14:
+            continue
+        ethertype = int.from_bytes(frame[12:14], 'big')
+        if ethertype == 0x0800 and len(frame) >= 24:
+            key = 'ipv4-proto-' + str(frame[23])
+        else:
+            key = 'ethertype-0x%04x' % ethertype
+        counts[key] = counts.get(key, 0) + 1
+    lines = ['frames=%d' % sum(counts.values())]
+    lines += ['%s=%d' % (key, counts[key]) for key in sorted(counts)]
+    return '\n'.join(lines) + '\n'
 
 
 def main():
@@ -43,7 +73,33 @@ def main():
     parser.add_argument('--stdin-file', type=Path)
     parser.add_argument('--locale-conf', type=Path, help='fixture contents for /etc/locale.conf')
     parser.add_argument('--env', action='append', default=[], help='single-ELF startup KEY=VALUE')
+    parser.add_argument('--net', action='store_true',
+                        help='attach virtio-net and run net_server plus --service as support processes')
+    parser.add_argument('--net-subnet', metavar='A.B.C.D/PREFIX',
+                        help='explicit QEMU user-mode IPv4 subnet for --net, '
+                             'for example 10.0.3.0/24 (default: QEMU default 10.0.2.0/24)')
+    parser.add_argument('--service', type=Path,
+                        help='optional native C service ELF run as support PID 4 (requires --net)')
     opts = parser.parse_args()
+    if opts.service and not opts.net:
+        parser.error('--service requires --net')
+    if opts.net_subnet and not opts.net:
+        parser.error('--net-subnet requires --net')
+    if opts.net_subnet:
+        match = re.fullmatch(r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})',
+                             opts.net_subnet)
+        if match is None:
+            parser.error('--net-subnet must be A.B.C.D/PREFIX')
+        octets = [int(part) for part in match.groups()[:4]]
+        prefix = int(match.group(5))
+        if any(octet > 255 for octet in octets) or not 8 <= prefix <= 30:
+            parser.error('--net-subnet has an invalid address or prefix')
+        network = int.from_bytes(bytes(octets), 'big')
+        host_bits = 32 - prefix
+        if network & ((1 << host_bits) - 1):
+            parser.error('--net-subnet must be a network address with zero host bits')
+    if opts.net and opts.suite:
+        parser.error('--net is a single-ELF mode')
     out = (opts.out or ROOT / 'target/native-c-guest-runs' / uuid.uuid4().hex).resolve()
     out.mkdir(parents=True, exist_ok=False)
     (out / '.gitignore').write_text('*\n!*.log\n!*.csv\n!*.json\n!*.txt\n!.gitignore\n')
@@ -87,6 +143,8 @@ def main():
     if opts.suite:
         if command('build-runtime', ['bash', 'tools/build_native_c.sh']):
             return 1
+        if command('build-cxx-output-runtime', ['bash', 'tools/build_native_cxx.sh']):
+            return 1
         base = ROOT / 'docs/audit/probes'
         sources = [(name, base / 'native-foundation' / (name + '.c'), code, (), b'', stdout, stderr, True)
                    for name, code, stdout, stderr in (
@@ -101,6 +159,34 @@ def main():
         random_index = next(i for i, source in enumerate(sources) if source[0] == 'getrandom')
         sources.insert(random_index, ('random-service-before', random_fixture, 0, ('stats',), b'', None, b'', False))
         sources.insert(random_index + 2, ('random-service-after', random_fixture, 0, ('stats',), b'', None, b'', False))
+        sources += [('termios-terminal-identity', ROOT / 'tools/native-c/tests/termios.c', 0, ('tty',), b'', b'', b'', False)]
+        sources += [('cxx-output', ROOT / 'tools/native-c/tests/cxx-output.cpp', 0, (), b'',
+                     b'output 0 1 -9223372036854775808 9223372036854775807 18446744073709551615 18446744073709551615\nbounds -32768 32767 65535 -2147483648 2147483647 4294967295 -9223372036854775808 9223372036854775807 0\nABC\n',
+                     b'stderr\nclog\n', False),
+                    ('cxx-backend', ROOT / 'tools/native-c/tests/cxx-backend.cpp', 0, (), b'',
+                     b'partial\nabxy', b'', False)]
+        sources += [('cxx-exception-class', ROOT / 'tools/native-c/tests/cxx-exception-class.cpp', 0, (), b'', b'', b'', False)]
+        sources += [('cpp-runtime-native', base / 'cpp-runtime.cpp', 0, (), b'',
+                     b'exception OK\nTLS OK\nstatic initialization OK\natexit OK\n', b'', False)]
+        sources += [('cxx-runtime-execution', ROOT / 'tools/native-c/tests/cxx-runtime-execution.cpp', 0, (), b'', b'', b'', False)]
+        sources += [('cxx-runtime-' + mode, ROOT / 'tools/native-c/tests/cxx-runtime-execution.cpp', 134, (mode,), b'', b'armed\n', b'', False)
+                    for mode in ('uncaught', 'destructor', 'worker', 'storage')]
+        sources += [('cxx-local-static-' + mode, ROOT / 'tools/native-c/tests/cxx-local-static.cpp', code,
+                     (mode,), b'', stdout, None if mode == 'recursive' else b'', False)
+                    for mode, code, stdout in (
+                        ('basic', 0, b'basic:OK\nbasic:D\n'),
+                        ('concurrent', 0, b'concurrent:OK\nconcurrent:D\n'),
+                        ('retry', 0, b'retry:OK\nretry:D\n'),
+                        ('nested', 0, b'nested:OK\nouter:D\ninner:D\n'),
+                        ('order', 0, b'order:OK\nsecond:D\nfirst:D\n'),
+                        ('recursive', 134, b'recursive:armed\n'),
+                    )]
+        sources += [('cxx-string', ROOT / 'tools/native-c/tests/cxx-string.cpp', 0, (), b'', b'string:A\0B:42\n', b'', False),
+                    ('cxx-string-backend', ROOT / 'tools/native-c/tests/cxx-string-backend.cpp', 0, (), b'', b'A\0BCDzeer', b'', False)]
+        sources += [('cxx-string-' + mode, ROOT / 'tools/native-c/tests/cxx-string-failure.cpp', 134, (mode,), b'', b'armed\n', b'', False)
+                    for mode in ('allocation', 'overflow', 'null')]
+        sources += [('wchar-contract', ROOT / 'tools/native-c/tests/wchar-contract.c', 0, (), b'', b'', b'', False)]
+        sources += [('termios-contract', ROOT / 'tools/native-c/tests/termios.c', 0, (), b'', b'', b'', False)]
         sources += [('dlfcn-contract', ROOT / 'tools/native-c/tests/dlfcn.c', 0, (), b'', b'', b'', False)]
         sources += [('epoll-contract', ROOT / 'tools/native-c/tests/epoll.c', 0, (), b'', b'', b'', False)]
         sources += [('pthread-' + mode, ROOT / 'tools/native-c/tests/pthread.c', 0, (mode,),
@@ -164,9 +250,20 @@ def main():
             compiler = ([sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']
                         if src.suffix == '.c' else ['clang++', '--target=x86_64-unknown-none-elf',
                             '-nostdinc', '-I' + str(ROOT / 'sunlight-libc/include'), '-nostdlib', '-fuse-ld=lld'])
+            if not historical and src.suffix == '.cpp':
+                compiler = [sys.executable, ROOT / 'tools/native-c/cxx.py', '-Wall', '-Wextra', '-Werror']
+                if name in ('cxx-backend', 'cxx-string-backend'):
+                    compiler += ['-Wl,--wrap=write']
+                if name in ('cxx-string', 'cxx-exception-class') or src.name in ('cxx-runtime-execution.cpp', 'cxx-local-static.cpp'):
+                    compiler += ['-Wl,--wrap=malloc,--wrap=free']
+                if src.name == 'cxx-runtime-execution.cpp':
+                    compiler += ['-Wl,--wrap=pthread_create']
+                if src.name == 'cxx-string-failure.cpp':
+                    compiler += ['-Wl,--wrap=malloc']
             if command('build-' + name, [*compiler, src, '-o', elf]):
+                link_failure = 'undefined symbol' in (out / ('build-' + name + '.log')).read_text()
                 rows.append(dict(probe=name, historical=historical, build='FAIL', guest_run='NOT_RUN',
-                                 acceptance='BUILD_FAIL', exit='', expected_exit=code,
+                                 acceptance='LINK_FAIL' if link_failure else 'BUILD_FAIL', exit='', expected_exit=code,
                                  detail='BUILD_FAILED: no executable to run', sha256=''))
             else:
                 command('elf-' + name, ['llvm-readelf', '-h', '-l', elf])
@@ -182,14 +279,29 @@ def main():
     support_env = dict(os.environ, RUSTFLAGS='-C link-arg=-Tservices/user-space.ld -C relocation-model=static')
     for key in ('CARGO_ENCODED_RUSTFLAGS', 'CARGO_TARGET_DIR'):
         support_env.pop(key, None)
-    if command('support-build', ['cargo', 'build', '-p', 'sunlight-init', '-p', 'rand_service',
+    support_packages = ['-p', 'sunlight-init', '-p', 'rand_service']
+    if opts.net:
+        support_packages += ['-p', 'sunlight-net-server']
+    if command('support-build', ['cargo', 'build', *support_packages,
                                  '--release', '--target', 'x86_64-unknown-none',
                                  '--target-dir', support_target], env=support_env):
         return 1
     manifest = out / 'manifest.rs'
+    net_elf = '&[]'
+    service_elf = '&[]'
+    wants_network = 'false'
+    if opts.net:
+        wants_network = 'true'
+        net_elf = 'include_bytes!(' + json.dumps(
+            str(support_target / 'x86_64-unknown-none/release/net_server')) + ')'
+        if opts.service:
+            service_elf = 'include_bytes!(' + json.dumps(str(opts.service.resolve())) + ')'
     manifest.write_text('static LOCALE_CONF: &[u8] = ' + rust_bytes(opts.locale_conf.read_bytes() if opts.locale_conf else b'') + ';\n' +
                         'static INIT_ELF: &[u8] = include_bytes!(' + json.dumps(str(support_target / 'x86_64-unknown-none/release/sunlight-init')) + ');\n' +
                         'static RAND_ELF: &[u8] = include_bytes!(' + json.dumps(str(support_target / 'x86_64-unknown-none/release/rand_service')) + ');\n' +
+                        'pub const WANTS_NETWORK: bool = ' + wants_network + ';\n' +
+                        'static NET_ELF: &[u8] = ' + net_elf + ';\n' +
+                        'static SERVICE_ELF: &[u8] = ' + service_elf + ';\n' +
                         'static CASES: &[Case] = &[\n' + ''.join(
         'Case { name: ' + json.dumps(c['name']) + ', elf: include_bytes!(' + json.dumps(str(c['elf'])) +
         '), args: &[' + ','.join(rust_bytes(a.encode()) for a in c['args']) + '], input: ' +
@@ -221,12 +333,21 @@ def main():
     serial = out / 'serial.log'
     argv = ['qemu-system-x86_64', '-accel', 'tcg', '-cpu', 'max', '-m', '2048M', '-smp', str(opts.cpus),
             '-cdrom', str(iso), '-boot', 'd', '-display', 'none', '-monitor', 'none',
-            '-serial', 'file:' + str(serial), '-nic', 'none',
+            '-serial', 'file:' + str(serial),
             '-device', 'virtio-rng-pci,disable-modern=on',
             '-device', 'isa-debug-exit,iobase=0xf4,iosize=0x04', '-no-reboot']
+    if opts.net:
+        netdev = 'user,id=net0' + (',net=' + opts.net_subnet if opts.net_subnet else '')
+        argv += ['-netdev', netdev,
+                 '-device', 'virtio-net-pci,netdev=net0,disable-modern=on',
+                 '-object', f'filter-dump,id=dump,netdev=net0,file={out / "network.pcap"}']
+    else:
+        argv += ['-nic', 'none']
     print('Booting disposable TCG guest', flush=True)
     rc = command('qemu', argv, timeout=opts.timeout)
     output = serial.read_text(errors='replace') if serial.exists() else ''
+    if opts.net and (out / 'network.pcap').is_file():
+        (out / 'network-summary.log').write_text(summarize_pcap(out / 'network.pcap'))
     fault_pattern = r'KERNEL[ _]PANIC|\[EXCEPTION\]|\[FAULT\]|\[INT\] (?:Divide Error|Invalid Opcode|Double Fault|General Protection)|Unknown syscall|Unhandled syscall'
     fault = re.search(fault_pattern, output, re.I)
     (out / 'faults.log').write_text(''.join(line + '\n' for line in output.splitlines()
@@ -287,7 +408,8 @@ def main():
     if history:
         print(f"Historical 21: PASS={sum(r['acceptance'] == 'PASS' for r in history)} "
               f"guest_FAIL={sum(r['guest_run'] == 'FAIL' for r in history)} "
-              f"BUILD_FAIL={sum(r['build'] == 'FAIL' for r in history)} "
+              f"BUILD_FAIL={sum(r['acceptance'] == 'BUILD_FAIL' for r in history)} "
+              f"LINK_FAIL={sum(r['acceptance'] == 'LINK_FAIL' for r in history)} "
               f"guest_NOT_RUN={sum(r['guest_run'] == 'NOT_RUN' for r in history)}")
     # Known missing APIs are recorded acceptance failures, not an infrastructure
     # failure of this focused phase. Every built guest must actually pass.

@@ -1,0 +1,3 @@
+$ musl-gcc /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/langinfo.c -static -no-pie -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-11-cxx-runtime/guard-controls/helios-langinfo -pthread -lm -ldl
+
+exit=0

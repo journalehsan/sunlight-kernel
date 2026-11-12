@@ -1,0 +1,6 @@
+$ python3 tools/native-c/tests/run_cxx_output.py --out target/phase22/accepted-output-abi
+native output headers/archive ownership/ELF dependencies: PASS
+historical cpp-runtime: LINK_FAIL (original command supplies no native libraries); guest NOT_RUN
+output runtime: NOT_RUN by this runner; use guest.py --suite on both CPU configurations
+
+exit=0

@@ -1,0 +1,16 @@
+$ llvm-nm --undefined-only /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a
+
+ostream.o:
+                 U write
+
+string.o:
+                 U _ZNSt7ostream5writeEPKcl
+                 U free
+                 U malloc
+                 U memcmp
+                 U memcpy
+                 U memmove
+                 U sl_std_exit
+                 U strlen
+
+exit=0

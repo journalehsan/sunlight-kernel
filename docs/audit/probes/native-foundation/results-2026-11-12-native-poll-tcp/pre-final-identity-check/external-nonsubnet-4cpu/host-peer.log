@@ -1,0 +1,3 @@
+HOST-PEER READY mode=echo addr=127.0.0.1 port=39677
+HOST-PEER ACCEPTED mode=echo peer=127.0.0.1:40098
+HOST-PEER PASS mode=echo exchanges=5 bytes=1371

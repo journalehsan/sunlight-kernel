@@ -1,0 +1,26 @@
+{
+  "2": {
+    "ram_mib": 2048,
+    "built_native_cases": 87,
+    "native_pass": 87,
+    "configured_historical": "PASS",
+    "original_command": "LINK_FAIL; runtime NOT_RUN",
+    "lifecycle": "PASS exact output and zero live wrapped allocations",
+    "expected_fatal_cases": 4,
+    "faults": "none"
+  },
+  "4": {
+    "ram_mib": 2048,
+    "built_native_cases": 87,
+    "native_pass": 87,
+    "configured_historical": "PASS",
+    "original_command": "LINK_FAIL; runtime NOT_RUN",
+    "lifecycle": "PASS exact output and zero live wrapped allocations",
+    "expected_fatal_cases": 4,
+    "faults": "none"
+  },
+  "historical_integrity": {
+    "files": 26,
+    "result": "PASS"
+  }
+}

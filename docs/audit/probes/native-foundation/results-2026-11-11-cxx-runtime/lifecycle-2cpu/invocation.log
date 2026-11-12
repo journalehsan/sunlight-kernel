@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/phase22/lifecycle-final.elf --cpus 2 --out target/phase22/lifecycle-2cpu

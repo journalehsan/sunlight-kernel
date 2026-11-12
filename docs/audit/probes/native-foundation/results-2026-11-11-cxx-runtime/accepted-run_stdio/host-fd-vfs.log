@@ -1,0 +1,84 @@
+$ cargo test --manifest-path tools/tests/fd-description/Cargo.toml --target x86_64-unknown-linux-gnu -- --test-threads=1
+stdout:
+
+stderr:
+   Compiling fd-description-tests v0.2.7167-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/tools/tests/fd-description)
+error[E0433]: cannot find `inet_socket` in `super`
+   --> src/../../../../kernel/src/process/fd_table.rs:232:16
+    |
+232 |         super::inet_socket::retain(handle.inet_socket_index());
+    |                ^^^^^^^^^^^ could not find `inet_socket` in the crate root
+
+error[E0433]: cannot find `inet_socket` in `super`
+   --> src/../../../../kernel/src/process/fd_table.rs:241:16
+    |
+241 |         super::inet_socket::release(handle.inet_socket_index());
+    |                ^^^^^^^^^^^ could not find `inet_socket` in the crate root
+
+warning: unexpected `cfg` condition value: `thread_admission_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1030:9
+     |
+1030 |         feature = "thread_admission_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_admission_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+     = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `thread_lifecycle_race_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1031:9
+     |
+1031 |         feature = "thread_lifecycle_race_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_lifecycle_race_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `thread_migration_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1032:9
+     |
+1032 |         feature = "thread_migration_test",
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `thread_migration_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `atomic_futex_test`
+    --> src/../../../../kernel/src/process/fd_table.rs:1033:9
+     |
+1033 |         feature = "atomic_futex_test"
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+     |
+     = note: no expected values for `feature`
+     = help: consider adding `atomic_futex_test` as a feature in `Cargo.toml`
+     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `core::num::NonZeroU32`
+ --> src/../../../../kernel/src/process/fd_table.rs:2:5
+  |
+2 | use core::num::NonZeroU32;
+  |     ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unexpected `cfg` condition value: `thread_admission_test`
+  --> src/../../../../kernel/src/process/thread_admission.rs:42:33
+   |
+42 |     #[cfg(all(debug_assertions, feature = "thread_admission_test", not(test)))]
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+   |
+   = note: no expected values for `feature`
+   = help: consider adding `thread_admission_test` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+For more information about this error, try `rustc --explain E0433`.
+warning: `fd-description-tests` (lib) generated 6 warnings
+error: could not compile `fd-description-tests` (lib) due to 2 previous errors; 6 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `fd-description-tests` (lib test) generated 6 warnings (6 duplicates)
+error: could not compile `fd-description-tests` (lib test) due to 2 previous errors; 6 warnings emitted
+
+exit=101

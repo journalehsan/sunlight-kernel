@@ -1,0 +1,4 @@
+$ g++ -print-file-name=libstdc++.a
+/usr/lib/gcc/x86_64-pc-linux-gnu/16/libstdc++.a
+
+exit=0

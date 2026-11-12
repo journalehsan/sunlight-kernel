@@ -1,0 +1,8 @@
+$ python3 tools/native-c/tests/run_cxx_exception_discovery.py --out target/phase22/runtime-exception_discovery-abi
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_exception_discovery.py", line 24, in <module>
+    assert b"undefined symbol" in diag and b"file not found" not in diag
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+
+exit=1

@@ -1,0 +1,12 @@
+{
+  "host": 0,
+  "wchar-abi": 0,
+  "termios-abi": 0,
+  "socket-abi": 0,
+  "signal-abi": 0,
+  "pthread-abi": 0,
+  "poll-abi": 0,
+  "kernel": 0,
+  "overlay": 0,
+  "workspace": 101
+}

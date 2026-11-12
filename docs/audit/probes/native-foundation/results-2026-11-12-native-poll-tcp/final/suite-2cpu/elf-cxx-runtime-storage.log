@@ -1,0 +1,50 @@
+$ llvm-readelf -h -l /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp/final/suite-2cpu/cxx-runtime-storage.elf
+ELF Header:
+  Magic:   7f 45 4c 46 02 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF64
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Advanced Micro Devices X86-64
+  Version:                           0x1
+  Entry point address:               0x40c92c
+  Start of program headers:          64 (bytes into file)
+  Start of section headers:          132152 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               64 (bytes)
+  Size of program headers:           56 (bytes)
+  Number of program headers:         8
+  Size of section headers:           64 (bytes)
+  Number of section headers:         14
+  Section header string table index: 12
+
+Elf file type is EXEC (Executable file)
+Entry point 0x40c92c
+There are 8 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x001000 0x0000000000400000 0x0000000000400000 0x00f008 0x00f008 R E 0x1000
+  LOAD           0x011000 0x0000000000410000 0x0000000000410000 0x005000 0x005000 R   0x1000
+  LOAD           0x016000 0x0000000000415000 0x0000000000415000 0x000030 0x000030 RW  0x1000
+  LOAD           0x017000 0x0000000000416000 0x0000000000416000 0x000000 0x0013e8 RW  0x1000
+  TLS            0x016000 0x0000000000415000 0x0000000000415000 0x000000 0x000020 R   0x8
+  GNU_RELRO      0x016030 0x0000000000415030 0x0000000000415030 0x000000 0x000000 R   0x1
+  GNU_EH_FRAME   0x0150b0 0x00000000004140b0 0x00000000004140b0 0x00038c 0x00038c R   0x8
+  GNU_STACK      0x000000 0x0000000000000000 0x0000000000000000 0x000000 0x000000 RW  0x0
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text 
+   01     .rodata .eh_frame .eh_frame_hdr .gcc_except_table 
+   02     .tdata .data 
+   03     .bss 
+   04     .tbss 
+   05     
+   06     .eh_frame_hdr 
+   07     
+   None   .init_array .symtab .shstrtab .strtab 
+
+exit=0

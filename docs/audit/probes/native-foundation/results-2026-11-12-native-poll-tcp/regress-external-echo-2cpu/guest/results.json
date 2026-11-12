@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "tcp-echo: run=regress-external-echo-2cpu dest=10.0.2.2:43413\ntcp-echo: refused errno=111\ntcp-echo: nonblocking-connect errno=95\ntcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

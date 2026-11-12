@@ -1,0 +1,17 @@
+$ target/phase22/alloc-base --test-threads=1
+
+running 9 tests
+test alloc::tests::alignment_validator_accepts_powers_of_two ... ok
+test alloc::tests::c_alignment_and_failed_realloc_keep_old_block ... ok
+test alloc::tests::c_calloc_and_realloc_contract ... ok
+test alloc::tests::c_coalesces_with_each_neighbor_direction ... ok
+test alloc::tests::c_reuses_blocks_in_non_lifo_order ... ok
+test alloc::tests::c_reuses_repeated_mixed_size_blocks ... ok
+test alloc::tests::free_list_exact_fit_unsplittable_tail_and_full_recovery ... ok
+test alloc::tests::heap_stats_track_live_bytes_and_recovery ... ok
+test alloc::tests::raw_layouts_are_reclaimed_and_honor_large_alignment ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+exit=0

@@ -1,0 +1,6 @@
+$ python3 docs/audit/probes/run.py --out target/phase22/historical
+usage: run.py [-h] [--targets {host,helios,native} [{host,helios,native} ...]]
+              [--out OUT]
+run.py: error: --out must be below docs/audit/probes/
+
+exit=2

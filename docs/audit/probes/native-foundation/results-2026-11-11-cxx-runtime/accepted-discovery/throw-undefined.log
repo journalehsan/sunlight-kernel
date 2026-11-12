@@ -1,0 +1,10 @@
+                 U _Unwind_Resume
+                 U _ZNSt13runtime_errorC1EPKc
+                 U _ZNSt13runtime_errorD1Ev
+                 U _ZTISt13runtime_error
+                 U _ZTISt9exception
+                 U __cxa_allocate_exception
+                 U __cxa_begin_catch
+                 U __cxa_end_catch
+                 U __cxa_throw
+                 U __gxx_personality_v0

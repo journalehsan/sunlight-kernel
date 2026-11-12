@@ -1,0 +1,3 @@
+// LLVM assertions remain active; a violated invariant terminates the process.
+extern "C" [[noreturn]] void sl_std_exit(int) noexcept;
+#define assert(expression) ((expression) ? static_cast<void>(0) : sl_std_exit(134))

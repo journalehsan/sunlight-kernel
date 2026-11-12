@@ -20,6 +20,7 @@ typedef long ssize_t;
  * only for count zero. Zero count follows the native no-transfer contract;
  * it does not establish that a nonnegative descriptor exists or is writable.
  * Arbitrary bad non-NULL user memory retains the native generic EIO result. */
+int isatty(int fd);
 int close(int fd);
 ssize_t read(int fd, void *buffer, size_t count);
 ssize_t write(int fd, const void *buffer, size_t count);
