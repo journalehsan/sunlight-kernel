@@ -1,0 +1,36 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/baseline-0.log"
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-check",
+      "-p",
+      "sunlight-sunfs-lab",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "log": "raw/baseline-1.log"
+  }
+]

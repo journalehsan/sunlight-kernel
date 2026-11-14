@@ -1,0 +1,40 @@
+CORRUPT selected=None union_blocks=0
+Report {
+    status: Corrupt,
+    selected: None,
+    superblocks: [
+        "VALID",
+        "VALID",
+    ],
+    slots: [
+        Slot {
+            block: 2,
+            generation: None,
+            class: "CORRUPT_OR_INTERRUPTED",
+            error: Some(
+                Codec(
+                    Checksum,
+                ),
+            ),
+        },
+        Slot {
+            block: 3,
+            generation: None,
+            class: "CORRUPT_OR_INTERRUPTED",
+            error: Some(
+                Codec(
+                    Checksum,
+                ),
+            ),
+        },
+        Slot {
+            block: 4,
+            generation: None,
+            class: "EMPTY",
+            error: None,
+        },
+    ],
+    issues: [],
+    union_blocks: 0,
+    pages_read: 5,
+}

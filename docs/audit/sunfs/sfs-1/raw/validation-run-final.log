@@ -1,0 +1,14 @@
+golden-final.log: exit 0
+core-no-std-final.log: exit 0
+tests-dev-final.log: exit 101
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs_validate.py", line 158, in <module>
+    if __name__=='__main__':main()
+                            ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs_validate.py", line 106, in main
+    test_logs[profile]=run(cargo('test',CRATES,[*extra,'--','--nocapture']),f'tests-{profile}-final.log',env=env)
+                       ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs_validate.py", line 34, in run
+    if p.returncode!=expected:raise RuntimeError(f'failed {name}; preserve the log')
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: failed tests-dev-final.log; preserve the log

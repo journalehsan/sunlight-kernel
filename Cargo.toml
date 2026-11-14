@@ -1,6 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
+    "sunlight-sunfs",
+    "sunlight-sunfs-lab",
+    "sunlight-sunfs-check",
     "sunlight-cert",
     "sunlight-account-broker",
     "sunlight-js",

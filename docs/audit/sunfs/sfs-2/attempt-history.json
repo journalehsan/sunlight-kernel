@@ -1,0 +1,57 @@
+{
+  "attempts": [
+    {
+      "log": "raw/mutation-first-attempt.log",
+      "result": "FAIL",
+      "reason": "Three fixture errors; original two-slot campaign passed 1538 schedules"
+    },
+    {
+      "log": "raw/mutation-second-attempt.log",
+      "result": "FAIL",
+      "reason": "Three-slot setup reused existing filename; all basic tests and two-slot campaign passed"
+    },
+    {
+      "log": "raw/mutation-third-attempt.log",
+      "result": "PASS",
+      "source_scope": "six-test snapshot before extent-cap/session additions"
+    },
+    {
+      "logs": [
+        "raw/clippy-first-attempt.log",
+        "raw/clippy-second-attempt.log"
+      ],
+      "result": "FAIL",
+      "reason": "Test needless borrows and example unused import"
+    },
+    {
+      "log": "raw/clippy-third-attempt.log",
+      "result": "PASS",
+      "source_scope": "intermediate snapshot"
+    },
+    {
+      "directory": "raw/qualification-20261114T180627.932845Z",
+      "result": "PASS",
+      "source_scope": "seven-test snapshot; final source has further handle/oracle checks"
+    },
+    {
+      "log": "raw/handle-session-first-build.log",
+      "result": "FAIL",
+      "reason": "Intermediate field-edit compiler errors; no runtime executed"
+    },
+    {
+      "log": "raw/strict-final-review-tests.log",
+      "result": "PASS",
+      "source_scope": "all eight final mutation tests with exact-state and expired-handle checks"
+    },
+    {
+      "directory": "raw/qualification-20261114T181049.913356Z",
+      "result": "PASS",
+      "source_scope": "Final source: 32 tests per profile, 3491 schedules and nine corruption images per profile, 139 storage regressions"
+    },
+    {
+      "log": "raw/replay-driver.log",
+      "result": "PASS",
+      "case": "two-seed-0-event-0-power-before"
+    }
+  ]
+}

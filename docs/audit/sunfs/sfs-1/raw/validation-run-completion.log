@@ -1,0 +1,18 @@
+golden-final.log: exit 0
+core-no-std-final.log: exit 0
+tests-dev-final.log: exit 0
+tests-release-final.log: exit 0
+storage-regressions-final.log: exit 0
+clippy-final.log: exit 0
+host-bins-final.log: exit 0
+performance-dev-final.log: exit 0
+performance-release-final.log: exit 0
+cli-format.log: exit 0
+cli-check-clean.log: exit 0
+cli-existing-refused.log: exit 2
+cli-symlink-refused.log: exit 2
+cli-confirmation-refused.log: exit 2
+cli-check-degraded.log: exit 1
+cli-check-corrupt.log: exit 2
+integrity: 88428 incoming files; SFS-0 preserved; 317 outputs verified
+SFS-1 validation complete; report must describe the bounded evidence.

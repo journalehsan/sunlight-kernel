@@ -1,0 +1,37 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+warning: unused variable: `selected`
+   --> sunlight-sunfs-lab/tests/transactions.rs:449:25
+    |
+449 |                     let selected = report.selected.unwrap_or(0);
+    |                         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_selected`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-sunfs-lab` (test "transactions") generated 1 warning (run `cargo fix --test "transactions" -p sunlight-sunfs-lab` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.86s
+     Running tests/transactions.rs (target/x86_64-unknown-linux-gnu/debug/deps/transactions-2ed7b296e65e765f)
+
+running 4 tests
+test admission_low_space_is_readonly_and_exact ... ok
+test hello_power_loss_and_volatile_semantics ... ok
+test writes_limits_identity_and_multiple_commits ... ok
+SFS2_CRASH campaign=two cases=1538 events=27 seeds=4
+
+thread 'deterministic_d_p_r_r0_crash_fault_matrix' (120) panicked at sunlight-sunfs-lab/tests/transactions.rs:280:41:
+called `Result::unwrap()` on an `Err` value: Exists
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test deterministic_d_p_r_r0_crash_fault_matrix ... FAILED
+
+failures:
+
+failures:
+    deterministic_d_p_r_r0_crash_fault_matrix
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.36s
+
+error: test failed, to rerun pass `-p sunlight-sunfs-lab --test transactions`

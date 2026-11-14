@@ -1,0 +1,56 @@
+{
+  "evidence_kind": "arithmetic_only",
+  "runtime_benchmark": "NOT_RUN",
+  "selected_lab_default": 256,
+  "final_geometry": "PENDING_SFS_1",
+  "assumptions": [
+    "4096-byte blocks",
+    "96-byte metadata header",
+    "82 table page descriptors",
+    "3976-byte table records area",
+    "48-byte summary entries, 48-byte summary prefix",
+    "No tail-trailer reservation; summaries are ordinary allocated pages",
+    "Full live summaries overhead excludes their own placement feedback; full fixed-point plan required in SFS-1"
+  ],
+  "models": [
+    {
+      "blocks_per_segment": 64,
+      "segment_bytes": 262144,
+      "bitmap_bytes": 8,
+      "segment_state_record_bytes": 72,
+      "max_summary_pages_at_full_liveness": 1,
+      "summary_bytes_per_segment": 4096,
+      "summary_bytes_over_segment_bytes": 0.015625,
+      "max_segments_by_single_level_table": 4510,
+      "gross_segment_area_bytes_at_table_cap": 1182269440,
+      "union_bitmap_bytes_at_table_cap": 36080,
+      "worst_one_partial_segment_unused_bytes": 258048
+    },
+    {
+      "blocks_per_segment": 256,
+      "segment_bytes": 1048576,
+      "bitmap_bytes": 32,
+      "segment_state_record_bytes": 96,
+      "max_summary_pages_at_full_liveness": 4,
+      "summary_bytes_per_segment": 16384,
+      "summary_bytes_over_segment_bytes": 0.015625,
+      "max_segments_by_single_level_table": 3362,
+      "gross_segment_area_bytes_at_table_cap": 3525312512,
+      "union_bitmap_bytes_at_table_cap": 107584,
+      "worst_one_partial_segment_unused_bytes": 1044480
+    },
+    {
+      "blocks_per_segment": 512,
+      "segment_bytes": 2097152,
+      "bitmap_bytes": 64,
+      "segment_state_record_bytes": 128,
+      "max_summary_pages_at_full_liveness": 7,
+      "summary_bytes_per_segment": 28672,
+      "summary_bytes_over_segment_bytes": 0.013671875,
+      "max_segments_by_single_level_table": 2542,
+      "gross_segment_area_bytes_at_table_cap": 5330960384,
+      "union_bitmap_bytes_at_table_cap": 162688,
+      "worst_one_partial_segment_unused_bytes": 2093056
+    }
+  ]
+}

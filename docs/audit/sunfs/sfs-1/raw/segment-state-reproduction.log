@@ -1,0 +1,35 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.41s
+     Running tests/codecs.rs (target/x86_64-unknown-linux-gnu/debug/deps/codecs-16f8d203b39aac3f)
+
+running 1 test
+test payload_negatives ... FAILED
+
+failures:
+
+---- payload_negatives stdout ----
+
+thread 'payload_negatives' (63) panicked at sunlight-sunfs/tests/codecs.rs:211:5:
+assertion failed: Segment {
+            index: 0,
+            epoch: 1,
+            state: 3,
+            live: 1,
+            next_hint: 1,
+            summary: BlockRef { block: 256, epoch: 1, crc: 1 },
+            bitmap: vec![1,0,0,0,0,0,0,0],
+        }.validate().is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    payload_negatives
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p sunlight-sunfs --test codecs`

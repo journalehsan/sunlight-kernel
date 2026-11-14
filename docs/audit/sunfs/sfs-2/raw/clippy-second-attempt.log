@@ -1,0 +1,17 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+error: unused import: `block`
+ --> sunlight-sunfs-lab/examples/transactions.rs:7:22
+  |
+7 | use sunlight_sunfs::{block::*, bootstrap::Bootstrap, engine::Filesystem, geometry::*};
+  |                      ^^^^^
+  |
+  = note: `-D unused-imports` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: could not compile `sunlight-sunfs-lab` (example "transactions") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

@@ -1,0 +1,40 @@
+DEGRADED_RECOVERABLE selected=Some(1) union_blocks=8
+Report {
+    status: DegradedRecoverable,
+    selected: Some(
+        1,
+    ),
+    superblocks: [
+        "VALID",
+        "VALID",
+    ],
+    slots: [
+        Slot {
+            block: 2,
+            generation: Some(
+                1,
+            ),
+            class: "VALID",
+            error: None,
+        },
+        Slot {
+            block: 3,
+            generation: None,
+            class: "CORRUPT_OR_INTERRUPTED",
+            error: Some(
+                Codec(
+                    Checksum,
+                ),
+            ),
+        },
+        Slot {
+            block: 4,
+            generation: None,
+            class: "EMPTY",
+            error: None,
+        },
+    ],
+    issues: [],
+    union_blocks: 8,
+    pages_read: 13,
+}

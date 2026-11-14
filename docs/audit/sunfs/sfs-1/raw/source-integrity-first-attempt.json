@@ -1,0 +1,9 @@
+{
+  "status": "FAIL",
+  "cause": "final new-file scan omitted the baseline symlink exclusion",
+  "unexpected_entries": 5434,
+  "all_entries_were_symlinks": true,
+  "unexpected_modified": [],
+  "missing": [],
+  "sfs0_errors": []
+}

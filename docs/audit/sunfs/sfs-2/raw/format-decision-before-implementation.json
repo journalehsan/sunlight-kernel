@@ -1,0 +1,9 @@
+{
+  "status": "PARTIAL",
+  "decision_before_implementation": true,
+  "format": "experimental 0.2 unchanged",
+  "layout_changes": [],
+  "codec_gap": "No missing structures; SFS-1 metadata bound excludes populated extent and directory pages. Exact SFS-2 plans must fit the existing transaction_bound.",
+  "compatibility": "Existing bootstrap images supported; valid wider v0.2 features outside bounded engine return Unsupported; independent checker retains wider inspection.",
+  "golden_fixtures": "preserve byte-for-byte"
+}

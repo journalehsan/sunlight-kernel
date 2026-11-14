@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "markers": {
+    "SFS1_CORRUPTION": "SFS1_CORRUPTION cases=16",
+    "SFS1_FAULT_MATRIX": "SFS1_FAULT_MATRIX cases=480 tear_offsets=[0, 1, 511, 512, 1024, 1536, 2048, 2560, 3072, 3584, 4095, 4096]",
+    "SFS1_FUZZ": "SFS1_FUZZ cases=4096 seeds=0,1,2,5457491 checker_images=2048 arbitrary_pages=2048",
+    "SFS1_CRASH_BOUNDARIES": "SFS1_CRASH_BOUNDARIES cases=112 events=14 clean=4 degraded=0 invalid=108"
+  },
+  "boundary_cases_per_profile": 112,
+  "fault_cases_per_profile": 480,
+  "deterministic_boundary_replays_per_profile": 112,
+  "seeds": [
+    0,
+    1,
+    2,
+    5457491
+  ],
+  "tear_offsets": [
+    0,
+    1,
+    511,
+    512,
+    1024,
+    1536,
+    2048,
+    2560,
+    3072,
+    3584,
+    4095,
+    4096
+  ],
+  "trace_directories": [
+    "raw/dev/crash-traces",
+    "raw/release/crash-traces"
+  ],
+  "oracle": "independent full closure checker; formatter success requires CLEAN after crash",
+  "scope": "finite formatter schedules and three-write reorderings; not exhaustive filesystem mutation safety",
+  "initial_attempt": "raw/lab-tests-initial.log: fixture popcount invalid, 11 PASS / 1 FAIL; corrected fixture preserves popcount before semantic check"
+}

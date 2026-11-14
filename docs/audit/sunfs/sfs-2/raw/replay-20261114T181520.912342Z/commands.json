@@ -1,0 +1,22 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs-lab",
+      "--offline",
+      "--locked",
+      "--test",
+      "transactions",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "deterministic_d_p_r_r0_crash_fault_matrix",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "log": "raw/replay-20261114T181520.912342Z/replay.log",
+    "elapsed_ns": 239569985
+  }
+]

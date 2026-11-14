@@ -1,0 +1,60 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+    Checking sunlight-sunfs-check v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+    Checking sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:346:20
+    |
+346 |     let dry = load(&base, 0);
+    |                    ^^^^^ help: change this to: `base`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+    = note: `-D clippy::needless-borrow` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_borrow)]`
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:374:22
+    |
+374 |         let d = load(&base, 0);
+    |                      ^^^^^ help: change this to: `base`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:381:23
+    |
+381 |         agreement(&d, &previous);
+    |                       ^^^^^^^^^ help: change this to: `previous`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:425:30
+    |
+425 |                 let d = load(&base, seed);
+    |                              ^^^^^ help: change this to: `base`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:467:25
+    |
+467 |                         &previous
+    |                         ^^^^^^^^^ help: change this to: `previous`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: this expression creates a reference which is immediately dereferenced by the compiler
+   --> sunlight-sunfs-lab/tests/transactions.rs:469:37
+    |
+469 |                     resource_oracle(&base, &bytes, &plan, &initial);
+    |                                     ^^^^^ help: change this to: `base`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#needless_borrow
+
+error: could not compile `sunlight-sunfs-lab` (test "transactions") due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...

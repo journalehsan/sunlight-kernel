@@ -1,0 +1,59 @@
+{
+  "milestone": "SFS-1",
+  "overall": "SFS-1 COMPLETE",
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "evidence": "source-baseline.json"
+    },
+    "G2": {
+      "status": "PASS",
+      "evidence": "architecture-implementation-map.json"
+    },
+    "G3": {
+      "status": "PASS",
+      "evidence": "block-device-contract.json"
+    },
+    "G4": {
+      "status": "PASS",
+      "evidence": "codec-validation.json"
+    },
+    "G5": {
+      "status": "PASS",
+      "evidence": "geometry-results.json"
+    },
+    "G6": {
+      "status": "PASS",
+      "evidence": "formatter-results.json"
+    },
+    "G7": {
+      "status": "PASS",
+      "evidence": "checker-results.json"
+    },
+    "G8": {
+      "status": "PASS",
+      "evidence": "crash-matrix.json"
+    },
+    "G9": {
+      "status": "PASS",
+      "evidence": "commands.json"
+    },
+    "G10": {
+      "status": "PASS",
+      "evidence": "source-integrity.json"
+    }
+  },
+  "tests_per_profile": {
+    "dev": 24,
+    "release": 24
+  },
+  "regression_tests": 139,
+  "execution_scope": "hosted laboratory and no_std compilation only",
+  "native_guest": "NOT_RUN",
+  "physical_durability": "UNQUALIFIED",
+  "filesystem_mutation_crash_safety": "NOT_RUN",
+  "production_mount": false,
+  "boot_root_changes": false,
+  "commit": false,
+  "push": false
+}

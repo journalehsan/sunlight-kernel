@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "rust_tests": 8,
+  "golden_pages": 4,
+  "golden_generator": "tools/sunfs_golden.py",
+  "endianness": "explicit little-endian",
+  "crc": "CRC-64/ECMA-182 poly 0x42f0e1eba9ea3693 nonreflected init0 xorout0",
+  "coverage": "entire 4096-byte metadata page, bytes64..71 zero",
+  "structures": [
+    "Superblock",
+    "copy identity",
+    "Checkpoint",
+    "generation",
+    "NodeId",
+    "BlockRef",
+    "MapEntry",
+    "Inode",
+    "DiskTime",
+    "DirEntry",
+    "Extent",
+    "Segment",
+    "SummaryEntry and summary page",
+    "Orphan",
+    "Features",
+    "table root/page/descriptor"
+  ],
+  "malformed_inputs": 4096,
+  "logs": [
+    "raw/tests-dev-final.log",
+    "raw/tests-release-final.log"
+  ]
+}

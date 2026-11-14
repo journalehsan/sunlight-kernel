@@ -1,0 +1,3 @@
+{"case":"two-admission-false","expected":[4],"selected":4,"status":"PASS"}
+{"case":"two-admission-true","expected":[4],"selected":4,"status":"PASS"}
+{"case":"two-seed-0-event-0-power-before","event":36,"operation":"write","fault":"Some(PowerLoss)","acknowledged":false,"expected":[4],"selected":4,"classification":"CLEAN","D":true,"P":true,"R":true,"R0":true,"status":"PASS"}

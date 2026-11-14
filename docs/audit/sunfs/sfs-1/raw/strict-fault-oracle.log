@@ -1,0 +1,26 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.13s
+     Running tests/laboratory.rs (target/x86_64-unknown-linux-gnu/debug/deps/laboratory-4cf687b87b796770)
+
+running 1 test
+
+thread 'formatter_torn_partial_failed_and_uncertain_operations' (109) panicked at sunlight-sunfs-lab/tests/laboratory.rs:298:17:
+assertion `left == right` failed: event=12 fault=Torn { start: 0, len: 511 }
+  left: DegradedRecoverable
+ right: Corrupt
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test formatter_torn_partial_failed_and_uncertain_operations ... FAILED
+
+failures:
+
+failures:
+    formatter_torn_partial_failed_and_uncertain_operations
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.72s
+
+error: test failed, to rerun pass `-p sunlight-sunfs-lab --test laboratory`

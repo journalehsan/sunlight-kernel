@@ -3279,6 +3279,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "sunlight-sunfs"
+version = "0.1.0"
+
+[[package]]
+name = "sunlight-sunfs-check"
+version = "0.1.0"
+dependencies = [
+ "sunlight-sunfs",
+]
+
+[[package]]
+name = "sunlight-sunfs-lab"
+version = "0.1.0"
+dependencies = [
+ "sunlight-sunfs",
+ "sunlight-sunfs-check",
+]
+
+[[package]]
 name = "sunlight-sunsay"
 version = "0.2.7279-alpha.2"
 dependencies = [

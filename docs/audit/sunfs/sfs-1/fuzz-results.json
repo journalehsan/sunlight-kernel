@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "seeds": [
+    0,
+    1,
+    2,
+    5457491
+  ],
+  "per_profile": {
+    "total_inputs": 4096,
+    "checker_images": 2048,
+    "arbitrary_pages": 2048,
+    "typed_payload_decodes": 16384
+  },
+  "panics": 0,
+  "classification_counts": {
+    "DEGRADED_RECOVERABLE": 1024,
+    "CORRUPT": 1021,
+    "Err(Magic)": 2048,
+    "UNSUPPORTED": 1,
+    "CLEAN": 2
+  },
+  "corpus": [
+    "raw/dev/fuzz-corpus.jsonl",
+    "raw/release/fuzz-corpus.jsonl"
+  ],
+  "reproduce": "python3 tools/sunfs_reproduce.py --seed N --index N --kind image-mutation --output /tmp/repro.img",
+  "unexpected_failing_images": [],
+  "limitation": "bounded malformed-input campaign; no absence-of-bugs proof"
+}

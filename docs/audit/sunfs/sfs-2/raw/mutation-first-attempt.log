@@ -1,0 +1,38 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+   Compiling sunlight-sunfs-check v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.97s
+     Running tests/transactions.rs (target/x86_64-unknown-linux-gnu/debug/deps/transactions-2ed7b296e65e765f)
+
+running 4 tests
+
+thread 'admission_low_space_is_readonly_and_exact' (357) panicked at sunlight-sunfs-lab/tests/transactions.rs:222:19:
+called `Result::unwrap()` on an `Err` value: NoSpace
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test admission_low_space_is_readonly_and_exact ... FAILED
+
+thread 'hello_power_loss_and_volatile_semantics' (359) panicked at sunlight-sunfs-lab/tests/transactions.rs:117:18:
+attempt to subtract with overflow
+test hello_power_loss_and_volatile_semantics ... FAILED
+
+thread 'writes_limits_identity_and_multiple_commits' (360) panicked at sunlight-sunfs-lab/tests/transactions.rs:195:14:
+range end index 4194 out of range for slice of length 4105
+test writes_limits_identity_and_multiple_commits ... FAILED
+SFS2_CRASH cases=1538 events=27 seeds=4
+test deterministic_d_p_r_r0_crash_fault_matrix ... ok
+
+failures:
+
+failures:
+    admission_low_space_is_readonly_and_exact
+    hello_power_loss_and_volatile_semantics
+    writes_limits_identity_and_multiple_commits
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 21.29s
+
+error: test failed, to rerun pass `-p sunlight-sunfs-lab --test transactions`

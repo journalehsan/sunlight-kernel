@@ -1,0 +1,39 @@
+{
+  "revision": "1affc823311cb6014e2aecf63b848b2bd4f2af6d",
+  "baseline_manifest_sha256": "25544078730ac15fb516080ff6f9d1f86e7eea8438482ddd6af7f0af12076caf",
+  "baseline_scope": "All incoming tracked and unignored regular files; excludes symlinks, directories, ignored artifacts and the two new SFS-0 output directories.",
+  "incoming_regular_files_verified": 88406,
+  "incoming_changed_or_missing": [],
+  "new_files_outside_output_directories": [],
+  "status": "PASS",
+  "outputs_sha256": {
+    "docs/filesystems/sunfs/adr/0001-checkpointed-segment-log.md": "97b92b8ee17506331bd491665ca257291555f0000f05ff1aa44ba861f70cd406",
+    "docs/filesystems/sunfs/sunfs-architecture-v0.2.md": "edd04bd2a255c9ba49a0d99125982dc3b3eaae545bea26d6d864cd4d0ce20a6d",
+    "docs/filesystems/sunfs/sunfs-crash-recovery-contract.md": "7548d6ca2b8a70f7f0a359172daab5d8ba58f341af83b4c31b68e17a190c4b67",
+    "docs/filesystems/sunfs/sunfs-implementation-roadmap.md": "5aef7677791ad733343590db3fe499f8fdb330522d2e5e847639b0ea012bbc1a",
+    "docs/filesystems/sunfs/sunfs-on-disk-format-v0.2.md": "c5e02f1fed16cc6c21be64bf85ce9f7ddbaed719c987c02e694be14d6a43452f",
+    "docs/filesystems/sunfs/sunfs-vfs-integration.md": "aef46e57a921c3c411cdf4d05ee3c7ea6cd3275bd3c489b2af3ed8e7e6a06607",
+    "docs/audit/sunfs/sfs-0/README.md": "7eb5b276a0486f991764855ce1d35d08aad8288b76d25af24e26a5c5a5d2895e",
+    "docs/audit/sunfs/sfs-0/architecture-decision-summary.md": "31b21153fd70e8ae56b67f04b5488a94ac7b914478d51225f35b90b8e992d8ff",
+    "docs/audit/sunfs/sfs-0/block-device-contract-assessment.md": "abc26f0cc40486d5814708f9405c2bc9d37432e7b9804e255d9270913acff428",
+    "docs/audit/sunfs/sfs-0/design-review-checklist.md": "a8c1aa5bbb8c638a6a05acd21bbeb3a5d72ccb9173d1fc169eb9e96b4968f6b8",
+    "docs/audit/sunfs/sfs-0/existing-draft-comparison.md": "5f40a1e452b1acbff1a41ff90f62cafe252565a878c6b63c563ef33c9d94849a",
+    "docs/audit/sunfs/sfs-0/format-field-inventory.json": "466ae337304aa4f8a75fe4ce6c57684c1dbb19a1679d648a2e5a7e8a4c167a32",
+    "docs/audit/sunfs/sfs-0/geometry-model.json": "deebde9c0616be526900752fda328baf09303db38ec5f2818b7746bd143f4246",
+    "docs/audit/sunfs/sfs-0/recovery-invariants.md": "378fdf1b5651f902cc72f5c9877a48fd11722bc6c3577ff75fad94017ac44ed1",
+    "docs/audit/sunfs/sfs-0/repository-capability-inventory.md": "cc06f2c575c3c4cfbe317bf501965bec1eec4165dc9a7f3fef3ea0750498f959",
+    "docs/audit/sunfs/sfs-0/risk-register.md": "930c8e8a57662b932c4eed9e9286a55d47cc4b4d6bb49e5156158d230d4e13cf",
+    "docs/audit/sunfs/sfs-0/source-anchors.json": "a858aa7e3b08ba5376246101fd86f4a05782d8a2cd9076110ec41b923d538e2b",
+    "docs/audit/sunfs/sfs-0/source-baseline.json": "25544078730ac15fb516080ff6f9d1f86e7eea8438482ddd6af7f0af12076caf",
+    "docs/audit/sunfs/sfs-0/validate.py": "25d5a9285fc8132d9dbf4c52b1c5f82f8b859d8f42045ec5218b200ac7adc96d",
+    "docs/audit/sunfs/sfs-0/validation-checks.json": "f323c351325508e574e8063ac35564fb14132f75696126fe7d4074f7e941ee24",
+    "docs/audit/sunfs/sfs-0/validation-summary.json": "3f28cec3b29357c40eaf743163483e7e4403172091a88a12841b4f9a39a20182"
+  },
+  "self_hash_excluded": true,
+  "limitations": [
+    "No symlink/directory metadata integrity assertion",
+    "Ignored generated artifacts excluded",
+    "No production/runtime/format/crash execution",
+    "Hashes detect byte changes, not design correctness"
+  ]
+}

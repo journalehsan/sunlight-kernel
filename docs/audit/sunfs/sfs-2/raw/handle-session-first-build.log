@@ -1,0 +1,33 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+error[E0062]: field `session` specified more than once
+   --> sunlight-sunfs/src/engine.rs:198:21
+    |
+197 |                     session: self.session,
+    |                     --------------------- first use of `session`
+198 |                     session: self.session,
+    |                     ^^^^^^^ used more than once
+
+error[E0560]: struct `engine::Owner` has no field named `session`
+   --> sunlight-sunfs/src/engine.rs:478:25
+    |
+478 |                         session: self.session,
+    |                         ^^^^^^^ `engine::Owner` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+error[E0560]: struct `engine::Owner` has no field named `session`
+   --> sunlight-sunfs/src/engine.rs:479:25
+    |
+479 |                         session: self.session,
+    |                         ^^^^^^^ `engine::Owner` does not have this field
+    |
+    = note: all struct fields are already assigned
+
+Some errors have detailed explanations: E0062, E0560.
+For more information about an error, try `rustc --explain E0062`.
+error: could not compile `sunlight-sunfs` (lib) due to 3 previous errors

@@ -1,0 +1,30 @@
+{
+  "milestone": "SFS-2",
+  "overall": "SFS-2 COMPLETE",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS",
+    "G8": "PASS",
+    "G9": "PASS",
+    "G10": "PASS"
+  },
+  "execution_scope": "bounded hosted engine on conforming simulator; no native durability claim",
+  "attempt": "raw/qualification-20261114T181049.913356Z",
+  "tests_per_profile": {
+    "dev": 32,
+    "release": 32
+  },
+  "crash_schedules_per_profile": 3491,
+  "corruption_images_per_profile": 9,
+  "regression_tests": 139,
+  "native_mount": false,
+  "physical_formatting": false,
+  "kernel_boot_root_cpython_changes": false,
+  "commit": false,
+  "push": false
+}

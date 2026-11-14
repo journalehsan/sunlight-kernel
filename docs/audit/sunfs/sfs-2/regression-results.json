@@ -1,0 +1,248 @@
+{
+  "status": "PASS",
+  "attempt": "raw/qualification-20261114T181049.913356Z",
+  "compiled_source_sha256": {
+    "Cargo.lock": "f43121caace0ae9c45bd8fb6435e4ef8c1f24a3a2820dde36b685313447bd1ca",
+    "Cargo.toml": "ee5d2639492fe5fc4be1ece52a320a51d6ee023a59f0d8f34f1021030f1c4e24",
+    "sunlight-sunfs/Cargo.toml": "bba6004aec9fb2404c89abb235cbbb0c49088d1c64744dc6dc22d9eeb9d9a6ad",
+    "sunlight-sunfs/src/block.rs": "59a809159fc4db9d2a2c478d4e52285eb66cd399e6cbec6ee6312a5568471ed0",
+    "sunlight-sunfs/src/bootstrap.rs": "d7de04c628887f0b85fa2975f7298f60f017a64e51068b38d25ce0ee3a4b61f9",
+    "sunlight-sunfs/src/codec.rs": "621fb92ebdebf31710ce20d78c7fa1dc1a6564d61cfe5b0219e7e015739da71e",
+    "sunlight-sunfs/src/engine/recovery.rs": "bc3435cff75b4780c4056606f861ca0554827db3a0aedde1801885631592d83c",
+    "sunlight-sunfs/src/engine.rs": "7dd8968684a37b7cb27b40f45d393f0627d1c893eafc3a320ec361627c51eb99",
+    "sunlight-sunfs/src/geometry.rs": "5a78f09d4e3574b24f8d388fc75bf30503f997e08192d0a56970ba519fc3e896",
+    "sunlight-sunfs/src/lib.rs": "382511660e261840a1d4b2d3acfb6bfeef32a0bbde1acfdc545287f2a97b9226",
+    "sunlight-sunfs/tests/codecs.rs": "790187288032509678f088f56ebe9318f118bf7a665686b30cc1927d3785a488",
+    "sunlight-sunfs/tests/fixtures/directory.bin": "0f2bd30384e0912f0149f7201e46f1b200c797d46b405832d62f95546707b148",
+    "sunlight-sunfs/tests/fixtures/empty-orphan-root.bin": "92628416ab3febccdd25c577d70c9f37bb1c605df9b05a2850bcb6b3f03ae10f",
+    "sunlight-sunfs/tests/fixtures/inode.bin": "54f0042b0055cb4ff246126fc7ea59bf3931ee4ec158b90fb0c9637123c6df3d",
+    "sunlight-sunfs/tests/fixtures/superblock.bin": "482e42b87c627d518a59d0077ed7397eb7a7b673c757c60f29af2d9bbb27a1f9",
+    "sunlight-sunfs-check/Cargo.toml": "a0c9a593862eb4d88ca4e159ca52cf7645f1298b5ce23b5c57fc04128d625ce0",
+    "sunlight-sunfs-check/src/bin/sunfs-check.rs": "0c2ac19324d50a4a5d343517512b4033bc80f7b97c205c4e24134b658bd48d21",
+    "sunlight-sunfs-check/src/lib.rs": "6b3f7019cec7eed0c9cbc481535175dae3d70f9aa5d1b0d520eb8ba045fe4b08",
+    "sunlight-sunfs-lab/Cargo.toml": "568e2d58d0d0f3e197b6603a3038f384db78b5960be3e17f13d038b9e82e18c4",
+    "sunlight-sunfs-lab/examples/baseline.rs": "5358b1281a543019b545666be6d80c74ad53d9467248147443637cb07c540f2a",
+    "sunlight-sunfs-lab/examples/transactions.rs": "ad575abefa767a60cf0203e90ccf7e7df5e516cbf57f5b4e992cb935aab40905",
+    "sunlight-sunfs-lab/src/bin/sunfs-format.rs": "4aec9156ec99f260028b87b4da8fc8be21d0093069a5d820986098800559839e",
+    "sunlight-sunfs-lab/src/image.rs": "5886dd322c5cdcae94d530e6d9992dd9a00d57847f2ad40540876a634a405176",
+    "sunlight-sunfs-lab/src/lib.rs": "3a31d22723db1704f5ef54f7081ae01a884d10e08c44edc18454ac49213cc2df",
+    "sunlight-sunfs-lab/src/simulator.rs": "5cd4b88cf8a92d08cd8399e2a755a83360845b543769b82b864cf551d5174ced",
+    "sunlight-sunfs-lab/tests/laboratory.rs": "0da16f93d545075257abbed52ee32825b4329caa0403876d2fb1e9d916bc70ed",
+    "sunlight-sunfs-lab/tests/transactions.rs": "34feb367aeb3218d329b2edc19104339d163682775a080287b19ab276f3131a8",
+    "tools/sunfs2_validate.py": "7312198bcd3f878f56226ee2d28dff9f3685c8c9f1a9fbbd6806bd0628e7c233"
+  },
+  "profiles": [
+    "dev",
+    "release"
+  ],
+  "commands": [
+    {
+      "argv": [
+        "rustc",
+        "--version",
+        "--verbose"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/toolchain.log",
+      "elapsed_ns": 33563164
+    },
+    {
+      "argv": [
+        "cargo",
+        "check",
+        "-p",
+        "sunlight-sunfs",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-none"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/core-no-std.log",
+      "elapsed_ns": 379676697
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--",
+        "--nocapture"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/tests-dev.log",
+      "elapsed_ns": 90233291332
+    },
+    {
+      "argv": [
+        "cargo",
+        "build",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--bins",
+        "--examples"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/build-dev.log",
+      "elapsed_ns": 2147477224
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "sunlight-sunfs-lab",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--example",
+        "transactions"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/performance-dev.log",
+      "elapsed_ns": 157436916
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--release",
+        "--",
+        "--nocapture"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/tests-release.log",
+      "elapsed_ns": 103215066039
+    },
+    {
+      "argv": [
+        "cargo",
+        "build",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--release",
+        "--bins",
+        "--examples"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/build-release.log",
+      "elapsed_ns": 10843534813
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "sunlight-sunfs-lab",
+        "--offline",
+        "--locked",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--release",
+        "--example",
+        "transactions"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/performance-release.log",
+      "elapsed_ns": 170379763
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "sunlight-block",
+        "-p",
+        "sunlight-fat",
+        "-p",
+        "sunlight-fs",
+        "--offline",
+        "--locked",
+        "--lib",
+        "--target",
+        "x86_64-unknown-linux-gnu"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/storage-regressions.log",
+      "elapsed_ns": 179498663
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "sunlight-sunfs",
+        "-p",
+        "sunlight-sunfs-lab",
+        "-p",
+        "sunlight-sunfs-check",
+        "--offline",
+        "--locked",
+        "--all-targets",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/clippy.log",
+      "elapsed_ns": 1144929283
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/sunfs_golden.py"
+      ],
+      "returncode": 0,
+      "log": "raw/qualification-20261114T181049.913356Z/golden.log",
+      "elapsed_ns": 53978500
+    }
+  ],
+  "tests_per_profile": {
+    "dev": 32,
+    "release": 32
+  },
+  "existing_sfs1_tests_per_profile": 24,
+  "new_mutation_tests_per_profile": 8,
+  "regression_counts": [
+    29,
+    9,
+    101
+  ],
+  "total_storage_regressions": 139,
+  "native_guest": "NOT_RUN",
+  "physical_durability": "UNQUALIFIED"
+}

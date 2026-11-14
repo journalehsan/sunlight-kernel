@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "independent_semantic_traversal": true,
+  "source": "sunlight-sunfs-check/src/lib.rs",
+  "shared": "low-level codec definitions only",
+  "cases": [
+    "empty 64/256/512 geometries",
+    "nonempty data, binding, orphan fixture",
+    "7 resealed semantic corruptions",
+    "9 nonempty semantic/data corruptions",
+    "16 classification/selection cases",
+    "read failure",
+    "read-only image hash checks"
+  ],
+  "exit_codes": {
+    "CLEAN": 0,
+    "DEGRADED_RECOVERABLE": 1,
+    "CORRUPT": 2,
+    "UNSUPPORTED": 3,
+    "INDETERMINATE": 4
+  },
+  "native_writable_admission": "UNQUALIFIED",
+  "page_read_budget_per_candidate": 65536,
+  "directory_binding_budget": "maximum_nodes",
+  "readonly_cli_hash_unchanged": true
+}

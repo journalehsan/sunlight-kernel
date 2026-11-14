@@ -1,0 +1,98 @@
+{
+  "status": "PASS",
+  "empty_geometries": [
+    64,
+    256,
+    512
+  ],
+  "initial_checkpoints": [
+    1,
+    2
+  ],
+  "ordering": [
+    "SB and immutable closure",
+    "D0 successful flush",
+    "CP1 and CP2",
+    "P0 successful flush"
+  ],
+  "safety": "create_new, pinned per-component O_NOFOLLOW parent walk, no overwrite, no physical devices",
+  "host_adapter_limit_bytes": 134217728,
+  "cli": [
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-format",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/disposable.img",
+        "--size",
+        "16MiB",
+        "--confirm-disposable"
+      ],
+      "exit": 0,
+      "log": "raw/cli-format.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-check",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/disposable.img"
+      ],
+      "exit": 0,
+      "log": "raw/cli-check-clean.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-format",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/disposable.img",
+        "--size",
+        "16MiB",
+        "--confirm-disposable"
+      ],
+      "exit": 2,
+      "log": "raw/cli-existing-refused.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-format",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/alias.img",
+        "--size",
+        "16MiB",
+        "--confirm-disposable"
+      ],
+      "exit": 2,
+      "log": "raw/cli-symlink-refused.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-format",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/unconfirmed.img",
+        "--size",
+        "16MiB"
+      ],
+      "exit": 2,
+      "log": "raw/cli-confirmation-refused.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-check",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/degraded.img"
+      ],
+      "exit": 1,
+      "log": "raw/cli-check-degraded.log"
+    },
+    {
+      "argv": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-linux-gnu/release/sunfs-check",
+        "--image",
+        "/tmp/sunfs-sfs1-nzvd3lvd/degraded.img"
+      ],
+      "exit": 2,
+      "log": "raw/cli-check-corrupt.log"
+    }
+  ],
+  "commit": false,
+  "push": false
+}

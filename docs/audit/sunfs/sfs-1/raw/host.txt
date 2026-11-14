@@ -1,0 +1,1 @@
+Linux ehsan-21ahs1qm00 7.2.4-1-cachyos #1 SMP PREEMPT_DYNAMIC Sun, 13 Sep 2026 08:32:58 +0000 x86_64 GNU/Linux

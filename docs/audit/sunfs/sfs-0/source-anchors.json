@@ -1,0 +1,1273 @@
+{
+  "evidence_kind": "static_source_anchors",
+  "sources": [
+    {
+      "path": "docs/sunfs/README.md",
+      "sha256": "289cf4c5d7e93c71a7c9d562e541e197e2a77326df5eae7bb1f0aed76be10d91",
+      "anchors": [
+        {
+          "pattern": "Document version",
+          "matches": [
+            {
+              "line": 3,
+              "text": "**Document version:** 0.1 \u2014 Draft"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "Rule 2",
+          "matches": [
+            {
+              "line": 130,
+              "text": "### Rule 2: Data needed for recovery must not be freed prematurely"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "Phase A",
+          "matches": [
+            {
+              "line": 250,
+              "text": "### Phase A \u2014 Storage laboratory"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/vfs.rs",
+      "sha256": "c32c9dc20d7e1006716747a2b40ca997b88a4458af59e4cebb45ddb70bc72e7d",
+      "anchors": [
+        {
+          "pattern": "pub trait FileSystem",
+          "matches": [
+            {
+              "line": 124,
+              "text": "pub trait FileSystem {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub enum FsNode",
+          "matches": [
+            {
+              "line": 683,
+              "text": "pub enum FsNode<D: BlockDevice = NullDevice> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub struct Vfs<",
+          "matches": [
+            {
+              "line": 891,
+              "text": "pub struct Vfs<D: BlockDevice = NullDevice> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn validate_runtime_target",
+          "matches": [
+            {
+              "line": 992,
+              "text": "    pub fn validate_runtime_target(&mut self, path: &str, source: u64) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn mount_runtime_fat",
+          "matches": [
+            {
+              "line": 1039,
+              "text": "    pub fn mount_runtime_fat("
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn unmount",
+          "matches": [
+            {
+              "line": 1065,
+              "text": "    pub fn unmount(&mut self, id: u64) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn next_handle_generation",
+          "matches": [
+            {
+              "line": 46,
+              "text": "pub(crate) fn next_handle_generation(generation: u32) -> Option<u32> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn authenticate",
+          "matches": [
+            {
+              "line": 275,
+              "text": "    fn authenticated_open(&mut self, handle: FileHandle) -> Result<FatOpen, FsError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn unlink(",
+          "matches": [
+            {
+              "line": 185,
+              "text": "    fn unlink(&mut self, path: &str) -> Result<(), FsError>;"
+            },
+            {
+              "line": 572,
+              "text": "    fn unlink(&mut self, path: &str) -> Result<(), FsError> {"
+            },
+            {
+              "line": 842,
+              "text": "    fn unlink(&mut self, path: &str) -> Result<(), FsError> {"
+            },
+            {
+              "line": 1272,
+              "text": "    pub fn unlink(&mut self, path: &str) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 4
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/vfs/lookup.rs",
+      "sha256": "a4d03d9b6c52fe77122459f1aea82c77279ee84bae73a210dbeaa9ca0d23a2b7",
+      "anchors": [
+        {
+          "pattern": "pub enum MetadataSource",
+          "matches": [
+            {
+              "line": 10,
+              "text": "pub enum MetadataSource {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub struct BackendCapabilities",
+          "matches": [
+            {
+              "line": 22,
+              "text": "pub struct BackendCapabilities {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub struct Metadata",
+          "matches": [
+            {
+              "line": 51,
+              "text": "pub struct Metadata {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "Resolve an existing object",
+          "matches": [
+            {
+              "line": 94,
+              "text": "    /// Resolve an existing object with search checks on each traversed parent."
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/tmpfs.rs",
+      "sha256": "4ceeb656541619e283f4c07e259b7fc17ff0b038e35b1246619a6d385cff84d9",
+      "anchors": [
+        {
+          "pattern": "unlinked inode",
+          "matches": [
+            {
+              "line": 32,
+              "text": "    // An unlinked inode remains charged and addressable by existing handles."
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub struct TmpfsDir",
+          "matches": [
+            {
+              "line": 45,
+              "text": "pub struct TmpfsDir {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn sync_file",
+          "matches": [
+            {
+              "line": 567,
+              "text": "    fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn unlink(",
+          "matches": [
+            {
+              "line": 662,
+              "text": "    fn unlink(&mut self, path: &str) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/ramfs.rs",
+      "sha256": "d75e2990d0e4a1d2a5e00a4031b112c1daf6510b42d5656da6174a781b41c174",
+      "anchors": [
+        {
+          "pattern": "Tmpfs as RamFs",
+          "matches": [
+            {
+              "line": 2,
+              "text": "pub use crate::tmpfs::Tmpfs as RamFs;"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/error.rs",
+      "sha256": "d1cabab425613eabfc951f35ed552fc60169f0511e6cd28dda5039d38810f076",
+      "anchors": [
+        {
+          "pattern": "pub enum FsError",
+          "matches": [
+            {
+              "line": 2,
+              "text": "pub enum FsError {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/permission.rs",
+      "sha256": "4544dd1f0aa3a0855222e65367446f0f66b011eda1242d86b7f91f22d806c0bb",
+      "anchors": [
+        {
+          "pattern": "pub fn check_permission",
+          "matches": [
+            {
+              "line": 18,
+              "text": "pub fn check_permission(stat: &FileStat, cred: &Credential, want: PermCheck) -> bool {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/policy.rs",
+      "sha256": "470afb23db3364a10572d49cb14010d46989381752841f0617293bcc470245c7",
+      "anchors": [
+        {
+          "pattern": "pub enum FsOperation",
+          "matches": [
+            {
+              "line": 11,
+              "text": "pub enum FsOperation {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fs/src/vfs/storage_tests.rs",
+      "sha256": "403da7594e16c7198d798f957b3caa0c838365918e6fe4ecaa06d1decb77be48",
+      "anchors": [
+        {
+          "pattern": "#[test]",
+          "matches": [
+            {
+              "line": 67,
+              "text": "#[test]"
+            },
+            {
+              "line": 124,
+              "text": "#[test]"
+            },
+            {
+              "line": 162,
+              "text": "#[test]"
+            },
+            {
+              "line": 190,
+              "text": "#[test]"
+            }
+          ],
+          "total_matches": 8
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fat/src/fat.rs",
+      "sha256": "0221fc041f434b14b1ea08ed96257db9723efa662f3cf2bafd6efc414edfc5c0",
+      "anchors": [
+        {
+          "pattern": "pub struct Fat32",
+          "matches": [
+            {
+              "line": 22,
+              "text": "pub struct Fat32<D: BlockDevice> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "stat_path",
+          "matches": [
+            {
+              "line": 295,
+              "text": "    pub fn stat_path(&mut self, path: &[u8]) -> Option<FatStat> {"
+            },
+            {
+              "line": 319,
+              "text": "    /// cluster chain. `first_cluster`/`file_size` come from [`Fat32::stat_path`]."
+            },
+            {
+              "line": 370,
+              "text": "        let stat = self.stat_path(path)?;"
+            },
+            {
+              "line": 385,
+              "text": "        let stat = self.stat_path(path)?;"
+            }
+          ],
+          "total_matches": 4
+        }
+      ]
+    },
+    {
+      "path": "sunlight-fat/src/fat/write.rs",
+      "sha256": "10ac29d33912e0d6a5adc94e08517f578b99e0aa732085da843f0ac49af2f615",
+      "anchors": [
+        {
+          "pattern": "entry_location",
+          "matches": [
+            {
+              "line": 393,
+              "text": "    pub fn entry_location(&mut self, path: &[u8]) -> Result<(u64, u16), FatError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn unlink_path",
+          "matches": [
+            {
+              "line": 472,
+              "text": "    pub fn unlink_path(&mut self, path: &[u8]) -> Result<(), FatError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn truncate_path",
+          "matches": [
+            {
+              "line": 444,
+              "text": "    pub fn truncate_path(&mut self, path: &[u8]) -> Result<(), FatError> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-block/src/lib.rs",
+      "sha256": "15d304f02c49311331827a0c842e432d21fe9a7b5211d68013ae16d67f8c7f60",
+      "anchors": [
+        {
+          "pattern": "pub trait BlockDevice",
+          "matches": [
+            {
+              "line": 29,
+              "text": "pub trait BlockDevice {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub enum BlockError",
+          "matches": [
+            {
+              "line": 23,
+              "text": "pub enum BlockError {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub const BLOCK_SIZE",
+          "matches": [
+            {
+              "line": 20,
+              "text": "pub const BLOCK_SIZE: usize = 512;"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn flush",
+          "matches": [
+            {
+              "line": 126,
+              "text": "    pub fn flush(&mut self) -> Result<(), BlockError> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub struct MemDisk",
+          "matches": [
+            {
+              "line": 197,
+              "text": "pub struct MemDisk<'a> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-block/src/partition.rs",
+      "sha256": "eb626f8ff69d645b8788375e8a7b66548a2d3f506112e32995214aa8e9d0e62e",
+      "anchors": [
+        {
+          "pattern": "pub struct PartitionBlockDevice",
+          "matches": [
+            {
+              "line": 15,
+              "text": "pub struct PartitionBlockDevice<D> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn flush",
+          "matches": [
+            {
+              "line": 62,
+              "text": "    fn flush(&mut self) -> Result<(), BlockError> {"
+            },
+            {
+              "line": 452,
+              "text": "    fn flush_propagates_failure() {"
+            },
+            {
+              "line": 461,
+              "text": "            fn flush(&mut self) -> Result<(), BlockError> {"
+            }
+          ],
+          "total_matches": 3
+        }
+      ]
+    },
+    {
+      "path": "sunlight-block/src/registry.rs",
+      "sha256": "bfc1d8d0064819d4a95f1f489df5cad6301a2bb90b2e6a7c1b7f8237af3efbcd",
+      "anchors": [
+        {
+          "pattern": "pub struct DeviceInfo",
+          "matches": [
+            {
+              "line": 13,
+              "text": "pub struct DeviceInfo {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-block/src/usb_msc.rs",
+      "sha256": "8798c6e6fc36554e2d8e1b735a4d95f258fc6e2a1e34b534654198d0b06ccd29",
+      "anchors": [
+        {
+          "pattern": "let sector_size",
+          "matches": [
+            {
+              "line": 264,
+              "text": "        let sector_size = u32::from_be_bytes(capacity[4..8].try_into().unwrap());"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn flush",
+          "matches": [
+            {
+              "line": 324,
+              "text": "    fn flush(&mut self) -> Result<(), BlockError> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-virtio/src/blk.rs",
+      "sha256": "f106354a69d84dc036d2f2949de50d36dc4303bdcfc398a33d7583410a2a6dab",
+      "anchors": [
+        {
+          "pattern": "unsafe fn submit",
+          "matches": [
+            {
+              "line": 142,
+              "text": "    unsafe fn submit(&mut self, request_type: u32, lba: u64, data_is_device_write: bool) -> bool {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub unsafe fn flush",
+          "matches": [
+            {
+              "line": 232,
+              "text": "    pub unsafe fn flush(&mut self) -> bool {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "supports_flush",
+          "matches": [
+            {
+              "line": 240,
+              "text": "    pub const fn supports_flush(&self) -> bool {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "capacity_sectors",
+          "matches": [
+            {
+              "line": 61,
+              "text": "    capacity_sectors: u64,"
+            },
+            {
+              "line": 96,
+              "text": "        let capacity_sectors = (inl(io_base + 0x18) as u64) << 32 | inl(io_base + 0x14) as u64;"
+            },
+            {
+              "line": 136,
+              "text": "            capacity_sectors,"
+            },
+            {
+              "line": 214,
+              "text": "        if lba >= self.capacity_sectors || !self.submit(VIRTIO_BLK_T_IN, lba, true) {"
+            }
+          ],
+          "total_matches": 6
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/main.rs",
+      "sha256": "52039e4ecdde61d5d7e81014a17dd5bc6e3be86ce75a8b04b20ca0ac7315f612",
+      "anchors": [
+        {
+          "pattern": "pub static KERNEL_VFS",
+          "matches": [
+            {
+              "line": 2024,
+              "text": "pub static KERNEL_VFS: spin::Mutex<Option<sunlight_fs::Vfs<KernelDisk>>> = spin::Mutex::new(None);"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub enum KernelDisk",
+          "matches": [
+            {
+              "line": 1974,
+              "text": "pub enum KernelDisk {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn init_kernel_vfs",
+          "matches": [
+            {
+              "line": 2361,
+              "text": "fn init_kernel_vfs() {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "impl sunlight_block::BlockDevice for KernelBlkDev",
+          "matches": [
+            {
+              "line": 1885,
+              "text": "impl sunlight_block::BlockDevice for KernelBlkDev {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/process/fd_table.rs",
+      "sha256": "380d2730bc798256a4017ff253b346736271e2644ce9e4657c708c0442cd6440",
+      "anchors": [
+        {
+          "pattern": "pub struct FileDescriptor",
+          "matches": [
+            {
+              "line": 259,
+              "text": "pub struct FileDescriptor {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "struct OpenDescription",
+          "matches": [
+            {
+              "line": 289,
+              "text": "struct OpenDescription {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn take",
+          "matches": [
+            {
+              "line": 478,
+              "text": "    pub fn take(&mut self, fd: i32) -> Result<FileDescriptor, FdError> {"
+            },
+            {
+              "line": 492,
+              "text": "    pub fn take_cloexec_handles(&mut self) -> [Option<FileHandle>; 256] {"
+            },
+            {
+              "line": 513,
+              "text": "    pub fn take_all_handles(&mut self) -> [Option<FileHandle>; 256] {"
+            }
+          ],
+          "total_matches": 3
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/arch/x86_64/syscall.rs",
+      "sha256": "97dcaaa3ee1ea03e00b7265eeb9b8aad9afd5395225187ca4a3095c8f98fa737",
+      "anchors": [
+        {
+          "pattern": "fn linux_resolve_at",
+          "matches": [
+            {
+              "line": 6574,
+              "text": "fn linux_resolve_at(dirfd: i32, path_ptr: u64) -> Result<alloc::string::String, u64> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn sys_linux_getdents64",
+          "matches": [
+            {
+              "line": 6831,
+              "text": "fn sys_linux_getdents64(frame: &mut SyscallFrame) -> u64 {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn sys_file_sync",
+          "matches": [
+            {
+              "line": 9586,
+              "text": "fn sys_file_sync(frame: &mut SyscallFrame) -> u64 {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "fn sys_dir_sync",
+          "matches": [
+            {
+              "line": 9620,
+              "text": "fn sys_dir_sync(frame: &mut SyscallFrame) -> u64 {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/storage.rs",
+      "sha256": "e8dc09d51c9776afaecebfadc585094c7581c370c954f9ed9526b20ee45fc600",
+      "anchors": [
+        {
+          "pattern": "pub fn mount",
+          "matches": [
+            {
+              "line": 7,
+              "text": "pub fn mount(vfs: &mut Vfs<crate::KernelDisk>, device: u64, target: &str) -> Result<(), FsError> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/usb_storage.rs",
+      "sha256": "52ef095046298b3bfd72b6492a78981c8b07a8f4d41eac10c108589a3ad5d2d5",
+      "anchors": [
+        {
+          "pattern": "sunlight_block",
+          "matches": [
+            {
+              "line": 4,
+              "text": "use sunlight_block::{usb_msc::Disk, BlockDevice};"
+            },
+            {
+              "line": 108,
+              "text": "                                let operations = sunlight_block::registry::READ"
+            },
+            {
+              "line": 109,
+              "text": "                                    | sunlight_block::registry::WRITE"
+            },
+            {
+              "line": 110,
+              "text": "                                    | sunlight_block::registry::FLUSH"
+            }
+          ],
+          "total_matches": 6
+        }
+      ]
+    },
+    {
+      "path": "kernel/src/capability/vfs_grants.rs",
+      "sha256": "ae10f904e22670a33d4a5a4cbc010172d67cda214f2b65dfd51a0d42b3e1495f",
+      "anchors": [
+        {
+          "pattern": "consume_vfs_grant",
+          "matches": [
+            {
+              "line": 67,
+              "text": "    pub(super) fn consume_vfs_grant("
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "services/vfs_server/src/main.rs",
+      "sha256": "7abeb48c10b906cc21219546730f352f872475314a2f6604a5d243ba526a9f9a",
+      "anchors": [
+        {
+          "pattern": "fn mount_from_fstab",
+          "matches": [
+            {
+              "line": 263,
+              "text": "fn mount_from_fstab(vfs: &mut Vfs, boot: &mut Option<BootFs>) -> Option<&'static str> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "ipc/src/lib.rs",
+      "sha256": "abb9f91034f79ec952de8594790bd797308e0fc8b3d17fa630ed21e04011e320",
+      "anchors": [
+        {
+          "pattern": "pub mod VfsMsg",
+          "matches": [
+            {
+              "line": 1468,
+              "text": "pub mod VfsMsg {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-libc/src/lib.rs",
+      "sha256": "affc94e4508114a0f158a5edfb3cd3c4c36e563d5d629836dd2484628256adeb",
+      "anchors": [
+        {
+          "pattern": "pub fn resolve_directory_path",
+          "matches": [
+            {
+              "line": 226,
+              "text": "pub fn resolve_directory_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn file_sync",
+          "matches": [
+            {
+              "line": 500,
+              "text": "pub fn file_sync(fd: Fd) -> Result<(), Errno> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn dir_sync",
+          "matches": [
+            {
+              "line": 506,
+              "text": "pub fn dir_sync(path: &[u8]) -> Result<(), Errno> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-libc/src/c_file.rs",
+      "sha256": "45ea78fa3815b74915718d0e2d022a6d217a4b99b0a4029b45c30bae2794eaf7",
+      "anchors": [
+        {
+          "pattern": "crate::resolve_path",
+          "matches": [
+            {
+              "line": 144,
+              "text": "    let n = match crate::resolve_path(core::slice::from_raw_parts(path, len), &mut canonical) {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-libc/src/file_ops.rs",
+      "sha256": "de0dd455a63d7918aba6976c3b4c9e39abc2f1082508b0c9df6f62f87591641d",
+      "anchors": [
+        {
+          "pattern": "pub fn",
+          "matches": [
+            {
+              "line": 21,
+              "text": "pub fn normalize(path: &str) -> Result<String, &'static str> {"
+            },
+            {
+              "line": 93,
+              "text": "pub fn read_directory(path: &str, limit: usize) -> Result<Vec<DirEntry>, &'static str> {"
+            },
+            {
+              "line": 195,
+              "text": "pub fn transfer(paths: &[String], destination: &str, cut: bool) -> Result<usize, TransferError> {"
+            },
+            {
+              "line": 298,
+              "text": "pub fn create_item(directory: &str, folder: bool) -> Result<String, &'static str> {"
+            }
+          ],
+          "total_matches": 15
+        }
+      ]
+    },
+    {
+      "path": "sunshell/src/main.rs",
+      "sha256": "4c5466387d610381bb2a9dd84c46874d66c7a7892cd4a301080ac095ab6662b7",
+      "anchors": [
+        {
+          "pattern": "fn resolve_directory",
+          "matches": [
+            {
+              "line": 2794,
+              "text": "    fn resolve_directory(cwd: &str, target: &str) -> Option<alloc::string::String> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "sunlight-files/src/main.rs",
+      "sha256": "fc2e13d3556d3a5a0a2a0195a721402d939b56f6bd96ffc5f052477e0db89a0f",
+      "anchors": [
+        {
+          "pattern": "libc::resolve_directory_path",
+          "matches": [
+            {
+              "line": 1273,
+              "text": "        let target = match libc::resolve_directory_path(input.as_bytes(), &mut output)"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "libc::file_ops::read_directory",
+          "matches": [
+            {
+              "line": 1316,
+              "text": "        match libc::file_ops::read_directory(path.as_str(), 4096) {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "tools/native-std/overlay/fs/sunlightos.rs",
+      "sha256": "130d0be4f190ea7e79232f738342b39c39ca397189bae3d2793e8665ddb4b233",
+      "anchors": [
+        {
+          "pattern": "pub fn symlink",
+          "matches": [
+            {
+              "line": 338,
+              "text": "pub fn symlink(_original: &Path, _link: &Path) -> io::Result<()> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn lstat",
+          "matches": [
+            {
+              "line": 352,
+              "text": "pub fn lstat(_p: &Path) -> io::Result<FileAttr> {"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "pub fn canonicalize",
+          "matches": [
+            {
+              "line": 356,
+              "text": "pub fn canonicalize(_p: &Path) -> io::Result<PathBuf> {"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "tools/test_runtime_storage.py",
+      "sha256": "4b9822cc26b006d08d8f18cb34b58858df3a673c17983d22b764c34f19015c71",
+      "anchors": [
+        {
+          "pattern": "def main",
+          "matches": [
+            {
+              "line": 54,
+              "text": "def main():"
+            }
+          ],
+          "total_matches": 1
+        },
+        {
+          "pattern": "cache=writeback",
+          "matches": [
+            {
+              "line": 25,
+              "text": "            '-drive', f'id=hd0,file={image},if=none,format=raw,cache=writeback',"
+            }
+          ],
+          "total_matches": 1
+        }
+      ]
+    },
+    {
+      "path": "tools/test_partitioned_storage.py",
+      "sha256": "1fd994f636350fa7e440ca75a4c6e49dfd5d3403d6a9cb294716d381becb7caf",
+      "anchors": [
+        {
+          "pattern": "def ",
+          "matches": [
+            {
+              "line": 18,
+              "text": "def run(*args, **kwargs):"
+            },
+            {
+              "line": 22,
+              "text": "def fixtures():"
+            },
+            {
+              "line": 66,
+              "text": "def boot(layout, image, number):"
+            },
+            {
+              "line": 105,
+              "text": "def main():"
+            }
+          ],
+          "total_matches": 4
+        }
+      ]
+    },
+    {
+      "path": "tools/test_usb_storage.py",
+      "sha256": "08fea1ad55e67764ca664c23d458d68b2c9ba99ca317eee77b6b0a7fbd0b9be4",
+      "anchors": [
+        {
+          "pattern": "def ",
+          "matches": [
+            {
+              "line": 20,
+              "text": "def mouse_report(content):"
+            },
+            {
+              "line": 27,
+              "text": "def boot(name, image, negative=False, sector_size=512):"
+            },
+            {
+              "line": 63,
+              "text": "                        def execute(command, arguments=None):"
+            },
+            {
+              "line": 107,
+              "text": "def main():"
+            }
+          ],
+          "total_matches": 4
+        }
+      ]
+    },
+    {
+      "path": "tools/disk.sh",
+      "sha256": "71e87ebd0dbc0ad1c2cd2260a163588f14e76d4930f0dbce25f6275a0b024224",
+      "anchors": [
+        {
+          "pattern": "mkfs.fat",
+          "matches": [
+            {
+              "line": 9,
+              "text": "for tool in dd mkfs.fat mmd mcopy; do"
+            },
+            {
+              "line": 22,
+              "text": "mkfs.fat -F32 -n SUNLIGHTOS \"$DISK_IMG\" >/dev/null"
+            }
+          ],
+          "total_matches": 2
+        }
+      ]
+    },
+    {
+      "path": "tools/state-disk.sh",
+      "sha256": "f0b129a8b13fccb252128a75b0abb46ffb93dc8ab5bda0e33fde7f87fe514858",
+      "anchors": [
+        {
+          "pattern": "mkfs.fat",
+          "matches": [
+            {
+              "line": 8,
+              "text": "for tool in dd mkfs.fat; do"
+            },
+            {
+              "line": 17,
+              "text": "mkfs.fat -F32 -n SUNSTATE \"$STATE_IMAGE\" >/dev/null"
+            }
+          ],
+          "total_matches": 2
+        }
+      ]
+    },
+    {
+      "path": "docs/runtime/python-py5-vfs-posix-filesystem-integration.md",
+      "sha256": "cdb481deef4f5ea7ccfde0646c6b4ac7f43c765655af3c43d0176996d343ad88",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# PY-5: VFS and POSIX filesystem integration audit"
+            },
+            {
+              "line": 11,
+              "text": "## Baseline and integrity"
+            },
+            {
+              "line": 21,
+              "text": "## SunShell capability matrix"
+            },
+            {
+              "line": 39,
+              "text": "## Sunlight Files capability matrix"
+            }
+          ],
+          "total_matches": 9
+        }
+      ]
+    },
+    {
+      "path": "docs/runtime/python-py6-unified-filesystem-foundation.md",
+      "sha256": "34adf2c9e5f5d42953531746cd7b4b710a8cec06a1bd3c26a2053d6cabab13d7",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# PY-6: Unified filesystem foundation"
+            },
+            {
+              "line": 11,
+              "text": "## Acceptance gates"
+            },
+            {
+              "line": 26,
+              "text": "## Baseline, inventory and preservation"
+            },
+            {
+              "line": 34,
+              "text": "## Authoritative architecture and ownership"
+            }
+          ],
+          "total_matches": 13
+        }
+      ]
+    },
+    {
+      "path": "docs/runtime/python-py7-filesystem-lifetime-posix-links.md",
+      "sha256": "0a67f84f37d1ed7826dc4a3ac8c5cf07a7767ecd90703b7e7c1a716ea9aebf43",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# PY-7: Filesystem lifetime, POSIX metadata and native links"
+            },
+            {
+              "line": 9,
+              "text": "## Acceptance gates"
+            },
+            {
+              "line": 24,
+              "text": "## Baseline and evidence integrity"
+            },
+            {
+              "line": 34,
+              "text": "## FAT ownership audit and selected design"
+            }
+          ],
+          "total_matches": 12
+        }
+      ]
+    },
+    {
+      "path": "docs/storage/storage-audit-fat32-block-vfs.md",
+      "sha256": "93876b6611abdf77d2f30b5485fc6227addfebf200e88d73686adb853bd9d86b",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# Storage, Block, VFS and Bootloader Audit"
+            },
+            {
+              "line": 15,
+              "text": "# sunlight-block 4 passed, sunlight-fat 8 passed, sunlight-fs 74 passed"
+            },
+            {
+              "line": 18,
+              "text": "## 1. Bootloader and memory mapping (Limine)"
+            },
+            {
+              "line": 20,
+              "text": "### Configuration"
+            }
+          ],
+          "total_matches": 30
+        }
+      ]
+    },
+    {
+      "path": "docs/storage/filesystem-boundaries-and-roadmap.md",
+      "sha256": "ce81c3b164878d1678f62fc36f7f95ef58fad7b8c6b445721d2aaf05ed21ecbc",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# Filesystem boundaries and improvement roadmap"
+            },
+            {
+              "line": 6,
+              "text": "## Recommendation"
+            },
+            {
+              "line": 19,
+              "text": "## What exists today"
+            },
+            {
+              "line": 42,
+              "text": "## Boot, `/boot`, root and partitions"
+            }
+          ],
+          "total_matches": 11
+        }
+      ]
+    },
+    {
+      "path": "docs/storage/partitioned-storage.md",
+      "sha256": "0fdf3c8f101a110bf248f4943523517e593cdac052f79f61982ac94cc9758029",
+      "anchors": [
+        {
+          "pattern": "# ",
+          "matches": [
+            {
+              "line": 1,
+              "text": "# First partitioned-disk milestone"
+            },
+            {
+              "line": 7,
+              "text": "## Selection and trust policy"
+            },
+            {
+              "line": 41,
+              "text": "## Supported layouts and bounds"
+            },
+            {
+              "line": 68,
+              "text": "## Validation"
+            }
+          ],
+          "total_matches": 8
+        }
+      ]
+    }
+  ]
+}

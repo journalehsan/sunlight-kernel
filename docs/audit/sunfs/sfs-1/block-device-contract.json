@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "interface": "sunlight-sunfs/src/block.rs",
+  "completion": [
+    "Completed (not durable)",
+    "Durable",
+    "known partial with completed prefix",
+    "known failure",
+    "uncertain with optional count",
+    "UnsupportedDurability"
+  ],
+  "capabilities": [
+    "logical/physical sector",
+    "capacity",
+    "alignment",
+    "identity",
+    "incarnation",
+    "max transfer",
+    "read_only",
+    "flush",
+    "FUA"
+  ],
+  "aggregation": "Sector512Adapter tested eight-sector writes and no failed-read exposure",
+  "flush_contract": "all earlier accepted bytes durable; ordered per byte, independent writes may reorder; no 4KiB atomicity",
+  "native_driver_qualification": "NOT_RUN",
+  "reset": "synchronous simulator fences all pending work; no real DMA qualification"
+}

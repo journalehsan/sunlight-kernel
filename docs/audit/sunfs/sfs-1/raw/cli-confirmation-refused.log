@@ -1,0 +1,1 @@
+usage: sunfs-format --image NEW_PATH --size INTEGER[MiB|GiB] --confirm-disposable

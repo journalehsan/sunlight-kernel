@@ -1,0 +1,52 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Checking sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+error: manual implementation of `.is_multiple_of()`
+  --> sunlight-sunfs/src/block.rs:23:16
+   |
+23 |             || self.max_transfer % self.logical_block != 0
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!self.max_transfer.is_multiple_of(self.logical_block)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+   = note: `-D clippy::manual-is-multiple-of` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::manual_is_multiple_of)]`
+
+error: manual implementation of `.is_multiple_of()`
+  --> sunlight-sunfs/src/block.rs:25:16
+   |
+25 |             || self.capacity % self.logical_block as u64 != 0
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!self.capacity.is_multiple_of(self.logical_block as u64)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+
+error: manual implementation of `.is_multiple_of()`
+  --> sunlight-sunfs/src/block.rs:42:12
+   |
+42 |         if offset % self.alignment as u64 != 0
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!offset.is_multiple_of(self.alignment as u64)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+
+error: manual implementation of `.is_multiple_of()`
+  --> sunlight-sunfs/src/block.rs:44:16
+   |
+44 |             || offset % self.logical_block as u64 != 0
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!offset.is_multiple_of(self.logical_block as u64)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+
+error: manual implementation of `.is_multiple_of()`
+  --> sunlight-sunfs/src/geometry.rs:87:16
+   |
+87 |             || p.capacity % p.logical_block as u64 != 0
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with: `!p.capacity.is_multiple_of(p.logical_block as u64)`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_is_multiple_of
+
+error: could not compile `sunlight-sunfs` (lib) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `sunlight-sunfs` (lib) due to 5 previous errors
+error: could not compile `sunlight-sunfs` (lib test) due to 5 previous errors

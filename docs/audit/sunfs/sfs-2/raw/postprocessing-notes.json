@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "qualified_source_changed": false,
+  "trace_preservation": "14509 gzip round trips and original-content SHA256 verified",
+  "initial_helper_attempt": {
+    "status": "FAIL",
+    "reason": "runpy invoked validator with a relative __file__, causing source-path resolution failure; subsequent integrity-only command saw the intentionally stale pre-compression manifest"
+  },
+  "correction": "Invoke helper with absolute path, verify qualified source/archive and compressed contents, refresh evidence hashes, then verify final manifest",
+  "filesystem_test_failures": false
+}

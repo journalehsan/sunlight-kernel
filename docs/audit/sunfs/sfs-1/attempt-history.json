@@ -1,0 +1,32 @@
+{
+  "expected_development_failures": [
+    {
+      "log": "raw/lab-tests-initial.log",
+      "classification": "invalid bitmap fixture before semantic validation",
+      "corrected": "preserve bitmap popcount while changing live ownership"
+    },
+    {
+      "log": "raw/source-integrity-first-attempt.json",
+      "classification": "validation harness scope mismatch",
+      "corrected": "exclude existing symlinks consistently with regular-file baseline"
+    },
+    {
+      "log": "raw/strict-fault-oracle.log",
+      "classification": "incorrect assumption that a prefix tear cannot yield a complete CP",
+      "demonstrated_prefix_bytes": 511,
+      "resulting_page_equals_complete_encoded_cp": true,
+      "checker_exit": 1,
+      "checker_status": "DEGRADED_RECOVERABLE selected=Some(1) union_blocks=8",
+      "image": "raw/torn-cp-prefix-511.img.gz",
+      "image_sha256": "c82e9513d4b8884927673d025f9ae3c61c30dca860b69e46e312c7dc5a80b376"
+    },
+    {
+      "log": "raw/segment-state-reproduction.log",
+      "classification": "real codec structural validation defect",
+      "corrected": "RETIRED live=0; all non-FREE epochs nonzero",
+      "regression_test": "payload_negatives"
+    }
+  ],
+  "final_profile_campaigns": "commands.json",
+  "original_attempts_preserved": true
+}

@@ -1,0 +1,66 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "argv": [
+        "python3",
+        "tools/sunfs_reproduce.py",
+        "--seed",
+        "0",
+        "--index",
+        "0",
+        "--kind",
+        "image-mutation",
+        "--output",
+        "/tmp/sunfs-reproduce-iw1ay6fi/0-0-image-mutation.img"
+      ],
+      "exit": 0,
+      "stdout": "{\"output\": \"/tmp/sunfs-reproduce-iw1ay6fi/0-0-image-mutation.img\", \"identity_crc64\": \"9f41a2338550c891\", \"recorded_classification\": \"DEGRADED_RECOVERABLE\"}\n",
+      "stderr": "",
+      "sha256": "e519fdcce368b4d8a50046f5728a1860463788d77f5087f10bba50cc7da27b80",
+      "checker_exit": 1,
+      "checker_first_line": "DEGRADED_RECOVERABLE selected=Some(2) union_blocks=8",
+      "existing_reproducer_refused": true
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/sunfs_reproduce.py",
+        "--seed",
+        "5457491",
+        "--index",
+        "363",
+        "--kind",
+        "image-mutation",
+        "--output",
+        "/tmp/sunfs-reproduce-iw1ay6fi/5457491-363-image-mutation.img"
+      ],
+      "exit": 0,
+      "stdout": "{\"output\": \"/tmp/sunfs-reproduce-iw1ay6fi/5457491-363-image-mutation.img\", \"identity_crc64\": \"c73671d2997c9c84\", \"recorded_classification\": \"CLEAN\"}\n",
+      "stderr": "",
+      "sha256": "8d8a0529e42cd9ccf8862fce35ff7157342e3263ad055769b7abb85c55838edc",
+      "checker_exit": 0,
+      "checker_first_line": "CLEAN selected=Some(2) union_blocks=8",
+      "existing_reproducer_refused": true
+    },
+    {
+      "argv": [
+        "python3",
+        "tools/sunfs_reproduce.py",
+        "--seed",
+        "1",
+        "--index",
+        "7",
+        "--kind",
+        "arbitrary-page",
+        "--output",
+        "/tmp/sunfs-reproduce-iw1ay6fi/1-7-arbitrary-page.img"
+      ],
+      "exit": 0,
+      "stdout": "{\"output\": \"/tmp/sunfs-reproduce-iw1ay6fi/1-7-arbitrary-page.img\", \"identity_crc64\": \"27c42d453fc4b75f\", \"recorded_classification\": \"Err(Magic)\"}\n",
+      "stderr": "",
+      "sha256": "71cfd8fee9245329b6f1f271aa663e14c85f35b130c2ef9ea71705101546309a",
+      "existing_reproducer_refused": true
+    }
+  ]
+}

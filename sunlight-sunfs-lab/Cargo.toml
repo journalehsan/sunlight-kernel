@@ -1,0 +1,10 @@
+[package]
+name = "sunlight-sunfs-lab"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sunlight-sunfs = { path = "../sunlight-sunfs" }
+
+[dev-dependencies]
+sunlight-sunfs-check = { path = "../sunlight-sunfs-check" }

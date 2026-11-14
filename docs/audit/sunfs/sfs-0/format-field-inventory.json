@@ -1,0 +1,901 @@
+{
+  "status": "PROPOSED_NOT_FROZEN",
+  "serialization_tests": "NOT_RUN",
+  "records": {
+    "common_header": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "magic",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "type",
+          "offset": 8,
+          "bytes": 2
+        },
+        {
+          "name": "structure_version",
+          "offset": 10,
+          "bytes": 2
+        },
+        {
+          "name": "header_bytes",
+          "offset": 12,
+          "bytes": 2
+        },
+        {
+          "name": "flags",
+          "offset": 14,
+          "bytes": 2
+        },
+        {
+          "name": "volume_uuid",
+          "offset": 16,
+          "bytes": 16
+        },
+        {
+          "name": "self_block",
+          "offset": 32,
+          "bytes": 8
+        },
+        {
+          "name": "segment_epoch",
+          "offset": 40,
+          "bytes": 8
+        },
+        {
+          "name": "birth_checkpoint",
+          "offset": 48,
+          "bytes": 8
+        },
+        {
+          "name": "payload_bytes",
+          "offset": 56,
+          "bytes": 4
+        },
+        {
+          "name": "reserved0",
+          "offset": 60,
+          "bytes": 4
+        },
+        {
+          "name": "crc64",
+          "offset": 64,
+          "bytes": 8
+        },
+        {
+          "name": "reserved1",
+          "offset": 72,
+          "bytes": 24
+        }
+      ],
+      "fixed_bytes": 96,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "superblock_payload": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "format_major",
+          "offset": 0,
+          "bytes": 2
+        },
+        {
+          "name": "format_minor",
+          "offset": 2,
+          "bytes": 2
+        },
+        {
+          "name": "minimum_reader_major",
+          "offset": 4,
+          "bytes": 2
+        },
+        {
+          "name": "minimum_reader_minor",
+          "offset": 6,
+          "bytes": 2
+        },
+        {
+          "name": "compatible",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "readonly_compatible",
+          "offset": 16,
+          "bytes": 8
+        },
+        {
+          "name": "incompatible",
+          "offset": 24,
+          "bytes": 8
+        },
+        {
+          "name": "filesystem_block_bytes",
+          "offset": 32,
+          "bytes": 4
+        },
+        {
+          "name": "blocks_per_segment",
+          "offset": 36,
+          "bytes": 4
+        },
+        {
+          "name": "volume_blocks",
+          "offset": 40,
+          "bytes": 8
+        },
+        {
+          "name": "segment_start",
+          "offset": 48,
+          "bytes": 8
+        },
+        {
+          "name": "segment_count",
+          "offset": 56,
+          "bytes": 8
+        },
+        {
+          "name": "checkpoint_slots",
+          "offset": 64,
+          "bytes": 24
+        },
+        {
+          "name": "maximum_nodes",
+          "offset": 88,
+          "bytes": 8
+        },
+        {
+          "name": "maximum_orphans",
+          "offset": 96,
+          "bytes": 8
+        },
+        {
+          "name": "maximum_table_pages",
+          "offset": 104,
+          "bytes": 4
+        },
+        {
+          "name": "maximum_extents_per_node",
+          "offset": 108,
+          "bytes": 4
+        },
+        {
+          "name": "cleaner_reserve_blocks",
+          "offset": 112,
+          "bytes": 8
+        },
+        {
+          "name": "maximum_transaction_blocks",
+          "offset": 120,
+          "bytes": 8
+        },
+        {
+          "name": "copy_index",
+          "offset": 128,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 132,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 136,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "checkpoint_payload": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "generation",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "predecessor_generation",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "root",
+          "offset": 16,
+          "bytes": 16
+        },
+        {
+          "name": "node_map",
+          "offset": 32,
+          "bytes": 24
+        },
+        {
+          "name": "segment_table",
+          "offset": 56,
+          "bytes": 24
+        },
+        {
+          "name": "orphan_table",
+          "offset": 80,
+          "bytes": 24
+        },
+        {
+          "name": "next_nid",
+          "offset": 104,
+          "bytes": 8
+        },
+        {
+          "name": "allocated_blocks",
+          "offset": 112,
+          "bytes": 8
+        },
+        {
+          "name": "free_blocks",
+          "offset": 120,
+          "bytes": 8
+        },
+        {
+          "name": "live_nodes",
+          "offset": 128,
+          "bytes": 8
+        },
+        {
+          "name": "orphan_nodes",
+          "offset": 136,
+          "bytes": 8
+        },
+        {
+          "name": "transaction_blocks",
+          "offset": 144,
+          "bytes": 8
+        },
+        {
+          "name": "state",
+          "offset": 152,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 156,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 160,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "node_id": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "nid",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "incarnation",
+          "offset": 8,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 16,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "block_ref": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "block",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "segment_epoch",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "crc64",
+          "offset": 16,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 24,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "time": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "seconds",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "nanos",
+          "offset": 8,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 12,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 16,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "node_payload": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "id",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "kind",
+          "offset": 16,
+          "bytes": 1
+        },
+        {
+          "name": "encoding",
+          "offset": 17,
+          "bytes": 1
+        },
+        {
+          "name": "mode",
+          "offset": 18,
+          "bytes": 2
+        },
+        {
+          "name": "uid",
+          "offset": 20,
+          "bytes": 4
+        },
+        {
+          "name": "gid",
+          "offset": 24,
+          "bytes": 4
+        },
+        {
+          "name": "nlink",
+          "offset": 28,
+          "bytes": 4
+        },
+        {
+          "name": "size_bytes",
+          "offset": 32,
+          "bytes": 8
+        },
+        {
+          "name": "content_generation",
+          "offset": 40,
+          "bytes": 8
+        },
+        {
+          "name": "parent",
+          "offset": 48,
+          "bytes": 16
+        },
+        {
+          "name": "extents",
+          "offset": 64,
+          "bytes": 24
+        },
+        {
+          "name": "directory_pages",
+          "offset": 88,
+          "bytes": 24
+        },
+        {
+          "name": "time_valid",
+          "offset": 112,
+          "bytes": 4
+        },
+        {
+          "name": "reserved0",
+          "offset": 116,
+          "bytes": 4
+        },
+        {
+          "name": "atime",
+          "offset": 120,
+          "bytes": 16
+        },
+        {
+          "name": "mtime",
+          "offset": 136,
+          "bytes": 16
+        },
+        {
+          "name": "ctime",
+          "offset": 152,
+          "bytes": 16
+        },
+        {
+          "name": "birth_time",
+          "offset": 168,
+          "bytes": 16
+        },
+        {
+          "name": "reserved1",
+          "offset": 184,
+          "bytes": 16
+        }
+      ],
+      "fixed_bytes": 200,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "table_root_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "table_kind",
+          "offset": 0,
+          "bytes": 2
+        },
+        {
+          "name": "reserved0",
+          "offset": 2,
+          "bytes": 2
+        },
+        {
+          "name": "page_count",
+          "offset": 4,
+          "bytes": 4
+        },
+        {
+          "name": "entry_count",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "entry_bytes",
+          "offset": 16,
+          "bytes": 4
+        },
+        {
+          "name": "reserved1",
+          "offset": 20,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 24,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "page_descriptor": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "first_key",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "last_key",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "page",
+          "offset": 16,
+          "bytes": 24
+        },
+        {
+          "name": "entry_count",
+          "offset": 40,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 44,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 48,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "table_page_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "table_kind",
+          "offset": 0,
+          "bytes": 2
+        },
+        {
+          "name": "reserved",
+          "offset": 2,
+          "bytes": 2
+        },
+        {
+          "name": "entry_count",
+          "offset": 4,
+          "bytes": 4
+        },
+        {
+          "name": "first_key",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "last_key",
+          "offset": 16,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 24,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "node_map_entry": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "id",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "node",
+          "offset": 16,
+          "bytes": 24
+        },
+        {
+          "name": "kind",
+          "offset": 40,
+          "bytes": 1
+        },
+        {
+          "name": "reserved",
+          "offset": 41,
+          "bytes": 7
+        }
+      ],
+      "fixed_bytes": 48,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "directory_page_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "owner",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "ordinal",
+          "offset": 16,
+          "bytes": 4
+        },
+        {
+          "name": "record_count",
+          "offset": 20,
+          "bytes": 4
+        },
+        {
+          "name": "used_bytes",
+          "offset": 24,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 28,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 32,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "directory_entry_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "target",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "name_bytes",
+          "offset": 16,
+          "bytes": 2
+        },
+        {
+          "name": "kind",
+          "offset": 18,
+          "bytes": 1
+        },
+        {
+          "name": "flags",
+          "offset": 19,
+          "bytes": 1
+        },
+        {
+          "name": "record_bytes",
+          "offset": 20,
+          "bytes": 2
+        },
+        {
+          "name": "reserved",
+          "offset": 22,
+          "bytes": 10
+        }
+      ],
+      "fixed_bytes": 32,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "extent_page_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "owner",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "count",
+          "offset": 16,
+          "bytes": 4
+        },
+        {
+          "name": "reserved",
+          "offset": 20,
+          "bytes": 4
+        }
+      ],
+      "fixed_bytes": 24,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "extent": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "logical_block",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "physical_block",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "segment_epoch",
+          "offset": 16,
+          "bytes": 8
+        },
+        {
+          "name": "content_generation",
+          "offset": 24,
+          "bytes": 8
+        },
+        {
+          "name": "block_count",
+          "offset": 32,
+          "bytes": 4
+        },
+        {
+          "name": "flags",
+          "offset": 36,
+          "bytes": 4
+        },
+        {
+          "name": "data_crc64",
+          "offset": 40,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 48,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "segment_state_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "segment_index",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "allocation_epoch",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "state",
+          "offset": 16,
+          "bytes": 2
+        },
+        {
+          "name": "reserved0",
+          "offset": 18,
+          "bytes": 2
+        },
+        {
+          "name": "live_blocks",
+          "offset": 20,
+          "bytes": 4
+        },
+        {
+          "name": "next_hint",
+          "offset": 24,
+          "bytes": 4
+        },
+        {
+          "name": "bitmap_bytes",
+          "offset": 28,
+          "bytes": 4
+        },
+        {
+          "name": "summary",
+          "offset": 32,
+          "bytes": 24
+        },
+        {
+          "name": "reserved1",
+          "offset": 56,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 64,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "summary_page_prefix": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "segment_index",
+          "offset": 0,
+          "bytes": 8
+        },
+        {
+          "name": "allocation_epoch",
+          "offset": 8,
+          "bytes": 8
+        },
+        {
+          "name": "ordinal",
+          "offset": 16,
+          "bytes": 4
+        },
+        {
+          "name": "entry_count",
+          "offset": 20,
+          "bytes": 4
+        },
+        {
+          "name": "next",
+          "offset": 24,
+          "bytes": 24
+        }
+      ],
+      "fixed_bytes": 48,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "summary_entry": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "block_offset",
+          "offset": 0,
+          "bytes": 4
+        },
+        {
+          "name": "kind",
+          "offset": 4,
+          "bytes": 2
+        },
+        {
+          "name": "reserved",
+          "offset": 6,
+          "bytes": 2
+        },
+        {
+          "name": "owner",
+          "offset": 8,
+          "bytes": 16
+        },
+        {
+          "name": "logical_key",
+          "offset": 24,
+          "bytes": 8
+        },
+        {
+          "name": "content_generation",
+          "offset": 32,
+          "bytes": 8
+        },
+        {
+          "name": "expected_crc64",
+          "offset": 40,
+          "bytes": 8
+        }
+      ],
+      "fixed_bytes": 48,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    },
+    "orphan_entry": {
+      "version": 2,
+      "fields": [
+        {
+          "name": "id",
+          "offset": 0,
+          "bytes": 16
+        },
+        {
+          "name": "unlink_generation",
+          "offset": 16,
+          "bytes": 8
+        },
+        {
+          "name": "reason",
+          "offset": 24,
+          "bytes": 2
+        },
+        {
+          "name": "reserved",
+          "offset": 26,
+          "bytes": 6
+        }
+      ],
+      "fixed_bytes": 32,
+      "offset_origin": "record start; metadata payload starts at96",
+      "endianness": "little, opaque arrays excepted",
+      "alignment": 8,
+      "checksum": "enclosing metadata CRC64; data CRC domain separately specified"
+    }
+  }
+}

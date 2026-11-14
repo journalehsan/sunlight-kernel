@@ -1,0 +1,38 @@
+CLEAN selected=Some(2) union_blocks=8
+Report {
+    status: Clean,
+    selected: Some(
+        2,
+    ),
+    superblocks: [
+        "VALID",
+        "VALID",
+    ],
+    slots: [
+        Slot {
+            block: 2,
+            generation: Some(
+                1,
+            ),
+            class: "VALID",
+            error: None,
+        },
+        Slot {
+            block: 3,
+            generation: Some(
+                2,
+            ),
+            class: "VALID",
+            error: None,
+        },
+        Slot {
+            block: 4,
+            generation: None,
+            class: "EMPTY",
+            error: None,
+        },
+    ],
+    issues: [],
+    union_blocks: 8,
+    pages_read: 21,
+}

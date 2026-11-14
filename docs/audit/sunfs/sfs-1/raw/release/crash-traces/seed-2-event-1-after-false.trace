@@ -1,0 +1,40 @@
+seed=2 event=1 after=false
+result=Err(IoFailure { kind: Write, completed: None, certainty: Uncertain })
+status=CORRUPT
+durable_crc64=0000000000000000
+trace=[
+    Event {
+        id: 1,
+        seed: 2,
+        operation: "write",
+        offset: 0,
+        length: 4096,
+        digest: 12004193713642079062,
+        outcome: "Err(IoFailure { kind: Write, completed: None, certainty: Uncertain })",
+        persistence: [],
+        incarnation: 1,
+    },
+    Event {
+        id: 2,
+        seed: 2,
+        operation: "power-loss",
+        offset: 0,
+        length: 0,
+        digest: 0,
+        outcome: "volatile discarded",
+        persistence: [],
+        incarnation: 1,
+    },
+]
+checker=Report {
+    status: Corrupt,
+    selected: None,
+    superblocks: [
+        "Codec(Magic)",
+        "Codec(Magic)",
+    ],
+    slots: [],
+    issues: [],
+    union_blocks: 0,
+    pages_read: 2,
+}

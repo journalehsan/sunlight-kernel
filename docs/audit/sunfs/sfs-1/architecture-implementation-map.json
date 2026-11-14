@@ -1,0 +1,39 @@
+{
+  "status": "PASS",
+  "core": {
+    "crate": "sunlight-sunfs",
+    "no_std": true,
+    "uses_alloc": true,
+    "normal_dependencies": [],
+    "files": [
+      "codec.rs",
+      "geometry.rs",
+      "block.rs",
+      "bootstrap.rs"
+    ]
+  },
+  "hosted": {
+    "crate": "sunlight-sunfs-lab",
+    "normal_dependencies": [
+      "sunlight-sunfs"
+    ],
+    "dev_dependencies": [
+      "sunlight-sunfs-check"
+    ]
+  },
+  "checker": {
+    "crate": "sunlight-sunfs-check",
+    "normal_dependencies": [
+      "sunlight-sunfs"
+    ],
+    "semantic_owner": "src/lib.rs Walker and independent selection",
+    "forbidden_calls": [
+      "bootstrap",
+      "Geometry::calculate",
+      "publish"
+    ],
+    "inspection": "checker source imports codec only; no engine recovery oracle"
+  },
+  "production_integration": false,
+  "format_decision": "docs/filesystems/sunfs/adr/0002-sfs1-experimental-codec.md"
+}

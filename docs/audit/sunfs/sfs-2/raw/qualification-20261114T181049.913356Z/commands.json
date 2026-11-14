@@ -1,0 +1,196 @@
+[
+  {
+    "argv": [
+      "rustc",
+      "--version",
+      "--verbose"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/toolchain.log",
+    "elapsed_ns": 33563164
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/core-no-std.log",
+    "elapsed_ns": 379676697
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/tests-dev.log",
+    "elapsed_ns": 90233291332
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--bins",
+      "--examples"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/build-dev.log",
+    "elapsed_ns": 2147477224
+  },
+  {
+    "argv": [
+      "cargo",
+      "run",
+      "-p",
+      "sunlight-sunfs-lab",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--example",
+      "transactions"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/performance-dev.log",
+    "elapsed_ns": 157436916
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/tests-release.log",
+    "elapsed_ns": 103215066039
+  },
+  {
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release",
+      "--bins",
+      "--examples"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/build-release.log",
+    "elapsed_ns": 10843534813
+  },
+  {
+    "argv": [
+      "cargo",
+      "run",
+      "-p",
+      "sunlight-sunfs-lab",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release",
+      "--example",
+      "transactions"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/performance-release.log",
+    "elapsed_ns": 170379763
+  },
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-block",
+      "-p",
+      "sunlight-fat",
+      "-p",
+      "sunlight-fs",
+      "--offline",
+      "--locked",
+      "--lib",
+      "--target",
+      "x86_64-unknown-linux-gnu"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/storage-regressions.log",
+    "elapsed_ns": 179498663
+  },
+  {
+    "argv": [
+      "cargo",
+      "clippy",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--all-targets",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/clippy.log",
+    "elapsed_ns": 1144929283
+  },
+  {
+    "argv": [
+      "python3",
+      "tools/sunfs_golden.py"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T181049.913356Z/golden.log",
+    "elapsed_ns": 53978500
+  }
+]

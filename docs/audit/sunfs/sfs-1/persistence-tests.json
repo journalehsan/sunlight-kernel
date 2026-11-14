@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "cases": [
+    "acknowledged no-flush lost",
+    "successful flush survives",
+    "failed flush persists none/some/all without durability success",
+    "uncertain write none/all durable",
+    "six independent write permutations",
+    "same-block order",
+    "read failure",
+    "reset/incarnation fencing",
+    "unsupported flush/FUA",
+    "dishonest advertised flush demonstrated separately"
+  ],
+  "exhaustive_reorder_bound": "three independent single-sector writes, all 6 permutations",
+  "dishonest_model_excluded_from_correctness_verdict": true,
+  "publication_scope": "bootstrap only; D/P/R/R0 mutation protocol deferred SFS-2"
+}

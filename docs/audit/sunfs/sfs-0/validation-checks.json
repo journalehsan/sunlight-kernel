@@ -1,0 +1,22 @@
+{
+  "evidence_kind": "documentation_source_integrity_and_arithmetic_only",
+  "command": "python3 docs/audit/sunfs/sfs-0/validate.py",
+  "incoming_regular_files_verified": 88406,
+  "changed_or_missing_incoming_files": [],
+  "unexpected_new_files_outside_output_directories": [],
+  "missing_required_files": [],
+  "broken_local_document_links": [],
+  "format_field_arithmetic_errors": [],
+  "crc64_ecma_check_value": "6c40df5f0b497347",
+  "crc64_convention_matches": true,
+  "geometry_arithmetic_errors": [],
+  "source_anchor_files_verified": 41,
+  "source_anchor_errors": [],
+  "production_tests": "NOT_RUN",
+  "format_serialization_tests": "NOT_RUN",
+  "crash_recovery_tests": "NOT_RUN",
+  "driver_durability_tests": "NOT_RUN",
+  "qemu_tests": "NOT_RUN",
+  "application_ui_tests": "NOT_RUN",
+  "status": "PASS"
+}
