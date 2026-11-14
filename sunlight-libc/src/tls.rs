@@ -4,7 +4,8 @@
 //! calls that may write errno. Each thread receives one mapping that holds the
 //! process TLS image followed by the Thread Control Block. FS_BASE points at
 //! the TCB so that `fs:0` == `self_ptr`, `fs:8` == `errno` and `fs:16` holds
-//! the optional pthread control block.
+//! the optional pthread control block. Native Rust std key slots start at
+//! `fs:32` and are part of the same allocated and initialized TCB.
 //!
 //! Native x86-64 uses TLS variant II: static TLS variables live at negative
 //! offsets from the thread pointer. The linker script exports the image bounds
@@ -23,6 +24,10 @@ pub struct Tcb {
     pub _reserved: u32,
     /// pthread control block for threads created by `pthread_create`.
     pub pthread: *mut u8,
+    _key_padding: usize,
+    // ABI shared with tools/native-std/overlay/thread_local/key/sunlightos.rs.
+    // Reserve the whole table after FS_BASE, including for static C TLS images.
+    std_keys: [*mut u8; 256],
 }
 
 pub const TCB_SIZE: usize = core::mem::size_of::<Tcb>();
@@ -78,18 +83,24 @@ fn align_up(value: usize, align: usize) -> usize {
 }
 
 /// Size of the TLS block as seen by `@TPOFF` references.
-fn tls_block_size() -> usize {
-    let image = tls_image();
+fn tls_block_size(image: TlsImage) -> usize {
     align_up(image.mem_len, image.align)
 }
 
-fn thread_pointer_align() -> usize {
-    TCB_ALIGN.max(tls_image().align)
+fn thread_pointer_align(image: TlsImage) -> usize {
+    TCB_ALIGN.max(image.align)
 }
 
 /// Mapping size required for a thread's TLS image and TCB.
 pub fn area_size() -> usize {
-    align_up(tls_block_size() + TCB_SIZE + thread_pointer_align(), 4096)
+    area_size_for(tls_image())
+}
+
+fn area_size_for(image: TlsImage) -> usize {
+    align_up(
+        tls_block_size(image) + TCB_SIZE + thread_pointer_align(image),
+        4096,
+    )
 }
 
 /// Lay out the TLS image and TCB inside `area`, returning the thread pointer.
@@ -98,15 +109,18 @@ pub fn area_size() -> usize {
 /// `area` must designate `size` writable bytes that stay mapped for the
 /// lifetime of the thread.
 pub unsafe fn prepare_area(area: *mut u8, size: usize) -> Option<*mut Tcb> {
-    let block_size = tls_block_size();
+    prepare_image(area, size, tls_image())
+}
+
+unsafe fn prepare_image(area: *mut u8, size: usize, image: TlsImage) -> Option<*mut Tcb> {
+    let block_size = tls_block_size(image);
     if area.is_null() || size < block_size + TCB_SIZE {
         return None;
     }
-    let tcb_addr = (area as usize + size - TCB_SIZE) & !(thread_pointer_align() - 1);
+    let tcb_addr = (area as usize + size - TCB_SIZE) & !(thread_pointer_align(image) - 1);
     if tcb_addr < area as usize + block_size {
         return None;
     }
-    let image = tls_image();
     let dest = tcb_addr - block_size;
     if image.data_len != 0 {
         core::ptr::copy_nonoverlapping(image.data, dest as *mut u8, image.data_len);
@@ -122,6 +136,8 @@ pub unsafe fn prepare_area(area: *mut u8, size: usize) -> Option<*mut Tcb> {
         errno: 0,
         _reserved: 0,
         pthread: core::ptr::null_mut(),
+        _key_padding: 0,
+        std_keys: [core::ptr::null_mut(); 256],
     });
     Some(tcb)
 }
@@ -195,5 +211,70 @@ pub unsafe fn set_pthread_control(control: *mut u8) {
     let tcb = current_tcb();
     if !tcb.is_null() {
         (*tcb).pthread = control;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tcb_preserves_native_std_and_pthread_offsets() {
+        assert_eq!(core::mem::offset_of!(Tcb, self_ptr), 0);
+        assert_eq!(core::mem::offset_of!(Tcb, errno), 8);
+        assert_eq!(core::mem::offset_of!(Tcb, pthread), 16);
+        assert_eq!(core::mem::offset_of!(Tcb, std_keys), 32);
+    }
+
+    #[test]
+    fn static_tls_and_std_keys_share_mapping_without_overlap() {
+        #[repr(align(8192))]
+        struct Storage([u8; 32768]);
+        let data = [0x5a; 73];
+        for align in [1, 64, 4096, 8192] {
+            let image = TlsImage {
+                data: data.as_ptr(),
+                data_len: data.len(),
+                mem_len: 5000,
+                align,
+            };
+            let size = area_size_for(image);
+            let mut storage = Storage([0xa5; 32768]);
+            let base = storage.0.as_mut_ptr();
+            let tcb = unsafe { prepare_image(base, size, image).unwrap() };
+            let offset = tcb as usize - base as usize;
+            let block = tls_block_size(image);
+            assert_eq!(tcb as usize % thread_pointer_align(image), 0);
+            assert!(offset >= block);
+            assert!(offset + TCB_SIZE <= size);
+            assert_eq!(
+                &storage.0[offset - block..offset - block + data.len()],
+                &data
+            );
+            assert!(storage.0[offset - block + data.len()..offset]
+                .iter()
+                .all(|b| *b == 0));
+            assert!(unsafe { (*tcb).std_keys.iter().all(|p| p.is_null()) });
+            assert!(storage.0[size..].iter().all(|b| *b == 0xa5));
+        }
+    }
+
+    #[test]
+    fn native_std_key_table_fits_and_starts_empty() {
+        // std's key backend uses all 256 pointer slots at FS_BASE + 32.
+        // Poison the storage so initialization cannot rely on mmap zeroing.
+        #[repr(align(4096))]
+        struct Page([u8; 4096]);
+        let mut page = Page([0xa5; 4096]);
+        let base = page.0.as_mut_ptr();
+        let tcb = unsafe { prepare_area(base, page.0.len()).unwrap() };
+        let table_end = tcb as usize + 32 + 256 * core::mem::size_of::<*mut u8>();
+        assert!(
+            table_end <= base as usize + page.0.len(),
+            "std TLS keys exceed mapping"
+        );
+        let table =
+            unsafe { core::slice::from_raw_parts((tcb as usize + 32) as *const *mut u8, 256) };
+        assert!(table.iter().all(|value| value.is_null()));
     }
 }

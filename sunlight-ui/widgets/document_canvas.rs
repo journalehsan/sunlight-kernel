@@ -2577,7 +2577,7 @@ impl ScrollView {
             };
         }
         let thumb_h = ((u64::from(track.h) * u64::from(surface_height)) / u64::from(content_height))
-            .clamp(u64::from(Self::MIN_THUMB_H), u64::from(track.h)) as u32;
+            .clamp(u64::from(Self::MIN_THUMB_H.min(track.h)), u64::from(track.h)) as u32;
         let travel = track.h.saturating_sub(thumb_h);
         let max_scroll = u64::from(max_scroll_y.max(1));
         let scrolled = u64::from(scroll_y.min(max_scroll_y));

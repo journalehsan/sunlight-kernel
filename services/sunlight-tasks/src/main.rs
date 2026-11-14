@@ -10,6 +10,8 @@ use sunlight_ipc::{
 use sunlight_libc::kill as libc_kill;
 use sunlight_telemetry::{ProcessState, SystemSnapshot, Telemetry, MAX_CORES, MAX_PROCESSES};
 use sunlight_ui::layout::Column as LayoutColumn;
+use sunlight_ui::scroll::{draw_scrollbar, hit_test_scrollbar, ScrollState};
+use sunlight_ui::widgets::table::{SortKey, SortState};
 use sunlight_ui::{
     request_close,
     widgets::{Column, Label, StatusBar, Table},
@@ -224,6 +226,8 @@ struct TasksApp {
     selected_pid: Option<u32>,
     scroll: usize,
     show_system_info: bool,
+    scrollbar: ScrollState,
+    header_hover: Option<usize>,
     view_mode: ViewMode,
     hovered_action: Option<usize>,
     pressed_action: Option<usize>,
@@ -275,6 +279,8 @@ impl TasksApp {
             selected_pid: None,
             scroll: 0,
             show_system_info: true,
+            scrollbar: ScrollState::new(),
+            header_hover: None,
             view_mode: ViewMode::Processes,
             hovered_action: None,
             pressed_action: None,
@@ -320,7 +326,16 @@ impl TasksApp {
         let mut root_children = [
             fixed_height_box(TITLE_H + 6),
             fixed_height_box(TOOLBAR_H),
-            fixed_height_box(SUMMARY_H),
+            fixed_height_box(
+                SUMMARY_H
+                    + if root.w < 560 {
+                        84
+                    } else if root.w < 800 {
+                        42
+                    } else {
+                        0
+                    },
+            ),
             LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill_sizing()),
             fixed_height_box(STATUS_H),
         ];
@@ -543,6 +558,13 @@ impl TasksApp {
                     .find(|p| p.pid == pid)
                     .map(|p| (p.pid, p.generation))
             });
+            let anchor = (self.view_mode == ViewMode::Processes
+                && self.scroll > 0
+                && self.scroll < self.row_count)
+                .then(|| {
+                    let p = &self.snapshot.procs[self.order[self.scroll]];
+                    (p.pid, p.generation, self.row_group[self.scroll])
+                });
             self.snapshot = *self.telemetry.snapshot();
             if old_identity.is_some_and(|id| {
                 !self.snapshot.procs[..self.snapshot.proc_count]
@@ -565,6 +587,14 @@ impl TasksApp {
                 }
             }
             self.rebuild_rows();
+            if let Some((pid, generation, group)) = anchor {
+                if let Some(row) = (0..self.row_count).find(|&row| {
+                    let p = &self.snapshot.procs[self.order[row]];
+                    p.pid == pid && p.generation == generation && self.row_group[row] == group
+                }) {
+                    self.scroll = row;
+                }
+            }
             self.rebuild_core_rows();
             self.rebuild_hw_info();
             self.clamp_scroll();
@@ -600,8 +630,19 @@ impl TasksApp {
 
         self.row_group.fill(false);
         if self.grouping == 2 {
-            let sorted = self.order;
+            let mut sorted = self.order;
             let count = self.row_count;
+            // Sort group keys by displayed aggregates; children retain process order.
+            for i in 1..count {
+                let key = sorted[i];
+                let mut j = i;
+                while j > 0 && self.group_before(key, sorted[j - 1]) {
+                    sorted[j] = sorted[j - 1];
+                    j -= 1;
+                }
+                sorted[j] = key;
+            }
+            let children = self.order;
             self.row_count = 0;
             let mut done = [false; MAX_PROCESSES];
             for i in 0..count {
@@ -614,8 +655,7 @@ impl TasksApp {
                 self.row_group[self.row_count] = true;
                 self.row_count += 1;
                 let collapsed = self.collapsed.contains(&key);
-                for j in i..count {
-                    let member = sorted[j];
+                for member in children[..count].iter().copied() {
                     if self.snapshot.procs[member].metrics.app_id == key {
                         done[member] = true;
                         if !collapsed {
@@ -630,33 +670,19 @@ impl TasksApp {
             let count = self.row_count;
             let mut emitted = [false; MAX_PROCESSES];
             self.row_count = 0;
-            // Stable parent-before-child traversal, including orphans/cycles.
-            for _ in 0..MAX_PROCESSES {
-                let mut progress = false;
-                for index in &sorted[..count] {
-                    if emitted[*index] {
-                        continue;
-                    }
-                    let p = &self.snapshot.procs[*index];
-                    let parent = sorted[..count]
-                        .iter()
-                        .find(|j| self.snapshot.procs[**j].pid == p.ppid);
-                    if parent.is_none_or(|j| emitted[*j]) {
-                        self.order[self.row_count] = *index;
-                        self.row_count += 1;
-                        emitted[*index] = true;
-                        progress = true;
-                    }
-                }
-                if !progress {
-                    break;
+            // Depth-first traversal keeps each sorted subtree contiguous.
+            for index in &sorted[..count] {
+                let p = &self.snapshot.procs[*index];
+                if !sorted[..count]
+                    .iter()
+                    .any(|j| self.snapshot.procs[*j].pid == p.ppid)
+                {
+                    self.emit_tree(*index, &sorted[..count], &mut emitted);
                 }
             }
+            // Deterministic recovery for cycles and self-parented records.
             for index in &sorted[..count] {
-                if !emitted[*index] {
-                    self.order[self.row_count] = *index;
-                    self.row_count += 1;
-                }
+                self.emit_tree(*index, &sorted[..count], &mut emitted);
             }
         }
         for row in 0..self.row_count {
@@ -772,6 +798,7 @@ impl TasksApp {
                 self.row_lens[row][1] = n;
             }
         }
+        self.clamp_scroll();
     }
 
     fn rebuild_core_rows(&mut self) {
@@ -880,26 +907,124 @@ impl TasksApp {
         }
     }
 
+    fn group_before(&self, a: usize, b: usize) -> bool {
+        let left = &self.snapshot.procs[a];
+        let right = &self.snapshot.procs[b];
+        let aggregate = |id: &[u8; 32]| -> u64 {
+            self.snapshot.procs[..self.snapshot.proc_count]
+                .iter()
+                .filter(|p| &p.metrics.app_id == id)
+                .map(|p| match self.sort_col {
+                    3 => p.cpu_bp as u64,
+                    4 => p.metrics.private_bytes,
+                    5 => p.metrics.shared_bytes,
+                    6 => p.metrics.mapped_bytes,
+                    _ => 0,
+                })
+                .fold(0u64, u64::saturating_add)
+        };
+        let order = match self.sort_col {
+            3..=6 => aggregate(&left.metrics.app_id).cmp(&aggregate(&right.metrics.app_id)),
+            1 | 7 => {
+                SortKey::Text(core::str::from_utf8(trim_zeros(&left.metrics.app_id)).unwrap_or(""))
+                    .compare(SortKey::Text(
+                        core::str::from_utf8(trim_zeros(&right.metrics.app_id)).unwrap_or(""),
+                    ))
+            }
+            // PID/state have no group aggregate: use the lowest PID member.
+            _ => {
+                let representative = |id: &[u8; 32]| {
+                    self.snapshot.procs[..self.snapshot.proc_count]
+                        .iter()
+                        .filter(|p| &p.metrics.app_id == id)
+                        .map(|p| {
+                            if self.sort_col == 2 {
+                                p.state as u32
+                            } else {
+                                p.pid
+                            }
+                        })
+                        .min()
+                        .unwrap_or(0)
+                };
+                representative(&left.metrics.app_id).cmp(&representative(&right.metrics.app_id))
+            }
+        };
+        SortState {
+            column: self.sort_col,
+            descending: self.descending,
+        }
+        .compare(order, left.metrics.app_id.cmp(&right.metrics.app_id))
+        .is_lt()
+    }
+
+    fn emit_tree(&mut self, index: usize, sorted: &[usize], emitted: &mut [bool; MAX_PROCESSES]) {
+        if emitted[index] {
+            return;
+        }
+        emitted[index] = true;
+        self.order[self.row_count] = index;
+        self.row_count += 1;
+        let pid = self.snapshot.procs[index].pid;
+        for child in sorted {
+            if self.snapshot.procs[*child].ppid == pid {
+                self.emit_tree(*child, sorted, emitted);
+            }
+        }
+    }
+
     fn before(&self, a: usize, b: usize) -> bool {
         let left = &self.snapshot.procs[a];
         let right = &self.snapshot.procs[b];
         let cmp = match self.sort_col {
             0 => left.pid.cmp(&right.pid),
-            1 => left.name_str().cmp(right.name_str()),
+            1 => SortKey::Text(left.name_str()).compare(SortKey::Text(right.name_str())),
             2 => (left.state as u8).cmp(&(right.state as u8)),
             4 => left.metrics.private_bytes.cmp(&right.metrics.private_bytes),
             5 => left.metrics.shared_bytes.cmp(&right.metrics.shared_bytes),
             6 => left.metrics.mapped_bytes.cmp(&right.metrics.mapped_bytes),
-            7 => left.metrics.app_id.cmp(&right.metrics.app_id),
+            7 => {
+                SortKey::Text(core::str::from_utf8(trim_zeros(&left.metrics.app_id)).unwrap_or(""))
+                    .compare(SortKey::Text(
+                        core::str::from_utf8(trim_zeros(&right.metrics.app_id)).unwrap_or(""),
+                    ))
+            }
             _ => left.cpu_bp.cmp(&right.cpu_bp),
         };
-        if cmp == core::cmp::Ordering::Equal {
-            left.pid < right.pid
-        } else if self.descending {
-            cmp.is_gt()
-        } else {
-            cmp.is_lt()
+        SortState {
+            column: self.sort_col,
+            descending: self.descending,
         }
+        .compare(cmp, left.pid.cmp(&right.pid))
+        .is_lt()
+    }
+
+    fn scroll_region(&self) -> Rect {
+        let rect = self.table_rect();
+        let hh = table_row_metrics().0;
+        Rect::new(
+            rect.right() - 10,
+            rect.y + hh as i32,
+            10,
+            rect.h.saturating_sub(hh),
+        )
+    }
+    fn sync_scrollbar(&mut self) {
+        let count = if self.view_mode == ViewMode::Processes {
+            self.row_count
+        } else {
+            self.core_row_count
+        };
+        let region = self.scroll_region();
+        let rh = table_row_metrics().1;
+        // Row-based viewport keeps the final complete row reachable.
+        self.scrollbar.set_geometry(
+            region.w,
+            (self.visible_rows().max(1) as u32) * rh,
+            region.w,
+            count as u32 * rh,
+        );
+        self.scrollbar.scroll_to_y((self.scroll as u32 * rh) as i32);
     }
 
     fn clamp_scroll(&mut self) {
@@ -927,7 +1052,13 @@ impl TasksApp {
     }
 
     fn summary_rect(&self) -> Rect {
-        self.layout.summary
+        let mut rect = self.layout.summary;
+        if !self.show_system_info {
+            rect.h = rect
+                .h
+                .saturating_sub(self.layout.summary.h.saturating_sub(94));
+        }
+        rect
     }
 
     fn summary_card_rects(&self) -> (Rect, Rect) {
@@ -940,6 +1071,11 @@ impl TasksApp {
 
     fn table_rect(&self) -> Rect {
         let mut rect = self.layout.table;
+        if !self.show_system_info {
+            let recovered = self.layout.summary.h.saturating_sub(94);
+            rect.y -= recovered as i32;
+            rect.h += recovered;
+        }
         if self.details && self.selected_pid.is_some() && self.view_mode == ViewMode::Processes {
             rect.h = rect.h.saturating_sub(112);
         }
@@ -951,11 +1087,14 @@ impl TasksApp {
     }
 
     fn process_columns(&self) -> [Column<'static>; TABLE_COLS] {
+        let mut remaining = self.table_rect().w.saturating_sub(10);
         core::array::from_fn(|i| {
             let id = self.col_order[i];
+            let width = self.widths[id].min(remaining);
+            remaining = remaining.saturating_sub(width);
             Column {
                 header: TABLE_COLUMNS[id].header,
-                width: self.widths[id],
+                width,
                 right_align: TABLE_COLUMNS[id].right_align,
             }
         })
@@ -1037,9 +1176,40 @@ impl TasksApp {
         );
     }
 
+    fn draw_info_lines(
+        canvas: &mut sunlight_ui::Canvas,
+        mut text: &str,
+        rect: Rect,
+        y: &mut i32,
+        color: Color,
+    ) {
+        while !text.is_empty() && *y + 14 <= rect.bottom() - 6 {
+            let mut end = text.len();
+            while end > 0 && F_SMALL.measure_w(&text[..end]) > rect.w {
+                end -= 1;
+                while !text.is_char_boundary(end) {
+                    end -= 1;
+                }
+            }
+            if end == 0 {
+                break;
+            }
+            if end < text.len() {
+                if let Some(space) = text[..end].rfind(' ') {
+                    if space > 0 {
+                        end = space;
+                    }
+                }
+            }
+            F_SMALL.draw_vcenter(canvas, &text[..end], rect.x, *y, 14, color);
+            *y += 14;
+            text = text[end..].trim_start();
+        }
+    }
+
     fn draw_memory_breakdown(&self, canvas: &mut sunlight_ui::Canvas, theme: &Theme) {
         let rect = self.mem_breakdown_rect();
-        if rect.h < 20 {
+        if !self.show_system_info || rect.h < 20 {
             return;
         }
         let acct = &self.snapshot.mem_acct;
@@ -1061,7 +1231,8 @@ impl TasksApp {
         n += copy_tail(b"  PT ", &mut line1[n..]);
         n += write_mib_bytes_into(acct.page_table_bytes, &mut line1[n..]);
         let s1 = core::str::from_utf8(&line1[..n]).unwrap_or("");
-        F_SMALL.draw_vcenter(canvas, s1, rect.x, rect.y, 14, theme.text_muted);
+        let mut detail_y = rect.y;
+        Self::draw_info_lines(canvas, s1, rect, &mut detail_y, theme.text_muted);
 
         // Line 2: RAMFS + cache + graphics + other/unclassified + free
         let mut line2 = [0u8; 256];
@@ -1091,7 +1262,7 @@ impl TasksApp {
         n += copy_tail(b"  Free ", &mut line2[n..]);
         n += write_mib_bytes_into(acct.free_bytes, &mut line2[n..]);
         let s2 = core::str::from_utf8(&line2[..n]).unwrap_or("");
-        F_SMALL.draw_vcenter(canvas, s2, rect.x, rect.y + 14, 14, theme.text_dim);
+        Self::draw_info_lines(canvas, s2, rect, &mut detail_y, theme.text_dim);
 
         // A disjoint physical breakdown; shared mapped row bytes never enter it.
         let categories = [
@@ -1144,7 +1315,7 @@ impl TasksApp {
             n += copy_tail(b"  Unclass>0", &mut line3[n..]);
         }
         let s3 = core::str::from_utf8(&line3[..n]).unwrap_or("");
-        F_SMALL.draw_vcenter(canvas, s3, rect.x, rect.y + 28, 14, theme.text_dim);
+        Self::draw_info_lines(canvas, s3, rect, &mut detail_y, theme.text_dim);
     }
 
     fn draw_metric_card(
@@ -1299,7 +1470,7 @@ impl App for TasksApp {
         self.overview_strings(&mut uptime, &mut tasks);
         let uptime_str = core::str::from_utf8(trim_zeros(&uptime)).unwrap_or("");
         let tasks_str = core::str::from_utf8(trim_zeros(&tasks)).unwrap_or("");
-        if self.show_system_info {
+        {
             let tasks_w = F_SMALL.measure_w(tasks_str);
             let uptime_w = F_SMALL.measure_w(uptime_str);
             let info_x = summary.right() - 14 - tasks_w as i32;
@@ -1419,6 +1590,29 @@ impl App for TasksApp {
             }
         }
 
+        let mut scrollbar = self.scrollbar;
+        let region = self.scroll_region();
+        let count = if self.view_mode == ViewMode::Processes {
+            self.row_count
+        } else {
+            self.core_row_count
+        };
+        let rh = table_row_metrics().1;
+        scrollbar.set_geometry(
+            region.w,
+            self.visible_rows().max(1) as u32 * rh,
+            region.w,
+            count as u32 * rh,
+        );
+        scrollbar.scroll_to_y((self.scroll as u32 * rh) as i32);
+        draw_scrollbar(
+            canvas,
+            theme,
+            region,
+            &scrollbar,
+            sunlight_ui::scroll::ScrollPolicy::Auto,
+        );
+
         if self.confirm_pid.is_some() {
             let rect = Rect::new(
                 self.layout.content.x + 16,
@@ -1514,7 +1708,32 @@ impl App for TasksApp {
                 true
             }
             Event::Tick => self.refresh(false),
+            Event::MouseWheel { x, y, delta } => {
+                if !self.table_rect().contains(Point::new(x, y)) {
+                    return false;
+                }
+                self.sync_scrollbar();
+                self.scrollbar
+                    .scroll_by_wheel(delta, table_row_metrics().1 as i32 * 3);
+                self.scroll = (self.scrollbar.offset_y as usize
+                    + table_row_metrics().1 as usize / 2)
+                    / table_row_metrics().1 as usize;
+                self.clamp_scroll();
+                true
+            }
             Event::MouseMove { x, y } => {
+                if self.scrollbar.dragging {
+                    let track = self.scrollbar.track_rect(self.scroll_region());
+                    self.scrollbar.update_drag(track, y);
+                    self.scroll = (self.scrollbar.offset_y as usize
+                        + table_row_metrics().1 as usize / 2)
+                        / table_row_metrics().1 as usize;
+                    self.clamp_scroll();
+                    return true;
+                }
+                let header = self.header_at(x, y).map(|v| v.0);
+                let header_changed = header != self.header_hover;
+                self.header_hover = header;
                 if let Some((col, origin, resize)) = self.drag {
                     if resize {
                         let id = self.col_order[col];
@@ -1529,9 +1748,22 @@ impl App for TasksApp {
                     self.hovered_action = hovered;
                     return true;
                 }
-                false
+                header_changed
             }
             Event::MouseDown { x, y, button: 0 } => {
+                self.sync_scrollbar();
+                let region = self.scroll_region();
+                if let Some(thumb) = hit_test_scrollbar(region, &self.scrollbar, x, y) {
+                    let track = self.scrollbar.track_rect(region);
+                    if thumb {
+                        self.scrollbar.start_drag(track, y);
+                    } else {
+                        self.scrollbar.handle_track_click(track, y);
+                    }
+                    self.scroll = self.scrollbar.offset_y as usize / table_row_metrics().1 as usize;
+                    self.clamp_scroll();
+                    return true;
+                }
                 if let Some((col, edge)) = self.header_at(x, y) {
                     self.drag = Some((col, x, edge));
                     return true;
@@ -1545,19 +1777,30 @@ impl App for TasksApp {
                 false
             }
             Event::MouseUp { x, y, .. } => {
+                if self.scrollbar.end_drag() {
+                    return true;
+                }
                 if let Some((col, origin, resize)) = self.drag.take() {
                     if !resize {
                         if let Some((to, _)) = self.header_at(x, y) {
                             if (x - origin).abs() > 8 {
                                 self.col_order.swap(col, to);
                             } else {
-                                let id = self.col_order[col];
-                                self.descending = if id == self.sort_col {
-                                    !self.descending
-                                } else {
-                                    false
+                                let columns = self.process_columns();
+                                let table = Table::new(self.table_rect(), &columns, &[])
+                                    .with_font(&F_UI)
+                                    .with_sorting(
+                                        &self.col_order,
+                                        Some(SortState {
+                                            column: self.sort_col,
+                                            descending: self.descending,
+                                        }),
+                                    );
+                                let Some(sort) = table.sort_at(x, y) else {
+                                    return true;
                                 };
-                                self.sort_col = id;
+                                self.sort_col = sort.column;
+                                self.descending = sort.descending;
                                 self.rebuild_rows();
                             }
                         }
@@ -1571,9 +1814,11 @@ impl App for TasksApp {
                 false
             }
             Event::Click { x, y } => {
+                if self.scroll_region().contains(Point::new(x, y)) {
+                    return true;
+                }
                 if self.layout.brand.contains(Point::new(x, y)) {
                     self.grouping = (self.grouping + 1) % 3;
-                    self.scroll = 0;
                     self.rebuild_rows();
                     return true;
                 }
@@ -1594,7 +1839,7 @@ impl App for TasksApp {
                             } else {
                                 ViewMode::Cores
                             };
-                            self.scroll = 0;
+                            self.clamp_scroll();
                             self.set_status(if self.view_mode == ViewMode::Cores {
                                 "Cores view"
                             } else {
@@ -1603,7 +1848,7 @@ impl App for TasksApp {
                         }
                         2 => {
                             self.show_system_info = !self.show_system_info;
-                            self.details = !self.details;
+                            self.clamp_scroll();
                             self.set_status(if self.show_system_info {
                                 "System info shown"
                             } else {
@@ -1628,10 +1873,13 @@ impl App for TasksApp {
                 }
                 if self.view_mode == ViewMode::Processes {
                     let columns = self.process_columns();
-                    let table = Table::new(self.table_rect(), &columns, &[]).with_font(&F_UI);
-                    if let Some(row) = table.hit_test(x, y) {
+                    let _ = columns;
+                    let rect = self.table_rect();
+                    let local_y = y - rect.y - table_row_metrics().0 as i32;
+                    if rect.contains(Point::new(x, y)) && local_y >= 0 {
+                        let row = local_y as usize / table_row_metrics().1 as usize;
                         let idx = self.scroll + row;
-                        if idx < self.row_count {
+                        if row < self.visible_rows() && idx < self.row_count {
                             let proc = &self.snapshot.procs[self.order[idx]];
                             if self.row_group[idx] {
                                 let key = proc.metrics.app_id;
@@ -2218,23 +2466,18 @@ impl TasksApp {
         let rect = self.table_rect();
         let (hh, rh) = table_row_metrics();
         canvas.fill_rect(Rect::new(rect.x, rect.y, rect.w, hh), theme.panel_alt);
-        let mut x = rect.x;
-        for id in self.col_order {
-            let width = self.widths[id].min(rect.right().saturating_sub(x).max(0) as u32);
-            let header = TABLE_COLUMNS[id].header;
-            F_UI.draw_vcenter(canvas, header, x + 4, rect.y, hh, theme.text);
-            if id == self.sort_col {
-                F_UI.draw_vcenter(
-                    canvas,
-                    if self.descending { "▼" } else { "▲" },
-                    x + width as i32 - 16,
-                    rect.y,
-                    hh,
-                    theme.accent,
-                );
-            }
-            x += width as i32;
-        }
+        let columns = self.process_columns();
+        Table::new(rect, &columns, &[])
+            .with_font(&F_UI)
+            .with_sorting(
+                &self.col_order,
+                Some(SortState {
+                    column: self.sort_col,
+                    descending: self.descending,
+                }),
+            )
+            .with_header_hover(self.header_hover)
+            .draw_header(canvas, theme);
         if self.row_count == 0 {
             F_UI.draw_vcenter(
                 canvas,
@@ -2264,7 +2507,8 @@ impl TasksApp {
             );
             let mut x = rect.x;
             for id in self.col_order {
-                let width = self.widths[id].min(rect.right().saturating_sub(x).max(0) as u32);
+                let width =
+                    self.widths[id].min((rect.right() - 10).saturating_sub(x).max(0) as u32);
                 if width == 0 {
                     break;
                 }
@@ -2462,6 +2706,120 @@ mod monitor_tests {
         }
         app.rebuild_rows();
         app
+    }
+    #[test]
+    fn wheel_drag_refresh_and_expansion_preserve_state() {
+        let mut app = fixture();
+        app.set_client_bounds(1024, 440);
+        app.snapshot.proc_count = MAX_PROCESSES;
+        for i in 3..MAX_PROCESSES {
+            app.snapshot.procs[i] = app.snapshot.procs[2];
+            app.snapshot.procs[i].pid = 100 + i as u32;
+        }
+        app.rebuild_rows();
+        let rect = app.table_rect();
+        assert!(app.update(Event::MouseWheel {
+            x: rect.x + 4,
+            y: rect.y + 30,
+            delta: 120
+        }));
+        assert!(app.scroll > 0);
+        let offset = app.scroll;
+        app.rebuild_rows();
+        assert_eq!(app.scroll, offset);
+        app.sync_scrollbar();
+        let track = app.scrollbar.track_rect(app.scroll_region());
+        let thumb = app.scrollbar.thumb_rect(track).unwrap();
+        assert!(app.update(Event::MouseDown {
+            x: thumb.x + 1,
+            y: thumb.y + 1,
+            button: 0
+        }));
+        app.update(Event::MouseMove {
+            x: thumb.x + 1,
+            y: track.bottom(),
+        });
+        assert_eq!(
+            app.scroll,
+            app.row_count.saturating_sub(app.visible_rows().max(1))
+        );
+        app.update(Event::MouseUp {
+            x: thumb.x + 1,
+            y: track.bottom(),
+            button: 0,
+        });
+        assert!(!app.scrollbar.dragging);
+        app.grouping = 2;
+        app.collapsed[0] = app.snapshot.procs[0].metrics.app_id;
+        let collapsed = app.collapsed;
+        app.sort_col = 7;
+        app.rebuild_rows();
+        assert_eq!(app.collapsed, collapsed);
+        assert!(app.scroll <= app.row_count.saturating_sub(app.visible_rows().max(1)));
+    }
+    #[test]
+    fn all_columns_sort_in_both_directions_and_keep_selection() {
+        let mut app = fixture();
+        app.selected_pid = Some(42);
+        for column in 0..TABLE_COLS {
+            for descending in [false, true] {
+                app.sort_col = column;
+                app.descending = descending;
+                app.rebuild_rows();
+                assert_eq!(app.selected_pid, Some(42));
+                for pair in app.order[..app.row_count].windows(2) {
+                    assert!(!app.before(pair[1], pair[0]));
+                }
+                app.rebuild_rows();
+                assert_eq!(app.sort_col, column);
+                assert_eq!(app.descending, descending);
+            }
+        }
+    }
+    #[test]
+    fn groups_sort_by_aggregate_and_tree_keeps_children_together() {
+        let mut app = fixture();
+        app.grouping = 2;
+        app.sort_col = 4;
+        app.descending = false;
+        app.rebuild_rows();
+        assert_eq!(
+            app.snapshot.procs[app.order[0]].metrics.app_id,
+            app.snapshot.procs[0].metrics.app_id
+        );
+        for row in 1..app.row_count {
+            if !app.row_group[row] {
+                let header = (0..row).rev().find(|&i| app.row_group[i]).unwrap();
+                assert_eq!(
+                    app.snapshot.procs[app.order[row]].metrics.app_id,
+                    app.snapshot.procs[app.order[header]].metrics.app_id
+                );
+            }
+        }
+        app.grouping = 1;
+        app.sort_col = 0;
+        app.descending = false;
+        app.rebuild_rows();
+        let parent = app.order[..app.row_count]
+            .iter()
+            .position(|&i| app.snapshot.procs[i].pid == 41)
+            .unwrap();
+        assert_eq!(app.snapshot.procs[app.order[parent + 1]].pid, 42);
+    }
+    #[test]
+    fn collapsing_system_details_recovers_viewport_and_clamps() {
+        let mut app = fixture();
+        let expanded = app.table_rect();
+        app.show_system_info = false;
+        assert_eq!(app.table_rect().h, expanded.h + 54);
+        assert_eq!(app.table_rect().y, expanded.y - 54);
+        assert_eq!(
+            app.summary_card_rects(),
+            (app.layout.cpu_card, app.layout.ram_card)
+        );
+        app.scroll = usize::MAX;
+        app.rebuild_rows();
+        assert!(app.scroll <= app.row_count.saturating_sub(app.visible_rows().max(1)));
     }
     #[test]
     fn sorting_search_and_group_totals() {
