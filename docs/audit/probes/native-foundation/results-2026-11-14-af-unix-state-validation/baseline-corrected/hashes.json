@@ -1,0 +1,15 @@
+{
+  "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unix-state-validation.c": "881b0e81f64fd28859ac987ae178964bd3afa513753771a64ba2f277c5fa7852",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux.elf": "045f9b766933f15e318b9c1ada387d8e2781088303954637141740cf0ca4189b",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native.elf": "fe7d91bc5a63de89cfed316f475ddca6b45cb18fe3f6ccc2b8fa684b35cd0937",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux.map": "60a4c5ad41acb029599d5e7ea90cfbf9c1e853ced7506eda118fdf12fcb6f174",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native.map": "c4abd9b1e676cf7d7d65b37a5845aab9a54dbe359fd024830a2bccf4204874aa",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux-2/kernel.elf": "2d71695ea27623fcdbdd3d305c50b1b2f0c43029f343b04177e710b8ae6143b7",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux-4/kernel.elf": "328b530997375de6422445c8670e2321fe43b785ef528576cf9ed555d53fa4d8",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native-2/kernel.elf": "64adace11e74cc2f4b8769c09f071c03e9222645d6b674b12ece0391d5a709ef",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native-4/kernel.elf": "fb2f2273922695b66a9a30e3a60e98d3bc8c4ec4fc1595beac7ee738462d8c41",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux-2/guest.iso": "cddb9b5772fcf73c0c9e07882be62d04e5c5ab7cc9bb99ef7bc6a49faa53ff91",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/linux-4/guest.iso": "2c38861f7244977110792284ff1b6c48be5cbb5a552c5da0a52ec37cf4e9539f",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native-2/guest.iso": "d97689d46aa9fcfb2fa260148c5d446e6c3dc774582273ef8b81511510b24883",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/baseline-corrected/native-4/guest.iso": "f5637cfa637c3d31c33815009dd38dde86e8a76d7357e19639bdfd78e15a66c3"
+}

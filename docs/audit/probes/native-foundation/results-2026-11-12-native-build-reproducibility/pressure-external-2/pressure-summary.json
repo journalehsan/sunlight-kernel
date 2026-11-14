@@ -1,0 +1,28 @@
+{
+  "mode": "external",
+  "cpus": 2,
+  "memory_mib": 2048,
+  "run_id": "external-2cpu-20261112T200439Z",
+  "net_subnet": null,
+  "host_alias": "10.0.2.2",
+  "commands": [
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-poll-pressure-client.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2/tcp-poll-pressure-client.elf",
+    "/usr/bin/python3 tools/native-c/tcp_pressure_peer.py --deadline 180"
+  ],
+  "checks": {
+    "client_build": true,
+    "host_peer_ready": false
+  },
+  "host_peer_lines": [
+    "Traceback (most recent call last):\n",
+    "  File \"/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tcp_pressure_peer.py\", line 262, in <module>\n",
+    "    sys.exit(main())\n",
+    "             ~~~~^^\n",
+    "  File \"/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tcp_pressure_peer.py\", line 126, in main\n",
+    "    control_listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n",
+    "  File \"/usr/lib/python3.14/socket.py\", line 236, in __init__\n",
+    "    _socket.socket.__init__(self, family, type, proto, fileno)\n",
+    "    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n",
+    "PermissionError: [Errno 1] Operation not permitted\n"
+  ]
+}

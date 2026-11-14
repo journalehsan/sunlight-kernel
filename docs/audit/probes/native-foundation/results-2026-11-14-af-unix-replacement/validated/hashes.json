@@ -1,0 +1,15 @@
+{
+  "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unix-replacement.c": "9772e86b5f5e918e32c4571a439032c4b74dbde00f3166b8299e085362d1ba0d",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux.elf": "9b9b04a3b636a979465cc469e782e241ab94eca95fa7becaba20e5327e5c37fa",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native.elf": "46246392d85187dd7dddc36bf42851f5f71869af9470077e2ef9cf5f5f48647e",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux.map": "428bbb79616c2eabd15ea1b3d40c1e77a8e93525a687cb217e7785d53b26b928",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native.map": "a01f07796370525e945254a5c2d3d7e8e99045f19173047873a56dca6da5ac79",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-2/kernel.elf": "78801a4f15d613b7cde4b1b1da432cf64019e7010ac877ee239a988236d549a4",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-4/kernel.elf": "e2e46ab4f203acaae983e5d5f55c9e3a315c7614d9a5f7c976978fe84a4521d4",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native-2/kernel.elf": "f0b590c0cd71d4a21759d3172934c4f9b279c449f67112738fe5214c5d2f84cc",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native-4/kernel.elf": "c6c9056cd6be0b497c839770d88a3ad869bef4507d97ba09cd52f67c0c37a8c5",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-2/guest.iso": "002c426addc9eb5c2cdf7f62eb15a8f0587ddc0449cd9f749d21b1836805ab86",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-4/guest.iso": "4043c368ad1bc86dcf699107020397b027824f20cb771821ebb173cbb0f060f7",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native-2/guest.iso": "47b9badf11b516f4cb4d37e5f70d7be65cb7c3a94cf9631932314e4b141c556d",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/native-4/guest.iso": "60c3ac6a9cc036414edaf2ac1faba3348d86efb0391a4a71b9e3d4388d224b5c"
+}

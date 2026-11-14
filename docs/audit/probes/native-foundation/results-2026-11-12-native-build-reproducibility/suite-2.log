@@ -1,0 +1,132 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2
+Building isolated native C guest (93 ELFs, 2 CPUs)
+Booting disposable TCG guest
+entry: PASS exit=0 expected=0
+write: PASS exit=0 expected=0
+guest write stderr: b'[NATIVE-C] write OK\n'
+exit: PASS exit=23 expected=23
+atexit: PASS exit=0 expected=0
+guest atexit stdout: b'atexit OK\n'
+clock: PASS exit=0 expected=0
+dirent: PASS exit=0 expected=0
+dlfcn: PASS exit=0 expected=0
+random-service-before: PASS exit=0 expected=0
+guest random-service-before stdout: b'rand service: requests=0 bytes=0\n'
+getrandom: PASS exit=0 expected=0
+random-service-after: PASS exit=0 expected=0
+guest random-service-after stdout: b'rand service: requests=1 bytes=16\n'
+langinfo: PASS exit=0 expected=0
+locale: PASS exit=0 expected=0
+math: PASS exit=0 expected=0
+mmap: PASS exit=0 expected=0
+poll_select: PASS exit=0 expected=0
+pthread: PASS exit=0 expected=0
+signal: PASS exit=0 expected=0
+socket: PASS exit=0 expected=0
+stdio: PASS exit=0 expected=0
+string: PASS exit=0 expected=0
+termios: PASS exit=0 expected=0
+wchar: PASS exit=0 expected=0
+termios-terminal-identity: PASS exit=0 expected=0
+cxx-output: PASS exit=0 expected=0
+guest cxx-output stdout: b'output 0 1 -9223372036854775808 9223372036854775807 18446744073709551615 18446744073709551615\nbounds -32768 32767 65535 -2147483648 2147483647 4294967295 -9223372036854775808 9223372036854775807 0\nABC\n'
+guest cxx-output stderr: b'stderr\nclog\n'
+cxx-backend: PASS exit=0 expected=0
+guest cxx-backend stdout: b'partial\nabxy'
+cxx-exception-class: PASS exit=0 expected=0
+cpp-runtime-native: PASS exit=0 expected=0
+guest cpp-runtime-native stdout: b'exception OK\nTLS OK\nstatic initialization OK\natexit OK\n'
+cxx-runtime-execution: PASS exit=0 expected=0
+cxx-runtime-uncaught: PASS exit=134 expected=134
+guest cxx-runtime-uncaught stdout: b'armed\n'
+cxx-runtime-destructor: PASS exit=134 expected=134
+guest cxx-runtime-destructor stdout: b'armed\n'
+cxx-runtime-worker: PASS exit=134 expected=134
+guest cxx-runtime-worker stdout: b'armed\n'
+cxx-runtime-storage: PASS exit=134 expected=134
+guest cxx-runtime-storage stdout: b'armed\n'
+cxx-local-static-basic: PASS exit=0 expected=0
+guest cxx-local-static-basic stdout: b'basic:OK\nbasic:D\n'
+cxx-local-static-concurrent: PASS exit=0 expected=0
+guest cxx-local-static-concurrent stdout: b'concurrent:OK\nconcurrent:D\n'
+cxx-local-static-retry: PASS exit=0 expected=0
+guest cxx-local-static-retry stdout: b'retry:OK\nretry:D\n'
+cxx-local-static-nested: PASS exit=0 expected=0
+guest cxx-local-static-nested stdout: b'nested:OK\nouter:D\ninner:D\n'
+cxx-local-static-order: PASS exit=0 expected=0
+guest cxx-local-static-order stdout: b'order:OK\nsecond:D\nfirst:D\n'
+cxx-local-static-recursive: PASS exit=134 expected=134
+guest cxx-local-static-recursive stdout: b'recursive:armed\n'
+guest cxx-local-static-recursive stderr: b'__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?'
+cxx-string: PASS exit=0 expected=0
+guest cxx-string stdout: b'string:A\x00B:42\n'
+cxx-string-backend: PASS exit=0 expected=0
+guest cxx-string-backend stdout: b'A\x00BCDzeer'
+cxx-string-allocation: PASS exit=134 expected=134
+guest cxx-string-allocation stdout: b'armed\n'
+cxx-string-overflow: PASS exit=134 expected=134
+guest cxx-string-overflow stdout: b'armed\n'
+cxx-string-null: PASS exit=134 expected=134
+guest cxx-string-null stdout: b'armed\n'
+wchar-contract: PASS exit=0 expected=0
+termios-contract: PASS exit=0 expected=0
+dlfcn-contract: PASS exit=0 expected=0
+epoll-contract: PASS exit=0 expected=0
+pthread-basic: PASS exit=0 expected=0
+pthread-exit: PASS exit=0 expected=0
+pthread-detached: PASS exit=0 expected=0
+pthread-attr: PASS exit=0 expected=0
+inet-socket-contract: PASS exit=0 expected=0
+inet-socket-reap: PASS exit=0 expected=0
+epoll-lifecycle: PASS exit=0 expected=0
+signal-contract: PASS exit=0 expected=0
+signal-fatal: PASS exit=138 expected=138
+signal-forged: PASS exit=139 expected=139
+signal-handler-exit: PASS exit=31 expected=31
+signal-bad-stack: PASS exit=139 expected=139
+pthread-abi: PASS exit=0 expected=0
+poll-contract: PASS exit=0 expected=0
+poll-socket-contract: PASS exit=0 expected=0
+math-contract: PASS exit=0 expected=0
+locale-contract: PASS exit=0 expected=0
+locale-environment: PASS exit=0 expected=0
+langinfo-contract: PASS exit=0 expected=0
+stdout: PASS exit=0 expected=0
+guest stdout stdout: b'[NATIVE-C] stdout OK\n'
+stdio-full: PASS exit=0 expected=0
+guest stdio-full stdout: b'stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\nstdio: file PASS; tmpfile PASS\n'
+guest stdio-full stderr: b'stdio: stderr 0007\n'
+open-unlink: PASS exit=0 expected=0
+exit-cleanup: PASS exit=0 expected=0
+write-basic: PASS exit=0 expected=0
+guest write-basic stdout: b'write OK\n'
+guest write-basic stderr: b'stderr OK\n'
+write-zero: PASS exit=0 expected=0
+write-short: PASS exit=0 expected=0
+write-errors: PASS exit=0 expected=0
+atexit-order: PASS exit=0 expected=0
+guest atexit-order stdout: b'CBA'
+atexit-register: PASS exit=0 expected=0
+guest atexit-register stdout: b'BCA'
+atexit-capacity: PASS exit=0 expected=0
+guest atexit-capacity stdout: b'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+atexit-exit: PASS exit=27 expected=27
+guest atexit-exit stdout: b'A'
+atexit-raw-exit: PASS exit=29 expected=29
+random-basic: PASS exit=0 expected=0
+random-zero: PASS exit=0 expected=0
+random-errors: PASS exit=0 expected=0
+random-guards: PASS exit=0 expected=0
+time-clocks: PASS exit=0 expected=0
+guest time-clocks stdout: b'time: clocks realtime=1794501328.000000000 monotonic=44.040000000\n'
+time-errors: PASS exit=0 expected=0
+time-zero: PASS exit=0 expected=0
+time-sleep: PASS exit=0 expected=0
+guest time-sleep stdout: b'time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged\ntime: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged\n'
+mman-subset: PASS exit=0 expected=0
+mman-fixed: PASS exit=0 expected=0
+mman-bounds: PASS exit=0 expected=0
+dirent-root: PASS exit=0 expected=0
+dirent-errors: PASS exit=0 expected=0
+dirent-entries: PASS exit=0 expected=0
+Historical 21: PASS=20 guest_FAIL=0 BUILD_FAIL=0 LINK_FAIL=1 guest_NOT_RUN=1

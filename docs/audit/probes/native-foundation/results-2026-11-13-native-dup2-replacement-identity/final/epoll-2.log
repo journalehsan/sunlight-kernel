@@ -1,0 +1,4 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-2
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0

@@ -1,0 +1,4 @@
+$ timeout --signal=TERM --kill-after=10 360 python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_runtime.py --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/regression/dup-runtime/cxx
+Target ABI/unwind ownership, upstream integrity, final ELF/frame inspection PASS. Original command LINK_FAIL; configured historical native ELF linked. Local static guard ABI linked with target-built implementation. Runtime requires both guest configurations.
+
+exit=0

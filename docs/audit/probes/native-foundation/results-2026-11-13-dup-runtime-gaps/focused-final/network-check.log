@@ -1,0 +1,377 @@
+$ timeout --signal=TERM --kill-after=10 240 cargo check -p sunlight-net -p sunlight-ipc -p sunlight-net-server --locked
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: sunlight-net@0.2.7254-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:176:17
+    |
+176 |     if unsafe { LIVE_CONFIG.is_some() } {
+    |                 ^^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+    = note: `#[warn(static_mut_refs)]` (part of `#[warn(rust_2024_compatibility)]`) on by default
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:177:30
+    |
+177 |         let lease = unsafe { LIVE_CONFIG.as_ref().unwrap() };
+    |                              ^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:413:36
+    |
+413 |     if let Some(config) = unsafe { LIVE_CONFIG.as_ref() } {
+    |                                    ^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:437:17
+    |
+437 | /                 TCP_MANAGER
+438 | |                     .as_ref()
+    | |_____________________________^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:453:51
+    |
+453 |             } else if let Some(config) = unsafe { LIVE_CONFIG.as_ref() } {
+    |                                                   ^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:474:17
+    |
+474 | /                 TCP_MANAGER
+475 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:490:24
+    |
+490 |                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                        ^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:490:44
+    |
+490 |                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                                            ^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:491:52
+    |
+491 |                       (Some(iface), Some(device)) => TCP_MANAGER
+    |  ____________________________________________________^
+492 | |                         .as_mut()
+    | |_________________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:502:40
+    |
+502 |                     if let Some(tcp) = TCP_MANAGER.as_mut() {
+    |                                        ^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:514:17
+    |
+514 | /                 TCP_MANAGER
+515 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:525:17
+    |
+525 | /                 TCP_MANAGER
+526 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:554:17
+    |
+554 | /                 TCP_MANAGER
+555 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:573:17
+    |
+573 | /                 TCP_MANAGER
+574 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:600:17
+    |
+600 | /                 TCP_MANAGER
+601 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:609:17
+    |
+609 | /                 TCP_MANAGER
+610 | |                     .as_ref()
+    | |_____________________________^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:637:17
+    |
+637 | /                 TCP_MANAGER
+638 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:648:17
+    |
+648 | /                 TCP_MANAGER
+649 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:658:17
+    |
+658 | /                 TCP_MANAGER
+659 | |                     .as_mut()
+    | |_____________________________^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+   --> services/net_server/src/main.rs:676:21
+    |
+676 | /                     TCP_MANAGER
+677 | |                         .as_ref()
+    | |_________________________________^ shared reference to mutable static
+    |
+    = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:752:36
+    |
+752 | ...                   match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                              ^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:752:56
+    |
+752 | ...                   match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                                                  ^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:852:24
+    |
+852 |                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                        ^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:852:44
+    |
+852 |                 match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                                            ^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:922:16
+    |
+922 |         match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                ^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+   --> services/net_server/src/main.rs:922:36
+    |
+922 |         match (NET_IFACE.as_mut(), NET_DEVICE.as_mut()) {
+    |                                    ^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+    |
+    = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+    = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1104:13
+     |
+1104 |             TCP_MANAGER.as_mut(),
+     |             ^^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1105:13
+     |
+1105 |             NET_IFACE.as_mut(),
+     |             ^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1106:13
+     |
+1106 |             NET_DEVICE.as_mut(),
+     |             ^^^^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+    --> services/net_server/src/main.rs:1121:19
+     |
+1121 |         let tcp = TCP_MANAGER.as_ref()?;
+     |                   ^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+     |
+     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+    --> services/net_server/src/main.rs:1160:19
+     |
+1160 |         let tcp = TCP_MANAGER.as_ref()?;
+     |                   ^^^^^^^^^^^^^^^^^^^^ shared reference to mutable static
+     |
+     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a shared reference to mutable static
+    --> services/net_server/src/main.rs:1190:9
+     |
+1190 | /         TCP_MANAGER
+1191 | |             .as_ref()
+     | |_____________________^ shared reference to mutable static
+     |
+     = note: shared references to mutable statics are dangerous; it's undefined behavior if the static is mutated or if a mutable reference is created for it while the shared reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1296:23
+     |
+1296 |         let waiters = WAITERS.as_mut().expect("waiter table initialized");
+     |                       ^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1319:34
+     |
+1319 |         unsafe { core::mem::take(WAITERS.as_mut().expect("waiter table initialized")) };
+     |                                  ^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: creating a mutable reference to mutable static
+    --> services/net_server/src/main.rs:1367:10
+     |
+1367 |         *WAITERS.as_mut().expect("waiter table initialized") = retained;
+     |          ^^^^^^^^^^^^^^^^ mutable reference to mutable static
+     |
+     = note: mutable references to mutable statics are dangerous; it's undefined behavior if any other pointer to the static is used or if any other reference is created for the static while the mutable reference lives
+     = note: for more information, see <https://doc.rust-lang.org/edition-guide/rust-2024/static-mut-references.html>
+
+warning: `sunlight-net-server` (bin "net_server") generated 35 warnings
+    Finished `dev` profile [optimized + debuginfo] target(s) in 7.23s
+
+exit=0

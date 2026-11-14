@@ -1,0 +1,3 @@
+$ qemu-system-x86_64 -accel tcg -cpu max -m 2048M -smp 4 -cdrom /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-4/guest.iso -boot d -display none -monitor none -serial file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/validated/linux-4/serial.log -device virtio-rng-pci,disable-modern=on -device isa-debug-exit,iobase=0xf4,iosize=0x04 -no-reboot -nic none
+
+exit=33

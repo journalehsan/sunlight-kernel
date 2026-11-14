@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/suite-2/cxx-local-static-order.elf
+
+exit=0

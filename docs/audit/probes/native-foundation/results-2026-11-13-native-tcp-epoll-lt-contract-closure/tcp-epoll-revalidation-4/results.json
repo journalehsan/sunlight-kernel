@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "epoll-revalidation: FAIL line=42 errno=107\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

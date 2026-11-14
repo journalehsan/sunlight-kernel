@@ -1,0 +1,30 @@
+--- tools/native-c/tests/inet-socket.c	2026-11-11 20:40:51.073007261 +0330
++++ tools/native-c/tests/inet-socket-epoll-lt.c	2026-11-12 23:02:15.322252041 +0330
+@@ -1,3 +1,7 @@
++/* Updated LT contract companion. The historical inet-socket.c is preserved.
++ * Socket creation, I/O, exhaustion, rollback, duplication and thread assertions
++ * are retained; only its superseded epoll placeholder/mode expectations change.
++ */
+ #include <sys/socket.h>
+ #include <sys/epoll.h>
+ #include <sys/select.h>
+@@ -48,11 +52,15 @@
+         int ep = epoll_create1(0);
+         struct epoll_event e = {.events=EPOLLIN | EPOLLOUT, .data=123}, out;
+         if (ep < 0 || epoll_ctl(ep, EPOLL_CTL_ADD, fd, &e)) return 19;
+-        if (epoll_wait(ep, &out, 1, 0) != 1 || out.events != EPOLLERR || out.data != 123) return 20;
+-        if (epoll_wait(ep, &out, 1, 0) != 1) return 21;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 20;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 21;
+         e.events |= EPOLLET | EPOLLONESHOT;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1 || epoll_wait(ep, &out, 1, 0)) return 22;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1) return 23;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 22;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLET;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 23;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 39;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 40;
+         if (close(ep) || close(fd) || close(fd) != -1 || errno != EBADF) return 24;
+     }
+     int fds[256], n = 0;

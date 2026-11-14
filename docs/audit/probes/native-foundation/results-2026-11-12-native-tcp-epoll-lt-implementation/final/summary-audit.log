@@ -1,0 +1,80 @@
+{
+  "suites": {
+    "2": {
+      "total": 94,
+      "acceptance_counts": {
+        "PASS": 92,
+        "LINK_FAIL": 1,
+        "FAIL": 1
+      },
+      "nonpass": [
+        {
+          "probe": "cpp-runtime",
+          "historical": "True",
+          "build": "FAIL",
+          "guest_run": "NOT_RUN",
+          "acceptance": "LINK_FAIL",
+          "exit": "",
+          "expected_exit": "0",
+          "detail": "BUILD_FAILED: no executable to run",
+          "sha256": ""
+        },
+        {
+          "probe": "inet-socket-contract",
+          "historical": "False",
+          "build": "PASS",
+          "guest_run": "FAIL",
+          "acceptance": "FAIL",
+          "exit": "20",
+          "expected_exit": "0",
+          "detail": "guest contract or infrastructure failed",
+          "sha256": "5821116968c6e702e040073842b1d4229a90ab24aef1208a391d42feb0c4eda0"
+        }
+      ]
+    },
+    "4": {
+      "total": 94,
+      "acceptance_counts": {
+        "PASS": 92,
+        "LINK_FAIL": 1,
+        "FAIL": 1
+      },
+      "nonpass": [
+        {
+          "probe": "cpp-runtime",
+          "historical": "True",
+          "build": "FAIL",
+          "guest_run": "NOT_RUN",
+          "acceptance": "LINK_FAIL",
+          "exit": "",
+          "expected_exit": "0",
+          "detail": "BUILD_FAILED: no executable to run",
+          "sha256": ""
+        },
+        {
+          "probe": "inet-socket-contract",
+          "historical": "False",
+          "build": "PASS",
+          "guest_run": "FAIL",
+          "acceptance": "FAIL",
+          "exit": "20",
+          "expected_exit": "0",
+          "detail": "guest contract or infrastructure failed",
+          "sha256": "5821116968c6e702e040073842b1d4229a90ab24aef1208a391d42feb0c4eda0"
+        }
+      ]
+    }
+  },
+  "preservation": {
+    "incoming_mismatches": [],
+    "source_mismatches": [],
+    "head": "5b08147001be963e468711d03284b349fa8b2089",
+    "incoming_lock_diff_unchanged": true
+  },
+  "archives": {
+    "target/native-c/sysroot/lib/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+    "target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+    "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+  },
+  "stable_archive_across_jobs": true
+}

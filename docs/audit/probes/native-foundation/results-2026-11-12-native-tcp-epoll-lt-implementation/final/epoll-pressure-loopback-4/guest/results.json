@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=2 filled=35688 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=3 filled=54992 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=4 filled=74296 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=5 filled=105604 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=6 filled=124908 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=7 filled=144212 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=8 filled=163516 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=9 filled=183996 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=10 filled=204800 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=11 filled=224104 held_ms=150 recovery_ms=30\npoll-pressure-loopback: cycle=12 filled=243408 held_ms=150 recovery_ms=20\npoll-pressure-loopback: PASS cycles=12 unstable=16 saturated_bytes=260076 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

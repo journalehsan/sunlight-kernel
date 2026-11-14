@@ -1,0 +1,3 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/regression/dup-runtime/cxx/cpp-runtime.o
+
+exit=0

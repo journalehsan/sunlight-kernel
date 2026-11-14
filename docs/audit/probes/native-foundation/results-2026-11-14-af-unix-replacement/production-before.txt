@@ -1,0 +1,3 @@
+2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7  target/native-c/sysroot/lib/libsunlight_native_c.a
+2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7  target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a
+97d9bb2204549ec7548b14fc6d2c90af0d3986dfdd5292aa5eec8ba21e931594  target/x86_64-unknown-none/debug/sunlight-kernel

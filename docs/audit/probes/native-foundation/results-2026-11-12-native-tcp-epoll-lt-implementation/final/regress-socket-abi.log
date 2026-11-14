@@ -1,0 +1,4 @@
+$ /usr/bin/python3 tools/native-c/tests/run_socket.py --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-socket-abi
+12 socket C/C++ ABI checks, exports, unchanged historical link: PASS
+
+exit=0

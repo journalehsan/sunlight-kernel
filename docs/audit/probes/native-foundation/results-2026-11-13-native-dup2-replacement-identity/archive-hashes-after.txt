@@ -1,0 +1,2 @@
+264d2ac0622838df8cff091ed9657e4a63926a3bc8dba7978a0933c1344e9882  target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a
+264d2ac0622838df8cff091ed9657e4a63926a3bc8dba7978a0933c1344e9882  target/native-c/sysroot/lib/libsunlight_native_c.a

@@ -1,0 +1,315 @@
+
+docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-lt-final2.elf:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000401d30 <epoll_wait>:
+  401d30: 55                           	pushq	%rbp
+  401d31: 41 57                        	pushq	%r15
+  401d33: 41 56                        	pushq	%r14
+  401d35: 41 55                        	pushq	%r13
+  401d37: 41 54                        	pushq	%r12
+  401d39: 53                           	pushq	%rbx
+  401d3a: 48 81 ec 48 08 00 00         	subq	$0x848, %rsp            # imm = 0x848
+  401d41: 85 d2                        	testl	%edx, %edx
+  401d43: 0f 8e 84 00 00 00            	jle	0x401dcd <epoll_wait+0x9d>
+  401d49: 49 89 f6                     	movq	%rsi, %r14
+  401d4c: 48 85 f6                     	testq	%rsi, %rsi
+  401d4f: 0f 84 98 00 00 00            	je	0x401ded <epoll_wait+0xbd>
+  401d55: 89 cb                        	movl	%ecx, %ebx
+  401d57: 41 89 ff                     	movl	%edi, %r15d
+  401d5a: 89 d5                        	movl	%edx, %ebp
+  401d5c: 0f 57 c0                     	xorps	%xmm0, %xmm0
+  401d5f: 0f 29 44 24 40               	movaps	%xmm0, 0x40(%rsp)
+  401d64: 48 8d 74 24 40               	leaq	0x40(%rsp), %rsi
+  401d69: bf 01 00 00 00               	movl	$0x1, %edi
+  401d6e: e8 2d 27 00 00               	callq	0x4044a0 <clock_gettime>
+  401d73: 85 c0                        	testl	%eax, %eax
+  401d75: 0f 85 a4 00 00 00            	jne	0x401e1f <epoll_wait+0xef>
+  401d7b: b8 e8 03 00 00               	movl	$0x3e8, %eax            # imm = 0x3E8
+  401d80: 48 f7 64 24 40               	mulq	0x40(%rsp)
+  401d85: 0f 80 ab 00 00 00            	jo	0x401e36 <epoll_wait+0x106>
+  401d8b: 48 89 c1                     	movq	%rax, %rcx
+  401d8e: 44 89 fe                     	movl	%r15d, %esi
+  401d91: 85 db                        	testl	%ebx, %ebx
+  401d93: 0f 8e af 00 00 00            	jle	0x401e48 <epoll_wait+0x118>
+  401d99: 48 8b 44 24 48               	movq	0x48(%rsp), %rax
+  401d9e: 48 ba db 34 b6 d7 82 de 1b 43	movabsq	$0x431bde82d7b634db, %rdx # imm = 0x431BDE82D7B634DB
+  401da8: 48 f7 e2                     	mulq	%rdx
+  401dab: 48 c1 ea 12                  	shrq	$0x12, %rdx
+  401daf: 48 01 d1                     	addq	%rdx, %rcx
+  401db2: 48 c7 c0 ff ff ff ff         	movq	$-0x1, %rax
+  401db9: 48 0f 42 c8                  	cmovbq	%rax, %rcx
+  401dbd: 89 da                        	movl	%ebx, %edx
+  401dbf: 48 01 ca                     	addq	%rcx, %rdx
+  401dc2: 48 0f 42 d0                  	cmovbq	%rax, %rdx
+  401dc6: 48 89 54 24 28               	movq	%rdx, 0x28(%rsp)
+  401dcb: eb 7b                        	jmp	0x401e48 <epoll_wait+0x118>
+  401dcd: 0f b6 05 30 a2 00 00         	movzbl	0xa230(%rip), %eax      # 0x40c004 <_RNvNtCs790hijwktEa_13sunlight_libc5errno9TLS_READY.0.llvm.3408264154317175253>
+  401dd4: 84 c0                        	testb	%al, %al
+  401dd6: 74 2f                        	je	0x401e07 <epoll_wait+0xd7>
+  401dd8: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+  401de1: 48 83 c0 08                  	addq	$0x8, %rax
+  401de5: c7 00 16 00 00 00            	movl	$0x16, (%rax)
+  401deb: eb 32                        	jmp	0x401e1f <epoll_wait+0xef>
+  401ded: 0f b6 05 10 a2 00 00         	movzbl	0xa210(%rip), %eax      # 0x40c004 <_RNvNtCs790hijwktEa_13sunlight_libc5errno9TLS_READY.0.llvm.3408264154317175253>
+  401df4: 84 c0                        	testb	%al, %al
+  401df6: 74 1c                        	je	0x401e14 <epoll_wait+0xe4>
+  401df8: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+  401e01: 48 83 c0 08                  	addq	$0x8, %rax
+  401e05: eb 12                        	jmp	0x401e19 <epoll_wait+0xe9>
+  401e07: b8 00 c0 40 00               	movl	$0x40c000, %eax         # imm = 0x40C000
+  401e0c: c7 00 16 00 00 00            	movl	$0x16, (%rax)
+  401e12: eb 0b                        	jmp	0x401e1f <epoll_wait+0xef>
+  401e14: b8 00 c0 40 00               	movl	$0x40c000, %eax         # imm = 0x40C000
+  401e19: c7 00 0e 00 00 00            	movl	$0xe, (%rax)
+  401e1f: b8 ff ff ff ff               	movl	$0xffffffff, %eax       # imm = 0xFFFFFFFF
+  401e24: 48 81 c4 48 08 00 00         	addq	$0x848, %rsp            # imm = 0x848
+  401e2b: 5b                           	popq	%rbx
+  401e2c: 41 5c                        	popq	%r12
+  401e2e: 41 5d                        	popq	%r13
+  401e30: 41 5e                        	popq	%r14
+  401e32: 41 5f                        	popq	%r15
+  401e34: 5d                           	popq	%rbp
+  401e35: c3                           	retq
+  401e36: 48 c7 c1 ff ff ff ff         	movq	$-0x1, %rcx
+  401e3d: 44 89 fe                     	movl	%r15d, %esi
+  401e40: 85 db                        	testl	%ebx, %ebx
+  401e42: 0f 8f 51 ff ff ff            	jg	0x401d99 <epoll_wait+0x69>
+  401e48: 4c 63 fe                     	movslq	%esi, %r15
+  401e4b: 81 fd 80 00 00 00            	cmpl	$0x80, %ebp
+  401e51: b8 80 00 00 00               	movl	$0x80, %eax
+  401e56: 0f 42 c5                     	cmovbl	%ebp, %eax
+  401e59: 48 89 44 24 30               	movq	%rax, 0x30(%rsp)
+  401e5e: 4c 8d 64 24 40               	leaq	0x40(%rsp), %r12
+  401e63: ba 00 08 00 00               	movl	$0x800, %edx            # imm = 0x800
+  401e68: 4c 89 e7                     	movq	%r12, %rdi
+  401e6b: 31 f6                        	xorl	%esi, %esi
+  401e6d: e8 0e 09 00 00               	callq	0x402780 <memset>
+  401e72: b8 b1 00 00 00               	movl	$0xb1, %eax
+  401e77: ba 40 00 00 00               	movl	$0x40, %edx
+  401e7c: 4c 89 ff                     	movq	%r15, %rdi
+  401e7f: 4c 89 e6                     	movq	%r12, %rsi
+  401e82: 45 31 d2                     	xorl	%r10d, %r10d
+  401e85: 45 31 c0                     	xorl	%r8d, %r8d
+  401e88: 45 31 c9                     	xorl	%r9d, %r9d
+  401e8b: 0f 05                        	syscall
+  401e8d: 49 89 c4                     	movq	%rax, %r12
+  401e90: 48 85 c0                     	testq	%rax, %rax
+  401e93: 0f 88 b3 02 00 00            	js	0x40214c <epoll_wait+0x41c>
+  401e99: 4c 8d 6c 24 40               	leaq	0x40(%rsp), %r13
+  401e9e: 89 5c 24 20                  	movl	%ebx, 0x20(%rsp)
+  401ea2: 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00    	nopw	%cs:(%rax,%rax)
+  401eb0: 49 83 fc 41                  	cmpq	$0x41, %r12
+  401eb4: 0f 83 25 03 00 00            	jae	0x4021df <epoll_wait+0x4af>
+  401eba: 4c 89 f3                     	movq	%r14, %rbx
+  401ebd: 4d 89 ee                     	movq	%r13, %r14
+  401ec0: 4c 89 fd                     	movq	%r15, %rbp
+  401ec3: 4d 85 e4                     	testq	%r12, %r12
+  401ec6: 0f 84 54 01 00 00            	je	0x402020 <epoll_wait+0x2f0>
+  401ecc: 4d 89 e5                     	movq	%r12, %r13
+  401ecf: 49 c1 e5 05                  	shlq	$0x5, %r13
+  401ed3: 45 31 ff                     	xorl	%r15d, %r15d
+  401ed6: eb 15                        	jmp	0x401eed <epoll_wait+0x1bd>
+  401ed8: 0f 1f 84 00 00 00 00 00      	nopl	(%rax,%rax)
+  401ee0: 49 83 c7 20                  	addq	$0x20, %r15
+  401ee4: 4d 39 fd                     	cmpq	%r15, %r13
+  401ee7: 0f 84 33 01 00 00            	je	0x402020 <epoll_wait+0x2f0>
+  401eed: 42 8b 44 3c 40               	movl	0x40(%rsp,%r15), %eax
+  401ef2: 48 3d ff 00 00 00            	cmpq	$0xff, %rax
+  401ef8: 77 e6                        	ja	0x401ee0 <epoll_wait+0x1b0>
+  401efa: 48 8b 04 c5 a8 c9 40 00      	movq	0x40c9a8(,%rax,8), %rax
+  401f02: 48 83 e8 01                  	subq	$0x1, %rax
+  401f06: 72 d8                        	jb	0x401ee0 <epoll_wait+0x1b0>
+  401f08: 4a 8b 4c 3c 50               	movq	0x50(%rsp,%r15), %rcx
+  401f0d: 48 83 f9 ff                  	cmpq	$-0x1, %rcx
+  401f11: 74 07                        	je	0x401f1a <epoll_wait+0x1ea>
+  401f13: 48 39 c8                     	cmpq	%rcx, %rax
+  401f16: 75 c8                        	jne	0x401ee0 <epoll_wait+0x1b0>
+  401f18: eb 05                        	jmp	0x401f1f <epoll_wait+0x1ef>
+  401f1a: 4a 89 44 3c 50               	movq	%rax, 0x50(%rsp,%r15)
+  401f1f: 42 8b 4c 3c 44               	movl	0x44(%rsp,%r15), %ecx
+  401f24: f6 c1 01                     	testb	$0x1, %cl
+  401f27: ba 7b 00 00 00               	movl	$0x7b, %edx
+  401f2c: be 70 00 00 00               	movl	$0x70, %esi
+  401f31: 0f 44 d6                     	cmovel	%esi, %edx
+  401f34: 83 e1 04                     	andl	$0x4, %ecx
+  401f37: 09 d1                        	orl	%edx, %ecx
+  401f39: 48 89 44 24 38               	movq	%rax, 0x38(%rsp)
+  401f3e: 89 4c 24 24                  	movl	%ecx, 0x24(%rsp)
+  401f42: ba 01 00 00 00               	movl	$0x1, %edx
+  401f47: 41 b8 01 00 00 00            	movl	$0x1, %r8d
+  401f4d: 48 89 e7                     	movq	%rsp, %rdi
+  401f50: 48 8d 74 24 38               	leaq	0x38(%rsp), %rsi
+  401f55: 48 8d 4c 24 24               	leaq	0x24(%rsp), %rcx
+  401f5a: 45 31 c9                     	xorl	%r9d, %r9d
+  401f5d: e8 ae 38 00 00               	callq	0x405810 <_RNvNtCs790hijwktEa_13sunlight_libc10net_bridge21wait_any_per_interest>
+  401f62: 48 8b 04 24                  	movq	(%rsp), %rax
+  401f66: 48 ff c0                     	incq	%rax
+  401f69: ff 24 c5 38 93 40 00         	jmpq	*0x409338(,%rax,8)
+  401f70: 48 8b 44 24 08               	movq	0x8(%rsp), %rax
+  401f75: 4a 3b 44 3c 50               	cmpq	0x50(%rsp,%r15), %rax
+  401f7a: 75 44                        	jne	0x401fc0 <epoll_wait+0x290>
+  401f7c: 48 8b 4c 24 10               	movq	0x10(%rsp), %rcx
+  401f81: 42 8b 44 3c 44               	movl	0x44(%rsp,%r15), %eax
+  401f86: 31 d2                        	xorl	%edx, %edx
+  401f88: f6 c1 0b                     	testb	$0xb, %cl
+  401f8b: 0f 95 c2                     	setne	%dl
+  401f8e: 89 ce                        	movl	%ecx, %esi
+  401f90: 83 e6 04                     	andl	$0x4, %esi
+  401f93: 8d 3c 16                     	leal	(%rsi,%rdx), %edi
+  401f96: f6 c1 50                     	testb	$0x50, %cl
+  401f99: 8d 54 16 08                  	leal	0x8(%rsi,%rdx), %edx
+  401f9d: 0f 44 d7                     	cmovel	%edi, %edx
+  401fa0: d1 e9                        	shrl	%ecx
+  401fa2: 83 e1 10                     	andl	$0x10, %ecx
+  401fa5: 09 d1                        	orl	%edx, %ecx
+  401fa7: 83 c8 18                     	orl	$0x18, %eax
+  401faa: 21 c8                        	andl	%ecx, %eax
+  401fac: 42 8b 4c 3c 40               	movl	0x40(%rsp,%r15), %ecx
+  401fb1: 48 81 f9 ff 00 00 00         	cmpq	$0xff, %rcx
+  401fb8: 0f 87 22 ff ff ff            	ja	0x401ee0 <epoll_wait+0x1b0>
+  401fbe: eb 2d                        	jmp	0x401fed <epoll_wait+0x2bd>
+  401fc0: 31 c0                        	xorl	%eax, %eax
+  401fc2: 42 8b 4c 3c 40               	movl	0x40(%rsp,%r15), %ecx
+  401fc7: 48 81 f9 ff 00 00 00         	cmpq	$0xff, %rcx
+  401fce: 0f 87 0c ff ff ff            	ja	0x401ee0 <epoll_wait+0x1b0>
+  401fd4: eb 17                        	jmp	0x401fed <epoll_wait+0x2bd>
+  401fd6: b8 18 00 00 00               	movl	$0x18, %eax
+  401fdb: 42 8b 4c 3c 40               	movl	0x40(%rsp,%r15), %ecx
+  401fe0: 48 81 f9 ff 00 00 00         	cmpq	$0xff, %rcx
+  401fe7: 0f 87 f3 fe ff ff            	ja	0x401ee0 <epoll_wait+0x1b0>
+  401fed: 48 8b 0c cd a8 c9 40 00      	movq	0x40c9a8(,%rcx,8), %rcx
+  401ff5: 48 83 c1 ff                  	addq	$-0x1, %rcx
+  401ff9: 0f 83 e1 fe ff ff            	jae	0x401ee0 <epoll_wait+0x1b0>
+  401fff: 4a 3b 4c 3c 50               	cmpq	0x50(%rsp,%r15), %rcx
+  402004: 0f 85 d6 fe ff ff            	jne	0x401ee0 <epoll_wait+0x1b0>
+  40200a: 42 89 44 3c 58               	movl	%eax, 0x58(%rsp,%r15)
+  40200f: e9 cc fe ff ff               	jmp	0x401ee0 <epoll_wait+0x1b0>
+  402014: 66 66 66 2e 0f 1f 84 00 00 00 00 00  	nopw	%cs:(%rax,%rax)
+  402020: b8 b1 00 00 00               	movl	$0xb1, %eax
+  402025: 41 b9 01 00 00 00            	movl	$0x1, %r9d
+  40202b: 48 89 ef                     	movq	%rbp, %rdi
+  40202e: 4c 89 f6                     	movq	%r14, %rsi
+  402031: 4c 89 e2                     	movq	%r12, %rdx
+  402034: 49 89 da                     	movq	%rbx, %r10
+  402037: 4c 8b 44 24 30               	movq	0x30(%rsp), %r8
+  40203c: 0f 05                        	syscall
+  40203e: 48 85 c0                     	testq	%rax, %rax
+  402041: 0f 88 58 01 00 00            	js	0x40219f <epoll_wait+0x46f>
+  402047: 4d 89 f5                     	movq	%r14, %r13
+  40204a: 49 89 de                     	movq	%rbx, %r14
+  40204d: 8b 5c 24 20                  	movl	0x20(%rsp), %ebx
+  402051: 85 db                        	testl	%ebx, %ebx
+  402053: 0f 84 cb fd ff ff            	je	0x401e24 <epoll_wait+0xf4>
+  402059: 48 85 c0                     	testq	%rax, %rax
+  40205c: 0f 85 c2 fd ff ff            	jne	0x401e24 <epoll_wait+0xf4>
+  402062: 49 89 ef                     	movq	%rbp, %r15
+  402065: 0f 57 c0                     	xorps	%xmm0, %xmm0
+  402068: 0f 29 04 24                  	movaps	%xmm0, (%rsp)
+  40206c: bf 01 00 00 00               	movl	$0x1, %edi
+  402071: 48 89 e6                     	movq	%rsp, %rsi
+  402074: e8 27 24 00 00               	callq	0x4044a0 <clock_gettime>
+  402079: 85 c0                        	testl	%eax, %eax
+  40207b: 0f 85 9e fd ff ff            	jne	0x401e1f <epoll_wait+0xef>
+  402081: b8 e8 03 00 00               	movl	$0x3e8, %eax            # imm = 0x3E8
+  402086: 48 f7 24 24                  	mulq	(%rsp)
+  40208a: 0f 80 b0 00 00 00            	jo	0x402140 <epoll_wait+0x410>
+  402090: 48 89 c1                     	movq	%rax, %rcx
+  402093: 48 b8 db 34 b6 d7 82 de 1b 43	movabsq	$0x431bde82d7b634db, %rax # imm = 0x431BDE82D7B634DB
+  40209d: 48 f7 64 24 08               	mulq	0x8(%rsp)
+  4020a2: 48 c1 ea 12                  	shrq	$0x12, %rdx
+  4020a6: 48 01 ca                     	addq	%rcx, %rdx
+  4020a9: 48 c7 c0 ff ff ff ff         	movq	$-0x1, %rax
+  4020b0: 48 0f 42 d0                  	cmovbq	%rax, %rdx
+  4020b4: b8 14 00 00 00               	movl	$0x14, %eax
+  4020b9: 85 db                        	testl	%ebx, %ebx
+  4020bb: 7e 25                        	jle	0x4020e2 <epoll_wait+0x3b2>
+  4020bd: 48 8b 4c 24 28               	movq	0x28(%rsp), %rcx
+  4020c2: 48 29 d1                     	subq	%rdx, %rcx
+  4020c5: be 00 00 00 00               	movl	$0x0, %esi
+  4020ca: 48 0f 42 ce                  	cmovbq	%rsi, %rcx
+  4020ce: 48 83 f9 14                  	cmpq	$0x14, %rcx
+  4020d2: 77 0e                        	ja	0x4020e2 <epoll_wait+0x3b2>
+  4020d4: 48 89 c8                     	movq	%rcx, %rax
+  4020d7: 48 39 54 24 28               	cmpq	%rdx, 0x28(%rsp)
+  4020dc: 0f 86 f6 00 00 00            	jbe	0x4021d8 <epoll_wait+0x4a8>
+  4020e2: 48 69 c0 40 42 0f 00         	imulq	$0xf4240, %rax, %rax    # imm = 0xF4240
+  4020e9: 48 c7 04 24 00 00 00 00      	movq	$0x0, (%rsp)
+  4020f1: 48 89 44 24 08               	movq	%rax, 0x8(%rsp)
+  4020f6: 48 89 e7                     	movq	%rsp, %rdi
+  4020f9: 31 f6                        	xorl	%esi, %esi
+  4020fb: e8 c0 24 00 00               	callq	0x4045c0 <nanosleep>
+  402100: 85 c0                        	testl	%eax, %eax
+  402102: 0f 85 17 fd ff ff            	jne	0x401e1f <epoll_wait+0xef>
+  402108: ba 00 08 00 00               	movl	$0x800, %edx            # imm = 0x800
+  40210d: 4c 89 ef                     	movq	%r13, %rdi
+  402110: 31 f6                        	xorl	%esi, %esi
+  402112: e8 69 06 00 00               	callq	0x402780 <memset>
+  402117: b8 b1 00 00 00               	movl	$0xb1, %eax
+  40211c: ba 40 00 00 00               	movl	$0x40, %edx
+  402121: 4c 89 ff                     	movq	%r15, %rdi
+  402124: 4c 89 ee                     	movq	%r13, %rsi
+  402127: 45 31 d2                     	xorl	%r10d, %r10d
+  40212a: 45 31 c0                     	xorl	%r8d, %r8d
+  40212d: 45 31 c9                     	xorl	%r9d, %r9d
+  402130: 0f 05                        	syscall
+  402132: 49 89 c4                     	movq	%rax, %r12
+  402135: 48 85 c0                     	testq	%rax, %rax
+  402138: 0f 89 72 fd ff ff            	jns	0x401eb0 <epoll_wait+0x180>
+  40213e: eb 0c                        	jmp	0x40214c <epoll_wait+0x41c>
+  402140: 48 c7 c1 ff ff ff ff         	movq	$-0x1, %rcx
+  402147: e9 47 ff ff ff               	jmp	0x402093 <epoll_wait+0x363>
+  40214c: 41 f7 dc                     	negl	%r12d
+  40214f: 0f b6 05 ae 9e 00 00         	movzbl	0x9eae(%rip), %eax      # 0x40c004 <_RNvNtCs790hijwktEa_13sunlight_libc5errno9TLS_READY.0.llvm.3408264154317175253>
+  402156: 84 c0                        	testb	%al, %al
+  402158: 74 15                        	je	0x40216f <epoll_wait+0x43f>
+  40215a: 64 48 8b 04 25 00 00 00 00   	movq	%fs:0x0, %rax
+  402163: 48 83 c0 08                  	addq	$0x8, %rax
+  402167: 44 89 20                     	movl	%r12d, (%rax)
+  40216a: e9 b0 fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  40216f: b8 00 c0 40 00               	movl	$0x40c000, %eax         # imm = 0x40C000
+  402174: 44 89 20                     	movl	%r12d, (%rax)
+  402177: e9 a3 fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  40217c: 8b 44 24 08                  	movl	0x8(%rsp), %eax
+  402180: 0f b6 0d 7d 9e 00 00         	movzbl	0x9e7d(%rip), %ecx      # 0x40c004 <_RNvNtCs790hijwktEa_13sunlight_libc5errno9TLS_READY.0.llvm.3408264154317175253>
+  402187: 84 c9                        	testb	%cl, %cl
+  402189: 74 35                        	je	0x4021c0 <epoll_wait+0x490>
+  40218b: 64 48 8b 0c 25 00 00 00 00   	movq	%fs:0x0, %rcx
+  402194: 48 83 c1 08                  	addq	$0x8, %rcx
+  402198: 89 01                        	movl	%eax, (%rcx)
+  40219a: e9 80 fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  40219f: f7 d8                        	negl	%eax
+  4021a1: 0f b6 0d 5c 9e 00 00         	movzbl	0x9e5c(%rip), %ecx      # 0x40c004 <_RNvNtCs790hijwktEa_13sunlight_libc5errno9TLS_READY.0.llvm.3408264154317175253>
+  4021a8: 84 c9                        	testb	%cl, %cl
+  4021aa: 74 20                        	je	0x4021cc <epoll_wait+0x49c>
+  4021ac: 64 48 8b 0c 25 00 00 00 00   	movq	%fs:0x0, %rcx
+  4021b5: 48 83 c1 08                  	addq	$0x8, %rcx
+  4021b9: 89 01                        	movl	%eax, (%rcx)
+  4021bb: e9 5f fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  4021c0: b9 00 c0 40 00               	movl	$0x40c000, %ecx         # imm = 0x40C000
+  4021c5: 89 01                        	movl	%eax, (%rcx)
+  4021c7: e9 53 fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  4021cc: b9 00 c0 40 00               	movl	$0x40c000, %ecx         # imm = 0x40C000
+  4021d1: 89 01                        	movl	%eax, (%rcx)
+  4021d3: e9 47 fc ff ff               	jmp	0x401e1f <epoll_wait+0xef>
+  4021d8: 31 c0                        	xorl	%eax, %eax
+  4021da: e9 45 fc ff ff               	jmp	0x401e24 <epoll_wait+0xf4>
+  4021df: ba 40 00 00 00               	movl	$0x40, %edx
+  4021e4: b9 58 93 40 00               	movl	$0x409358, %ecx         # imm = 0x409358
+  4021e9: 31 ff                        	xorl	%edi, %edi
+  4021eb: 4c 89 e6                     	movq	%r12, %rsi
+  4021ee: e8 dd 58 00 00               	callq	0x407ad0 <_RNvNtNtCsg6my6oZXuye_4core5slice5index16slice_index_fail>
+  4021f3: cc                           	int3
+  4021f4: cc                           	int3
+  4021f5: cc                           	int3
+  4021f6: cc                           	int3
+  4021f7: cc                           	int3
+  4021f8: cc                           	int3
+  4021f9: cc                           	int3
+  4021fa: cc                           	int3
+  4021fb: cc                           	int3
+  4021fc: cc                           	int3
+  4021fd: cc                           	int3
+  4021fe: cc                           	int3
+  4021ff: cc                           	int3

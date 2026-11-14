@@ -1,0 +1,5 @@
+ld.lld: error: undefined symbol: dup2
+>>> referenced by probe-dup2-abi.c
+>>>               /tmp/probe-dup2-abi-e43ec1.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+link exit=1

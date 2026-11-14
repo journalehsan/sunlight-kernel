@@ -1,0 +1,19 @@
+tools/native-c/tests/dup-runtime.c:51:15: error: use of out-of-scope declaration of 'coverage_replace' [-Werror,-Wout-of-scope-function]
+   51 |         check(coverage_replace(-1, s) == -5, "wrapper-invalid-source-EBADF");
+      |               ^
+tools/native-c/tests/dup2-replacement.c:62:17: note: previous declaration is here
+   62 |     extern long REPLACEMENT_ADAPTER(int, int);
+      |                 ^
+tools/native-c/tests/dup-runtime.c:7:29: note: expanded from macro 'REPLACEMENT_ADAPTER'
+    7 | #define REPLACEMENT_ADAPTER coverage_replace
+      |                             ^
+tools/native-c/tests/dup-runtime.c:74:15: error: use of out-of-scope declaration of 'coverage_replace' [-Werror,-Wout-of-scope-function]
+   74 |         check(coverage_replace(p[0], s) == s, "attached-success-replacement");
+      |               ^
+tools/native-c/tests/dup2-replacement.c:62:17: note: previous declaration is here
+   62 |     extern long REPLACEMENT_ADAPTER(int, int);
+      |                 ^
+tools/native-c/tests/dup-runtime.c:7:29: note: expanded from macro 'REPLACEMENT_ADAPTER'
+    7 | #define REPLACEMENT_ADAPTER coverage_replace
+      |                             ^
+2 errors generated.

@@ -1,0 +1,1147 @@
+[
+  {
+    "path": "target/native-c/sysroot/lib/libsunlight_native_c.a",
+    "sha256": "87bfcf73706f88243b6f60000da3ff4230bb2cd041fdd67736065fdbffa76ab7",
+    "mtime": 1794503930.432967
+  },
+  {
+    "path": "target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a",
+    "sha256": "87bfcf73706f88243b6f60000da3ff4230bb2cd041fdd67736065fdbffa76ab7",
+    "mtime": 1794501258.7215664
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/entry.elf",
+    "sha256": "f731192a3002779f9c63ed6c7da1c69d45c128fb8cbf10411f00ce13764217f1",
+    "mtime": 1794501265.6495109
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/write.elf",
+    "sha256": "898188e749a387ce878b5f797cfc81b64c9b1e189f4a0c45ef4d20829835be50",
+    "mtime": 1794501265.77651
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/exit.elf",
+    "sha256": "f1795dda2ffa9e4c49f36b04b6499b7a6d6150159741c4793a07eda0b4b5924c",
+    "mtime": 1794501265.9085088
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit.elf",
+    "sha256": "d79217d2892cc2389c9c34d191219159d0621c18f692faec5cbf85da73f439d8",
+    "mtime": 1794501266.025508
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/clock.elf",
+    "sha256": "af101dc76efd746086b6b167844c139f7561cbb525e276cbe6e9a4103f7e903b",
+    "mtime": 1794501266.160507
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dirent.elf",
+    "sha256": "309849df9b3b9b8bb45c22a1b224366043932559f5cfc651b7396f8aeb14fdca",
+    "mtime": 1794501266.276506
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dlfcn.elf",
+    "sha256": "284405a36c535d0707bd69d8bcc3ac7e195ce794326329285c12b8a2ba8df300",
+    "mtime": 1794501266.4105048
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-service-before.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501266.5495038
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/getrandom.elf",
+    "sha256": "01c9e899307cbe2ff8216229c5468407abe1d77e5f34d892695f2776ad8c6608",
+    "mtime": 1794501266.6705027
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-service-after.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501266.8065016
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/langinfo.elf",
+    "sha256": "530856c1a858d343225b87f98cb61570faa3162af900770e5faac0e84c9f1b76",
+    "mtime": 1794501266.9195008
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/locale.elf",
+    "sha256": "2a7f05c57519f33ba9a0d9c7a2b43cd7e84bb9897c5b1c9fd9451b96c6e7ac1e",
+    "mtime": 1794501267.0534997
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/math.elf",
+    "sha256": "38acdfe03c3a06b07cc1f4a875882b9e360e297fe2af234a57df91d494005081",
+    "mtime": 1794501267.1754987
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/mmap.elf",
+    "sha256": "a4999be611d04f471b8c49d322b7b047cb034f7b54c4b8950ee28e08f943156f",
+    "mtime": 1794501267.3144975
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/poll_select.elf",
+    "sha256": "6bca230a44a5b194f7803f352460fa73dfafc169b51ae96eb528baf5c9fab1c8",
+    "mtime": 1794501267.4454966
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread.elf",
+    "sha256": "399f8293ba578c9d824d4003596870c9be37d75605f460a365818f45189e8f6a",
+    "mtime": 1794501267.5664954
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal.elf",
+    "sha256": "af94a80a8ead2e441a8dbb499a50a8ab5dce3c9ae6f1b9a687cb986a0a3bcc17",
+    "mtime": 1794501267.7014945
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/socket.elf",
+    "sha256": "a109183ce98e5b45649612860ac181ba6dac3c88d6a17a6dc09f4b796a31c041",
+    "mtime": 1794501267.8234935
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/stdio.elf",
+    "sha256": "fac7c42529270f3fd4c4facb19ab2ebf2941c577da11196847e1211e0bac5449",
+    "mtime": 1794501267.9584923
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/string.elf",
+    "sha256": "e7b30adfa73109cd1c72be9ba931fd37a1518e78736a05f6a0749f7c22e1a19c",
+    "mtime": 1794501268.0874913
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/termios.elf",
+    "sha256": "0c6c25d57f6765b13b2e57819cc562a5e4a7a0970f029798356cb763a143057e",
+    "mtime": 1794501268.2074902
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/wchar.elf",
+    "sha256": "9e75a7cecbbb7cc40893e36825cdbf3c6140d0b92665b3da600f4710dd1884ef",
+    "mtime": 1794501268.3394892
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/termios-terminal-identity.elf",
+    "sha256": "dc2049e6bb237f293b319775612d01ded9bc75b1b7f79e5755bc7bf9e687bc14",
+    "mtime": 1794501268.5354877
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-output.elf",
+    "sha256": "d790322ed39d16157a8a1f3b23e2804e471357cb1fe79f8b35a0195bb685ef1d",
+    "mtime": 1794501268.6824865
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-backend.elf",
+    "sha256": "edeb3409d0487f2c86874e0dc94d14c73cd3fa3a6fe8e50361780d3b443f1954",
+    "mtime": 1794501268.8074853
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-exception-class.elf",
+    "sha256": "17b7a48f5b6648e92524fc38c91b903111429a65790906c106d08701a1300b26",
+    "mtime": 1794501268.9394844
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cpp-runtime-native.elf",
+    "sha256": "e1e65ec19cc29a26f035fd128e4773cae8ae5d326fa1d88ac86a51d1f9f58774",
+    "mtime": 1794501269.0724833
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-runtime-execution.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501269.2094822
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-runtime-uncaught.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501269.3924806
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-runtime-destructor.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501269.5714793
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-runtime-worker.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501269.7574778
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-runtime-storage.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501269.9354763
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-basic.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.1164749
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-concurrent.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.2974734
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-retry.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.4814718
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-nested.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.6554704
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-order.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.7754695
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-local-static-recursive.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501270.8954685
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-string.elf",
+    "sha256": "6794802e0ba40ba28b5cff57b8e829516e965ac48ef92070277866c1bedf0eac",
+    "mtime": 1794501271.0284674
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-string-backend.elf",
+    "sha256": "f3dc5cff3ec07c72d0c6298e4711186f352ee87cfa5a8f253319ad3973f65ff8",
+    "mtime": 1794501271.1474664
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-string-allocation.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501271.2804654
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-string-overflow.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501271.4104643
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/cxx-string-null.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501271.542463
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/wchar-contract.elf",
+    "sha256": "9e110eb27bdd1e6b793cb7b907d8513c9a6427afb94392e5ab2995b3297fdc71",
+    "mtime": 1794501271.6414623
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/termios-contract.elf",
+    "sha256": "dc2049e6bb237f293b319775612d01ded9bc75b1b7f79e5755bc7bf9e687bc14",
+    "mtime": 1794501271.7764614
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dlfcn-contract.elf",
+    "sha256": "43e06053624a569ed0b541979f3b8a8a17d18d0ca9ec33a0738bb525ae4097a9",
+    "mtime": 1794501271.8994603
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/epoll-contract.elf",
+    "sha256": "4396070f4661710858e9c0dfbd7279fed6f1271c2dfa8fa1e226b67a18ad232d",
+    "mtime": 1794501272.044459
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread-basic.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501272.1654582
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread-exit.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501272.294457
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread-detached.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501272.425456
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread-attr.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501272.5614548
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/inet-socket-contract.elf",
+    "sha256": "98c6a0823286d7458cce077694e80a8299b9e7548e7f1d19f36c7c6a37377732",
+    "mtime": 1794501272.7004538
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/inet-socket-reap.elf",
+    "sha256": "98c6a0823286d7458cce077694e80a8299b9e7548e7f1d19f36c7c6a37377732",
+    "mtime": 1794501272.8254528
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/epoll-lifecycle.elf",
+    "sha256": "1d19a5b35c32a0054f7d96e863536109b6f91a092759d273066dd4d99ec108b1",
+    "mtime": 1794501272.9534516
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal-contract.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501273.084949
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal-fatal.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501273.2434492
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal-forged.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501273.3584483
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal-handler-exit.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501273.503447
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/signal-bad-stack.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501273.6304462
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/pthread-abi.elf",
+    "sha256": "f6704508bcfce24a316733039e3c1bff1904d37fbb1ed949783f9e88248c9ca8",
+    "mtime": 1794501273.758445
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/poll-contract.elf",
+    "sha256": "5894fd1a535afea87c1825afa50382651d707eff3e1145cb24f039bd522aa6c6",
+    "mtime": 1794501273.893444
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/poll-socket-contract.elf",
+    "sha256": "fc9ecfe41878c8caf0007f7e93f3b1ad4cb965863fef37e6134df71d27c53d7f",
+    "mtime": 1794501274.0444427
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/math-contract.elf",
+    "sha256": "4b5e341e352c72bfaaa3fcd887bd6290ad3791f819cab61d621ae58747bc62f3",
+    "mtime": 1794501274.1694417
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/locale-contract.elf",
+    "sha256": "a7df0d7af7d8f540904d597efd751a3eea5c546c5d507a6ec9fafcd57ba50f8c",
+    "mtime": 1794501274.3004405
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/locale-environment.elf",
+    "sha256": "a7df0d7af7d8f540904d597efd751a3eea5c546c5d507a6ec9fafcd57ba50f8c",
+    "mtime": 1794501274.4294395
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/langinfo-contract.elf",
+    "sha256": "221e6864f5ead126b1dfaba10c36d37888b4797cfc8c1cadc00fbf8ffd2a2135",
+    "mtime": 1794501274.5604384
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/stdout.elf",
+    "sha256": "25e0499648eee4b42129a88b6174763511fba56f27fb1f391fb1660c27534da9",
+    "mtime": 1794501274.6964374
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/stdio-full.elf",
+    "sha256": "de212280f21a0340a9aadd6ba9ce6ff94df8f133aa104a33ae3246b46c9aac7d",
+    "mtime": 1794501274.8284364
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/open-unlink.elf",
+    "sha256": "7926559b719c54edfcce5e69f57d7ce812b6f0515e1113db125a0e0741cd483f",
+    "mtime": 1794501274.965435
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/exit-cleanup.elf",
+    "sha256": "6326a518800601ed68d591cf033b523936ca0fe963a2eabeaf0bb57060701fd6",
+    "mtime": 1794501275.0844343
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/write-basic.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.220433
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/write-zero.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.351432
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/write-short.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.4844308
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/write-errors.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.6274297
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit-order.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.7484288
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit-register.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501275.8644278
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit-capacity.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501276.0084267
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit-exit.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501276.1364255
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/atexit-raw-exit.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501276.2604244
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-basic.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501276.3934233
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-zero.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501276.5254223
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-errors.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501276.6584213
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/random-guards.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501276.7884202
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/time-clocks.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501276.916419
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/time-errors.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501277.048418
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/time-zero.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501277.185417
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/time-sleep.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501277.3104157
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/mman-subset.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501277.4434147
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/mman-fixed.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501277.5754137
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/mman-bounds.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501277.6964126
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dirent-root.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501277.8364115
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dirent-errors.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501277.9454105
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/dirent-entries.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501278.0824094
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/kernel.elf",
+    "sha256": "03cb613bfdde70e2034276cc3890ae41d4796446f464bb925fb9a498bb5eef46",
+    "mtime": 1794501281.1713839
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2/tcp-poll-pressure-client.elf",
+    "sha256": "630d29c9ede1832bcf80bcbb3a6acccac4be5eab1b84ad0eb0e4330534dcc943",
+    "mtime": 1794501279.6803963
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/entry.elf",
+    "sha256": "f731192a3002779f9c63ed6c7da1c69d45c128fb8cbf10411f00ce13764217f1",
+    "mtime": 1794501298.1252406
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/write.elf",
+    "sha256": "898188e749a387ce878b5f797cfc81b64c9b1e189f4a0c45ef4d20829835be50",
+    "mtime": 1794501298.2342396
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/exit.elf",
+    "sha256": "f1795dda2ffa9e4c49f36b04b6499b7a6d6150159741c4793a07eda0b4b5924c",
+    "mtime": 1794501298.3772383
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit.elf",
+    "sha256": "d79217d2892cc2389c9c34d191219159d0621c18f692faec5cbf85da73f439d8",
+    "mtime": 1794501298.5062373
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/clock.elf",
+    "sha256": "af101dc76efd746086b6b167844c139f7561cbb525e276cbe6e9a4103f7e903b",
+    "mtime": 1794501298.6362362
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dirent.elf",
+    "sha256": "309849df9b3b9b8bb45c22a1b224366043932559f5cfc651b7396f8aeb14fdca",
+    "mtime": 1794501298.765235
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dlfcn.elf",
+    "sha256": "284405a36c535d0707bd69d8bcc3ac7e195ce794326329285c12b8a2ba8df300",
+    "mtime": 1794501298.897234
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-service-before.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501299.016233
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/getrandom.elf",
+    "sha256": "01c9e899307cbe2ff8216229c5468407abe1d77e5f34d892695f2776ad8c6608",
+    "mtime": 1794501299.1402318
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-service-after.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501299.2792306
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/langinfo.elf",
+    "sha256": "530856c1a858d343225b87f98cb61570faa3162af900770e5faac0e84c9f1b76",
+    "mtime": 1794501299.4072294
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/locale.elf",
+    "sha256": "2a7f05c57519f33ba9a0d9c7a2b43cd7e84bb9897c5b1c9fd9451b96c6e7ac1e",
+    "mtime": 1794501299.5242286
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/math.elf",
+    "sha256": "38acdfe03c3a06b07cc1f4a875882b9e360e297fe2af234a57df91d494005081",
+    "mtime": 1794501299.6472275
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/mmap.elf",
+    "sha256": "a4999be611d04f471b8c49d322b7b047cb034f7b54c4b8950ee28e08f943156f",
+    "mtime": 1794501299.7642264
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/poll_select.elf",
+    "sha256": "6bca230a44a5b194f7803f352460fa73dfafc169b51ae96eb528baf5c9fab1c8",
+    "mtime": 1794501299.8982253
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread.elf",
+    "sha256": "399f8293ba578c9d824d4003596870c9be37d75605f460a365818f45189e8f6a",
+    "mtime": 1794501300.031224
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal.elf",
+    "sha256": "af94a80a8ead2e441a8dbb499a50a8ab5dce3c9ae6f1b9a687cb986a0a3bcc17",
+    "mtime": 1794501300.152223
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/socket.elf",
+    "sha256": "a109183ce98e5b45649612860ac181ba6dac3c88d6a17a6dc09f4b796a31c041",
+    "mtime": 1794501300.275222
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/stdio.elf",
+    "sha256": "fac7c42529270f3fd4c4facb19ab2ebf2941c577da11196847e1211e0bac5449",
+    "mtime": 1794501300.405221
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/string.elf",
+    "sha256": "e7b30adfa73109cd1c72be9ba931fd37a1518e78736a05f6a0749f7c22e1a19c",
+    "mtime": 1794501300.52522
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/termios.elf",
+    "sha256": "0c6c25d57f6765b13b2e57819cc562a5e4a7a0970f029798356cb763a143057e",
+    "mtime": 1794501300.6562188
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/wchar.elf",
+    "sha256": "9e75a7cecbbb7cc40893e36825cdbf3c6140d0b92665b3da600f4710dd1884ef",
+    "mtime": 1794501300.7832177
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/termios-terminal-identity.elf",
+    "sha256": "dc2049e6bb237f293b319775612d01ded9bc75b1b7f79e5755bc7bf9e687bc14",
+    "mtime": 1794501300.987216
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-output.elf",
+    "sha256": "d790322ed39d16157a8a1f3b23e2804e471357cb1fe79f8b35a0195bb685ef1d",
+    "mtime": 1794501301.1332147
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-backend.elf",
+    "sha256": "edeb3409d0487f2c86874e0dc94d14c73cd3fa3a6fe8e50361780d3b443f1954",
+    "mtime": 1794501301.2562137
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-exception-class.elf",
+    "sha256": "17b7a48f5b6648e92524fc38c91b903111429a65790906c106d08701a1300b26",
+    "mtime": 1794501301.3862123
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cpp-runtime-native.elf",
+    "sha256": "e1e65ec19cc29a26f035fd128e4773cae8ae5d326fa1d88ac86a51d1f9f58774",
+    "mtime": 1794501301.5232112
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-runtime-execution.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501301.6492102
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-runtime-uncaught.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501301.784209
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-runtime-destructor.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501301.900208
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-runtime-worker.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501302.0282068
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-runtime-storage.elf",
+    "sha256": "0ab068a7a120f8c094ae78aa63e38c0eb8316a451058c10f220f6ae3e6303186",
+    "mtime": 1794501302.2092054
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-basic.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501302.3362043
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-concurrent.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501302.5232027
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-retry.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501302.699201
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-nested.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501302.8791995
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-order.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501303.061198
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-local-static-recursive.elf",
+    "sha256": "b2c8af951170ca3dc92aefc13fba0e7384f28f0df445b4ba095068061647e3ad",
+    "mtime": 1794501303.2391963
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-string.elf",
+    "sha256": "6794802e0ba40ba28b5cff57b8e829516e965ac48ef92070277866c1bedf0eac",
+    "mtime": 1794501303.3621953
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-string-backend.elf",
+    "sha256": "f3dc5cff3ec07c72d0c6298e4711186f352ee87cfa5a8f253319ad3973f65ff8",
+    "mtime": 1794501303.531194
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-string-allocation.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501303.651193
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-string-overflow.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501303.7711918
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/cxx-string-null.elf",
+    "sha256": "26e83d79b1e86d24062482afd3c4a34645a46c37c98153a2f62a763d9cb35041",
+    "mtime": 1794501303.9141905
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/wchar-contract.elf",
+    "sha256": "9e110eb27bdd1e6b793cb7b907d8513c9a6427afb94392e5ab2995b3297fdc71",
+    "mtime": 1794501304.0021899
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/termios-contract.elf",
+    "sha256": "dc2049e6bb237f293b319775612d01ded9bc75b1b7f79e5755bc7bf9e687bc14",
+    "mtime": 1794501304.1411886
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dlfcn-contract.elf",
+    "sha256": "43e06053624a569ed0b541979f3b8a8a17d18d0ca9ec33a0738bb525ae4097a9",
+    "mtime": 1794501304.2561877
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/epoll-contract.elf",
+    "sha256": "4396070f4661710858e9c0dfbd7279fed6f1271c2dfa8fa1e226b67a18ad232d",
+    "mtime": 1794501304.3901865
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread-basic.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501304.5191853
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread-exit.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501304.654184
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread-detached.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501304.7651832
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread-attr.elf",
+    "sha256": "ff6a19cfe47baca8531dcea05ace38b30e873ae488c8e0887d911cad0fb47cbe",
+    "mtime": 1794501304.901182
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/inet-socket-contract.elf",
+    "sha256": "98c6a0823286d7458cce077694e80a8299b9e7548e7f1d19f36c7c6a37377732",
+    "mtime": 1794501305.033181
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/inet-socket-reap.elf",
+    "sha256": "98c6a0823286d7458cce077694e80a8299b9e7548e7f1d19f36c7c6a37377732",
+    "mtime": 1794501305.1751797
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/epoll-lifecycle.elf",
+    "sha256": "1d19a5b35c32a0054f7d96e863536109b6f91a092759d273066dd4d99ec108b1",
+    "mtime": 1794501305.2941785
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal-contract.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501305.4311774
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal-fatal.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501305.5621762
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal-forged.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501305.6891751
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal-handler-exit.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501305.8321738
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/signal-bad-stack.elf",
+    "sha256": "830d13346082a78fd7c460d1ca9aea5f391ec12e4b00a8c2467250232cc2165d",
+    "mtime": 1794501305.938173
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/pthread-abi.elf",
+    "sha256": "f6704508bcfce24a316733039e3c1bff1904d37fbb1ed949783f9e88248c9ca8",
+    "mtime": 1794501306.066172
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/poll-contract.elf",
+    "sha256": "5894fd1a535afea87c1825afa50382651d707eff3e1145cb24f039bd522aa6c6",
+    "mtime": 1794501306.1871707
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/poll-socket-contract.elf",
+    "sha256": "fc9ecfe41878c8caf0007f7e93f3b1ad4cb965863fef37e6134df71d27c53d7f",
+    "mtime": 1794501306.3191698
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/math-contract.elf",
+    "sha256": "4b5e341e352c72bfaaa3fcd887bd6290ad3791f819cab61d621ae58747bc62f3",
+    "mtime": 1794501306.4431686
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/locale-contract.elf",
+    "sha256": "a7df0d7af7d8f540904d597efd751a3eea5c546c5d507a6ec9fafcd57ba50f8c",
+    "mtime": 1794501306.5601676
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/locale-environment.elf",
+    "sha256": "a7df0d7af7d8f540904d597efd751a3eea5c546c5d507a6ec9fafcd57ba50f8c",
+    "mtime": 1794501306.7031662
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/langinfo-contract.elf",
+    "sha256": "221e6864f5ead126b1dfaba10c36d37888b4797cfc8c1cadc00fbf8ffd2a2135",
+    "mtime": 1794501306.8311653
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/stdout.elf",
+    "sha256": "25e0499648eee4b42129a88b6174763511fba56f27fb1f391fb1660c27534da9",
+    "mtime": 1794501306.966164
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/stdio-full.elf",
+    "sha256": "de212280f21a0340a9aadd6ba9ce6ff94df8f133aa104a33ae3246b46c9aac7d",
+    "mtime": 1794501307.097163
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/open-unlink.elf",
+    "sha256": "7926559b719c54edfcce5e69f57d7ce812b6f0515e1113db125a0e0741cd483f",
+    "mtime": 1794501307.2231617
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/exit-cleanup.elf",
+    "sha256": "6326a518800601ed68d591cf033b523936ca0fe963a2eabeaf0bb57060701fd6",
+    "mtime": 1794501307.3601606
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/write-basic.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501307.4861596
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/write-zero.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501307.6141584
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/write-short.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501307.7401574
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/write-errors.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501307.8821561
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit-order.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501308.006155
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit-register.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501308.1381538
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit-capacity.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501308.2461529
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit-exit.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501308.3841517
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/atexit-raw-exit.elf",
+    "sha256": "8238e8a7a1ce7a6364aff01c0b2c1d8f4225085c5d6ddcccf7e5cd3ff0c2abbd",
+    "mtime": 1794501308.5201504
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-basic.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501308.6761491
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-zero.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501308.7981482
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-errors.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501308.9281468
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/random-guards.elf",
+    "sha256": "aa99da7e32f0b7f9af1b1a5db038c403c2da532197aef4037610034a734860c9",
+    "mtime": 1794501309.0541458
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/time-clocks.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501309.1761448
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/time-errors.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501309.3081436
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/time-zero.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501309.4261425
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/time-sleep.elf",
+    "sha256": "0c98b329e06deec191d945feb28c34225d082d9e7fb6b3c16fa33480e3d84d33",
+    "mtime": 1794501309.5601413
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/mman-subset.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501309.6921403
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/mman-fixed.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501309.8041391
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/mman-bounds.elf",
+    "sha256": "ff712e0b0c424f658904de50725fb37492d1860d100f023589294305b4eea399",
+    "mtime": 1794501309.938138
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dirent-root.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501310.0631785
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dirent-errors.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501310.1951358
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/dirent-entries.elf",
+    "sha256": "55d946bc3cd44f3e27acd4e37c9722637e86fe2d81fea268c685d7727633c69f",
+    "mtime": 1794501310.3251348
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/kernel.elf",
+    "sha256": "6f29b812261bbd59586886d18b5429e9a34914d22474cdb7048892daeecf4c48",
+    "mtime": 1794501312.336117
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-retry/tcp-poll-pressure-client.elf",
+    "sha256": "630d29c9ede1832bcf80bcbb3a6acccac4be5eab1b84ad0eb0e4330534dcc943",
+    "mtime": 1794501311.4861245
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-2/tcp-poll-pressure-client.elf",
+    "sha256": "a59bd94c37a96cbbfd5bf5716057ff20358305d7c1105aacd1ce88c030a65af2",
+    "mtime": 1794501337.66989
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-2/tcp-poll-pressure-service.elf",
+    "sha256": "51556a0dd4f778ba95318c80652d126302550f443b672da0d150ca528e66be49",
+    "mtime": 1794501337.7808888
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-4/tcp-poll-pressure-client.elf",
+    "sha256": "630d29c9ede1832bcf80bcbb3a6acccac4be5eab1b84ad0eb0e4330534dcc943",
+    "mtime": 1794501655.0098898
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-4/tcp-poll-pressure-client.elf",
+    "sha256": "a59bd94c37a96cbbfd5bf5716057ff20358305d7c1105aacd1ce88c030a65af2",
+    "mtime": 1794501668.5901508
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-4/tcp-poll-pressure-service.elf",
+    "sha256": "51556a0dd4f778ba95318c80652d126302550f443b672da0d150ca528e66be49",
+    "mtime": 1794501668.705153
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-repeat/tcp-poll-pressure-client.elf",
+    "sha256": "630d29c9ede1832bcf80bcbb3a6acccac4be5eab1b84ad0eb0e4330534dcc943",
+    "mtime": 1794503909.7453415
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/tcp-poll-service.elf",
+    "sha256": "236140dba61c7f46b1f62648a8f78f5bddfe972df10590d155de0c98e43b1071",
+    "mtime": 1794503921.144689
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/tcp-poll-client.elf",
+    "sha256": "4288c13bde327968bfc8d540de3d3bd6e4a17a15878a7702b8ee0ff3e163066b",
+    "mtime": 1794503921.2656927
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-abi/poll.elf",
+    "sha256": "6bca230a44a5b194f7803f352460fa73dfafc169b51ae96eb528baf5c9fab1c8",
+    "mtime": 1794503930.0079544
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-abi/poll-contract.elf",
+    "sha256": "c545b0fb799120e2cb3159a051ea537d74fc7ac1f80cc2f9998f90cbbba22ab6",
+    "mtime": 1794503930.129958
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-abi/poll-socket-contract.elf",
+    "sha256": "0509d17b99bca492456925b12c6a66d3e8a618e374ef58b191665a2afa533e36",
+    "mtime": 1794503930.2269607
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/socket-abi/socket.elf",
+    "sha256": "a109183ce98e5b45649612860ac181ba6dac3c88d6a17a6dc09f4b796a31c041",
+    "mtime": 1794503930.744976
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-external/tcp-poll-client.elf",
+    "sha256": "827e7a9c8c90dfeedd103b8fdc1d80266b54acea74c85b51c179d5de59e63076",
+    "mtime": 1794503942.432319
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-external/tcp-echo-client.elf",
+    "sha256": "11c425c4513749844f4b020491c37ad94ff7bf43451c73a30238b3e2606b8d0d",
+    "mtime": 1794503979.8143668
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/tcp-stall-client.elf",
+    "sha256": "43420fffd1d89f05ca308865abaa7b1c4cdc5a2d910ea866febdc235f14f2141",
+    "mtime": 1794503987.1545644
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-loopback/kernel.elf",
+    "sha256": "84d28c1d8e92a1c31750315a3276d3dea32b068d8a2dd4bd8fc338b17230f04b",
+    "mtime": 1794504012.5512276
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-loopback/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "84d28c1d8e92a1c31750315a3276d3dea32b068d8a2dd4bd8fc338b17230f04b",
+    "mtime": 1794504012.6962314
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/guest/kernel.elf",
+    "sha256": "31d670492a03a8fa3778ec68ae4bf6660b4229f47f5fef25da15704c998dbcd2",
+    "mtime": 1794503990.3366492
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "31d670492a03a8fa3778ec68ae4bf6660b4229f47f5fef25da15704c998dbcd2",
+    "mtime": 1794503990.4906533
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-external/guest/kernel.elf",
+    "sha256": "f80ffdc7cb20a400365b205f4ead63af0fd66579a5cc06c03bffd56e5f89cfaa",
+    "mtime": 1794503983.0924554
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-external/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "f80ffdc7cb20a400365b205f4ead63af0fd66579a5cc06c03bffd56e5f89cfaa",
+    "mtime": 1794503983.2584598
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-external/guest/kernel.elf",
+    "sha256": "7ca4de05e407a3abc55db3cedd4a2cc872066085decb656864f0991dbf68f9cb",
+    "mtime": 1794503945.5574093
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-external/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "7ca4de05e407a3abc55db3cedd4a2cc872066085decb656864f0991dbf68f9cb",
+    "mtime": 1794503945.728414
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/guest/kernel.elf",
+    "sha256": "9a318a049d8ff11b82a6a4d81d7a79bb792cdb90ff16ec69cdead8ba8ed2aeba",
+    "mtime": 1794503924.602793
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "9a318a049d8ff11b82a6a4d81d7a79bb792cdb90ff16ec69cdead8ba8ed2aeba",
+    "mtime": 1794503924.7407973
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-repeat/guest/kernel.elf",
+    "sha256": "eb64c5b80d92e4b948f36a27dfac5f96859006d57e22a319cef1f2923caedc45",
+    "mtime": 1794503912.9864411
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-repeat/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "eb64c5b80d92e4b948f36a27dfac5f96859006d57e22a319cef1f2923caedc45",
+    "mtime": 1794503913.1154451
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-4/guest/kernel.elf",
+    "sha256": "beba3a779d15c6fd2d6a3c26992e2dc5623a44e3740fa2026c9b0408d275ef26",
+    "mtime": 1794501671.9842145
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-4/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "beba3a779d15c6fd2d6a3c26992e2dc5623a44e3740fa2026c9b0408d275ef26",
+    "mtime": 1794501672.1252172
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-4/guest/kernel.elf",
+    "sha256": "7771182eb16dd157428fc848a2d5ebcdd0f94587d48a1a030a3f936f237e5bf7",
+    "mtime": 1794501658.257953
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-4/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "7771182eb16dd157428fc848a2d5ebcdd0f94587d48a1a030a3f936f237e5bf7",
+    "mtime": 1794501658.400956
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-2/guest/kernel.elf",
+    "sha256": "44cab3158409b43039614068364243a3a8002870ea1538bfb67260f033b6668b",
+    "mtime": 1794501341.8618515
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-loopback-2/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "44cab3158409b43039614068364243a3a8002870ea1538bfb67260f033b6668b",
+    "mtime": 1794501342.01985
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-retry/guest/kernel.elf",
+    "sha256": "849fc5be8ad98e3b983c8c39a0554cca3ed238090e021381747a017b72d6f552",
+    "mtime": 1794501316.6650789
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/pressure-external-2-retry/guest/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "849fc5be8ad98e3b983c8c39a0554cca3ed238090e021381747a017b72d6f552",
+    "mtime": 1794501316.865077
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-4/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "6f29b812261bbd59586886d18b5429e9a34914d22474cdb7048892daeecf4c48",
+    "mtime": 1794501312.460116
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/suite-2/media/target/iso_root/boot/sunlight-kernel.elf",
+    "sha256": "03cb613bfdde70e2034276cc3890ae41d4796446f464bb925fb9a498bb5eef46",
+    "mtime": 1794501281.3233826
+  }
+]

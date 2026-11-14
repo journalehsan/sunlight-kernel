@@ -1,0 +1,18 @@
+$ timeout --signal=TERM --kill-after=10 300 python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf --cpus 4 --timeout 110 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry-4
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry-4
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 436, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 284, in main
+    add('elf', opts.elf, opts.expect_exit, opts.arg,
+    ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        opts.stdin_file.read_bytes() if opts.stdin_file else b'',
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        environment=(b'TMPDIR=/tmp', *(entry.encode() for entry in opts.env)))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 141, in add
+    raise ValueError(f'{elf}: expected x86-64 ET_EXEC with OSABI={expected_osabi}')
+ValueError: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf: expected x86-64 ET_EXEC with OSABI=0
+
+exit=1

@@ -1,0 +1,48 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0   400000     1 . = 0x0000000000400000
+          400000           400000     3d0e    16 .text
+          400000           400000     3d0e    16         /tmp/unix-state-validation-b10dd6.o:(.text)
+          400000           400000        0     1                 _start
+          400020           400020       cc     1                 main
+          4000f0           4000f0      67d     1                 section_empty
+          400770           400770      68f     1                 section_pending
+          400e00           400e00      821     1                 section_full
+          401630           401630      49c     1                 section_invalid_dest
+          401ad0           401ad0      302     1                 section_self
+          401de0           401de0      952     1                 section_alias_connect
+          402740           402740      941     1                 section_alias_listener
+          403090           403090      5ae     1                 section_alias_reuse
+          403640           403640      3de     1                 section_repeat
+          403a20           403a20       48     1                 sc
+          403a70           403a70       22     1                 mk
+          403aa0           403aa0       b0     1                 bindl
+          403b50           403b50       37     1                 ctl
+          403b90           403b90       b0     1                 conn
+          403c40           403c40       32     1                 wait1
+          403c80           403c80       32     1                 close_if
+          403cc0           403cc0       4e     1                 close_ok
+          403d0e           403d0e      2f2     1 . = ALIGN(4096)
+          404000           404000     1ca8     2 .rodata
+          404000           404000     1c4b     1         <internal>:(.rodata.str1.1)
+          405c4b           405c4b       3c     1         /tmp/unix-state-validation-b10dd6.o:(.rodata)
+          405c88           405c88       20     2         <internal>:(.rodata.cst32)
+          405ca8           405ca8      358     1 . = ALIGN(4096)
+          406000           406000        0     1 .tdata
+          406000           406000        0     1         __tls_tdata_start = .
+          406000           406000        0     1         __tls_tdata_end = .
+          406000           406000        0     1 .tbss
+          406000           406000        0     1         __tls_tbss_start = .
+          406000           406000        0     1         __tls_tbss_end = .
+          406000           406000        0     1 __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss))
+          406000           406000        0     1 __tls_size = __tls_tbss_end - __tls_tdata_start
+          406000           406000        0     1 . = ALIGN(4096)
+          406000           406000        0     1 . = ALIGN(4096)
+          406000           406000        4     4 .bss
+          406000           406000        4     4         /tmp/unix-state-validation-b10dd6.o:(.bss)
+          406000           406000        4     1                 failures
+               0                0      2a0     8 .symtab
+               0                0      2a0     8         <internal>:(.symtab)
+               0                0       3b     1 .shstrtab
+               0                0       3b     1         <internal>:(.shstrtab)
+               0                0      151     1 .strtab
+               0                0      151     1         <internal>:(.strtab)

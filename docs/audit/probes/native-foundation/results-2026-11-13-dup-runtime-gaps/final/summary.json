@@ -1,0 +1,20 @@
+{
+  "native-build": {
+    "build": "PASS"
+  },
+  "archive-symbols": {
+    "build": "PASS"
+  },
+  "adapter-build": {
+    "build": "PASS"
+  },
+  "wrapper-link": {
+    "link": "PASS"
+  },
+  "linux-handler-link": {
+    "link": "PASS"
+  },
+  "linux-entry-link": {
+    "link": "LINK_FAIL"
+  }
+}

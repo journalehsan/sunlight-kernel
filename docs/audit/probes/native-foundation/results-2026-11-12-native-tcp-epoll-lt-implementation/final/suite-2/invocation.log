@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 2 --timeout 360 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2

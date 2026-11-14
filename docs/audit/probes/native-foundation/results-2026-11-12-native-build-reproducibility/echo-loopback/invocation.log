@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/native-build-echo-client --service target/native-build-echo-service --net --cpus 2 --out docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/echo-loopback

@@ -1,0 +1,12 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-nm --demangle /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/adapter.o
+0000000000000000 T <core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>
+0000000000000000 t dup2_wrapper_adapter::coverage_bridge_id::{closure#0}
+                 U sunlight_libc::dup2
+                 U sunlight_libc::net_bridge::lookup
+0000000000000000 t sunlight_libc::sys::syscall6
+                 U core::panicking::panic_const::panic_const_add_overflow
+0000000000000000 T coverage_bridge_id
+0000000000000000 T coverage_generation
+0000000000000000 T coverage_replace
+
+exit=0

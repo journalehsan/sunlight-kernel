@@ -35,7 +35,7 @@ Legend: I = IMPLEMENTED, P = PARTIAL, S = STUB, U = UNSUPPORTED, M = MISSING.
 | 35 | nanosleep | I | `sys_linux_nanosleep` | timer block | timespec validated | tier1 | | |
 | 39 | getpid | I | native | process.pid | | | Y | |
 | 41 | socket | P | `sys_linux_socket` | unix_socket pool | AF_UNIX SOCK_STREAM only; other domains/types EAFNOSUPPORT/ESOCKTNOSUPPORT | | Y | |
-| 42 | connect | P | `sys_linux_connect` | pipe-backed socketpair | AF_UNIX pathname peers in-process or kernel-wide; ENOENT path ECONNREFUSED | | Y | |
+| 42 | connect | P | `sys_linux_connect` | pipe-backed socketpair | AF_UNIX pathname peers in-process or kernel-wide; ENOENT path ECONNREFUSED; LISTEN source EINVAL (listener/queue preserved) | | Y | |
 | 43 | accept | P | `sys_linux_accept` | pipe-backed socketpair | EAGAIN when queue empty (nonblocking) | | | |
 | 48 | shutdown | P | `sys_linux_shutdown` | pipe ring ends | connected sockets only; ENOTCONN otherwise | | | |
 | 49 | bind | P | `sys_linux_bind` | unix_socket path | EADDRINUSE on duplicate path | | Y | |

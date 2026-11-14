@@ -1,0 +1,192 @@
+{
+  "archive_sha256": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+  "head": "5b08147001be963e468711d03284b349fa8b2089",
+  "rows": [
+    {
+      "name": "build-native",
+      "command": "bash tools/build_native_c.sh",
+      "exit": 0,
+      "note": "archive unchanged"
+    },
+    {
+      "name": "build-inet",
+      "command": "python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Wl,-t tools/native-c/tests/inet-socket.c -o <D>/inet-socket.elf",
+      "exit": 0,
+      "note": "linked against absolute sysroot archive"
+    },
+    {
+      "name": "build-companion",
+      "command": "python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Wl,-t tools/native-c/tests/inet-socket-epoll-lt.c -o <D>/inet-socket-epoll-lt.elf",
+      "exit": 0,
+      "note": "wrapper includes maintained original"
+    },
+    {
+      "name": "inet-2",
+      "command": "python3 tools/native-c/guest.py <D>/inet-socket.elf --cpus 2 --expect-exit 0 --timeout 180 --out <D>/inet-2",
+      "exit": 0,
+      "note": "elf PASS exit=0 clean=1"
+    },
+    {
+      "name": "inet-4",
+      "command": "python3 tools/native-c/guest.py <D>/inet-socket.elf --cpus 4 --expect-exit 0 --timeout 180 --out <D>/inet-4",
+      "exit": 0,
+      "note": "elf PASS exit=0 clean=1"
+    },
+    {
+      "name": "companion-2",
+      "command": "python3 tools/native-c/guest.py <D>/inet-socket-epoll-lt.elf --cpus 2 --expect-exit 0 --timeout 180 --out <D>/companion-2",
+      "exit": 0,
+      "note": "elf PASS exit=0 clean=1"
+    },
+    {
+      "name": "abi-poll",
+      "command": "python3 tools/native-c/tests/run_poll.py --out <D>/abi-poll",
+      "exit": 0,
+      "note": "12 ABI checks + unique exports + historical link PASS"
+    },
+    {
+      "name": "build-epoll",
+      "command": "python3 tools/native-c/cc.py ... tools/native-c/tests/epoll.c -o <D>/epoll.elf",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "build-epoll-lifecycle",
+      "command": "python3 tools/native-c/cc.py ... tools/native-c/tests/epoll-lifecycle.c -o <D>/epoll-lifecycle.elf",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "build-lt",
+      "command": "python3 tools/native-c/cc.py ... tools/native-c/tests/tcp-epoll-lt.c -o <D>/tcp-epoll-lt.elf",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "build-revalidation",
+      "command": "python3 tools/native-c/cc.py ... tools/native-c/tests/tcp-epoll-revalidation.c -o <D>/tcp-epoll-revalidation.elf",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "epoll-2",
+      "command": "python3 tools/native-c/guest.py <D>/epoll.elf --cpus 2 --expect-exit 0 --out <D>/epoll-2",
+      "exit": 0,
+      "note": "elf PASS"
+    },
+    {
+      "name": "epoll-4",
+      "command": "python3 tools/native-c/guest.py <D>/epoll.elf --cpus 4 --expect-exit 0 --out <D>/epoll-4",
+      "exit": 0,
+      "note": "elf PASS"
+    },
+    {
+      "name": "epoll-lifecycle-2",
+      "command": "python3 tools/native-c/guest.py <D>/epoll-lifecycle.elf --cpus 2 --expect-exit 0 --out <D>/epoll-lifecycle-2",
+      "exit": 0,
+      "note": "elf PASS"
+    },
+    {
+      "name": "epoll-lifecycle-4",
+      "command": "python3 tools/native-c/guest.py <D>/epoll-lifecycle.elf --cpus 4 --expect-exit 0 --out <D>/epoll-lifecycle-4",
+      "exit": 0,
+      "note": "elf PASS"
+    },
+    {
+      "name": "tcp-epoll-lt-net-2",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-lt.elf --net --cpus 2 --expect-exit 0 --out <D>/tcp-epoll-lt-net-2",
+      "exit": 0,
+      "note": "40 registrations, 9 ready maxevents=1, PASS"
+    },
+    {
+      "name": "tcp-epoll-lt-net-4",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-lt.elf --net --cpus 4 --expect-exit 0 --out <D>/tcp-epoll-lt-net-4",
+      "exit": 0,
+      "note": "PASS"
+    },
+    {
+      "name": "tcp-epoll-revalidation-net-2",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-revalidation.elf --net --cpus 2 --expect-exit 0 --out <D>/tcp-epoll-revalidation-net-2",
+      "exit": 0,
+      "note": "PASS"
+    },
+    {
+      "name": "tcp-epoll-revalidation-net-4",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-revalidation.elf --net --cpus 4 --expect-exit 0 --out <D>/tcp-epoll-revalidation-net-4",
+      "exit": 0,
+      "note": "PASS"
+    },
+    {
+      "name": "suite-2",
+      "command": "python3 tools/native-c/guest.py --suite --cpus 2 --timeout 180 --out <D>/suite-2",
+      "exit": 0,
+      "note": "94 cases: 93 PASS, 1 LINK_FAIL/NOT_RUN"
+    },
+    {
+      "name": "suite-4",
+      "command": "python3 tools/native-c/guest.py --suite --cpus 4 --timeout 180 --out <D>/suite-4",
+      "exit": 0,
+      "note": "94 cases: 93 PASS, 1 LINK_FAIL/NOT_RUN"
+    },
+    {
+      "name": "cargo-kernel",
+      "command": "cargo check -p sunlight-kernel",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "cargo-net",
+      "command": "cargo check -p sunlight-net -p sunlight-ipc -p sunlight-net-server",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "cargo-libc",
+      "command": "cargo check -p sunlight-libc --features native-c",
+      "exit": 0,
+      "note": "existing warnings retained"
+    },
+    {
+      "name": "diff-check",
+      "command": "git diff --check",
+      "exit": 0,
+      "note": ""
+    },
+    {
+      "name": "retry-probe-2",
+      "command": "python3 tools/native-c/guest.py <D>/retry-probe-client.elf --net --service <D>/tcp-poll-pressure-service.elf --cpus 2 --expect-exit 0 --timeout 420 --out <D>/retry-probe-2",
+      "exit": 0,
+      "note": "cycles=13 unstable=17 retry_snapshot=0 retry_held=17"
+    },
+    {
+      "name": "retry-probe-4",
+      "command": "python3 tools/native-c/guest.py <D>/retry-probe-client.elf --net --service <D>/tcp-poll-pressure-service.elf --cpus 4 --expect-exit 0 --timeout 420 --out <D>/retry-probe-4",
+      "exit": 0,
+      "note": "cycles=13 unstable=16 retry_snapshot=1 retry_held=15"
+    },
+    {
+      "name": "tcp-epoll-lt-2-invalid",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-lt.elf --cpus 2 ... (missing --net)",
+      "exit": 1,
+      "note": "FAIL line=52 errno=107 ENOTCONN; invalid invocation, preserved"
+    },
+    {
+      "name": "tcp-epoll-lt-4-invalid",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-lt.elf --cpus 4 ... (missing --net)",
+      "exit": 1,
+      "note": "FAIL line=52 errno=107 ENOTCONN; invalid invocation, preserved"
+    },
+    {
+      "name": "tcp-epoll-revalidation-2-invalid",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-revalidation.elf --cpus 2 ... (missing --net)",
+      "exit": 1,
+      "note": "FAIL line=42 errno=107 ENOTCONN; invalid invocation, preserved"
+    },
+    {
+      "name": "tcp-epoll-revalidation-4-invalid",
+      "command": "python3 tools/native-c/guest.py <D>/tcp-epoll-revalidation.elf --cpus 4 ... (missing --net)",
+      "exit": 1,
+      "note": "FAIL line=42 errno=107 ENOTCONN; invalid invocation, preserved"
+    }
+  ]
+}

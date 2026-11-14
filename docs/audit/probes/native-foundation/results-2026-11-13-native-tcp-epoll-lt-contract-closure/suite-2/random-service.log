@@ -1,0 +1,3 @@
+snapshots=[(0, 0), (1, 16)]
+expected_delta=requests:1,bytes:16
+unchanged_getrandom_service_backing=PASS

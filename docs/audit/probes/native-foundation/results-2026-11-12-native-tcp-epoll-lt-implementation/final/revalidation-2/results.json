@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "epoll-revalidation: PASS stale MOD DEL reADD identity generation close-reuse input-validation concurrent-deadline capacity64 maxevents\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

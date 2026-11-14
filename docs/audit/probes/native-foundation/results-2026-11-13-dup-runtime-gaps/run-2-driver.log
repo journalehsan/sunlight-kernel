@@ -1,0 +1,206 @@
+{
+  "native-build": {
+    "build": "PASS"
+  },
+  "archive-symbols": {
+    "build": "PASS"
+  },
+  "adapter-build": {
+    "build": "PASS"
+  },
+  "wrapper-link": {
+    "link": "PASS"
+  },
+  "linux-handler-link": {
+    "link": "PASS"
+  },
+  "linux-entry-link": {
+    "link": "PASS"
+  },
+  "dup2-replacement-link": {
+    "link": "PASS"
+  },
+  "epoll-lifecycle-link": {
+    "link": "PASS"
+  },
+  "epoll-link": {
+    "link": "PASS"
+  },
+  "inet-socket-link": {
+    "link": "PASS"
+  },
+  "tcp-epoll-lt-link": {
+    "link": "PASS"
+  },
+  "tcp-epoll-revalidation-link": {
+    "link": "PASS"
+  },
+  "adapter.o-symbols": {
+    "build": "PASS"
+  },
+  "adapter.o-assembly": {
+    "build": "PASS"
+  },
+  "wrapper.elf-symbols": {
+    "build": "PASS"
+  },
+  "wrapper.elf-assembly": {
+    "build": "PASS"
+  },
+  "wrapper.elf-headers": {
+    "build": "PASS"
+  },
+  "wrapper.elf-undefined": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-symbols": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-assembly": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-headers": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-undefined": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-symbols": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-assembly": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-headers": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-undefined": {
+    "build": "PASS"
+  },
+  "wrapper-2": {
+    "runtime": "PASS",
+    "assertion_passes": 403,
+    "assertion_failures": []
+  },
+  "linux-handler-2": {
+    "runtime": "PASS",
+    "assertion_passes": 410,
+    "assertion_failures": []
+  },
+  "linux-entry-2": {
+    "runtime": "FAIL",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "dup2-replacement-2": {
+    "runtime": "PASS",
+    "assertion_passes": 51,
+    "assertion_failures": []
+  },
+  "epoll-lifecycle-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "epoll-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "inet-socket-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "tcp-epoll-lt-2": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": []
+  },
+  "tcp-epoll-revalidation-2": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": []
+  },
+  "suite-2": {
+    "runtime": "PASS",
+    "total": 94,
+    "passed": 94
+  },
+  "wrapper-4": {
+    "runtime": "FAIL",
+    "assertion_passes": 400,
+    "assertion_failures": [
+      "dup2-replacement: FAIL rejections-release-no-attachments (errno=107)",
+      "dup2-replacement: FAIL rejections-release-no-attachments (errno=107)",
+      "dup-runtime: FAIL complete"
+    ]
+  },
+  "linux-handler-4": {
+    "runtime": "FAIL",
+    "assertion_passes": 407,
+    "assertion_failures": [
+      "dup2-replacement: FAIL rejections-release-no-attachments (errno=107)",
+      "dup2-replacement: FAIL rejections-release-no-attachments (errno=107)",
+      "dup-runtime: FAIL complete"
+    ]
+  },
+  "linux-entry-4": {
+    "runtime": "FAIL",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "dup2-replacement-4": {
+    "runtime": "PASS",
+    "assertion_passes": 51,
+    "assertion_failures": []
+  },
+  "epoll-lifecycle-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "epoll-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "inet-socket-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": []
+  },
+  "tcp-epoll-lt-4": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": []
+  },
+  "tcp-epoll-revalidation-4": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": []
+  },
+  "suite-4": {
+    "runtime": "PASS",
+    "total": 94,
+    "passed": 94
+  },
+  "cxx-checker": {
+    "build": "PASS"
+  },
+  "poll-abi": {
+    "build": "PASS"
+  },
+  "kernel-check": {
+    "build": "PASS"
+  },
+  "libc-check": {
+    "build": "PASS"
+  },
+  "network-check": {
+    "build": "PASS"
+  },
+  "diff-check": {
+    "build": "PASS"
+  }
+}

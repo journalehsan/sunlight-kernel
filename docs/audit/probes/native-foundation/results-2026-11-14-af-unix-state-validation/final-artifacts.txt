@@ -1,0 +1,9 @@
+== production after ==
+2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7  target/native-c/sysroot/lib/libsunlight_native_c.a
+2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7  target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a
+d3c50f196e46573a30ac061f228c8a3cef2462c42dbe0d26cc18a43971990407  target/x86_64-unknown-none/debug/sunlight-kernel
+== new sources ==
+9240810220ec03d7e7b8e09d294138a7160c621f1e7f77de44380dfab8edcd9b  tools/native-c/tests/unix-state-validation.c
+f7942ee48b9a8e0fd086c33090b0dfc3bf8506e03fd8f76049f1cd4b33fc2bd2  tools/native-c/tests/run_unix_state_validation.py
+84514d30caf23589c4f630a44e03705a7b009d333262e3b2222290718909752d  tools/native-c/tests/unix-replacement.c
+fc402b528d68ce30ac5d09db3e6d6f5da181f4bbea1b05ed62ea34899ea5d1ba  docs/networking/2026-11-14_AF_UNIX_STATE_VALIDATION.md

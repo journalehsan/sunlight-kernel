@@ -1,0 +1,7 @@
+a78df76cbed1222fbeb4f354ec307403e249b157c9e76080c0e44b23383b582a  tools/native-c/tests/dup2-replacement.c
+7656c46c88c982929011c035db03ebe96e0b4dc73b7bb8826f8354a7dad83adc  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/dup2-replacement.elf
+ed96ed1a41f4d2ab87668bc7018348b918930f9315d251859cf498b2b243b4af  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-lifecycle.elf
+ce5615af7317414917368c2cffd140cddf8605d534a655be960e5ccba88d56ce  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll.elf
+690ee89e5823182b324c5f0b989229f2cd0c99730754417bd6472f3fd6fde399  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/inet-socket.elf
+24624db60877ad946d7837100b4da5cced1f8ceb8606a5714f071197f53a381a  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt.elf
+a815fbdc0ecec3698d2d652424b574381516227aacdff6ac280e792dbf5b23b6  docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-revalidation.elf

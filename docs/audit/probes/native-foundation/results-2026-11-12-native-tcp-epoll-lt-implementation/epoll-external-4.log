@@ -1,0 +1,3 @@
+$ /usr/bin/python3 tools/native-c/run_epoll_tcp.py --mode external --cpus 4 --skip-build --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-4
+
+exit=0

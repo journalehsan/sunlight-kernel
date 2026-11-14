@@ -1,0 +1,27 @@
+diff --git a/tools/native-c/tests/inet-socket.c b/tools/native-c/tests/inet-socket.c
+index ddb05ec66..c7ba24fd7 100644
+--- a/tools/native-c/tests/inet-socket.c
++++ b/tools/native-c/tests/inet-socket.c
+@@ -48,11 +48,18 @@ int main(int argc, char **argv) {
+         int ep = epoll_create1(0);
+         struct epoll_event e = {.events=EPOLLIN | EPOLLOUT, .data=123}, out;
+         if (ep < 0 || epoll_ctl(ep, EPOLL_CTL_ADD, fd, &e)) return 19;
+-        if (epoll_wait(ep, &out, 1, 0) != 1 || out.events != EPOLLERR || out.data != 123) return 20;
+-        if (epoll_wait(ep, &out, 1, 0) != 1) return 21;
++        /* An unattached inet placeholder is inert for epoll LT: the old
++         * synthetic EPOLLERR was the pre-transport placeholder contract. */
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 20;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 21;
++        /* TCP ET/oneshot are unsupported and rejected, never silently armed. */
+         e.events |= EPOLLET | EPOLLONESHOT;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1 || epoll_wait(ep, &out, 1, 0)) return 22;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1) return 23;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 22;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLET;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 23;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 39;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 40;
+         if (close(ep) || close(fd) || close(fd) != -1 || errno != EBADF) return 24;
+     }
+     int fds[256], n = 0;

@@ -1,0 +1,4 @@
+tools/native-c/tests/tcp-epoll-lt.c:43:64: error: use of undeclared identifier 'EEXIST'
+   43 |     CHECK(epoll_ctl(ep,EPOLL_CTL_ADD,pair[0],&e)==-1 && errno==EEXIST);
+      |                                                                ^~~~~~
+1 error generated.

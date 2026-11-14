@@ -174,7 +174,29 @@ pub fn dup(fd: Fd) -> Result<Fd, Errno> {
 }
 
 pub fn dup2(old: Fd, new: Fd) -> Result<Fd, Errno> {
-    checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) })
+    if old.0 == new.0 {
+        return checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) });
+    }
+    // Replacement ends the target's transport attachment. Detach it before
+    // the kernel rebinds the number so a concurrent bridged operation on the
+    // target fails closed instead of reaching the replaced endpoint. When the
+    // kernel rejects the replacement (invalid source or target) the target is
+    // untouched, so its attachment is restored.
+    let displaced = crate::net_bridge::detach(new.0 as i32);
+    match checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) }) {
+        Ok(fd) => {
+            if let Some((socket_id, _)) = displaced {
+                crate::net_bridge::release_detached(socket_id);
+            }
+            Ok(fd)
+        }
+        Err(error) => {
+            if let Some((socket_id, generation)) = displaced {
+                crate::net_bridge::reattach(new.0 as i32, socket_id, generation);
+            }
+            Err(error)
+        }
+    }
 }
 
 /// Read the process CWD into a caller-owned, kernel-sized path buffer.

@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "tcp-epoll-lt: FAIL line=52 errno=107\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

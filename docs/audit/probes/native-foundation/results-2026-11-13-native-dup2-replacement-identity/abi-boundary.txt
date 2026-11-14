@@ -1,0 +1,5 @@
+== exported dup/dup2/dup3 symbols in current archive ==
+(none)
+
+== unistd.h declarations ==
+(none)

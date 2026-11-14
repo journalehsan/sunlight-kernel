@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "tcp-epoll-lt: capacity=40 net_batch=32 registered=41 ready=9 maxevents=1 fairness=PASS\ntcp-epoll-lt: FAIL line=109 errno=2\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

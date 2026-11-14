@@ -65,6 +65,8 @@ def main():
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument('elf', nargs='?', type=Path)
     choice.add_argument('--suite', action='store_true')
+    parser.add_argument('--linux-actor', action='store_true',
+                        help='single raw Linux syscall actor (explicit OSABI=3); never the native suite')
     parser.add_argument('--out', type=Path, help='new evidence directory; default: unique path under target/native-c-guest-runs')
     parser.add_argument('--cpus', type=int, default=2, choices=(1, 2, 4))
     parser.add_argument('--timeout', type=int, default=90, help='guest wall-clock seconds')
@@ -130,10 +132,13 @@ def main():
         elf = elf.resolve()
         data = elf.read_bytes()
         # Keep personality rejection explicit rather than accidentally testing Helios.
-        if (data[:7] != b'\x7fELF\x02\x01\x01' or data[7] != 0 or
-                data[9:15] == b'HLNX01' or int.from_bytes(data[16:18], 'little') != 2 or
+        if opts.linux_actor and (opts.suite or opts.net):
+            raise ValueError('--linux-actor requires a single non-network Linux ELF')
+        expected_osabi = 3 if opts.linux_actor else 0
+        if (data[:7] != b'\x7fELF\x02\x01\x01' or data[7] != expected_osabi or
+                (not opts.linux_actor and data[9:15] == b'HLNX01') or int.from_bytes(data[16:18], 'little') != 2 or
                 int.from_bytes(data[18:20], 'little') != 62):
-            raise ValueError(f'{elf}: expected a native x86-64 ET_EXEC from cc.py')
+            raise ValueError(f'{elf}: expected x86-64 ET_EXEC with OSABI={expected_osabi}')
         cases.append(dict(name=name, elf=elf, expected=expected, args=list(args), input=input,
                           stdout=stdout, stderr=stderr, environment=environment))
         rows.append(dict(probe=name, historical=historical, build='PASS', guest_run='NOT_RUN',
@@ -152,7 +157,9 @@ def main():
                        ('exit', 23, b'', b''))]
         sources += [(p.stem, p, 0, (), b'', b'atexit OK\n' if p.stem == 'atexit' else b'', b'', True)
                     for p in sorted(base.glob('*.c')) if p.name != 'compiler.c']
-        sources += [(p.stem, p, 0, (), b'', b'', b'', True) for p in sorted(base.glob('*.cpp'))]
+        sources += [(p.stem, p, 0, (), b'',
+                     b'exception OK\nTLS OK\nstatic initialization OK\natexit OK\n' if p.stem == 'cpp-runtime' else b'',
+                     b'', True) for p in sorted(base.glob('*.cpp'))]
         # Independent service counters bracket the unchanged historical source.
         # No other workload runs between these snapshots and getrandom.c.
         random_fixture = ROOT / 'tools/native-c/tests/random.c'
@@ -247,10 +254,14 @@ def main():
                     for mode in ('root', 'errors', 'entries')]
         for name, src, code, args, input, stdout, stderr, historical in sources:
             elf = out / (name + '.elf')
-            compiler = ([sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']
-                        if src.suffix == '.c' else ['clang++', '--target=x86_64-unknown-none-elf',
-                            '-nostdinc', '-I' + str(ROOT / 'sunlight-libc/include'), '-nostdlib', '-fuse-ld=lld'])
-            if not historical and src.suffix == '.cpp':
+            if src.suffix == '.c':
+                compiler = [sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']
+            else:
+                # Every C++ cell, including historical probe sources, uses the
+                # configured native driver. A bare clang++ -nostdlib command has
+                # no native startup, libc, C++ runtime/EH archives or linker
+                # script; that recipe is preserved as a regression check in
+                # tests/run_cxx_runtime.py rather than used to build a cell.
                 compiler = [sys.executable, ROOT / 'tools/native-c/cxx.py', '-Wall', '-Wextra', '-Werror']
                 if name in ('cxx-backend', 'cxx-string-backend'):
                     compiler += ['-Wl,--wrap=write']

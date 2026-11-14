@@ -29,7 +29,7 @@ struct NetworkTarget {
     interest: u32,
 }
 
-fn requested_interest(events: i16) -> u32 {
+pub(crate) fn requested_interest(events: i16) -> u32 {
     use sunlight_ipc::netop::NetReady;
     let mut interest = (NetReady::RESET | NetReady::CLOSED | NetReady::ERROR) as u32;
     if events & POLLIN != 0 {
@@ -42,7 +42,7 @@ fn requested_interest(events: i16) -> u32 {
     interest
 }
 
-fn map_ready(bits: u64, events: i16) -> i16 {
+pub(crate) fn map_ready(bits: u64, events: i16) -> i16 {
     use sunlight_ipc::netop::NetReady;
     let mut revents = 0;
     if bits & (NetReady::ACCEPT | NetReady::READ | NetReady::EOF) != 0 {
@@ -396,7 +396,7 @@ fn selected(p: &PollFd) -> bool {
         || (p.events & 4 != 0 && p.revents & (4 | 8) != 0)
         || (p.events & 2 != 0 && p.revents & 2 != 0)
 }
-unsafe fn monotonic_ms() -> Option<u64> {
+pub(crate) unsafe fn monotonic_ms() -> Option<u64> {
     let mut t = crate::time::Timespec {
         tv_sec: 0,
         tv_nsec: 0,

@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/tcp-poll-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/guest --timeout 300 --service /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/tcp-poll-service.elf
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/poll-loopback/guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0\n'
+
+exit=0

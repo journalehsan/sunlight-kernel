@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll.elf --expect-exit 0 --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-2 --timeout 120

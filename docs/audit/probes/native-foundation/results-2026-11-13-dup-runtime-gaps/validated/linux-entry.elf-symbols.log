@@ -1,0 +1,13 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-nm --demangle /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/validated/linux-entry.elf
+0000000000000001 A __tls_align
+0000000000000000 A __tls_size
+0000000000402000 R __tls_tbss_end
+0000000000402000 R __tls_tbss_start
+0000000000402000 R __tls_tdata_end
+0000000000402000 R __tls_tdata_start
+0000000000400000 T _start
+0000000000402000 b failures
+0000000000400020 T main
+0000000000400d30 t sc
+
+exit=0

@@ -1,0 +1,5 @@
+In file included from docs/audit/probes/socket.c:2:
+sunlight-libc/include/sys/socket.h:3:10: fatal error: 'stddef.h' file not found
+    3 | #include <stddef.h>
+      |          ^~~~~~~~~~
+1 error generated.

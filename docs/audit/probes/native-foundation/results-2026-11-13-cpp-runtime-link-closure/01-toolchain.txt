@@ -1,0 +1,19 @@
+== clang
+clang version 23.1.4
+Target: x86_64-pc-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+== ld.lld
+LLD 23.1.4 (compatible with GNU linkers)
+== llvm tools
+llvm-nm, compatible with GNU nm
+LLVM (http://llvm.org/):
+== rustc
+rustc 1.98.0-nightly (8954863c8 2026-06-05)
+== cargo
+cargo 1.98.0-nightly (0b1123a48 2026-06-01)
+== target
+[toolchain]
+channel = "nightly"
+components = ["rust-src", "llvm-tools-preview", "rustfmt", "clippy"]
+targets = ["x86_64-unknown-none"]

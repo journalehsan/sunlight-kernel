@@ -1,0 +1,4 @@
+tools/native-c/tests/tcp-epoll-lt.c:22:13: error: unused function 'raw' [-Werror,-Wunused-function]
+   22 | static long raw(long n, long a) { __asm__ volatile("syscall":"+a"(n):"D"(a):"rcx","r11","memory"); return n; }
+      |             ^~~
+1 error generated.

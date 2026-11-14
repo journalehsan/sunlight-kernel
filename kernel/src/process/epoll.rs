@@ -8,7 +8,9 @@
 
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, Ordering};
 use spin::Mutex;
+static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 use super::fd_table::{CapRights, FileHandle};
 
@@ -41,6 +43,8 @@ pub const EPOLL_EVENT_SIZE: usize = 12;
 
 #[derive(Clone, Copy)]
 struct Interest {
+    token: u64,
+    external: Option<u64>,
     events: u32,
     /// Last observed readiness for edge-triggered interests. An I/O call
     /// that drains readiness clears this mask through refresh_after_io.
@@ -51,6 +55,7 @@ struct Interest {
 }
 
 struct EpollInstance {
+    cursor: i32,
     /// Target fd → interest.
     interests: BTreeMap<i32, Interest>,
 }
@@ -60,6 +65,7 @@ static EPOLL_POOL: Mutex<Vec<Option<EpollInstance>>> = Mutex::new(Vec::new());
 fn alloc_instance() -> Option<u32> {
     let mut pool = EPOLL_POOL.lock();
     let instance = EpollInstance {
+        cursor: -1,
         interests: BTreeMap::new(),
     };
     for (idx, slot) in pool.iter_mut().enumerate() {
@@ -109,13 +115,17 @@ pub fn create_epoll_fd(
     }
 }
 
-pub fn ctl(
+pub fn ctl_external(
     epoll_idx: u32,
     op: i32,
     target_fd: i32,
     events: u32,
     data: [u8; 8],
+    external: Option<u64>,
 ) -> Result<(), EpollError> {
+    if external.is_some() && events & (EPOLLET | EPOLLONESHOT) != 0 {
+        return Err(EpollError::Inval);
+    }
     if target_fd < 0 {
         return Err(EpollError::BadFd);
     }
@@ -136,6 +146,8 @@ pub fn ctl(
             instance.interests.insert(
                 target_fd,
                 Interest {
+                    token: NEXT_TOKEN.fetch_add(1, Ordering::Relaxed),
+                    external,
                     events,
                     data,
                     last_ready: 0,
@@ -149,6 +161,8 @@ pub fn ctl(
                 .interests
                 .get_mut(&target_fd)
                 .ok_or(EpollError::Noent)?;
+            entry.token = NEXT_TOKEN.fetch_add(1, Ordering::Relaxed);
+            entry.external = external;
             entry.events = events;
             entry.data = data;
             entry.last_ready = 0;
@@ -177,6 +191,46 @@ pub fn collect_ready(
     maxevents: usize,
     sched: &crate::sched::Scheduler,
 ) -> Result<Vec<ReadyEvent>, EpollError> {
+    collect_ready_external(epoll_idx, maxevents, sched, &[])
+}
+
+pub use sunlight_ipc::native_epoll::ExternalObservation;
+
+pub fn external_snapshot(
+    idx: u32,
+    process: &crate::process::Process,
+) -> Result<Vec<ExternalObservation>, EpollError> {
+    let pool = EPOLL_POOL.lock();
+    let instance = pool
+        .get(idx as usize)
+        .and_then(Option::as_ref)
+        .ok_or(EpollError::BadFd)?;
+    Ok(instance
+        .interests
+        .iter()
+        .filter_map(|(&fd, i)| {
+            let handle = process.fd_table.get(fd)?.handle;
+            if !handle.is_inet_socket() {
+                return None;
+            }
+            Some(ExternalObservation {
+                fd,
+                events: i.events,
+                token: i.token,
+                identity: i.external.unwrap_or(u64::MAX),
+                ready: 0,
+                reserved: 0,
+            })
+        })
+        .collect())
+}
+
+pub fn collect_ready_external(
+    epoll_idx: u32,
+    maxevents: usize,
+    sched: &crate::sched::Scheduler,
+    observations: &[ExternalObservation],
+) -> Result<Vec<ReadyEvent>, EpollError> {
     #[cfg(not(test))]
     let trace = if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
         use core::sync::atomic::{AtomicUsize, Ordering};
@@ -198,7 +252,10 @@ pub fn collect_ready(
     let process = sched.current_shared_process();
     let mut out = Vec::new();
 
-    for (&fd, interest) in instance.interests.iter_mut() {
+    let keys: Vec<i32> = instance.interests.keys().copied().collect();
+    let start = keys.partition_point(|fd| *fd <= instance.cursor);
+    for fd in keys[start..].iter().chain(keys[..start].iter()).copied() {
+        let interest = instance.interests.get_mut(&fd).unwrap();
         if out.len() >= maxevents {
             break;
         }
@@ -224,7 +281,23 @@ pub fn collect_ready(
         let handle = entry.handle;
         // Nested epoll descriptors are not part of the current readiness
         // graph; reporting them ready would require a second pool lock.
-        let readiness = if handle.is_epoll() {
+        let readiness = if handle.is_inet_socket() {
+            // An interest can precede bind/connect. Its first validated
+            // observation binds the transport identity to this registration.
+            // Close detaches the token before the fd/pool slot can be reused.
+            let observation = observations.iter().find(|o| {
+                o.fd == fd
+                    && o.token == interest.token
+                    && o.identity != u64::MAX
+                    && interest.external.is_none_or(|id| id == o.identity)
+            });
+            if let Some(o) = observation {
+                interest.external = Some(o.identity);
+                (o.ready as i16) & (POLLIN | POLLOUT | POLLERR | POLLHUP)
+            } else {
+                0
+            }
+        } else if handle.is_epoll() {
             0
         } else {
             descriptor_events_depth(fd, handle, process, 0)
@@ -247,6 +320,7 @@ pub fn collect_ready(
             revents = new_edges;
         }
         if revents != 0 {
+            instance.cursor = fd;
             if interest.events & EPOLLONESHOT != 0 {
                 interest.disabled = true;
             }

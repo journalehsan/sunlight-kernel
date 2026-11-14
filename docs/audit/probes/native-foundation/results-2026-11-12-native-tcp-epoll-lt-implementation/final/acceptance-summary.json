@@ -1,0 +1,1449 @@
+{
+  "matrix": [
+    {
+      "name": "build-archive",
+      "argv": [
+        "bash",
+        "tools/build_native_c.sh"
+      ],
+      "exit": 0,
+      "seconds": 1.02,
+      "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "build-lt",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-t",
+        "tools/native-c/tests/tcp-epoll-lt.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-lt-final2.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.11,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "lt-2-final",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-lt-final2.elf",
+        "--expect-exit",
+        "0",
+        "--net",
+        "--cpus",
+        "2",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-2-final"
+      ],
+      "exit": 0,
+      "seconds": 8.29,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "lt-4-final",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-lt-final2.elf",
+        "--expect-exit",
+        "0",
+        "--net",
+        "--cpus",
+        "4",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-4-final"
+      ],
+      "exit": 0,
+      "seconds": 6.43,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-external-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_tcp.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-2"
+      ],
+      "exit": 0,
+      "seconds": 7.48,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-external-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_tcp.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-4"
+      ],
+      "exit": 0,
+      "seconds": 7.73,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-external-2-repeat",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_tcp.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-2-repeat"
+      ],
+      "exit": 0,
+      "seconds": 9.94,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-pressure-external-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_pressure.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-2"
+      ],
+      "exit": 0,
+      "seconds": 19.75,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-pressure-external-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_pressure.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-4"
+      ],
+      "exit": 0,
+      "seconds": 18.26,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-pressure-external-2-repeat",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_pressure.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-2-repeat"
+      ],
+      "exit": 0,
+      "seconds": 20.37,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-pressure-loopback-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_pressure.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-2"
+      ],
+      "exit": 0,
+      "seconds": 13.01,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "epoll-pressure-loopback-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_epoll_pressure.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-4"
+      ],
+      "exit": 0,
+      "seconds": 10.64,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-poll-abi",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/tests/run_poll.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-abi"
+      ],
+      "exit": 0,
+      "seconds": 0.87,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-socket-abi",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/tests/run_socket.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-socket-abi"
+      ],
+      "exit": 0,
+      "seconds": 0.57,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "build-epoll",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-t",
+        "tools/native-c/tests/epoll.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.11,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "build-epoll-lifecycle",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-t",
+        "tools/native-c/tests/epoll-lifecycle.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-lifecycle.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.11,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "build-tcp-echo-client",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-t",
+        "tools/native-c/tests/tcp-echo-client.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-client.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.11,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "build-tcp-echo-service",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wl,-t",
+        "tools/native-c/tests/tcp-echo-service.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-service.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.11,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-epoll-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll.elf",
+        "--expect-exit",
+        "0",
+        "--cpus",
+        "2",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-2",
+        "--timeout",
+        "120"
+      ],
+      "exit": 0,
+      "seconds": 9.75,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-epoll-lifecycle-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-lifecycle.elf",
+        "--expect-exit",
+        "0",
+        "--cpus",
+        "2",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-lifecycle-2",
+        "--timeout",
+        "120"
+      ],
+      "exit": 0,
+      "seconds": 16.78,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-loopback-echo-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-client.elf",
+        "--expect-exit",
+        "0",
+        "--service",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-service.elf",
+        "--net",
+        "--cpus",
+        "2",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-2",
+        "--timeout",
+        "180"
+      ],
+      "exit": 0,
+      "seconds": 13.45,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-poll-loopback-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-2"
+      ],
+      "exit": 0,
+      "seconds": 10.39,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-pressure-loopback-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_pressure.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-2"
+      ],
+      "exit": 0,
+      "seconds": 13.56,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-poll-external-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-external-2"
+      ],
+      "exit": 0,
+      "seconds": 10.05,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-pressure-external-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_pressure.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-external-2"
+      ],
+      "exit": 0,
+      "seconds": 22.73,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-external-echo-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_external_tcp.py",
+        "--mode",
+        "echo",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-echo-2"
+      ],
+      "exit": 0,
+      "seconds": 10.7,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-external-stall-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_external_tcp.py",
+        "--mode",
+        "stall",
+        "--cpus",
+        "2",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-2"
+      ],
+      "exit": 0,
+      "seconds": 19.93,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "suite-2",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "2",
+        "--timeout",
+        "360",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2"
+      ],
+      "exit": 1,
+      "seconds": 72.34,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-epoll-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll.elf",
+        "--expect-exit",
+        "0",
+        "--cpus",
+        "4",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-4",
+        "--timeout",
+        "120"
+      ],
+      "exit": 0,
+      "seconds": 7.19,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-epoll-lifecycle-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-lifecycle.elf",
+        "--expect-exit",
+        "0",
+        "--cpus",
+        "4",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-lifecycle-4",
+        "--timeout",
+        "120"
+      ],
+      "exit": 0,
+      "seconds": 8.18,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-loopback-echo-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-client.elf",
+        "--expect-exit",
+        "0",
+        "--service",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-echo-service.elf",
+        "--net",
+        "--cpus",
+        "4",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-4",
+        "--timeout",
+        "180"
+      ],
+      "exit": 0,
+      "seconds": 10.86,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-poll-loopback-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-4"
+      ],
+      "exit": 0,
+      "seconds": 10.8,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-pressure-loopback-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_pressure.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-4"
+      ],
+      "exit": 0,
+      "seconds": 13.35,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-poll-external-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-external-4"
+      ],
+      "exit": 0,
+      "seconds": 10.59,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-pressure-external-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_poll_pressure.py",
+        "--mode",
+        "external",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-external-4"
+      ],
+      "exit": 0,
+      "seconds": 26.53,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-external-echo-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_external_tcp.py",
+        "--mode",
+        "echo",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-echo-4"
+      ],
+      "exit": 0,
+      "seconds": 11.9,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-external-stall-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/run_external_tcp.py",
+        "--mode",
+        "stall",
+        "--cpus",
+        "4",
+        "--skip-build",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4"
+      ],
+      "exit": 0,
+      "seconds": 20.54,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "suite-4",
+      "argv": [
+        "/usr/bin/python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "4",
+        "--timeout",
+        "360",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4"
+      ],
+      "exit": 1,
+      "seconds": 74.35,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-kernel-check",
+      "argv": [
+        "cargo",
+        "check",
+        "-p",
+        "sunlight-kernel"
+      ],
+      "exit": 0,
+      "seconds": 65.38,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-net-ipc-server-check",
+      "argv": [
+        "cargo",
+        "check",
+        "-p",
+        "sunlight-net",
+        "-p",
+        "sunlight-ipc",
+        "-p",
+        "sunlight-net-server"
+      ],
+      "exit": 0,
+      "seconds": 0.36,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "regress-libc-check",
+      "argv": [
+        "cargo",
+        "check",
+        "-p",
+        "sunlight-libc",
+        "--features",
+        "native-c"
+      ],
+      "exit": 0,
+      "seconds": 0.36,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    },
+    {
+      "name": "diff-check",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit": 0,
+      "seconds": 0.03,
+      "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+      "archive_after": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+    }
+  ],
+  "suites": {
+    "2": {
+      "total": 94,
+      "acceptance_counts": {
+        "PASS": 92,
+        "LINK_FAIL": 1,
+        "FAIL": 1
+      },
+      "nonpass": [
+        {
+          "probe": "cpp-runtime",
+          "historical": "True",
+          "build": "FAIL",
+          "guest_run": "NOT_RUN",
+          "acceptance": "LINK_FAIL",
+          "exit": "",
+          "expected_exit": "0",
+          "detail": "BUILD_FAILED: no executable to run",
+          "sha256": ""
+        },
+        {
+          "probe": "inet-socket-contract",
+          "historical": "False",
+          "build": "PASS",
+          "guest_run": "FAIL",
+          "acceptance": "FAIL",
+          "exit": "20",
+          "expected_exit": "0",
+          "detail": "guest contract or infrastructure failed",
+          "sha256": "5821116968c6e702e040073842b1d4229a90ab24aef1208a391d42feb0c4eda0"
+        }
+      ]
+    },
+    "4": {
+      "total": 94,
+      "acceptance_counts": {
+        "PASS": 92,
+        "LINK_FAIL": 1,
+        "FAIL": 1
+      },
+      "nonpass": [
+        {
+          "probe": "cpp-runtime",
+          "historical": "True",
+          "build": "FAIL",
+          "guest_run": "NOT_RUN",
+          "acceptance": "LINK_FAIL",
+          "exit": "",
+          "expected_exit": "0",
+          "detail": "BUILD_FAILED: no executable to run",
+          "sha256": ""
+        },
+        {
+          "probe": "inet-socket-contract",
+          "historical": "False",
+          "build": "PASS",
+          "guest_run": "FAIL",
+          "acceptance": "FAIL",
+          "exit": "20",
+          "expected_exit": "0",
+          "detail": "guest contract or infrastructure failed",
+          "sha256": "5821116968c6e702e040073842b1d4229a90ab24aef1208a391d42feb0c4eda0"
+        }
+      ]
+    }
+  },
+  "network_runs": {
+    "epoll-external-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "host_peer_exit": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=45711",
+      "guest_stdout": "poll-external: run=external-2cpu-20261112T225556Z dest=10.0.2.2:45711\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-external-2-repeat": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "host_peer_exit": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=35177",
+      "guest_stdout": "poll-external: run=external-2cpu-20261112T225612Z dest=10.0.2.2:35177\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-external-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "host_peer_exit": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=37779",
+      "guest_stdout": "poll-external: run=external-4cpu-20261112T225604Z dest=10.0.2.2:37779\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-pressure-external-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "host_peer_exit": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=pressure ctrl=34725 data=34419 reset=44259",
+      "guest_stdout": "poll-pressure: run=external-2cpu-20261112T225622Z dest=10.0.2.2:34419 stream=16777224\npoll-pressure: cycle=1 filled=2694072 held_ms=800 recovery_ms=20\npoll-pressure: cycle=2 filled=5958300 held_ms=800 recovery_ms=20\npoll-pressure: cycle=3 filled=9222528 held_ms=800 recovery_ms=20\npoll-pressure: cycle=4 filled=12486756 held_ms=800 recovery_ms=20\npoll-pressure: cycle=5 filled=15750984 held_ms=800 recovery_ms=20\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15750984 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15750984 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "host_peer_pass_line": "HOST-PEER PASS mode=pressure bytes=16777224 payload=16777216 fnv=5105c7d8c3e47d34",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=637 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-pressure-external-2-repeat": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "host_peer_exit": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=pressure ctrl=33423 data=44661 reset=37319",
+      "guest_stdout": "poll-pressure: run=external-2cpu-20261112T225700Z dest=10.0.2.2:44661 stream=16777224\npoll-pressure: cycle=1 filled=2940812 held_ms=800 recovery_ms=20\npoll-pressure: cycle=2 filled=6205040 held_ms=800 recovery_ms=20\npoll-pressure: cycle=3 filled=9469268 held_ms=800 recovery_ms=20\npoll-pressure: cycle=4 filled=12733496 held_ms=800 recovery_ms=20\npoll-pressure: cycle=5 filled=15997724 held_ms=800 recovery_ms=20\npoll-pressure: reset revents=0x10 elapsed_ms=20 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15997724 reset_saturated_bytes=4187928 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15997724 reset_saturated_bytes=4187928 bytes=16777228 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "host_peer_pass_line": "HOST-PEER PASS mode=pressure bytes=16777224 payload=16777216 fnv=5105c7d8c3e47d34",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=638 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-pressure-external-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "host_peer_exit": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=pressure ctrl=35029 data=33307 reset=40093",
+      "guest_stdout": "poll-pressure: run=external-4cpu-20261112T225641Z dest=10.0.2.2:33307 stream=16777224\npoll-pressure: cycle=1 filled=2940812 held_ms=800 recovery_ms=20\npoll-pressure: cycle=2 filled=6205040 held_ms=800 recovery_ms=20\npoll-pressure: cycle=3 filled=9469268 held_ms=800 recovery_ms=20\npoll-pressure: cycle=4 filled=12733496 held_ms=800 recovery_ms=20\npoll-pressure: cycle=5 filled=15997724 held_ms=800 recovery_ms=20\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15997724 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15997724 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "host_peer_pass_line": "HOST-PEER PASS mode=pressure bytes=16777224 payload=16777216 fnv=5105c7d8c3e47d34",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=637 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-pressure-loopback-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "service_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "loopback_no_nic_tcp": true
+      },
+      "guest_stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=2 filled=35688 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=3 filled=54992 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=4 filled=74296 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=5 filled=93600 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=6 filled=118784 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=7 filled=138088 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=8 filled=159744 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=9 filled=179048 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=10 filled=198352 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=11 filled=217656 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=12 filled=236960 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=13 filled=256264 held_ms=150 recovery_ms=20\npoll-pressure-loopback: PASS cycles=13 unstable=16 saturated_bytes=256264 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure-loopback: PASS cycles=13 unstable=16 saturated_bytes=256264 bytes=262152 socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=1079 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "epoll-pressure-loopback-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "service_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "loopback_no_nic_tcp": true
+      },
+      "guest_stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=2 filled=35688 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=3 filled=54992 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=4 filled=74296 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=5 filled=105604 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=6 filled=124908 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=7 filled=144212 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=8 filled=163516 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=9 filled=183996 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=10 filled=204800 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=11 filled=224104 held_ms=150 recovery_ms=30\npoll-pressure-loopback: cycle=12 filled=243408 held_ms=150 recovery_ms=20\npoll-pressure-loopback: PASS cycles=12 unstable=16 saturated_bytes=260076 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure-loopback: PASS cycles=12 unstable=16 saturated_bytes=260076 bytes=262152 socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=1006 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-external-echo-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "host_peer_exit": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "dhcp_gateway_matches_host_alias": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true,
+        "outbound_stream_exact": true,
+        "inbound_stream_exact": true,
+        "arp_for_gateway": true,
+        "arp_for_host_alias": true,
+        "bidirectional_tcp": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=36755",
+      "host_peer_exit": 0,
+      "guest_stdout": "tcp-echo: run=echo-2cpu-20261112T225922Z dest=10.0.2.2:36755\ntcp-echo: refused errno=111\ntcp-echo: nonblocking-connect errno=95\ntcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_pass_line": "HOST-PEER PASS mode=echo exchanges=5 bytes=1371",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=210 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-external-echo-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "host_peer_exit": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "dhcp_gateway_matches_host_alias": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true,
+        "outbound_stream_exact": true,
+        "inbound_stream_exact": true,
+        "arp_for_gateway": true,
+        "arp_for_host_alias": true,
+        "bidirectional_tcp": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=42393",
+      "host_peer_exit": 0,
+      "guest_stdout": "tcp-echo: run=echo-4cpu-20261112T230233Z dest=10.0.2.2:42393\ntcp-echo: refused errno=111\ntcp-echo: nonblocking-connect errno=95\ntcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_pass_line": "HOST-PEER PASS mode=echo exchanges=5 bytes=1371",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=210 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-external-stall-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "host_peer_exit": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "dhcp_gateway_matches_host_alias": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true,
+        "outbound_stream_exact": true,
+        "inbound_stream_exact": true,
+        "arp_for_gateway": true,
+        "arp_for_host_alias": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=stall addr=127.0.0.1 port=37549",
+      "host_peer_exit": 0,
+      "guest_stdout": "tcp-stall: run=stall-2cpu-20261112T225933Z dest=10.0.2.2:37549\ntcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_pass_line": "HOST-PEER PASS mode=stall received_frames=1 bytes=8",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=150 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-external-stall-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "host_peer_exit": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "dhcp_gateway_matches_host_alias": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true,
+        "outbound_stream_exact": true,
+        "inbound_stream_exact": true,
+        "arp_for_gateway": true,
+        "arp_for_host_alias": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=stall addr=127.0.0.1 port=32897",
+      "host_peer_exit": 0,
+      "guest_stdout": "tcp-stall: run=stall-4cpu-20261112T230245Z dest=10.0.2.2:32897\ntcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_pass_line": "HOST-PEER PASS mode=stall received_frames=1 bytes=8",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=150 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-poll-external-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "host_peer_exit": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=42563",
+      "guest_stdout": "poll-external: run=external-2cpu-20261112T225850Z dest=10.0.2.2:42563\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-poll-external-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "host_peer_exit": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=echo addr=127.0.0.1 port=43033",
+      "guest_stdout": "poll-external: run=external-4cpu-20261112T230156Z dest=10.0.2.2:43033\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-poll-loopback-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "service_build": true,
+        "client_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true
+      },
+      "guest_stdout": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=59 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-poll-loopback-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "service_build": true,
+        "client_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true
+      },
+      "guest_stdout": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=59 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-pressure-external-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "host_peer_exit": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=pressure ctrl=39229 data=39529 reset=45123",
+      "guest_stdout": "poll-pressure: run=external-2cpu-20261112T225900Z dest=10.0.2.2:39529 stream=16777224\npoll-pressure: cycle=1 filled=2694072 held_ms=800 recovery_ms=10\npoll-pressure: cycle=2 filled=5713020 held_ms=800 recovery_ms=0\npoll-pressure: cycle=3 filled=8977248 held_ms=800 recovery_ms=10\npoll-pressure: cycle=4 filled=12241476 held_ms=800 recovery_ms=10\npoll-pressure: cycle=5 filled=15505704 held_ms=800 recovery_ms=10\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15505704 reset_saturated_bytes=2669528 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15505704 reset_saturated_bytes=2669528 bytes=16777228 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "host_peer_pass_line": "HOST-PEER PASS mode=pressure bytes=16777224 payload=16777216 fnv=5105c7d8c3e47d34",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=636 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-pressure-external-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "host_peer_ready": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "host_peer_exit": true,
+        "host_peer_pass_line": true,
+        "tcp_frames_present": true
+      },
+      "host_peer_ready": "HOST-PEER READY mode=pressure ctrl=43339 data=33083 reset=40681",
+      "guest_stdout": "poll-pressure: run=external-4cpu-20261112T230206Z dest=10.0.2.2:33083 stream=16777224\npoll-pressure: cycle=1 filled=2698168 held_ms=800 recovery_ms=10\npoll-pressure: cycle=2 filled=5962396 held_ms=800 recovery_ms=10\npoll-pressure: cycle=3 filled=9226624 held_ms=800 recovery_ms=10\npoll-pressure: cycle=4 filled=12490852 held_ms=800 recovery_ms=0\npoll-pressure: cycle=5 filled=15755080 held_ms=800 recovery_ms=10\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15755080 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15755080 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0",
+      "host_peer_exit": 0,
+      "host_peer_pass_line": "HOST-PEER PASS mode=pressure bytes=16777224 payload=16777216 fnv=5105c7d8c3e47d34",
+      "result": "PASS",
+      "support_exit": [],
+      "resource_records": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=636 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-pressure-loopback-2": {
+      "cpus": 2,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "service_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "loopback_no_nic_tcp": true
+      },
+      "guest_stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=2 filled=32768 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=3 filled=45056 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=4 filled=60272 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=5 filled=81036 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=6 filled=94208 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=7 filled=106496 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=8 filled=118784 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=9 filled=131072 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=10 filled=143360 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=11 filled=159144 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=12 filled=171432 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=13 filled=184320 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=14 filled=199528 held_ms=170 recovery_ms=10\npoll-pressure-loopback: cycle=15 filled=219408 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=16 filled=233156 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=17 filled=245444 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=18 filled=258048 held_ms=150 recovery_ms=0\npoll-pressure-loopback: PASS cycles=18 unstable=34 saturated_bytes=261828 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure-loopback: PASS cycles=18 unstable=34 saturated_bytes=261828 bytes=262152 socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=1435 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "regress-pressure-loopback-4": {
+      "cpus": 4,
+      "memory_mib": 2048,
+      "checks": {
+        "client_build": true,
+        "service_build": true,
+        "guest_runner": true,
+        "guest_pass_line": true,
+        "guest_clean": true,
+        "guest_done": true,
+        "dhcp_lease_present": true,
+        "loopback_no_nic_tcp": true
+      },
+      "guest_stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=2 filled=31592 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=3 filled=45056 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=4 filled=61440 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=5 filled=77824 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=6 filled=90112 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=7 filled=102400 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=8 filled=126368 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=9 filled=138656 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=10 filled=150944 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=11 filled=171424 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=12 filled=184320 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=13 filled=200096 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=14 filled=212384 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=15 filled=225280 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=16 filled=241340 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=17 filled=261820 held_ms=150 recovery_ms=10\npoll-pressure-loopback: PASS cycles=17 unstable=28 saturated_bytes=261820 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+      "guest_pass_line": "poll-pressure-loopback: PASS cycles=17 unstable=28 saturated_bytes=261820 bytes=262152 socket_live=0 listener_live=0 stream_live=0",
+      "result": "PASS",
+      "support_exit": [
+        "0"
+      ],
+      "resource_records": [
+        "[NATIVE-C-SUPPORT-REAP] pid=4 name=tcp-echo-service exit=0 owned_frames=0",
+        "[NATIVE-C-INET] before=1 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=1366 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    }
+  },
+  "focused": {
+    "lt-2-final": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "tcp-epoll-lt: capacity=40 net_batch=32 registered=41 ready=9 maxevents=1 fairness=PASS\ntcp-epoll-lt: PASS ABI ctl listener receive drain MOD DEL multi EOF reuse timeout concurrent socket_live=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "lt-4-final": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "tcp-epoll-lt: capacity=40 net_batch=32 registered=41 ready=9 maxevents=1 fairness=PASS\ntcp-epoll-lt: PASS ABI ctl listener receive drain MOD DEL multi EOF reuse timeout concurrent socket_live=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "revalidation-2": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "epoll-revalidation: PASS stale MOD DEL reADD identity generation close-reuse input-validation concurrent-deadline capacity64 maxevents\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "revalidation-4": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "epoll-revalidation: PASS stale MOD DEL reADD identity generation close-reuse input-validation concurrent-deadline capacity64 maxevents\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "inet-lt-2": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    },
+    "inet-lt-4": {
+      "results": {
+        "elf": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "resources": [
+        "[NATIVE-C-INET] before=0 after=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ]
+    }
+  },
+  "preservation": {
+    "incoming_mismatches": [],
+    "source_mismatches": [],
+    "head": "5b08147001be963e468711d03284b349fa8b2089",
+    "incoming_lock_diff_unchanged": true
+  },
+  "archives": {
+    "target/native-c/sysroot/lib/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+    "target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+    "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/libsunlight_native_c.a": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+  },
+  "stable_archive_across_jobs": true
+}

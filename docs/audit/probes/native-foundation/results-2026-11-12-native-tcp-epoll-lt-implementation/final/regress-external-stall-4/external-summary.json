@@ -1,0 +1,80 @@
+{
+  "mode": "stall",
+  "cpus": 4,
+  "memory_mib": 2048,
+  "run_id": "stall-4cpu-20261112T230245Z",
+  "net_subnet": null,
+  "host_alias": "10.0.2.2",
+  "commands": [
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-stall-client.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4/tcp-stall-client.elf",
+    "/usr/bin/python3 tools/native-c/tcp_host_peer.py --mode stall --deadline 120",
+    "/usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4/tcp-stall-client.elf --net --cpus 4 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4/guest --timeout 300 --arg 32897 --arg 10.0.2.2 --arg stall-4cpu-20261112T230245Z"
+  ],
+  "checks": {
+    "client_build": true,
+    "host_peer_ready": true,
+    "guest_runner": true,
+    "host_peer_exit": true,
+    "guest_pass_line": true,
+    "guest_clean": true,
+    "guest_done": true,
+    "dhcp_lease_present": true,
+    "dhcp_gateway_matches_host_alias": true,
+    "host_peer_pass_line": true,
+    "tcp_frames_present": true,
+    "outbound_stream_exact": true,
+    "inbound_stream_exact": true,
+    "arp_for_gateway": true,
+    "arp_for_host_alias": true
+  },
+  "host_peer_ready": "HOST-PEER READY mode=stall addr=127.0.0.1 port=32897",
+  "host_port": 32897,
+  "guest_destination": "10.0.2.2:32897",
+  "host_peer_exit": 0,
+  "guest_stdout": "tcp-stall: run=stall-4cpu-20261112T230245Z dest=10.0.2.2:32897\ntcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0\n",
+  "guest_pass_line": "tcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0",
+  "guest_clean": true,
+  "guest_done": true,
+  "dhcp_lease": {
+    "address": "10.0.2.15",
+    "prefix": 24,
+    "gateway": "10.0.2.2",
+    "dns": "10.0.2.3"
+  },
+  "host_peer_pass_line": "HOST-PEER PASS mode=stall received_frames=1 bytes=8",
+  "pcap": {
+    "frames": 15,
+    "arp": 2,
+    "ipv4": 13,
+    "tcp": 9,
+    "udp": 4
+  },
+  "arp": [
+    {
+      "opcode": 1,
+      "sender": "10.0.2.15",
+      "target": "10.0.2.2"
+    },
+    {
+      "opcode": 2,
+      "sender": "10.0.2.2",
+      "target": "10.0.2.15"
+    }
+  ],
+  "ipv4_endpoints": [
+    "0.0.0.0",
+    "10.0.2.15",
+    "10.0.2.2",
+    "255.255.255.255"
+  ],
+  "tcp_segments": 9,
+  "reconstructed": {
+    "outbound_bytes": 12,
+    "outbound_sha256": "3e3c22af446e48578259d3857b8b22018326dc5dc92abb77f0823ae81e1a7822",
+    "inbound_bytes": 0,
+    "inbound_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "expected_outbound_sha256": "3e3c22af446e48578259d3857b8b22018326dc5dc92abb77f0823ae81e1a7822",
+    "expected_inbound_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "result": "PASS"
+}

@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/suite-4/cxx-runtime-uncaught.elf
+
+exit=0

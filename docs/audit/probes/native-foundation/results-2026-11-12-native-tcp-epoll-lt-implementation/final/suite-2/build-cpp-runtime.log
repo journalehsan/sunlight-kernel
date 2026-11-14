@@ -1,0 +1,124 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -nostdlib -fuse-ld=lld /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/cpp-runtime.elf
+ld.lld: error: undefined symbol: std::string::string(char const*)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init.1)
+
+ld.lld: error: undefined symbol: std::string::~string()
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init.1)
+
+ld.lld: error: undefined symbol: __cxa_atexit
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init)
+
+ld.lld: error: undefined symbol: __cxa_thread_atexit
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(__cxx_global_var_init.1)
+
+ld.lld: error: undefined symbol: atexit
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+
+ld.lld: error: undefined symbol: operator new(unsigned long)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+
+ld.lld: error: undefined symbol: __dynamic_cast
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+
+ld.lld: error: undefined symbol: __cxa_bad_typeid
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+
+ld.lld: error: undefined symbol: __cxa_allocate_exception
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::join())
+
+ld.lld: error: undefined symbol: std::runtime_error::runtime_error(char const*)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::join())
+
+ld.lld: error: undefined symbol: typeinfo for std::runtime_error
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::join())
+
+ld.lld: error: undefined symbol: std::runtime_error::~runtime_error()
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::join())
+
+ld.lld: error: undefined symbol: __cxa_throw
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::join())
+
+ld.lld: error: undefined symbol: __cxa_begin_catch
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::__sl_thread::storage<main::$_0>::enter(void*))
+
+ld.lld: error: undefined symbol: std::cout
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(done())
+>>> referenced 1 more times
+
+ld.lld: error: undefined symbol: std::ostream::operator<<(char const*)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(done())
+
+ld.lld: error: undefined symbol: __cxa_end_catch
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+
+ld.lld: error: undefined symbol: std::operator<<(std::ostream&, std::string const&)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main::$_0::operator()() const)
+
+ld.lld: error: undefined symbol: _Unwind_Resume
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(main)
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+
+ld.lld: error: undefined symbol: pthread_create
+>>> referenced by cpp-runtime.cpp
+>>>               /tmp/cpp-runtime-090463.o:(std::thread::thread<main::$_0>(main::$_0&&))
+
+ld.lld: error: too many errors emitted, stopping now (use --error-limit=0 to see all errors)
+clang++: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

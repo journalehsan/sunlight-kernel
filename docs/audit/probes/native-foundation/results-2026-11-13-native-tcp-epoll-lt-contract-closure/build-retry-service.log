@@ -1,0 +1,2 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-poll-pressure-service.c -o docs/audit/probes/native-foundation/results-2026-11-13-native-tcp-epoll-lt-contract-closure/tcp-poll-pressure-service.elf
+exit=0

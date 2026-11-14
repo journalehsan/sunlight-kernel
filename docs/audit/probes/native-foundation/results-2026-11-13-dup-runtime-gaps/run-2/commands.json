@@ -1,0 +1,953 @@
+[
+  {
+    "name": "native-build",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "archive-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "-A",
+      "-g",
+      "--defined-only",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "adapter-build",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc",
+      "--edition=2021",
+      "--crate-type=lib",
+      "--emit=obj",
+      "-C",
+      "opt-level=0",
+      "-C",
+      "panic=abort",
+      "--target",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json",
+      "-Z",
+      "unstable-options",
+      "-L",
+      "dependency=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps",
+      "--extern",
+      "core=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libcore-98dfb8ed3b8bdfbd.rlib",
+      "--extern",
+      "sunlight_libc=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libsunlight_libc-2d48049d6dc48c05.rlib",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup2-wrapper-adapter.rs",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/adapter.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup-runtime.c",
+      "-DWRAPPER_TEST",
+      "-DRELEASE_SYMBOL=\"_RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached\"",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/adapter.o",
+      "-Wl,--wrap=_RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup-runtime.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-mno-red-zone",
+      "-ffreestanding",
+      "-fno-stack-protector",
+      "-fno-pie",
+      "-nostdlib",
+      "-static",
+      "-fuse-ld=lld",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-Wl,-T,/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup3-linux-entry.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "dup2-replacement-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup2-replacement.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-lifecycle-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll-lifecycle.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "inet-socket-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/inet-socket.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-lt-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/tcp-epoll-lt.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-revalidation-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/tcp-epoll-revalidation.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "adapter.o-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/adapter.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "adapter.o-assembly",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-objdump",
+      "-dr",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/adapter.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper.elf-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper.elf-assembly",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-objdump",
+      "-dr",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper.elf-headers",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-readelf",
+      "-h",
+      "-l",
+      "-d",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper.elf-undefined",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "-u",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler.elf-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler.elf-assembly",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-objdump",
+      "-dr",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler.elf-headers",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-readelf",
+      "-h",
+      "-l",
+      "-d",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler.elf-undefined",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "-u",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry.elf-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry.elf-assembly",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-objdump",
+      "-dr",
+      "--demangle",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry.elf-headers",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-readelf",
+      "-h",
+      "-l",
+      "-d",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry.elf-undefined",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "-u",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper-2",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler-2",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry-2"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "dup2-replacement-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement-2",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-lifecycle-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "inet-socket-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-lt-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt-2",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-revalidation-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation-2",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "suite-2",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "600",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/suite-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/wrapper-4",
+      "--net"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "linux-handler-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler-4",
+      "--net"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "linux-entry-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry-4"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "dup2-replacement-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/dup2-replacement-4",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-lifecycle-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-lifecycle-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "epoll-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/epoll-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "inet-socket-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-lt-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-lt-4",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-epoll-revalidation-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "110",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/tcp-epoll-revalidation-4",
+      "--net"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "suite-4",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "600",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/suite-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "cxx-checker",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "360",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_runtime.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/cxx"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "poll-abi",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_poll.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/poll-abi"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "kernel-check",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-kernel",
+      "--locked"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "libc-check",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-libc",
+      "--features",
+      "native-c",
+      "--locked"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "network-check",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-net",
+      "-p",
+      "sunlight-ipc",
+      "-p",
+      "sunlight-net-server",
+      "--locked"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "diff-check",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0
+  }
+]

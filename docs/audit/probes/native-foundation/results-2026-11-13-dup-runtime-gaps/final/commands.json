@@ -1,0 +1,121 @@
+[
+  {
+    "name": "native-build",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "archive-symbols",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "llvm-nm",
+      "-A",
+      "-g",
+      "--defined-only",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "adapter-build",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc",
+      "--edition=2021",
+      "--crate-type=lib",
+      "--emit=obj",
+      "-C",
+      "opt-level=0",
+      "-C",
+      "panic=abort",
+      "--target",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/targets/x86_64-sunlightos.json",
+      "-Z",
+      "unstable-options",
+      "-L",
+      "dependency=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps",
+      "--extern",
+      "core=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libcore-98dfb8ed3b8bdfbd.rlib",
+      "--extern",
+      "sunlight_libc=/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libsunlight_libc-2d48049d6dc48c05.rlib",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup2-wrapper-adapter.rs",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/adapter.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "wrapper-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup-runtime.c",
+      "-DWRAPPER_TEST",
+      "-DRELEASE_SYMBOL=\"_RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached\"",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/adapter.o",
+      "-Wl,--wrap=_RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/wrapper.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/wrapper.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-handler-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup-runtime.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-handler.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-handler.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-entry-link",
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=10",
+      "240",
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup3-linux-entry.c",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-entry.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-entry.elf"
+    ],
+    "exit": 1
+  }
+]

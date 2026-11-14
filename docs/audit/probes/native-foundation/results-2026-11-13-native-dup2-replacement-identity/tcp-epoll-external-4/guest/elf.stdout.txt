@@ -1,0 +1,2 @@
+poll-external: run=external-4cpu-20261113T185747Z dest=10.0.2.2:33851
+poll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0

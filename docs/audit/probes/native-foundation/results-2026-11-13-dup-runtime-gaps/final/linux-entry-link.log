@@ -1,0 +1,9 @@
+$ timeout --signal=TERM --kill-after=10 240 python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup3-linux-entry.c -Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-entry.map -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/final/linux-entry.elf
+ld.lld: error: duplicate symbol: _start
+>>> defined at dup3-linux-entry.c
+>>>            /tmp/dup3-linux-entry-68b87a.o:(.text+0x0)
+>>> defined at sunlight_libc.533996db5d854a30-cgu.06
+>>>            sunlight_libc-2d48049d6dc48c05.sunlight_libc.533996db5d854a30-cgu.06.rcgu.o:(.text+0x0) in archive /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

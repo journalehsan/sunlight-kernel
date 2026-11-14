@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll.elf --cpus 2 --expect-exit 0 --timeout 240 --out docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-2

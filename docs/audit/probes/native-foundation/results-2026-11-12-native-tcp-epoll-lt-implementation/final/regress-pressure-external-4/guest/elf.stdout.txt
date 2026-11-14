@@ -1,0 +1,8 @@
+poll-pressure: run=external-4cpu-20261112T230206Z dest=10.0.2.2:33083 stream=16777224
+poll-pressure: cycle=1 filled=2698168 held_ms=800 recovery_ms=10
+poll-pressure: cycle=2 filled=5962396 held_ms=800 recovery_ms=10
+poll-pressure: cycle=3 filled=9226624 held_ms=800 recovery_ms=10
+poll-pressure: cycle=4 filled=12490852 held_ms=800 recovery_ms=0
+poll-pressure: cycle=5 filled=15755080 held_ms=800 recovery_ms=10
+poll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111
+poll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15755080 reset_saturated_bytes=2935248 bytes=16777228 socket_live=0 listener_live=0 stream_live=0

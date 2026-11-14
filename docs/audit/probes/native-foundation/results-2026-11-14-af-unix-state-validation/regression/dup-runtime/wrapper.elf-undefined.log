@@ -1,0 +1,3 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/regression/dup-runtime/wrapper.elf
+
+exit=0

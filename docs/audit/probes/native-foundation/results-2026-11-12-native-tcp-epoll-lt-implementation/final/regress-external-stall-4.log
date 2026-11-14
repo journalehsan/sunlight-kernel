@@ -1,0 +1,19 @@
+$ /usr/bin/python3 tools/native-c/run_external_tcp.py --mode stall --cpus 4 --skip-build --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4
+external stall: PASS
+  client_build                 PASS
+  host_peer_ready              PASS
+  guest_runner                 PASS
+  host_peer_exit               PASS
+  guest_pass_line              PASS
+  guest_clean                  PASS
+  guest_done                   PASS
+  dhcp_lease_present           PASS
+  dhcp_gateway_matches_host_alias PASS
+  host_peer_pass_line          PASS
+  tcp_frames_present           PASS
+  outbound_stream_exact        PASS
+  inbound_stream_exact         PASS
+  arp_for_gateway              PASS
+  arp_for_host_alias           PASS
+
+exit=0

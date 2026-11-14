@@ -1,0 +1,1061 @@
+diff --git a/docs/audit/std-progress.md b/docs/audit/std-progress.md
+index e4591fcb3..f517bde06 100644
+--- a/docs/audit/std-progress.md
++++ b/docs/audit/std-progress.md
+@@ -4761,3 +4761,57 @@ attachment transfer, `bind`-then-`connect`, non-default QEMU user-mode
+ subnets, and guest-to-guest topology. The next smallest useful step is the same
+ external exchange under an explicit non-default slirp subnet to prove the path
+ follows the DHCP-advertised gateway rather than a hardcoded alias.
++
++## Phase 23 follow-up — historical cpp-runtime LINK_FAIL root cause and closure (2026-11-13)
++
++Scope: the historical native suite row `cpp-runtime: LINK_FAIL, runtime
++NOT_RUN`. TCP LT epoll contract-closure work is untouched. Evidence:
++`docs/audit/probes/native-foundation/results-2026-11-13-cpp-runtime-link-closure/`.
++
++### Root cause (Category A: build/link recipe defect)
++
++The reported `undefined symbol: close` is **not** the cpp-runtime failure; it is
++the historical `socket.c` bare-command failure
++(`results-2026-11-12-native-net/historical/original-command.log`). The
++cpp-runtime cell failed with **20 unresolved C++ runtime symbols**
++(`_Unwind_Resume`, `__cxa_*`, `__gxx_personality_v0`, `_ZTISt13runtime_error`,
++`std::string`, `std::cout`, `_Znwm`/`_ZdlPvm`, `atexit`, `pthread_*`,
++`__dso_handle`), because the historical C++ cell used a bare
++`clang++ --target=x86_64-unknown-none-elf -nostdinc -I<libc>/include -nostdlib -fuse-ld=lld`
++command with no native startup, libc archive, C++/EH archives or linker script.
++
++- `close` is a strong export (`T close`) in the target-built
++  `libsunlight_native_c.a`; `cpp-runtime.o` never references it (no missing libc
++  export — B ruled out; no C++ integration defect — C ruled out; no unsupported
++  functionality — D ruled out).
++- C fixtures link `close` because they use `cc.py`, which passes
++  `libsunlight_native_c.a`, `-nostdlib -static` and `user-space.ld`; only the
++  historical C++ cell used the bare recipe.
++
++### Fix
++
++`tools/native-c/guest.py` routes every C++ cell (historical probe sources
++included) through the configured `tools/native-c/cxx.py` driver, matching every
++other native cell. `tools/native-c/tests/run_cxx_runtime.py` retains the bare
++command as an explicit LINK_FAIL regression and asserts the diagnosed facts
++(`close` strong native export, `cpp-runtime.o` undefined set, linked ELF map
++contains all three native archives). `-nostdlib`, the fixture and archive
++contents are unchanged; no stub, no host libc, no hosted build, no networking
++change.
++
++### Fresh validation
++
++| Gate | Result |
++| --- | --- |
++| Locked native-C build | PASS; archives byte-identical, `libsunlight_native_c.a = f1fe24…7441` |
++| cpp-runtime, 2 CPUs | LINK PASS, runtime **PASS** exit 0, `exception OK`/`TLS OK`/`static initialization OK`/`atexit OK` |
++| cpp-runtime, 4 CPUs | LINK PASS, runtime **PASS** exit 0, identical |
++| Full native suite, 2 CPUs | 94 rows, all PASS; `Historical 21: PASS=21` |
++| Full native suite, 4 CPUs | 94 rows, all PASS; `Historical 21: PASS=21` |
++| `run_cxx_runtime.py` | PASS |
++| Kernel check | PASS |
++| `git diff --check` | clean |
++
++All prior `cpp-runtime` LINK_FAIL reports are unchanged; these PASS results are
++new evidence. The bare historical command remains LINK_FAIL by design and is
++never reclassified as a production-driver defect. No commit was created.
+diff --git a/ipc/src/lib.rs b/ipc/src/lib.rs
+index 18b76135f..d97f436ad 100644
+--- a/ipc/src/lib.rs
++++ b/ipc/src/lib.rs
+@@ -11,6 +11,7 @@ pub mod display_metrics;
+ pub mod display_modes;
+ pub mod measurement_clock;
+ pub mod netop;
++pub mod native_epoll;
+ pub mod pty;
+ pub mod resource_ledger;
+ pub mod session_completion;
+diff --git a/kernel/src/arch/x86_64/syscall.rs b/kernel/src/arch/x86_64/syscall.rs
+index 75017ba8c..1d8c4558d 100644
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -1025,6 +1025,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
+         174 => sys_native_signal(frame),
+         175 => sys_native_socket(frame),
+         176 => sys_native_terminal(frame),
++        177 => sys_native_epoll_bridge(frame),
+         160 => sys_foreground(frame),
+         23 => sys_tty_stdin_push(frame),
+         24 => sys_tty_stdout_pull(frame),
+@@ -6602,11 +6603,10 @@ fn sys_linux_dup3(frame: &mut SyscallFrame) -> u64 {
+     }
+     let cloexec = flags & sunlight_compat_linux::abi::O_CLOEXEC != 0;
+     let mut sched = crate::sched::SCHEDULER.lock();
+-    match sched
+-        .current_shared_process_mut()
+-        .fd_table
+-        .dup3(old_fd, new_fd, cloexec)
+-    {
++    let process = sched.current_shared_process_mut();
++    // dup3 replaces the target's descriptor identity; see sys_dup2.
++    invalidate_replaced_fd(process, old_fd, new_fd);
++    match process.fd_table.dup3(old_fd, new_fd, cloexec) {
+         Ok((fd, displaced)) => {
+             drop(sched);
+             if let Some(handle) = displaced {
+@@ -7447,6 +7447,15 @@ fn sys_native_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
+ }
+ 
+ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
++    epoll_ctl_impl_external(frame, linux, None, linux)
++}
++
++fn epoll_ctl_impl_external(
++    frame: &mut SyscallFrame,
++    linux: bool,
++    external: Option<u64>,
++    error_linux: bool,
++) -> u64 {
+     use crate::process::epoll::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLL_EVENT_SIZE};
+ 
+     let epfd = frame.rdi as i32;
+@@ -7454,16 +7463,16 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+     let target_fd = frame.rdx as i32;
+     let event_ptr = frame.r10;
+     if !matches!(op, EPOLL_CTL_ADD | EPOLL_CTL_MOD | EPOLL_CTL_DEL) || epfd == target_fd {
+-        return epoll_errno(linux, 22);
++        return epoll_errno(error_linux, 22);
+     }
+ 
+     let epoll_idx = {
+         let sched = crate::sched::SCHEDULER.lock();
+         let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd).copied() else {
+-            return epoll_errno(linux, 9);
++            return epoll_errno(error_linux, 9);
+         };
+         if !ep_entry.handle.is_epoll() {
+-            return epoll_errno(linux, 9);
++            return epoll_errno(error_linux, 9);
+         }
+ 
+         // Target must exist for ADD/MOD (except we allow ADD only for open fds).
+@@ -7474,7 +7483,7 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+                 .get(target_fd)
+                 .is_none()
+             {
+-                return epoll_errno(linux, 9);
++                return epoll_errno(error_linux, 9);
+             }
+         }
+ 
+@@ -7488,12 +7497,12 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+         (0u32, [0u8; 8])
+     } else {
+         if event_ptr == 0 {
+-            return epoll_errno(linux, 14);
++            return epoll_errno(error_linux, 14);
+         }
+         let mut wire = [0u8; 16];
+         let size = if linux { EPOLL_EVENT_SIZE } else { 16 };
+         if crate::memory::user::copy_from_current(event_ptr, &mut wire[..size]).is_err() {
+-            return epoll_errno(linux, 14);
++            return epoll_errno(error_linux, 14);
+         }
+         let events = u32::from_ne_bytes(wire[0..4].try_into().unwrap());
+         let mut data = [0u8; 8];
+@@ -7502,9 +7511,39 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+         (events, data)
+     };
+ 
+-    match crate::process::epoll::ctl(epoll_idx, op, target_fd, events, data) {
++    // Revalidate under the same scheduler lock as registration mutation/close.
++    let sched = crate::sched::SCHEDULER.lock();
++    let process = sched.current_shared_process();
++    if !process
++        .fd_table
++        .get(epfd)
++        .is_some_and(|e| e.handle.is_epoll() && e.handle.epoll_index() == epoll_idx)
++    {
++        return epoll_errno(error_linux, 9);
++    }
++    if op != EPOLL_CTL_DEL {
++        let Some(target) = process.fd_table.get(target_fd) else {
++            return epoll_errno(error_linux, 9);
++        };
++        if external.is_some() {
++            if !target.handle.is_inet_socket() {
++                return epoll_errno(error_linux, 22);
++            }
++            if crate::process::inet_socket::generation(target.handle.inet_socket_index())
++                != frame.r9 >> 8
++            {
++                return epoll_errno(error_linux, 9);
++            }
++        }
++        if target.handle.is_inet_socket()
++            && events & (crate::process::epoll::EPOLLET | crate::process::epoll::EPOLLONESHOT) != 0
++        {
++            return epoll_errno(error_linux, 22);
++        }
++    }
++    match crate::process::epoll::ctl_external(epoll_idx, op, target_fd, events, data, external) {
+         Ok(()) => 0,
+-        Err(e) => epoll_error(linux, e),
++        Err(e) => epoll_error(error_linux, e),
+     }
+ }
+ 
+@@ -7518,6 +7557,99 @@ fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+     epoll_wait_impl(frame, true)
+ }
+ 
++/// Native-only bridge. No user pointer is used while holding SCHEDULER.
++/// mode 0 snapshots all external interests; mode 1 merges observations with
++/// local readiness; mode 2 installs an external identity through ordinary ctl.
++fn sys_native_epoll_bridge(frame: &mut SyscallFrame) -> u64 {
++    use crate::process::epoll::{self, ExternalObservation};
++    let mode = frame.r9 & 0xff;
++    if mode > 3 || (mode != 2 && frame.r9 != mode) {
++        return linux_errno(22);
++    }
++    if mode == 3 {
++        let sched = crate::sched::SCHEDULER.lock();
++        let Some(entry) = sched
++            .current_shared_process()
++            .fd_table
++            .get(frame.rdi as i32)
++        else {
++            return linux_errno(9);
++        };
++        return if entry.handle.is_inet_socket() {
++            crate::process::inet_socket::generation(entry.handle.inet_socket_index())
++        } else {
++            0
++        };
++    }
++    if mode == 2 {
++        return epoll_ctl_impl_external(
++            frame,
++            false,
++            (frame.r8 != u64::MAX).then_some(frame.r8),
++            true,
++        );
++    }
++    let count = frame.rdx as usize;
++    if count > 64 || (mode == 0 && count != 64) || (mode == 1 && (frame.r8 == 0 || frame.r8 > 128))
++    {
++        return linux_errno(22);
++    }
++    let mut observations = alloc::vec![ExternalObservation::default(); count];
++    if mode == 1 && count != 0 {
++        let bytes = unsafe {
++            core::slice::from_raw_parts_mut(observations.as_mut_ptr() as *mut u8, count * 32)
++        };
++        if crate::memory::user::copy_from_current(frame.rsi, bytes).is_err() {
++            return linux_errno(14);
++        }
++        if observations
++            .iter()
++            .any(|o| o.reserved != 0 || o.ready & !0x1d != 0)
++        {
++            return linux_errno(22);
++        }
++    }
++    let sched = crate::sched::SCHEDULER.lock();
++    let Some(entry) = sched
++        .current_shared_process()
++        .fd_table
++        .get(frame.rdi as i32)
++    else {
++        return linux_errno(9);
++    };
++    if !entry.handle.is_epoll() {
++        return linux_errno(9);
++    }
++    let idx = entry.handle.epoll_index();
++    if mode == 0 {
++        let snapshot = match epoll::external_snapshot(idx, sched.current_shared_process()) {
++            Ok(s) => s,
++            Err(e) => return linux_errno(e.to_linux_errno()),
++        };
++        drop(sched);
++        let bytes = unsafe {
++            core::slice::from_raw_parts(snapshot.as_ptr() as *const u8, snapshot.len() * 32)
++        };
++        if !bytes.is_empty() && crate::memory::user::copy_to_current(frame.rsi, bytes).is_err() {
++            return linux_errno(14);
++        }
++        return snapshot.len() as u64;
++    }
++    let ready = match epoll::collect_ready_external(idx, frame.r8 as usize, &sched, &observations) {
++        Ok(r) => r,
++        Err(e) => return linux_errno(e.to_linux_errno()),
++    };
++    drop(sched);
++    let mut bytes = alloc::vec![0u8; ready.len() * 16];
++    for (i, event) in ready.iter().enumerate() {
++        bytes[i * 16..i * 16 + 4].copy_from_slice(&event.events.to_ne_bytes());
++        bytes[i * 16 + 8..i * 16 + 16].copy_from_slice(&event.data);
++    }
++    if !bytes.is_empty() && crate::memory::user::copy_to_current(frame.r10, &bytes).is_err() {
++        return linux_errno(14);
++    }
++    ready.len() as u64
++}
+ fn sys_native_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+     epoll_wait_impl(frame, false)
+ }
+@@ -10333,11 +10465,9 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+     let old_fd = frame.rdi as i32;
+     let new_fd = frame.rsi as i32;
+     let mut sched = crate::sched::SCHEDULER.lock();
+-    match sched
+-        .current_shared_process_mut()
+-        .fd_table
+-        .dup2(old_fd, new_fd)
+-    {
++    let process = sched.current_shared_process_mut();
++    invalidate_replaced_fd(process, old_fd, new_fd);
++    match process.fd_table.dup2(old_fd, new_fd) {
+         Ok((fd, displaced)) => {
+             drop(sched);
+             if let Some(handle) = displaced {
+@@ -10349,6 +10479,24 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+     }
+ }
+ 
++/// A registration is keyed by fd number, so it cannot survive a descriptor
++/// replacement: it would report the readiness of whatever object the number
++/// was rebound to, under the old registration token and `event.data`. With a
++/// userspace transport attachment that still names the replaced endpoint, it
++/// would even deliver the replaced endpoint's readiness. Descriptor
++/// replacement therefore ends the target's registrations, exactly as close
++/// does. Validation mirrors `FdTable::dup2`, so an invalid source, an invalid
++/// target or `old_fd == new_fd` leaves the target untouched.
++fn invalidate_replaced_fd(process: &crate::process::Process, old_fd: i32, new_fd: i32) {
++    if old_fd == new_fd || !(0..256).contains(&new_fd) {
++        return;
++    }
++    if process.fd_table.get(old_fd).is_none() {
++        return;
++    }
++    crate::process::epoll::detach_fd(new_fd, process);
++}
++
+ /// Syscall: pipe (47)
+ /// rdi = pointer to int[2] array for (read_fd, write_fd)
+ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {
+diff --git a/kernel/src/process/epoll.rs b/kernel/src/process/epoll.rs
+index 3526690cc..c1329631f 100644
+--- a/kernel/src/process/epoll.rs
++++ b/kernel/src/process/epoll.rs
+@@ -8,7 +8,9 @@
+ 
+ use alloc::collections::BTreeMap;
+ use alloc::vec::Vec;
++use core::sync::atomic::{AtomicU64, Ordering};
+ use spin::Mutex;
++static NEXT_TOKEN: AtomicU64 = AtomicU64::new(1);
+ 
+ use super::fd_table::{CapRights, FileHandle};
+ 
+@@ -41,6 +43,8 @@ pub const EPOLL_EVENT_SIZE: usize = 12;
+ 
+ #[derive(Clone, Copy)]
+ struct Interest {
++    token: u64,
++    external: Option<u64>,
+     events: u32,
+     /// Last observed readiness for edge-triggered interests. An I/O call
+     /// that drains readiness clears this mask through refresh_after_io.
+@@ -51,6 +55,7 @@ struct Interest {
+ }
+ 
+ struct EpollInstance {
++    cursor: i32,
+     /// Target fd → interest.
+     interests: BTreeMap<i32, Interest>,
+ }
+@@ -60,6 +65,7 @@ static EPOLL_POOL: Mutex<Vec<Option<EpollInstance>>> = Mutex::new(Vec::new());
+ fn alloc_instance() -> Option<u32> {
+     let mut pool = EPOLL_POOL.lock();
+     let instance = EpollInstance {
++        cursor: -1,
+         interests: BTreeMap::new(),
+     };
+     for (idx, slot) in pool.iter_mut().enumerate() {
+@@ -109,13 +115,17 @@ pub fn create_epoll_fd(
+     }
+ }
+ 
+-pub fn ctl(
++pub fn ctl_external(
+     epoll_idx: u32,
+     op: i32,
+     target_fd: i32,
+     events: u32,
+     data: [u8; 8],
++    external: Option<u64>,
+ ) -> Result<(), EpollError> {
++    if external.is_some() && events & (EPOLLET | EPOLLONESHOT) != 0 {
++        return Err(EpollError::Inval);
++    }
+     if target_fd < 0 {
+         return Err(EpollError::BadFd);
+     }
+@@ -136,6 +146,8 @@ pub fn ctl(
+             instance.interests.insert(
+                 target_fd,
+                 Interest {
++                    token: NEXT_TOKEN.fetch_add(1, Ordering::Relaxed),
++                    external,
+                     events,
+                     data,
+                     last_ready: 0,
+@@ -149,6 +161,8 @@ pub fn ctl(
+                 .interests
+                 .get_mut(&target_fd)
+                 .ok_or(EpollError::Noent)?;
++            entry.token = NEXT_TOKEN.fetch_add(1, Ordering::Relaxed);
++            entry.external = external;
+             entry.events = events;
+             entry.data = data;
+             entry.last_ready = 0;
+@@ -176,6 +190,46 @@ pub fn collect_ready(
+     epoll_idx: u32,
+     maxevents: usize,
+     sched: &crate::sched::Scheduler,
++) -> Result<Vec<ReadyEvent>, EpollError> {
++    collect_ready_external(epoll_idx, maxevents, sched, &[])
++}
++
++pub use sunlight_ipc::native_epoll::ExternalObservation;
++
++pub fn external_snapshot(
++    idx: u32,
++    process: &crate::process::Process,
++) -> Result<Vec<ExternalObservation>, EpollError> {
++    let pool = EPOLL_POOL.lock();
++    let instance = pool
++        .get(idx as usize)
++        .and_then(Option::as_ref)
++        .ok_or(EpollError::BadFd)?;
++    Ok(instance
++        .interests
++        .iter()
++        .filter_map(|(&fd, i)| {
++            let handle = process.fd_table.get(fd)?.handle;
++            if !handle.is_inet_socket() {
++                return None;
++            }
++            Some(ExternalObservation {
++                fd,
++                events: i.events,
++                token: i.token,
++                identity: i.external.unwrap_or(u64::MAX),
++                ready: 0,
++                reserved: 0,
++            })
++        })
++        .collect())
++}
++
++pub fn collect_ready_external(
++    epoll_idx: u32,
++    maxevents: usize,
++    sched: &crate::sched::Scheduler,
++    observations: &[ExternalObservation],
+ ) -> Result<Vec<ReadyEvent>, EpollError> {
+     #[cfg(not(test))]
+     let trace = if option_env!("SUNLIGHT_INJECT_PHASE") == Some("yazi-phase1") {
+@@ -198,7 +252,10 @@ pub fn collect_ready(
+     let process = sched.current_shared_process();
+     let mut out = Vec::new();
+ 
+-    for (&fd, interest) in instance.interests.iter_mut() {
++    let keys: Vec<i32> = instance.interests.keys().copied().collect();
++    let start = keys.partition_point(|fd| *fd <= instance.cursor);
++    for fd in keys[start..].iter().chain(keys[..start].iter()).copied() {
++        let interest = instance.interests.get_mut(&fd).unwrap();
+         if out.len() >= maxevents {
+             break;
+         }
+@@ -224,7 +281,23 @@ pub fn collect_ready(
+         let handle = entry.handle;
+         // Nested epoll descriptors are not part of the current readiness
+         // graph; reporting them ready would require a second pool lock.
+-        let readiness = if handle.is_epoll() {
++        let readiness = if handle.is_inet_socket() {
++            // An interest can precede bind/connect. Its first validated
++            // observation binds the transport identity to this registration.
++            // Close detaches the token before the fd/pool slot can be reused.
++            let observation = observations.iter().find(|o| {
++                o.fd == fd
++                    && o.token == interest.token
++                    && o.identity != u64::MAX
++                    && interest.external.is_none_or(|id| id == o.identity)
++            });
++            if let Some(o) = observation {
++                interest.external = Some(o.identity);
++                (o.ready as i16) & (POLLIN | POLLOUT | POLLERR | POLLHUP)
++            } else {
++                0
++            }
++        } else if handle.is_epoll() {
+             0
+         } else {
+             descriptor_events_depth(fd, handle, process, 0)
+@@ -247,6 +320,7 @@ pub fn collect_ready(
+             revents = new_edges;
+         }
+         if revents != 0 {
++            instance.cursor = fd;
+             if interest.events & EPOLLONESHOT != 0 {
+                 interest.disabled = true;
+             }
+diff --git a/kernel/src/process/inet_socket.rs b/kernel/src/process/inet_socket.rs
+index 243a568ad..f3c2d6cea 100644
+--- a/kernel/src/process/inet_socket.rs
++++ b/kernel/src/process/inet_socket.rs
+@@ -5,12 +5,21 @@
+ use spin::Mutex;
+ 
+ // Fixed storage makes exhaustion and rollback independent of heap allocation.
++static GENERATIONS: Mutex<[u64; 128]> = Mutex::new([0; 128]);
++static NEXT_GENERATION: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(1);
++
++/// Distinguishes a live endpoint from a reused pool slot.
++pub fn generation(index: u32) -> u64 {
++    GENERATIONS.lock()[index as usize]
++}
++
+ static REFS: Mutex<[usize; 128]> = Mutex::new([0; 128]);
+ 
+ pub fn create() -> Option<u32> {
+     let mut refs = REFS.lock();
+     let index = refs.iter().position(|n| *n == 0)?;
+     refs[index] = 1;
++    GENERATIONS.lock()[index] = NEXT_GENERATION.fetch_add(1, core::sync::atomic::Ordering::Relaxed);
+     Some(index as u32)
+ }
+ 
+diff --git a/sunlight-libc/include/errno.h b/sunlight-libc/include/errno.h
+index 91b429eeb..3ed865f2b 100644
+--- a/sunlight-libc/include/errno.h
++++ b/sunlight-libc/include/errno.h
+@@ -14,6 +14,7 @@ int *__errno_location(void);
+ #define ENOMEM 12
+ #define EACCES 13
+ #define EFAULT 14
++#define EEXIST 17
+ #define EISDIR 21
+ #define ENOTDIR 20
+ #define EILSEQ 84
+diff --git a/sunlight-libc/src/lib.rs b/sunlight-libc/src/lib.rs
+index c84e1a165..770f08180 100644
+--- a/sunlight-libc/src/lib.rs
++++ b/sunlight-libc/src/lib.rs
+@@ -174,7 +174,29 @@ pub fn dup(fd: Fd) -> Result<Fd, Errno> {
+ }
+ 
+ pub fn dup2(old: Fd, new: Fd) -> Result<Fd, Errno> {
+-    checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) })
++    if old.0 == new.0 {
++        return checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) });
++    }
++    // Replacement ends the target's transport attachment. Detach it before
++    // the kernel rebinds the number so a concurrent bridged operation on the
++    // target fails closed instead of reaching the replaced endpoint. When the
++    // kernel rejects the replacement (invalid source or target) the target is
++    // untouched, so its attachment is restored.
++    let displaced = crate::net_bridge::detach(new.0 as i32);
++    match checked_fd(unsafe { sys::syscall2(sys::SYS_DUP2, old.0 as u64, new.0 as u64) }) {
++        Ok(fd) => {
++            if let Some((socket_id, _)) = displaced {
++                crate::net_bridge::release_detached(socket_id);
++            }
++            Ok(fd)
++        }
++        Err(error) => {
++            if let Some((socket_id, generation)) = displaced {
++                crate::net_bridge::reattach(new.0 as i32, socket_id, generation);
++            }
++            Err(error)
++        }
++    }
+ }
+ 
+ /// Read the process CWD into a caller-owned, kernel-sized path buffer.
+diff --git a/sunlight-libc/src/multiplex.rs b/sunlight-libc/src/multiplex.rs
+index bd93a1d63..0f3a1e303 100644
+--- a/sunlight-libc/src/multiplex.rs
++++ b/sunlight-libc/src/multiplex.rs
+@@ -29,7 +29,7 @@ struct NetworkTarget {
+     interest: u32,
+ }
+ 
+-fn requested_interest(events: i16) -> u32 {
++pub(crate) fn requested_interest(events: i16) -> u32 {
+     use sunlight_ipc::netop::NetReady;
+     let mut interest = (NetReady::RESET | NetReady::CLOSED | NetReady::ERROR) as u32;
+     if events & POLLIN != 0 {
+@@ -42,7 +42,7 @@ fn requested_interest(events: i16) -> u32 {
+     interest
+ }
+ 
+-fn map_ready(bits: u64, events: i16) -> i16 {
++pub(crate) fn map_ready(bits: u64, events: i16) -> i16 {
+     use sunlight_ipc::netop::NetReady;
+     let mut revents = 0;
+     if bits & (NetReady::ACCEPT | NetReady::READ | NetReady::EOF) != 0 {
+@@ -396,7 +396,7 @@ fn selected(p: &PollFd) -> bool {
+         || (p.events & 4 != 0 && p.revents & (4 | 8) != 0)
+         || (p.events & 2 != 0 && p.revents & 2 != 0)
+ }
+-unsafe fn monotonic_ms() -> Option<u64> {
++pub(crate) unsafe fn monotonic_ms() -> Option<u64> {
+     let mut t = crate::time::Timespec {
+         tv_sec: 0,
+         tv_nsec: 0,
+diff --git a/sunlight-libc/src/net_bridge.rs b/sunlight-libc/src/net_bridge.rs
+index 08824fa2b..a8d46c73b 100644
+--- a/sunlight-libc/src/net_bridge.rs
++++ b/sunlight-libc/src/net_bridge.rs
+@@ -17,8 +17,8 @@
+ //! * Sockets are owned by the calling PID in `net_server`. `fork()` therefore
+ //!   does not transfer ownership; `dup()` does not copy the bridge mapping.
+ //! * `poll` and (through poll) `select` use `NetOp::WAIT` readiness for
+-//!   attached listeners and streams. `epoll` remains on the kernel descriptor
+-//!   path and is not bridged for TCP.
++//!   attached listeners and streams. Native epoll submits observations against
++//!   kernel-owned registration tokens through syscall 177.
+ //!
+ //! No global lock is held across an IPC call. The fixed fd table lock only
+ //! protects the fd -> socket-id mapping itself.
+@@ -52,6 +52,9 @@ const SOCKADDR_IN_LEN: u32 = 16;
+ 
+ /// fd -> (net_server socket id + 1); zero means "not bridged".
+ static IDS: [AtomicU64; MAX_BRIDGED_FDS] = [const { AtomicU64::new(0) }; MAX_BRIDGED_FDS];
++/// Kernel inet-endpoint generation recorded when the mapping was installed.
++/// Zero means "not a live inet endpoint at install time".
++static GENERATIONS: [AtomicU64; MAX_BRIDGED_FDS] = [const { AtomicU64::new(0) }; MAX_BRIDGED_FDS];
+ static TABLE_LOCK: AtomicBool = AtomicBool::new(false);
+ static NET_CAP: AtomicU64 = AtomicU64::new(0);
+ 
+@@ -76,25 +79,88 @@ fn slot(fd: i32) -> Option<usize> {
+     }
+ }
+ 
+-/// Return the attached net_server socket id for `fd`, if any.
+-pub fn lookup(fd: i32) -> Option<u64> {
++/// Current kernel endpoint generation for `fd`. Zero means the fd is not an
++/// inet endpoint; a negative value means the fd does not exist.
++///
++/// This is a non-blocking identity query, never a NetOp IPC. It is performed
++/// before taking the table lock.
++fn endpoint_generation(fd: i32) -> i64 {
++    // SAFETY: generation query (mode 3) takes only the fd and writes no user
++    // memory.
++    unsafe { sys::syscall6(sys::SYS_EPOLL_BRIDGE, fd as u64, 0, 0, 0, 0, 3) as i64 }
++}
++
++fn recorded(fd: i32) -> Option<(u64, u64)> {
+     let index = slot(fd)?;
++    lock_table();
+     let stored = IDS[index].load(Ordering::Acquire);
+-    (stored != 0).then_some(stored - 1)
++    let generation = GENERATIONS[index].load(Ordering::Acquire);
++    unlock_table();
++    (stored != 0 && generation != 0).then_some((stored - 1, generation))
+ }
+ 
+-fn install(fd: i32, socket_id: u64) {
++/// Endpoint identity captured at the start of an attach operation. Capturing
++/// before the `NetOp` means a replacement racing the operation leaves a stale
++/// record that [`lookup`] rejects, instead of a record that matches the new
++/// endpoint.
++fn endpoint_identity(fd: i32) -> u64 {
++    endpoint_generation(fd).max(0) as u64
++}
++
++/// Return the attached net_server socket id for `fd`, if any.
++///
++/// A mapping is valid only while the descriptor still names the kernel inet
++/// endpoint it was recorded against. `dup2`/`dup3` replacement, or a close
++/// that bypassed this crate, rebinds the fd number. The stale attachment must
++/// then be unusable: returning it would route transport I/O and readiness to
++/// the replaced endpoint. `close` uses [`detach`] instead so the displaced
++/// endpoint is still released.
++pub fn lookup(fd: i32) -> Option<u64> {
++    let (socket_id, generation) = recorded(fd)?;
++    let current = endpoint_generation(fd);
++    (current > 0 && current as u64 == generation).then_some(socket_id)
++}
++
++fn install(fd: i32, socket_id: u64, generation: u64) {
+     let Some(index) = slot(fd) else { return };
+     lock_table();
+     IDS[index].store(socket_id + 1, Ordering::Release);
++    GENERATIONS[index].store(generation, Ordering::Release);
+     unlock_table();
+ }
+ 
++/// Remove and return the attachment and endpoint generation recorded for `fd`.
++pub fn detach(fd: i32) -> Option<(u64, u64)> {
++    let index = slot(fd)?;
++    lock_table();
++    let stored = IDS[index].load(Ordering::Acquire);
++    let generation = GENERATIONS[index].load(Ordering::Acquire);
++    IDS[index].store(0, Ordering::Release);
++    GENERATIONS[index].store(0, Ordering::Release);
++    unlock_table();
++    (stored != 0).then_some((stored - 1, generation))
++}
++
++/// Release an attachment removed by [`detach`].
++pub fn release_detached(socket_id: u64) {
++    if let Some(cap) = net_cap() {
++        close_net_socket(cap, socket_id);
++    }
++}
++
++/// Restore an attachment removed by [`detach`] after a rejected replacement.
++/// The original generation is restored, so the record only becomes valid
++/// again if the descriptor still names the same endpoint.
++pub fn reattach(fd: i32, socket_id: u64, generation: u64) {
++    install(fd, socket_id, generation);
++}
++
+ /// Drop any bridge mapping for `fd` without contacting net_server.
+ pub fn forget(fd: i32) {
+     let Some(index) = slot(fd) else { return };
+     lock_table();
+     IDS[index].store(0, Ordering::Release);
++    GENERATIONS[index].store(0, Ordering::Release);
+     unlock_table();
+ }
+ 
+@@ -348,6 +414,9 @@ pub unsafe extern "C" fn connect(fd: i32, addr: *const u8, len: u32) -> i32 {
+     if fd_nonblocking(fd) {
+         return fail(errno::EOPNOTSUPP);
+     }
++    // Capture the endpoint before the first NetOp so a concurrent
++    // replacement cannot make this attachment look current.
++    let generation = endpoint_identity(fd);
+     let (ip, port) = match parse_sockaddr(addr, len) {
+         Ok(value) => value,
+         Err(error) => return fail(error),
+@@ -382,7 +451,7 @@ pub unsafe extern "C" fn connect(fd: i32, addr: *const u8, len: u32) -> i32 {
+     }
+     match wait_ready(cap, socket_id, NetReady::WRITE, CONNECT_TIMEOUT_MS) {
+         Ok(ready) if ready & NetReady::WRITE != 0 => {
+-            install(fd, socket_id);
++            install(fd, socket_id, generation);
+             0
+         }
+         Ok(ready) => {
+@@ -408,6 +477,7 @@ pub unsafe extern "C" fn bind(fd: i32, addr: *const u8, len: u32) -> i32 {
+     if lookup(fd).is_some() {
+         return fail(errno::EINVAL);
+     }
++    let generation = endpoint_identity(fd);
+     let (ip, port) = match parse_sockaddr(addr, len) {
+         Ok(value) => value,
+         Err(error) => return fail(error),
+@@ -437,7 +507,7 @@ pub unsafe extern "C" fn bind(fd: i32, addr: *const u8, len: u32) -> i32 {
+         close_net_socket(cap, socket_id);
+         return fail(status_errno(reply.words[1]));
+     }
+-    install(fd, socket_id);
++    install(fd, socket_id, generation);
+     0
+ }
+ 
+@@ -516,7 +586,7 @@ pub unsafe extern "C" fn accept(fd: i32, addr: *mut u8, len_ptr: *mut u32) -> i3
+         return fail((-raw) as i32);
+     }
+     let new_fd = raw as i32;
+-    install(new_fd, new_id);
++    install(new_fd, new_id, endpoint_identity(new_fd));
+     if !addr.is_null() && !len_ptr.is_null() {
+         if getpeername(new_fd, addr, len_ptr) != 0 {
+             // Preserve accept success; the peer address is advisory.
+@@ -771,8 +841,12 @@ pub extern "C" fn shutdown(_fd: i32, _how: i32) -> i32 {
+ /// Called by `close()` before the kernel descriptor is consumed. Safe to call
+ /// for non-bridged descriptors.
+ pub fn close(fd: i32) {
+-    let Some(socket_id) = lookup(fd) else { return };
+-    forget(fd);
++    // Descriptor destruction must release the attachment that was installed,
++    // even if the fd number was rebound (for example by a raw `dup2`) and the
++    // current identity no longer matches. Ordinary operations use `lookup`.
++    let Some((socket_id, _)) = detach(fd) else {
++        return;
++    };
+     if let Some(cap) = net_cap() {
+         close_net_socket(cap, socket_id);
+     }
+diff --git a/sunlight-libc/src/socket.rs b/sunlight-libc/src/socket.rs
+index 361255f60..f1774d228 100644
+--- a/sunlight-libc/src/socket.rs
++++ b/sunlight-libc/src/socket.rs
+@@ -145,19 +145,27 @@ pub extern "C" fn epoll_create1(flags: i32) -> i32 {
+ /// ADD/MOD require a valid `event`; DEL may pass null.
+ #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+ pub unsafe extern "C" fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32 {
+-    match sys::check(sys::syscall4(
+-        sys::SYS_EPOLL_CTL,
++    // Capture the kernel endpoint generation before reading the bridge map.
++    // A close/reuse between these operations makes ctl fail, never attach an
++    // old transport identity to a newly allocated placeholder.
++    let generation = sys::syscall6(sys::SYS_EPOLL_BRIDGE, fd as u64, 0, 0, 0, 0, 3) as i64;
++    if generation < 0 {
++        return fail_i32((-generation) as i32);
++    }
++    let identity = crate::net_bridge::lookup(fd).unwrap_or(u64::MAX);
++    let result = sys::syscall6(
++        sys::SYS_EPOLL_BRIDGE,
+         epfd as u64,
+         op as u64,
+         fd as u64,
+         event as u64,
+-    )) {
+-        Ok(_) => 0,
+-        Err(error) => {
+-            errno::set_from_errno(error);
+-            -1
+-        }
++        identity,
++        2 | ((generation as u64) << 8),
++    ) as i64;
++    if result < 0 {
++        return fail_i32((-result) as i32);
+     }
++    0
+ }
+ 
+ /// # Safety
+@@ -175,21 +183,90 @@ pub unsafe extern "C" fn epoll_wait(
+     if events.is_null() {
+         return fail_i32(errno::EFAULT);
+     }
+-    match sys::check(sys::syscall4(
+-        sys::SYS_EPOLL_WAIT,
+-        epfd as u64,
+-        events as u64,
+-        maxevents as u64,
+-        timeout_ms as u64,
+-    )) {
+-        Ok(n) => n as i32,
+-        Err(error) => {
+-            errno::set_from_errno(error);
+-            -1
++    // One deadline covers snapshots, IPC, and every internal wait slice.
++    let Some(started) = crate::multiplex::monotonic_ms() else {
++        return -1;
++    };
++    let deadline = (timeout_ms > 0).then(|| started.saturating_add(timeout_ms as u64));
++    loop {
++        let mut observations = [ExternalObservation::default(); 64];
++        let count = sys::syscall6(
++            sys::SYS_EPOLL_BRIDGE,
++            epfd as u64,
++            observations.as_mut_ptr() as u64,
++            64,
++            0,
++            0,
++            0,
++        ) as i64;
++        if count < 0 {
++            return fail_i32((-count) as i32);
++        }
++        for observation in &mut observations[..count as usize] {
++            let Some(identity) = crate::net_bridge::lookup(observation.fd) else {
++                continue;
++            };
++            if observation.identity == u64::MAX {
++                observation.identity = identity;
++            } else if identity != observation.identity {
++                continue;
++            }
++            let interest = crate::multiplex::requested_interest(observation.events as i16);
++            let ready = match crate::net_bridge::wait_any_per_interest(
++                &[observation.identity],
++                &[interest],
++                0,
++            ) {
++                Ok(crate::net_bridge::WaitOutcome::Ready(id, bits))
++                    if id == observation.identity =>
++                {
++                    crate::multiplex::map_ready(bits, observation.events as i16)
++                }
++                Ok(crate::net_bridge::WaitOutcome::Gone) => (EPOLLERR | EPOLLHUP) as i16,
++                Ok(_) => 0,
++                Err(error) => return fail_i32(error),
++            };
++            if crate::net_bridge::lookup(observation.fd) == Some(observation.identity) {
++                observation.ready = ready as u32;
++            }
++        }
++        // Kernel tokens reject observations made before MOD, DEL, or close.
++        let result = sys::syscall6(
++            sys::SYS_EPOLL_BRIDGE,
++            epfd as u64,
++            observations.as_ptr() as u64,
++            count as u64,
++            events as u64,
++            (maxevents as u64).min(128),
++            1,
++        ) as i64;
++        if result < 0 {
++            return fail_i32((-result) as i32);
++        }
++        if result != 0 || timeout_ms == 0 {
++            return result as i32;
++        }
++        let Some(now) = crate::multiplex::monotonic_ms() else {
++            return -1;
++        };
++        let remaining = deadline.map_or(20, |end| end.saturating_sub(now).min(20));
++        if remaining == 0 {
++            return 0;
++        }
++        // Bounded sleep revisits every registration, including sets larger
++        // than NetWait's batch capacity. No registration lock spans IPC/sleep.
++        let delay = crate::time::Timespec {
++            tv_sec: 0,
++            tv_nsec: (remaining * 1_000_000) as i64,
++        };
++        if crate::time::nanosleep(&delay, core::ptr::null_mut()) != 0 {
++            return -1;
+         }
+     }
+ }
+ 
++use sunlight_ipc::native_epoll::ExternalObservation;
++
+ /// Attach an AF_INET/SOCK_STREAM descriptor to the `net` service.
+ ///
+ /// # Safety
+diff --git a/sunlight-libc/src/sys.rs b/sunlight-libc/src/sys.rs
+index 0a01bb8d7..0d1c8770a 100644
+--- a/sunlight-libc/src/sys.rs
++++ b/sunlight-libc/src/sys.rs
+@@ -25,6 +25,7 @@ pub const SYS_RECV: u64 = 170;
+ pub const SYS_EPOLL_CREATE1: u64 = 171;
+ pub const SYS_EPOLL_CTL: u64 = 172;
+ pub const SYS_EPOLL_WAIT: u64 = 173;
++pub const SYS_EPOLL_BRIDGE: u64 = 177;
+ pub const SYS_DUP: u64 = 45;
+ pub const SYS_DUP2: u64 = 46;
+ pub const SYS_FSTAT: u64 = 48;
+diff --git a/tools/native-c/Cargo.lock b/tools/native-c/Cargo.lock
+index 976a24094..dfbab1a97 100644
+--- a/tools/native-c/Cargo.lock
++++ b/tools/native-c/Cargo.lock
+@@ -4,18 +4,18 @@ version = 4
+ 
+ [[package]]
+ name = "sunlight-ipc"
+-version = "0.2.7167-alpha.2"
++version = "0.2.7254-alpha.2"
+ 
+ [[package]]
+ name = "sunlight-libc"
+-version = "0.2.7167-alpha.2"
++version = "0.2.7254-alpha.2"
+ dependencies = [
+  "sunlight-ipc",
+ ]
+ 
+ [[package]]
+ name = "sunlight-native-c"
+-version = "0.2.7167-alpha.2"
++version = "0.2.7254-alpha.2"
+ dependencies = [
+  "sunlight-libc",
+ ]
+diff --git a/tools/native-c/guest.py b/tools/native-c/guest.py
+index 4287a6862..c0a7dfe63 100644
+--- a/tools/native-c/guest.py
++++ b/tools/native-c/guest.py
+@@ -152,7 +152,9 @@ def main():
+                        ('exit', 23, b'', b''))]
+         sources += [(p.stem, p, 0, (), b'', b'atexit OK\n' if p.stem == 'atexit' else b'', b'', True)
+                     for p in sorted(base.glob('*.c')) if p.name != 'compiler.c']
+-        sources += [(p.stem, p, 0, (), b'', b'', b'', True) for p in sorted(base.glob('*.cpp'))]
++        sources += [(p.stem, p, 0, (), b'',
++                     b'exception OK\nTLS OK\nstatic initialization OK\natexit OK\n' if p.stem == 'cpp-runtime' else b'',
++                     b'', True) for p in sorted(base.glob('*.cpp'))]
+         # Independent service counters bracket the unchanged historical source.
+         # No other workload runs between these snapshots and getrandom.c.
+         random_fixture = ROOT / 'tools/native-c/tests/random.c'
+@@ -247,10 +249,14 @@ def main():
+                     for mode in ('root', 'errors', 'entries')]
+         for name, src, code, args, input, stdout, stderr, historical in sources:
+             elf = out / (name + '.elf')
+-            compiler = ([sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']
+-                        if src.suffix == '.c' else ['clang++', '--target=x86_64-unknown-none-elf',
+-                            '-nostdinc', '-I' + str(ROOT / 'sunlight-libc/include'), '-nostdlib', '-fuse-ld=lld'])
+-            if not historical and src.suffix == '.cpp':
++            if src.suffix == '.c':
++                compiler = [sys.executable, ROOT / 'tools/native-c/cc.py', '-std=c11', '-Wall', '-Wextra', '-Werror']
++            else:
++                # Every C++ cell, including historical probe sources, uses the
++                # configured native driver. A bare clang++ -nostdlib command has
++                # no native startup, libc, C++ runtime/EH archives or linker
++                # script; that recipe is preserved as a regression check in
++                # tests/run_cxx_runtime.py rather than used to build a cell.
+                 compiler = [sys.executable, ROOT / 'tools/native-c/cxx.py', '-Wall', '-Wextra', '-Werror']
+                 if name in ('cxx-backend', 'cxx-string-backend'):
+                     compiler += ['-Wl,--wrap=write']
+diff --git a/tools/native-c/tests/inet-socket.c b/tools/native-c/tests/inet-socket.c
+index ddb05ec66..c7ba24fd7 100644
+--- a/tools/native-c/tests/inet-socket.c
++++ b/tools/native-c/tests/inet-socket.c
+@@ -48,11 +48,18 @@ int main(int argc, char **argv) {
+         int ep = epoll_create1(0);
+         struct epoll_event e = {.events=EPOLLIN | EPOLLOUT, .data=123}, out;
+         if (ep < 0 || epoll_ctl(ep, EPOLL_CTL_ADD, fd, &e)) return 19;
+-        if (epoll_wait(ep, &out, 1, 0) != 1 || out.events != EPOLLERR || out.data != 123) return 20;
+-        if (epoll_wait(ep, &out, 1, 0) != 1) return 21;
++        /* An unattached inet placeholder is inert for epoll LT: the old
++         * synthetic EPOLLERR was the pre-transport placeholder contract. */
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 20;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 21;
++        /* TCP ET/oneshot are unsupported and rejected, never silently armed. */
+         e.events |= EPOLLET | EPOLLONESHOT;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1 || epoll_wait(ep, &out, 1, 0)) return 22;
+-        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) || epoll_wait(ep, &out, 1, 0) != 1) return 23;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 22;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLET;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 23;
++        e.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT;
++        if (epoll_ctl(ep, EPOLL_CTL_MOD, fd, &e) != -1 || errno != EINVAL) return 39;
++        if (epoll_wait(ep, &out, 1, 0) != 0) return 40;
+         if (close(ep) || close(fd) || close(fd) != -1 || errno != EBADF) return 24;
+     }
+     int fds[256], n = 0;
+diff --git a/tools/native-c/tests/run_cxx_runtime.py b/tools/native-c/tests/run_cxx_runtime.py
+index d992b2926..6857fd324 100644
+--- a/tools/native-c/tests/run_cxx_runtime.py
++++ b/tools/native-c/tests/run_cxx_runtime.py
+@@ -46,6 +46,21 @@ assert probe.read_bytes()==subprocess.check_output(['git','show','HEAD:docs/audi
+ # Preserve original command literally; it has no native startup/libraries.
+ diag=run('historical-original',['clang++','--target=x86_64-unknown-none-elf','-nostdinc','-I'+str(ROOT/'sunlight-libc/include'),'-nostdlib','-fuse-ld=lld',probe,'-o',out/'original.elf'],1)
+ assert b'undefined symbol' in diag and b'file not found' not in diag
++# Diagnosed failure: the bare recipe omits native link inputs, it does not
++# reference a missing libc export. cpp-runtime never calls close, and close is
++# a strong definition in the target-built native C archive.
++native=ROOT/'target/native-c/sysroot/lib/libsunlight_native_c.a'
++native_symbols=run('native-close-symbols',['llvm-nm','-g','--defined-only',native])
++assert any(f==[b'T',b'close'] for f in (l.split()[-2:] for l in native_symbols.splitlines())),'close is not a strong native export'
++obj=out/'cpp-runtime.o'
++run('cpp-runtime-object',['clang++','--target=x86_64-unknown-none-elf','-nostdinc','-I'+str(ROOT/'sunlight-libc/include'),'-c',probe,'-o',obj])
++object_undefined=run('cpp-runtime-object-undefined',['llvm-nm','-u',obj])
++assert b'close' not in object_undefined.split()
++assert b'__cxa_atexit' in object_undefined and b'__gxx_personality_v0' in object_undefined
++assert b'undefined symbol: close' not in diag
++historical_map=(out/'historical.map').read_text()
++for archive in ('libsunlight_native_c.a','libsunlight_cxx.a','libsunlight_eh.a'):
++ assert archive in historical_map,archive
+ local=out/'local-static.cpp';local.write_text('#include <string>\nstd::string& f() { static std::string s("x"); return s; }\nint main() { return f().empty(); }\n')
+ run('local-static-link',['python3','tools/native-c/cxx.py',local,'-o',out/'local-static.elf'])
+ guard=run('local-static-symbols',['llvm-nm','-g','--defined-only',out/'local-static.elf'])

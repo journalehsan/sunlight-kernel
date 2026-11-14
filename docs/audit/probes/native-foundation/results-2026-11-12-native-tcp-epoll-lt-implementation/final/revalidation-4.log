@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-revalidation.elf --net --cpus 4 --expect-exit 0 --timeout 180 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-4
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'epoll-revalidation: PASS stale MOD DEL reADD identity generation close-reuse input-validation concurrent-deadline capacity64 maxevents\n'
+
+exit=0

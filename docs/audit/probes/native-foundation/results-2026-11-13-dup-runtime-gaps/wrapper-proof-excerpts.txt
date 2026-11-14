@@ -1,0 +1,360 @@
+0000000000402100 <coverage_replace>:
+  402100: 48 83 ec 18                  	subq	$0x18, %rsp
+  402104: e8 b7 62 00 00               	callq	0x4083c0 <sunlight_libc::dup2>
+  402109: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+  40210e: 48 8b 44 24 10               	movq	0x10(%rsp), %rax
+  402113: 48 89 44 24 08               	movq	%rax, 0x8(%rsp)
+  402118: 8a 44 24 08                  	movb	0x8(%rsp), %al
+  40211c: 24 01                        	andb	$0x1, %al
+  40211e: 0f b6 c0                     	movzbl	%al, %eax
+  402121: 48 a9 01 00 00 00            	testq	$0x1, %rax
+  402127: 74 0d                        	je	0x402136 <coverage_replace+0x36>
+  402129: 0f b6 44 24 09               	movzbl	0x9(%rsp), %eax
+  40212e: 48 83 f8 06                  	cmpq	$0x6, %rax
+  402132: 74 13                        	je	0x402147 <coverage_replace+0x47>
+  402134: eb 1b                        	jmp	0x402151 <coverage_replace+0x51>
+  402136: 8b 44 24 0c                  	movl	0xc(%rsp), %eax
+  40213a: 48 89 04 24                  	movq	%rax, (%rsp)
+  40213e: 48 8b 04 24                  	movq	(%rsp), %rax
+  402142: 48 83 c4 18                  	addq	$0x18, %rsp
+  402146: c3                           	retq
+  402147: 48 c7 04 24 fb ff ff ff      	movq	$-0x5, (%rsp)
+  40214f: eb ed                        	jmp	0x40213e <coverage_replace+0x3e>
+  402151: 48 c7 04 24 19 fc ff ff      	movq	$-0x3e7, (%rsp)         # imm = 0xFC19
+  402159: eb e3                        	jmp	0x40213e <coverage_replace+0x3e>
+  40215b: cc                           	int3
+  40215c: cc                           	int3
+  40215d: cc                           	int3
+  40215e: cc                           	int3
+  40215f: cc                           	int3
+
+0000000000402160 <accept>:
+  402160: e9 9b 53 00 00               	jmp	0x407500 <sunlight_libc::net_bridge::accept>
+  402165: cc                           	int3
+  402166: cc                           	int3
+  402167: cc                           	int3
+  402168: cc                           	int3
+  402169: cc                           	int3
+  40216a: cc                           	int3
+  40216b: cc                           	int3
+  40216c: cc                           	int3
+  40216d: cc                           	int3
+  40216e: cc                           	int3
+  40216f: cc                           	int3
+
+0000000000402170 <bind>:
+  402170: e9 3b 42 00 00               	jmp	0x4063b0 <sunlight_libc::net_bridge::bind>
+  402175: cc                           	int3
+  402176: cc                           	int3
+  402177: cc                           	int3
+  402178: cc                           	int3
+  402179: cc                           	int3
+  40217a: cc                           	int3
+  40217b: cc                           	int3
+  40217c: cc                           	int3
+  40217d: cc                           	int3
+  40217e: cc                           	int3
+  40217f: cc                           	int3
+
+0000000000402180 <close>:
+  402180: 41 56                        	pushq	%r14
+  402182: 53                           	pushq	%rbx
+  402183: 48 81 ec d8 00 00 00         	subq	$0xd8, %rsp
+  40218a: 85 ff                        	testl	%edi, %edi
+  40218c: 0f 88 1f 01 00 00            	js	0x4022b1 <close+0x131>
+  402192: 89 f8                        	movl	%edi, %eax
+  402194: 89 ff                        	movl	%edi, %edi
+  402196: 3d ff 00 00 00               	cmpl	$0xff, %eax
+  40219b: 0f 87 dd 00 00 00            	ja	0x40227e <close+0xfe>
+  4021a1: b1 01                        	movb	$0x1, %cl
+  4021a3: 31 c0                        	xorl	%eax, %eax
+  4021a5: f0                           	lock
+  4021a6: 0f b0 0d 04 c8 00 00         	cmpxchgb	%cl, 0xc804(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4021ad: 74 0f                        	je	0x4021be <close+0x3e>
+  4021af: 90                           	nop
+  4021b0: f3 90                        	pause
+  4021b2: 31 c0                        	xorl	%eax, %eax
+  4021b4: f0                           	lock
+  4021b5: 0f b0 0d f5 c7 00 00         	cmpxchgb	%cl, 0xc7f5(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4021bc: 75 f2                        	jne	0x4021b0 <close+0x30>
+  4021be: 4c 8b 34 fd b8 f1 40 00      	movq	0x40f1b8(,%rdi,8), %r14
+  4021c6: 48 8b 04 fd b8 e9 40 00      	movq	0x40e9b8(,%rdi,8), %rax
+  4021ce: 48 c7 04 fd b8 f1 40 00 00 00 00 00  	movq	$0x0, 0x40f1b8(,%rdi,8)
+  4021da: 48 c7 04 fd b8 e9 40 00 00 00 00 00  	movq	$0x0, 0x40e9b8(,%rdi,8)
+  4021e6: c6 05 c4 c7 00 00 00         	movb	$0x0, 0xc7c4(%rip)      # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4021ed: 4d 85 f6                     	testq	%r14, %r14
+  4021f0: 0f 84 88 00 00 00            	je	0x40227e <close+0xfe>
+  4021f6: 48 89 fb                     	movq	%rdi, %rbx
+  4021f9: 48 8b 35 b8 d7 00 00         	movq	0xd7b8(%rip), %rsi      # 0x40f9b8 <sunlight_libc::net_bridge::NET_CAP (.0.llvm.17331505550573148227)>
+  402200: 48 85 f6                     	testq	%rsi, %rsi
+  402203: 75 27                        	jne	0x40222c <close+0xac>
+00000000004020b0 <coverage_bridge_id>:
+  4020b0: 50                           	pushq	%rax
+  4020b1: e8 4a 5a 00 00               	callq	0x407b00 <sunlight_libc::net_bridge::lookup>
+  4020b6: 48 89 c7                     	movq	%rax, %rdi
+  4020b9: 48 89 d6                     	movq	%rdx, %rsi
+  4020bc: 31 c0                        	xorl	%eax, %eax
+  4020be: 89 c2                        	movl	%eax, %edx
+  4020c0: e8 1b ff ff ff               	callq	0x401fe0 <<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>>
+  4020c5: 59                           	popq	%rcx
+  4020c6: c3                           	retq
+  4020c7: cc                           	int3
+  4020c8: cc                           	int3
+  4020c9: cc                           	int3
+  4020ca: cc                           	int3
+  4020cb: cc                           	int3
+  4020cc: cc                           	int3
+  4020cd: cc                           	int3
+  4020ce: cc                           	int3
+  4020cf: cc                           	int3
+
+00000000004020d0 <coverage_generation>:
+  4020d0: 50                           	pushq	%rax
+  4020d1: 48 63 f7                     	movslq	%edi, %rsi
+  4020d4: bf b1 00 00 00               	movl	$0xb1, %edi
+  4020d9: 31 c0                        	xorl	%eax, %eax
+  4020db: 41 89 c1                     	movl	%eax, %r9d
+  4020de: 4c 89 ca                     	movq	%r9, %rdx
+  4020e1: 4c 89 c9                     	movq	%r9, %rcx
+  4020e4: 4d 89 c8                     	movq	%r9, %r8
+  4020e7: 48 c7 04 24 03 00 00 00      	movq	$0x3, (%rsp)
+  4020ef: e8 6c ff ff ff               	callq	0x402060 <sunlight_libc::sys::syscall6>
+  4020f4: 59                           	popq	%rcx
+  4020f5: c3                           	retq
+  4020f6: cc                           	int3
+  4020f7: cc                           	int3
+  4020f8: cc                           	int3
+  4020f9: cc                           	int3
+  4020fa: cc                           	int3
+  4020fb: cc                           	int3
+  4020fc: cc                           	int3
+  4020fd: cc                           	int3
+  4020fe: cc                           	int3
+  4020ff: cc                           	int3
+
+0000000000402100 <coverage_replace>:
+  402100: 48 83 ec 18                  	subq	$0x18, %rsp
+  402104: e8 b7 62 00 00               	callq	0x4083c0 <sunlight_libc::dup2>
+  402109: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+  40210e: 48 8b 44 24 10               	movq	0x10(%rsp), %rax
+  402113: 48 89 44 24 08               	movq	%rax, 0x8(%rsp)
+  402118: 8a 44 24 08                  	movb	0x8(%rsp), %al
+  40211c: 24 01                        	andb	$0x1, %al
+  40211e: 0f b6 c0                     	movzbl	%al, %eax
+  402121: 48 a9 01 00 00 00            	testq	$0x1, %rax
+  402127: 74 0d                        	je	0x402136 <coverage_replace+0x36>
+  402129: 0f b6 44 24 09               	movzbl	0x9(%rsp), %eax
+  40212e: 48 83 f8 06                  	cmpq	$0x6, %rax
+  402132: 74 13                        	je	0x402147 <coverage_replace+0x47>
+  402134: eb 1b                        	jmp	0x402151 <coverage_replace+0x51>
+  402136: 8b 44 24 0c                  	movl	0xc(%rsp), %eax
+  40213a: 48 89 04 24                  	movq	%rax, (%rsp)
+  40213e: 48 8b 04 24                  	movq	(%rsp), %rax
+  402142: 48 83 c4 18                  	addq	$0x18, %rsp
+  402146: c3                           	retq
+  402147: 48 c7 04 24 fb ff ff ff      	movq	$-0x5, (%rsp)
+  40214f: eb ed                        	jmp	0x40213e <coverage_replace+0x3e>
+  402151: 48 c7 04 24 19 fc ff ff      	movq	$-0x3e7, (%rsp)         # imm = 0xFC19
+  402159: eb e3                        	jmp	0x40213e <coverage_replace+0x3e>
+  40215b: cc                           	int3
+  40215c: cc                           	int3
+  40215d: cc                           	int3
+  40215e: cc                           	int3
+  40215f: cc                           	int3
+
+0000000000402160 <accept>:
+  402160: e9 9b 53 00 00               	jmp	0x407500 <sunlight_libc::net_bridge::accept>
+  402165: cc                           	int3
+  402166: cc                           	int3
+  402167: cc                           	int3
+  402168: cc                           	int3
+  402169: cc                           	int3
+  40216a: cc                           	int3
+  40216b: cc                           	int3
+  40216c: cc                           	int3
+  40216d: cc                           	int3
+  40216e: cc                           	int3
+  40216f: cc                           	int3
+
+0000000000402170 <bind>:
+  402170: e9 3b 42 00 00               	jmp	0x4063b0 <sunlight_libc::net_bridge::bind>
+00000000004083c0 <sunlight_libc::dup2>:
+  4083c0: 53                           	pushq	%rbx
+  4083c1: 39 f7                        	cmpl	%esi, %edi
+  4083c3: 75 20                        	jne	0x4083e5 <sunlight_libc::dup2+0x25>
+  4083c5: 89 ff                        	movl	%edi, %edi
+  4083c7: b8 2e 00 00 00               	movl	$0x2e, %eax
+  4083cc: 48 89 fe                     	movq	%rdi, %rsi
+  4083cf: 0f 05                        	syscall
+  4083d1: 48 83 f8 f1                  	cmpq	$-0xf, %rax
+  4083d5: 0f 86 8b 00 00 00            	jbe	0x408466 <sunlight_libc::dup2+0xa6>
+  4083db: 48 8b 04 c5 58 b3 40 00      	movq	0x40b358(,%rax,8), %rax
+  4083e3: 5b                           	popq	%rbx
+  4083e4: c3                           	retq
+  4083e5: 89 f2                        	movl	%esi, %edx
+  4083e7: 4c 63 ce                     	movslq	%esi, %r9
+  4083ea: 81 fe ff 00 00 00            	cmpl	$0xff, %esi
+  4083f0: 77 57                        	ja	0x408449 <sunlight_libc::dup2+0x89>
+  4083f2: b1 01                        	movb	$0x1, %cl
+  4083f4: 31 c0                        	xorl	%eax, %eax
+  4083f6: f0                           	lock
+  4083f7: 0f b0 0d b3 65 00 00         	cmpxchgb	%cl, 0x65b3(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4083fe: 74 0e                        	je	0x40840e <sunlight_libc::dup2+0x4e>
+  408400: f3 90                        	pause
+  408402: 31 c0                        	xorl	%eax, %eax
+  408404: f0                           	lock
+  408405: 0f b0 0d a5 65 00 00         	cmpxchgb	%cl, 0x65a5(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  40840c: 75 f2                        	jne	0x408400 <sunlight_libc::dup2+0x40>
+  40840e: 4e 8b 04 cd b8 f1 40 00      	movq	0x40f1b8(,%r9,8), %r8
+  408416: 4e 8b 14 cd b8 e9 40 00      	movq	0x40e9b8(,%r9,8), %r10
+  40841e: 4a c7 04 cd b8 f1 40 00 00 00 00 00  	movq	$0x0, 0x40f1b8(,%r9,8)
+  40842a: 4a c7 04 cd b8 e9 40 00 00 00 00 00  	movq	$0x0, 0x40e9b8(,%r9,8)
+  408436: c6 05 74 65 00 00 00         	movb	$0x0, 0x6574(%rip)      # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  40843d: 4d 85 c0                     	testq	%r8, %r8
+  408440: 74 07                        	je	0x408449 <sunlight_libc::dup2+0x89>
+  408442: 49 ff c8                     	decq	%r8
+  408445: b3 01                        	movb	$0x1, %bl
+  408447: eb 02                        	jmp	0x40844b <sunlight_libc::dup2+0x8b>
+  408449: 31 db                        	xorl	%ebx, %ebx
+  40844b: 89 ff                        	movl	%edi, %edi
+  40844d: 89 d6                        	movl	%edx, %esi
+  40844f: b8 2e 00 00 00               	movl	$0x2e, %eax
+  408454: 0f 05                        	syscall
+  408456: 48 83 f8 f1                  	cmpq	$-0xf, %rax
+  40845a: 76 22                        	jbe	0x40847e <sunlight_libc::dup2+0xbe>
+  40845c: 48 8b 04 c5 58 b3 40 00      	movq	0x40b358(,%rax,8), %rax
+  408464: eb 32                        	jmp	0x408498 <sunlight_libc::dup2+0xd8>
+  408466: 48 89 c1                     	movq	%rax, %rcx
+  408469: 48 c1 e1 20                  	shlq	$0x20, %rcx
+  40846d: 48 a9 00 00 00 80            	testq	$-0x80000000, %rax      # imm = 0x80000000
+  408473: b8 01 00 00 00               	movl	$0x1, %eax
+  408478: 48 0f 44 c1                  	cmoveq	%rcx, %rax
+  40847c: 5b                           	popq	%rbx
+  40847d: c3                           	retq
+  40847e: 48 89 c1                     	movq	%rax, %rcx
+  408481: 48 c1 e1 20                  	shlq	$0x20, %rcx
+  408485: 48 a9 00 00 00 80            	testq	$-0x80000000, %rax      # imm = 0x80000000
+  40848b: b8 01 00 00 00               	movl	$0x1, %eax
+  408490: 48 0f 44 c1                  	cmoveq	%rcx, %rax
+  408494: 84 c0                        	testb	%al, %al
+  408496: 74 55                        	je	0x4084ed <sunlight_libc::dup2+0x12d>
+  408498: 81 fa 00 01 00 00            	cmpl	$0x100, %edx            # imm = 0x100
+  40849e: 0f 92 c1                     	setb	%cl
+  4084a1: 84 d9                        	testb	%bl, %cl
+  4084a3: 0f 84 3a ff ff ff            	je	0x4083e3 <sunlight_libc::dup2+0x23>
+  4084a9: 48 89 c1                     	movq	%rax, %rcx
+  4084ac: b2 01                        	movb	$0x1, %dl
+  4084ae: 31 c0                        	xorl	%eax, %eax
+  4084b0: f0                           	lock
+  4084b1: 0f b0 15 f9 64 00 00         	cmpxchgb	%dl, 0x64f9(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4084b8: 74 14                        	je	0x4084ce <sunlight_libc::dup2+0x10e>
+  4084ba: 66 0f 1f 44 00 00            	nopw	(%rax,%rax)
+  4084c0: f3 90                        	pause
+  4084c2: 31 c0                        	xorl	%eax, %eax
+  4084c4: f0                           	lock
+  4084c5: 0f b0 15 e5 64 00 00         	cmpxchgb	%dl, 0x64e5(%rip)       # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4084cc: 75 f2                        	jne	0x4084c0 <sunlight_libc::dup2+0x100>
+  4084ce: 49 ff c0                     	incq	%r8
+  4084d1: 4e 89 04 cd b8 f1 40 00      	movq	%r8, 0x40f1b8(,%r9,8)
+  4084d9: 4e 89 14 cd b8 e9 40 00      	movq	%r10, 0x40e9b8(,%r9,8)
+  4084e1: c6 05 c9 64 00 00 00         	movb	$0x0, 0x64c9(%rip)      # 0x40e9b1 <sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)>
+  4084e8: 48 89 c8                     	movq	%rcx, %rax
+  4084eb: 5b                           	popq	%rbx
+  4084ec: c3                           	retq
+  4084ed: 84 db                        	testb	%bl, %bl
+  4084ef: 0f 84 ee fe ff ff            	je	0x4083e3 <sunlight_libc::dup2+0x23>
+  4084f5: 4c 89 c7                     	movq	%r8, %rdi
+  4084f8: 48 89 c3                     	movq	%rax, %rbx
+  4084fb: e8 70 90 ff ff               	callq	0x401570 <__wrap__RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached>
+  408500: 48 89 d8                     	movq	%rbx, %rax
+  408503: 5b                           	popq	%rbx
+0000000000401570 <__wrap__RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached>:
+  401570: 55                           	pushq	%rbp
+  401571: 48 89 e5                     	movq	%rsp, %rbp
+  401574: 48 83 ec 10                  	subq	$0x10, %rsp
+  401578: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+  40157c: 48 8b 04 25 08 e0 40 00      	movq	0x40e008, %rax
+  401584: 48 83 c0 01                  	addq	$0x1, %rax
+  401588: 48 89 04 25 08 e0 40 00      	movq	%rax, 0x40e008
+  401590: 48 8b 7d f8                  	movq	-0x8(%rbp), %rdi
+  401594: e8 07 4b 00 00               	callq	0x4060a0 <sunlight_libc::net_bridge::release_detached>
+  401599: 48 83 c4 10                  	addq	$0x10, %rsp
+  40159d: 5d                           	popq	%rbp
+  40159e: c3                           	retq
+  40159f: 90                           	nop
+
+00000000004015a0 <main>:
+  4015a0: 55                           	pushq	%rbp
+  4015a1: 48 89 e5                     	movq	%rsp, %rbp
+  4015a4: 48 81 ec 90 00 00 00         	subq	$0x90, %rsp
+  4015ab: e8 f0 03 00 00               	callq	0x4019a0 <descriptor_count>
+  4015b0: 89 45 fc                     	movl	%eax, -0x4(%rbp)
+  4015b3: e8 48 ea ff ff               	callq	0x400000 <replacement_base_main>
+  4015b8: 89 45 f8                     	movl	%eax, -0x8(%rbp)
+  4015bb: 83 7d f8 00                  	cmpl	$0x0, -0x8(%rbp)
+  4015bf: 0f 94 c0                     	sete	%al
+  4015c2: 24 01                        	andb	$0x1, %al
+  4015c4: 0f b6 f8                     	movzbl	%al, %edi
+  4015c7: 48 be 63 a4 40 00 00 00 00 00	movabsq	$0x40a463, %rsi         # imm = 0x40A463
+  4015d1: e8 6a fb ff ff               	callq	0x401140 <check>
+  4015d6: 48 83 3c 25 08 e0 40 00 02   	cmpq	$0x2, 0x40e008
+  4015df: 0f 94 c0                     	sete	%al
+  4015e2: 24 01                        	andb	$0x1, %al
+  4015e4: 0f b6 f8                     	movzbl	%al, %edi
+  4015e7: 48 be 51 ab 40 00 00 00 00 00	movabsq	$0x40ab51, %rsi         # imm = 0x40AB51
+  4015f1: e8 4a fb ff ff               	callq	0x401140 <check>
+  4015f6: c7 45 f4 00 00 00 00         	movl	$0x0, -0xc(%rbp)
+  4015fd: 83 7d f4 04                  	cmpl	$0x4, -0xc(%rbp)
+  401601: 7d 10                        	jge	0x401613 <main+0x73>
+  401603: e8 f8 03 00 00               	callq	0x401a00 <attached_rejections>
+  401608: 8b 45 f4                     	movl	-0xc(%rbp), %eax
+  40160b: 83 c0 01                     	addl	$0x1, %eax
+  40160e: 89 45 f4                     	movl	%eax, -0xc(%rbp)
+  401611: eb ea                        	jmp	0x4015fd <main+0x5d>
+  401613: c7 45 f0 ff ff ff ff         	movl	$0xffffffff, -0x10(%rbp) # imm = 0xFFFFFFFF
+  40161a: c7 45 ec ff ff ff ff         	movl	$0xffffffff, -0x14(%rbp) # imm = 0xFFFFFFFF
+  401621: c7 45 e8 ff ff ff ff         	movl	$0xffffffff, -0x18(%rbp) # imm = 0xFFFFFFFF
+  401628: bf e2 10 00 00               	movl	$0x10e2, %edi           # imm = 0x10E2
+  40162d: 48 8d 75 f0                  	leaq	-0x10(%rbp), %rsi
+  401631: 48 8d 55 ec                  	leaq	-0x14(%rbp), %rdx
+  401635: 48 8d 4d e8                  	leaq	-0x18(%rbp), %rcx
+  401639: e8 02 fc ff ff               	callq	0x401240 <connect_pair>
+  40163e: 89 c1                        	movl	%eax, %ecx
+  401640: 31 c0                        	xorl	%eax, %eax
+  401642: 83 f9 00                     	cmpl	$0x0, %ecx
+  401645: 88 85 7b ff ff ff            	movb	%al, -0x85(%rbp)
+  40164b: 74 1f                        	je	0x40166c <main+0xcc>
+  40164d: 48 8d 7d e0                  	leaq	-0x20(%rbp), %rdi
+  401651: 48 be c3 a6 40 00 00 00 00 00	movabsq	$0x40a6c3, %rsi         # imm = 0x40A6C3
+  40165b: e8 50 fb ff ff               	callq	0x4011b0 <make_pipe>
+  401660: 83 f8 00                     	cmpl	$0x0, %eax
+  401663: 0f 95 c0                     	setne	%al
+  401666: 88 85 7b ff ff ff            	movb	%al, -0x85(%rbp)
+  40166c: 8a 85 7b ff ff ff            	movb	-0x85(%rbp), %al
+  401672: 24 01                        	andb	$0x1, %al
+  401674: 0f b6 f8                     	movzbl	%al, %edi
+  401677: 48 be 6b a1 40 00 00 00 00 00	movabsq	$0x40a16b, %rsi         # imm = 0x40A16B
+  401681: e8 ba fa ff ff               	callq	0x401140 <check>
+  401686: 83 f8 00                     	cmpl	$0x0, %eax
+  401689: 0f 84 43 01 00 00            	je	0x4017d2 <main+0x232>
+  40168f: 8b 7d e8                     	movl	-0x18(%rbp), %edi
+  401692: e8 19 0a 00 00               	callq	0x4020b0 <coverage_bridge_id>
+  401697: 48 89 45 d8                  	movq	%rax, -0x28(%rbp)
+  40169b: 31 c0                        	xorl	%eax, %eax
+  40169d: 48 83 7d d8 00               	cmpq	$0x0, -0x28(%rbp)
+  4016a2: 88 85 7a ff ff ff            	movb	%al, -0x86(%rbp)
+  4016a8: 74 26                        	je	0x4016d0 <main+0x130>
+  4016aa: 48 63 75 e0                  	movslq	-0x20(%rbp), %rsi
+  4016ae: 48 63 55 e8                  	movslq	-0x18(%rbp), %rdx
+  4016b2: bf 2e 00 00 00               	movl	$0x2e, %edi
+  4016b7: 31 c0                        	xorl	%eax, %eax
+  4016b9: 89 c1                        	movl	%eax, %ecx
+  4016bb: e8 e0 08 00 00               	callq	0x401fa0 <call3>
+  4016c0: 48 63 4d e8                  	movslq	-0x18(%rbp), %rcx
+  4016c4: 48 39 c8                     	cmpq	%rcx, %rax
+  4016c7: 0f 94 c0                     	sete	%al
+  4016ca: 88 85 7a ff ff ff            	movb	%al, -0x86(%rbp)
+  4016d0: 8a 85 7a ff ff ff            	movb	-0x86(%rbp), %al
+  4016d6: 24 01                        	andb	$0x1, %al
+  4016d8: 0f b6 f8                     	movzbl	%al, %edi
+  4016db: 48 be ee a6 40 00 00 00 00 00	movabsq	$0x40a6ee, %rsi         # imm = 0x40A6EE

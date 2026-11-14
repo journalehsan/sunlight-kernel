@@ -1,0 +1,3 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/linux-handler.elf
+
+exit=0

@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "poll-pressure: run=external-2cpu-20261113T192853Z dest=10.0.2.2:39911 stream=16777224\npoll-pressure: cycle=1 filled=2702264 held_ms=800 recovery_ms=20\npoll-pressure: cycle=2 filled=5984052 held_ms=800 recovery_ms=20\npoll-pressure: cycle=3 filled=9253390 held_ms=800 recovery_ms=20\npoll-pressure: cycle=4 filled=12522728 held_ms=800 recovery_ms=20\npoll-pressure: cycle=5 filled=15792066 held_ms=800 recovery_ms=20\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=5 unstable=0 stream_saturated_bytes=15792066 reset_saturated_bytes=2688508 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

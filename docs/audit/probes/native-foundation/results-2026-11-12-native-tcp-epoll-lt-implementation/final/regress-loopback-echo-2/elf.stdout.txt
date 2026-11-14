@@ -1,0 +1,3 @@
+tcp-echo: refused errno=111
+tcp-echo: nonblocking-connect errno=95
+tcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0

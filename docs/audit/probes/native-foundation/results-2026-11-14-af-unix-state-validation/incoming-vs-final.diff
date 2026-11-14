@@ -1,0 +1,39 @@
+0a1,13
+> diff --git a/docs/Helios_LinuxCompat/coverage.md b/docs/Helios_LinuxCompat/coverage.md
+> index 325101a15..c56167aa8 100644
+> --- a/docs/Helios_LinuxCompat/coverage.md
+> +++ b/docs/Helios_LinuxCompat/coverage.md
+> @@ -35,7 +35,7 @@ Legend: I = IMPLEMENTED, P = PARTIAL, S = STUB, U = UNSUPPORTED, M = MISSING.
+>  | 35 | nanosleep | I | `sys_linux_nanosleep` | timer block | timespec validated | tier1 | | |
+>  | 39 | getpid | I | native | process.pid | | | Y | |
+>  | 41 | socket | P | `sys_linux_socket` | unix_socket pool | AF_UNIX SOCK_STREAM only; other domains/types EAFNOSUPPORT/ESOCKTNOSUPPORT | | Y | |
+> -| 42 | connect | P | `sys_linux_connect` | pipe-backed socketpair | AF_UNIX pathname peers in-process or kernel-wide; ENOENT path ECONNREFUSED | | Y | |
+> +| 42 | connect | P | `sys_linux_connect` | pipe-backed socketpair | AF_UNIX pathname peers in-process or kernel-wide; ENOENT path ECONNREFUSED; LISTEN source EINVAL (listener/queue preserved) | | Y | |
+>  | 43 | accept | P | `sys_linux_accept` | pipe-backed socketpair | EAGAIN when queue empty (nonblocking) | | | |
+>  | 48 | shutdown | P | `sys_linux_shutdown` | pipe ring ends | connected sockets only; ENOTCONN otherwise | | | |
+>  | 49 | bind | P | `sys_linux_bind` | unix_socket path | EADDRINUSE on duplicate path | | Y | |
+76c89
+< index 75017ba8c..1d8c4558d 100644
+---
+> index 75017ba8c..839803b06 100644
+305c318,331
+< @@ -10333,11 +10465,9 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+---
+> @@ -7908,6 +8040,12 @@ fn sys_linux_connect(frame: &mut SyscallFrame) -> u64 {
+>          });
+>      }
+>      let index = handle.unix_socket_index();
+> +    // Linux `connect(2)` on a socket in LISTEN state fails with EINVAL and
+> +    // leaves the listener, its pathname and its pending queue untouched.
+> +    // Reject before any endpoint allocation or destructive handle swap.
+> +    if crate::process::unix_socket::is_listening(index) {
+> +        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
+> +    }
+>      let Some(listener) = crate::process::unix_socket::find_listener(&path) else {
+>          if unix_trace_budget() {
+>              crate::serial_println!("[HELIOS-UNIX] connect fd={} refused", fd);
+> @@ -10333,11 +10471,9 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+320c346
+< @@ -10349,6 +10479,24 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+---
+> @@ -10349,6 +10485,24 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {

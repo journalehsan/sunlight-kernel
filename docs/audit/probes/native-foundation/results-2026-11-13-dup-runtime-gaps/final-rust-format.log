@@ -1,0 +1,3 @@
+$ rustfmt --check --edition 2021 tools/native-c/tests/dup2-wrapper-adapter.rs
+
+exit=0

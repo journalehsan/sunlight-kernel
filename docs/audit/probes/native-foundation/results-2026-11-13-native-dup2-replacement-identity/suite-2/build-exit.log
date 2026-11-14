@@ -1,0 +1,3 @@
+$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/exit.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/suite-2/exit.elf
+
+exit=0

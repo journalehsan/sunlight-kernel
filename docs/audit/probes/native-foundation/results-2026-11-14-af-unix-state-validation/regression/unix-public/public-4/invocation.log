@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/regression/unix-public/public.elf --cpus 4 --timeout 70 --expect-exit 0 --out docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/regression/unix-public/public-4

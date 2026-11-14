@@ -1,0 +1,7 @@
+$ timeout --signal=TERM --kill-after=10 300 python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket.elf --cpus 4 --timeout 110 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket-4
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/inet-socket-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+
+exit=0

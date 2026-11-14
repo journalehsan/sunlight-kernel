@@ -1,0 +1,3 @@
+$ timeout --signal=TERM --kill-after=10 240 clang --target=x86_64-unknown-none-elf -mno-red-zone -ffreestanding -fno-stack-protector -fno-pie -nostdlib -static -fuse-ld=lld -Wall -Wextra -Werror -Wl,-T,/home/ehsantor/Projects/sunlightos-kernel/services/user-space.ld /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dup3-linux-entry.c -Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.map -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf
+
+exit=0

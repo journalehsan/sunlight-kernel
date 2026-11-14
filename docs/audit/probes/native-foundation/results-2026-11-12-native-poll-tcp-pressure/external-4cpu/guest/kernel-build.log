@@ -1,0 +1,44 @@
+$ cargo build -p sunlight-kernel --bin sunlight-kernel --target x86_64-unknown-none --target-dir /home/ehsantor/Projects/sunlightos-kernel/target/native-c-guest/kernel --no-default-features --features native_c_guest
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: sunlight-net@0.2.7254-alpha.2: [SUNLIGHT BUILD] compiling VMXNET3 backend
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling sunlight-kernel v0.2.7254-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/kernel)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.58s
+
+exit=0

@@ -1,0 +1,24 @@
+[toolchain]
+channel = "nightly"
+components = ["rust-src", "llvm-tools-preview", "rustfmt", "clippy"]
+targets = ["x86_64-unknown-none"]
+# Workspace default target for kernel build.
+# Legacy userspace overrides linker flags; std applications select the native
+# target through tools/build_native_std.sh. See docs/workspace-checks.md.
+[build]
+target = "x86_64-unknown-none"
+
+# Kernel-only flags: conservative baseline (x86-64), no SIMD.
+# Userspace uses -C target-cpu=x86-64-v2 via SERVICE_RUSTFLAGS in build scripts,
+# which overrides these when RUSTFLAGS env is set.
+[target.x86_64-unknown-none]
+rustflags = [
+    "-C", "link-arg=-Tkernel/src/arch/x86_64/linker.ld",
+    "-C", "relocation-model=static",
+    # No target-cpu here — kernel stays at x86-64 baseline (soft-float, no SSE)
+]
+
+# Fast combined host-library check. Full platform-aware validation is
+# `python3 tools/check_workspace.py`; see docs/workspace-checks.md.
+[alias]
+check-host-libs = "check --workspace --lib --target x86_64-unknown-linux-gnu"

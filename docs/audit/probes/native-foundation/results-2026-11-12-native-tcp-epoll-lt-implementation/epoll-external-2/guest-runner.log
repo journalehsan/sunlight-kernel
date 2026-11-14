@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-2/tcp-poll-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-2/guest --timeout 300 --arg 42131 --arg 10.0.2.2 --arg external-2cpu-20261112T225308Z
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-2/guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'poll-external: run=external-2cpu-20261112T225308Z dest=10.0.2.2:42131\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n'
+
+exit=0

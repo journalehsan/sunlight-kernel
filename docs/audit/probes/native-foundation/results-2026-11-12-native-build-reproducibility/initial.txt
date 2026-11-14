@@ -1,0 +1,24 @@
+['git', 'status', '--short']
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/
+?? docs/networking/2026-11-12_NATIVE_POLL_TCP_WRITE_BACKPRESSURE.md
+?? tools/native-c/run_poll_pressure.py
+?? tools/native-c/tcp_pressure_peer.py
+?? tools/native-c/tests/tcp-poll-pressure-client.c
+?? tools/native-c/tests/tcp-poll-pressure-loopback-client.c
+?? tools/native-c/tests/tcp-poll-pressure-service.c
+['git', 'rev-parse', 'HEAD']
+5b08147001be963e468711d03284b349fa8b2089
+['rustc', '-Vv']
+rustc 1.98.0-nightly (8954863c8 2026-06-05)
+binary: rustc
+commit-hash: 8954863c81df429ebf96ea38a16c76f209995833
+commit-date: 2026-06-05
+host: x86_64-unknown-linux-gnu
+release: 1.98.0-nightly
+LLVM version: 22.1.6
+['git', 'diff']
+['git', 'ls-files', 'tools/native-c/Cargo.lock']
+tools/native-c/Cargo.lock
+target/native-c/sysroot/lib/libsunlight_native_c.a mtime=1794496756.9964645 sha256=87bfcf73706f88243b6f60000da3ff4230bb2cd041fdd67736065fdbffa76ab7
+target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a mtime=1794496750.225572 sha256=87bfcf73706f88243b6f60000da3ff4230bb2cd041fdd67736065fdbffa76ab7

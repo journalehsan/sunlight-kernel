@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "poll-external: run=external-2cpu-20261113T192634Z dest=10.0.2.2:40329\npoll-external: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

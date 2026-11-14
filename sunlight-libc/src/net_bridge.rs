@@ -17,8 +17,8 @@
 //! * Sockets are owned by the calling PID in `net_server`. `fork()` therefore
 //!   does not transfer ownership; `dup()` does not copy the bridge mapping.
 //! * `poll` and (through poll) `select` use `NetOp::WAIT` readiness for
-//!   attached listeners and streams. `epoll` remains on the kernel descriptor
-//!   path and is not bridged for TCP.
+//!   attached listeners and streams. Native epoll submits observations against
+//!   kernel-owned registration tokens through syscall 177.
 //!
 //! No global lock is held across an IPC call. The fixed fd table lock only
 //! protects the fd -> socket-id mapping itself.
@@ -52,6 +52,9 @@ const SOCKADDR_IN_LEN: u32 = 16;
 
 /// fd -> (net_server socket id + 1); zero means "not bridged".
 static IDS: [AtomicU64; MAX_BRIDGED_FDS] = [const { AtomicU64::new(0) }; MAX_BRIDGED_FDS];
+/// Kernel inet-endpoint generation recorded when the mapping was installed.
+/// Zero means "not a live inet endpoint at install time".
+static GENERATIONS: [AtomicU64; MAX_BRIDGED_FDS] = [const { AtomicU64::new(0) }; MAX_BRIDGED_FDS];
 static TABLE_LOCK: AtomicBool = AtomicBool::new(false);
 static NET_CAP: AtomicU64 = AtomicU64::new(0);
 
@@ -76,18 +79,80 @@ fn slot(fd: i32) -> Option<usize> {
     }
 }
 
-/// Return the attached net_server socket id for `fd`, if any.
-pub fn lookup(fd: i32) -> Option<u64> {
-    let index = slot(fd)?;
-    let stored = IDS[index].load(Ordering::Acquire);
-    (stored != 0).then_some(stored - 1)
+/// Current kernel endpoint generation for `fd`. Zero means the fd is not an
+/// inet endpoint; a negative value means the fd does not exist.
+///
+/// This is a non-blocking identity query, never a NetOp IPC. It is performed
+/// before taking the table lock.
+fn endpoint_generation(fd: i32) -> i64 {
+    // SAFETY: generation query (mode 3) takes only the fd and writes no user
+    // memory.
+    unsafe { sys::syscall6(sys::SYS_EPOLL_BRIDGE, fd as u64, 0, 0, 0, 0, 3) as i64 }
 }
 
-fn install(fd: i32, socket_id: u64) {
+fn recorded(fd: i32) -> Option<(u64, u64)> {
+    let index = slot(fd)?;
+    lock_table();
+    let stored = IDS[index].load(Ordering::Acquire);
+    let generation = GENERATIONS[index].load(Ordering::Acquire);
+    unlock_table();
+    (stored != 0 && generation != 0).then_some((stored - 1, generation))
+}
+
+/// Endpoint identity captured at the start of an attach operation. Capturing
+/// before the `NetOp` means a replacement racing the operation leaves a stale
+/// record that [`lookup`] rejects, instead of a record that matches the new
+/// endpoint.
+fn endpoint_identity(fd: i32) -> u64 {
+    endpoint_generation(fd).max(0) as u64
+}
+
+/// Return the attached net_server socket id for `fd`, if any.
+///
+/// A mapping is valid only while the descriptor still names the kernel inet
+/// endpoint it was recorded against. `dup2`/`dup3` replacement, or a close
+/// that bypassed this crate, rebinds the fd number. The stale attachment must
+/// then be unusable: returning it would route transport I/O and readiness to
+/// the replaced endpoint. `close` uses [`detach`] instead so the displaced
+/// endpoint is still released.
+pub fn lookup(fd: i32) -> Option<u64> {
+    let (socket_id, generation) = recorded(fd)?;
+    let current = endpoint_generation(fd);
+    (current > 0 && current as u64 == generation).then_some(socket_id)
+}
+
+fn install(fd: i32, socket_id: u64, generation: u64) {
     let Some(index) = slot(fd) else { return };
     lock_table();
     IDS[index].store(socket_id + 1, Ordering::Release);
+    GENERATIONS[index].store(generation, Ordering::Release);
     unlock_table();
+}
+
+/// Remove and return the attachment and endpoint generation recorded for `fd`.
+pub fn detach(fd: i32) -> Option<(u64, u64)> {
+    let index = slot(fd)?;
+    lock_table();
+    let stored = IDS[index].load(Ordering::Acquire);
+    let generation = GENERATIONS[index].load(Ordering::Acquire);
+    IDS[index].store(0, Ordering::Release);
+    GENERATIONS[index].store(0, Ordering::Release);
+    unlock_table();
+    (stored != 0).then_some((stored - 1, generation))
+}
+
+/// Release an attachment removed by [`detach`].
+pub fn release_detached(socket_id: u64) {
+    if let Some(cap) = net_cap() {
+        close_net_socket(cap, socket_id);
+    }
+}
+
+/// Restore an attachment removed by [`detach`] after a rejected replacement.
+/// The original generation is restored, so the record only becomes valid
+/// again if the descriptor still names the same endpoint.
+pub fn reattach(fd: i32, socket_id: u64, generation: u64) {
+    install(fd, socket_id, generation);
 }
 
 /// Drop any bridge mapping for `fd` without contacting net_server.
@@ -95,6 +160,7 @@ pub fn forget(fd: i32) {
     let Some(index) = slot(fd) else { return };
     lock_table();
     IDS[index].store(0, Ordering::Release);
+    GENERATIONS[index].store(0, Ordering::Release);
     unlock_table();
 }
 
@@ -348,6 +414,9 @@ pub unsafe extern "C" fn connect(fd: i32, addr: *const u8, len: u32) -> i32 {
     if fd_nonblocking(fd) {
         return fail(errno::EOPNOTSUPP);
     }
+    // Capture the endpoint before the first NetOp so a concurrent
+    // replacement cannot make this attachment look current.
+    let generation = endpoint_identity(fd);
     let (ip, port) = match parse_sockaddr(addr, len) {
         Ok(value) => value,
         Err(error) => return fail(error),
@@ -382,7 +451,7 @@ pub unsafe extern "C" fn connect(fd: i32, addr: *const u8, len: u32) -> i32 {
     }
     match wait_ready(cap, socket_id, NetReady::WRITE, CONNECT_TIMEOUT_MS) {
         Ok(ready) if ready & NetReady::WRITE != 0 => {
-            install(fd, socket_id);
+            install(fd, socket_id, generation);
             0
         }
         Ok(ready) => {
@@ -408,6 +477,7 @@ pub unsafe extern "C" fn bind(fd: i32, addr: *const u8, len: u32) -> i32 {
     if lookup(fd).is_some() {
         return fail(errno::EINVAL);
     }
+    let generation = endpoint_identity(fd);
     let (ip, port) = match parse_sockaddr(addr, len) {
         Ok(value) => value,
         Err(error) => return fail(error),
@@ -437,7 +507,7 @@ pub unsafe extern "C" fn bind(fd: i32, addr: *const u8, len: u32) -> i32 {
         close_net_socket(cap, socket_id);
         return fail(status_errno(reply.words[1]));
     }
-    install(fd, socket_id);
+    install(fd, socket_id, generation);
     0
 }
 
@@ -516,7 +586,7 @@ pub unsafe extern "C" fn accept(fd: i32, addr: *mut u8, len_ptr: *mut u32) -> i3
         return fail((-raw) as i32);
     }
     let new_fd = raw as i32;
-    install(new_fd, new_id);
+    install(new_fd, new_id, endpoint_identity(new_fd));
     if !addr.is_null() && !len_ptr.is_null() {
         if getpeername(new_fd, addr, len_ptr) != 0 {
             // Preserve accept success; the peer address is advisory.
@@ -771,8 +841,12 @@ pub extern "C" fn shutdown(_fd: i32, _how: i32) -> i32 {
 /// Called by `close()` before the kernel descriptor is consumed. Safe to call
 /// for non-bridged descriptors.
 pub fn close(fd: i32) {
-    let Some(socket_id) = lookup(fd) else { return };
-    forget(fd);
+    // Descriptor destruction must release the attachment that was installed,
+    // even if the fd number was rebound (for example by a raw `dup2`) and the
+    // current identity no longer matches. Ordinary operations use `lookup`.
+    let Some((socket_id, _)) = detach(fd) else {
+        return;
+    };
     if let Some(cap) = net_cap() {
         close_net_socket(cap, socket_id);
     }

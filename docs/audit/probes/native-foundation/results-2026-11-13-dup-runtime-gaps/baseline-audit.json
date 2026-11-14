@@ -1,0 +1,27 @@
+{
+  "historical-suite-2": {
+    "rows": 94,
+    "pass": 94
+  },
+  "historical-replacement-2": {
+    "pass_lines": 51,
+    "fail_lines": []
+  },
+  "historical-suite-4": {
+    "rows": 94,
+    "pass": 94
+  },
+  "historical-replacement-4": {
+    "pass_lines": 51,
+    "fail_lines": []
+  },
+  "historical-reproduced-failures": [
+    "dup2-replacement: FAIL local-target-registration-invalidated (errno=0)",
+    "dup2-replacement: FAIL tcp-target-registration-invalidated (errno=0)",
+    "dup2-replacement: FAIL replaced-tcp-target-fails-closed (errno=0)",
+    "dup2-replacement: FAIL tcp-target-invalidated-by-local-source (errno=107)",
+    "dup2-replacement: FAIL local-source-keeps-local-semantics (errno=107)",
+    "dup2-replacement: FAIL repeated-replacement-invalidates-each-registration (errno=107)",
+    "dup2-replacement: FAIL failures=6"
+  ]
+}

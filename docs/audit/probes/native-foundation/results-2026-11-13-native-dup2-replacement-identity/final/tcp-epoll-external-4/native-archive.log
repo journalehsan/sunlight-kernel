@@ -1,0 +1,51 @@
+$ bash tools/build_native_c.sh
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: module `NetOp` should have a snake case name
+ --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+warning: field `terminal` is never read
+   --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/sun_exec.rs:767:5
+    |
+762 | struct ChronosManifest<'a> {
+    |        --------------- field in this struct
+...
+767 |     terminal: bool,
+    |     ^^^^^^^^
+    |
+    = note: `ChronosManifest` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `sunlight-libc` (lib) generated 1 warning
+    Finished `release` profile [optimized] target(s) in 0.06s
+
+exit=0

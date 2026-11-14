@@ -1,0 +1,17 @@
+{
+  "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a": "2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7",
+  "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a": "2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7",
+  "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libsunlight_libc-2d48049d6dc48c05.rlib": "cd726f956f83ed02061afc228c4a64ba5264d5098bdc694b469c219945376e34",
+  "/home/ehsantor/Projects/sunlightos-kernel/target/native-c/x86_64-sunlightos/release/deps/libcore-98dfb8ed3b8bdfbd.rlib": "75d136f423e59421034be2b402561911e4eec16c8cf9360ba3f8101a2f622324",
+  "/home/ehsantor/Projects/sunlightos-kernel/target/x86_64-unknown-none/debug/sunlight-kernel": "97d9bb2204549ec7548b14fc6d2c90af0d3986dfdd5292aa5eec8ba21e931594",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/wrapper.elf": "4913fb5cdf19279dd7ce668e02345d2311b1c3162dec8165ede938654889591c",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/linux-handler.elf": "479f48a0532c96be64f7c8bcc4c6b33cf1c0ea8da7764e71c626c78d40c4b1af",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/linux-entry.elf": "f5239234150cb7ca71446ed23bc0b22c6623a9cda522a5edf517949b5b2d2a58",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/dup2-replacement.elf": "7656c46c88c982929011c035db03ebe96e0b4dc73b7bb8826f8354a7dad83adc",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/epoll-lifecycle.elf": "ed96ed1a41f4d2ab87668bc7018348b918930f9315d251859cf498b2b243b4af",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/epoll.elf": "ce5615af7317414917368c2cffd140cddf8605d534a655be960e5ccba88d56ce",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/inet-socket.elf": "690ee89e5823182b324c5f0b989229f2cd0c99730754417bd6472f3fd6fde399",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/tcp-epoll-lt.elf": "24624db60877ad946d7837100b4da5cced1f8ceb8606a5714f071197f53a381a",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/tcp-epoll-revalidation.elf": "a815fbdc0ecec3698d2d652424b574381516227aacdff6ac280e792dbf5b23b6",
+  "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/focused-final/adapter.o": "1150ff820d76abd7468402c03c45763726b39b31c2040084dfe47b77e3752274"
+}

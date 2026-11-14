@@ -1,0 +1,38 @@
+[
+  {
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-revalidation.elf",
+      "--net",
+      "--cpus",
+      "2",
+      "--expect-exit",
+      "0",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-2"
+    ],
+    "exit": 0,
+    "archive_sha256": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+  },
+  {
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-revalidation.elf",
+      "--net",
+      "--cpus",
+      "4",
+      "--expect-exit",
+      "0",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-4"
+    ],
+    "exit": 0,
+    "archive_sha256": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441"
+  }
+]

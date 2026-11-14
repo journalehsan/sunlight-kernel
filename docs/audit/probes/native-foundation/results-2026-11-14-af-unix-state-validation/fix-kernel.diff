@@ -1,0 +1,283 @@
+diff --git a/kernel/src/arch/x86_64/syscall.rs b/kernel/src/arch/x86_64/syscall.rs
+index 75017ba8c..839803b06 100644
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -1025,6 +1025,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
+         174 => sys_native_signal(frame),
+         175 => sys_native_socket(frame),
+         176 => sys_native_terminal(frame),
++        177 => sys_native_epoll_bridge(frame),
+         160 => sys_foreground(frame),
+         23 => sys_tty_stdin_push(frame),
+         24 => sys_tty_stdout_pull(frame),
+@@ -6602,11 +6603,10 @@ fn sys_linux_dup3(frame: &mut SyscallFrame) -> u64 {
+     }
+     let cloexec = flags & sunlight_compat_linux::abi::O_CLOEXEC != 0;
+     let mut sched = crate::sched::SCHEDULER.lock();
+-    match sched
+-        .current_shared_process_mut()
+-        .fd_table
+-        .dup3(old_fd, new_fd, cloexec)
+-    {
++    let process = sched.current_shared_process_mut();
++    // dup3 replaces the target's descriptor identity; see sys_dup2.
++    invalidate_replaced_fd(process, old_fd, new_fd);
++    match process.fd_table.dup3(old_fd, new_fd, cloexec) {
+         Ok((fd, displaced)) => {
+             drop(sched);
+             if let Some(handle) = displaced {
+@@ -7447,6 +7447,15 @@ fn sys_native_epoll_ctl(frame: &mut SyscallFrame) -> u64 {
+ }
+ 
+ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
++    epoll_ctl_impl_external(frame, linux, None, linux)
++}
++
++fn epoll_ctl_impl_external(
++    frame: &mut SyscallFrame,
++    linux: bool,
++    external: Option<u64>,
++    error_linux: bool,
++) -> u64 {
+     use crate::process::epoll::{EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD, EPOLL_EVENT_SIZE};
+ 
+     let epfd = frame.rdi as i32;
+@@ -7454,16 +7463,16 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+     let target_fd = frame.rdx as i32;
+     let event_ptr = frame.r10;
+     if !matches!(op, EPOLL_CTL_ADD | EPOLL_CTL_MOD | EPOLL_CTL_DEL) || epfd == target_fd {
+-        return epoll_errno(linux, 22);
++        return epoll_errno(error_linux, 22);
+     }
+ 
+     let epoll_idx = {
+         let sched = crate::sched::SCHEDULER.lock();
+         let Some(ep_entry) = sched.current_shared_process().fd_table.get(epfd).copied() else {
+-            return epoll_errno(linux, 9);
++            return epoll_errno(error_linux, 9);
+         };
+         if !ep_entry.handle.is_epoll() {
+-            return epoll_errno(linux, 9);
++            return epoll_errno(error_linux, 9);
+         }
+ 
+         // Target must exist for ADD/MOD (except we allow ADD only for open fds).
+@@ -7474,7 +7483,7 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+                 .get(target_fd)
+                 .is_none()
+             {
+-                return epoll_errno(linux, 9);
++                return epoll_errno(error_linux, 9);
+             }
+         }
+ 
+@@ -7488,12 +7497,12 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+         (0u32, [0u8; 8])
+     } else {
+         if event_ptr == 0 {
+-            return epoll_errno(linux, 14);
++            return epoll_errno(error_linux, 14);
+         }
+         let mut wire = [0u8; 16];
+         let size = if linux { EPOLL_EVENT_SIZE } else { 16 };
+         if crate::memory::user::copy_from_current(event_ptr, &mut wire[..size]).is_err() {
+-            return epoll_errno(linux, 14);
++            return epoll_errno(error_linux, 14);
+         }
+         let events = u32::from_ne_bytes(wire[0..4].try_into().unwrap());
+         let mut data = [0u8; 8];
+@@ -7502,9 +7511,39 @@ fn epoll_ctl_impl(frame: &mut SyscallFrame, linux: bool) -> u64 {
+         (events, data)
+     };
+ 
+-    match crate::process::epoll::ctl(epoll_idx, op, target_fd, events, data) {
++    // Revalidate under the same scheduler lock as registration mutation/close.
++    let sched = crate::sched::SCHEDULER.lock();
++    let process = sched.current_shared_process();
++    if !process
++        .fd_table
++        .get(epfd)
++        .is_some_and(|e| e.handle.is_epoll() && e.handle.epoll_index() == epoll_idx)
++    {
++        return epoll_errno(error_linux, 9);
++    }
++    if op != EPOLL_CTL_DEL {
++        let Some(target) = process.fd_table.get(target_fd) else {
++            return epoll_errno(error_linux, 9);
++        };
++        if external.is_some() {
++            if !target.handle.is_inet_socket() {
++                return epoll_errno(error_linux, 22);
++            }
++            if crate::process::inet_socket::generation(target.handle.inet_socket_index())
++                != frame.r9 >> 8
++            {
++                return epoll_errno(error_linux, 9);
++            }
++        }
++        if target.handle.is_inet_socket()
++            && events & (crate::process::epoll::EPOLLET | crate::process::epoll::EPOLLONESHOT) != 0
++        {
++            return epoll_errno(error_linux, 22);
++        }
++    }
++    match crate::process::epoll::ctl_external(epoll_idx, op, target_fd, events, data, external) {
+         Ok(()) => 0,
+-        Err(e) => epoll_error(linux, e),
++        Err(e) => epoll_error(error_linux, e),
+     }
+ }
+ 
+@@ -7518,6 +7557,99 @@ fn sys_linux_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+     epoll_wait_impl(frame, true)
+ }
+ 
++/// Native-only bridge. No user pointer is used while holding SCHEDULER.
++/// mode 0 snapshots all external interests; mode 1 merges observations with
++/// local readiness; mode 2 installs an external identity through ordinary ctl.
++fn sys_native_epoll_bridge(frame: &mut SyscallFrame) -> u64 {
++    use crate::process::epoll::{self, ExternalObservation};
++    let mode = frame.r9 & 0xff;
++    if mode > 3 || (mode != 2 && frame.r9 != mode) {
++        return linux_errno(22);
++    }
++    if mode == 3 {
++        let sched = crate::sched::SCHEDULER.lock();
++        let Some(entry) = sched
++            .current_shared_process()
++            .fd_table
++            .get(frame.rdi as i32)
++        else {
++            return linux_errno(9);
++        };
++        return if entry.handle.is_inet_socket() {
++            crate::process::inet_socket::generation(entry.handle.inet_socket_index())
++        } else {
++            0
++        };
++    }
++    if mode == 2 {
++        return epoll_ctl_impl_external(
++            frame,
++            false,
++            (frame.r8 != u64::MAX).then_some(frame.r8),
++            true,
++        );
++    }
++    let count = frame.rdx as usize;
++    if count > 64 || (mode == 0 && count != 64) || (mode == 1 && (frame.r8 == 0 || frame.r8 > 128))
++    {
++        return linux_errno(22);
++    }
++    let mut observations = alloc::vec![ExternalObservation::default(); count];
++    if mode == 1 && count != 0 {
++        let bytes = unsafe {
++            core::slice::from_raw_parts_mut(observations.as_mut_ptr() as *mut u8, count * 32)
++        };
++        if crate::memory::user::copy_from_current(frame.rsi, bytes).is_err() {
++            return linux_errno(14);
++        }
++        if observations
++            .iter()
++            .any(|o| o.reserved != 0 || o.ready & !0x1d != 0)
++        {
++            return linux_errno(22);
++        }
++    }
++    let sched = crate::sched::SCHEDULER.lock();
++    let Some(entry) = sched
++        .current_shared_process()
++        .fd_table
++        .get(frame.rdi as i32)
++    else {
++        return linux_errno(9);
++    };
++    if !entry.handle.is_epoll() {
++        return linux_errno(9);
++    }
++    let idx = entry.handle.epoll_index();
++    if mode == 0 {
++        let snapshot = match epoll::external_snapshot(idx, sched.current_shared_process()) {
++            Ok(s) => s,
++            Err(e) => return linux_errno(e.to_linux_errno()),
++        };
++        drop(sched);
++        let bytes = unsafe {
++            core::slice::from_raw_parts(snapshot.as_ptr() as *const u8, snapshot.len() * 32)
++        };
++        if !bytes.is_empty() && crate::memory::user::copy_to_current(frame.rsi, bytes).is_err() {
++            return linux_errno(14);
++        }
++        return snapshot.len() as u64;
++    }
++    let ready = match epoll::collect_ready_external(idx, frame.r8 as usize, &sched, &observations) {
++        Ok(r) => r,
++        Err(e) => return linux_errno(e.to_linux_errno()),
++    };
++    drop(sched);
++    let mut bytes = alloc::vec![0u8; ready.len() * 16];
++    for (i, event) in ready.iter().enumerate() {
++        bytes[i * 16..i * 16 + 4].copy_from_slice(&event.events.to_ne_bytes());
++        bytes[i * 16 + 8..i * 16 + 16].copy_from_slice(&event.data);
++    }
++    if !bytes.is_empty() && crate::memory::user::copy_to_current(frame.r10, &bytes).is_err() {
++        return linux_errno(14);
++    }
++    ready.len() as u64
++}
+ fn sys_native_epoll_wait(frame: &mut SyscallFrame) -> u64 {
+     epoll_wait_impl(frame, false)
+ }
+@@ -7908,6 +8040,12 @@ fn sys_linux_connect(frame: &mut SyscallFrame) -> u64 {
+         });
+     }
+     let index = handle.unix_socket_index();
++    // Linux `connect(2)` on a socket in LISTEN state fails with EINVAL and
++    // leaves the listener, its pathname and its pending queue untouched.
++    // Reject before any endpoint allocation or destructive handle swap.
++    if crate::process::unix_socket::is_listening(index) {
++        return linux_errno(sunlight_compat_linux::abi::EINVAL as u64);
++    }
+     let Some(listener) = crate::process::unix_socket::find_listener(&path) else {
+         if unix_trace_budget() {
+             crate::serial_println!("[HELIOS-UNIX] connect fd={} refused", fd);
+@@ -10333,11 +10471,9 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+     let old_fd = frame.rdi as i32;
+     let new_fd = frame.rsi as i32;
+     let mut sched = crate::sched::SCHEDULER.lock();
+-    match sched
+-        .current_shared_process_mut()
+-        .fd_table
+-        .dup2(old_fd, new_fd)
+-    {
++    let process = sched.current_shared_process_mut();
++    invalidate_replaced_fd(process, old_fd, new_fd);
++    match process.fd_table.dup2(old_fd, new_fd) {
+         Ok((fd, displaced)) => {
+             drop(sched);
+             if let Some(handle) = displaced {
+@@ -10349,6 +10485,24 @@ fn sys_dup2(frame: &mut SyscallFrame) -> u64 {
+     }
+ }
+ 
++/// A registration is keyed by fd number, so it cannot survive a descriptor
++/// replacement: it would report the readiness of whatever object the number
++/// was rebound to, under the old registration token and `event.data`. With a
++/// userspace transport attachment that still names the replaced endpoint, it
++/// would even deliver the replaced endpoint's readiness. Descriptor
++/// replacement therefore ends the target's registrations, exactly as close
++/// does. Validation mirrors `FdTable::dup2`, so an invalid source, an invalid
++/// target or `old_fd == new_fd` leaves the target untouched.
++fn invalidate_replaced_fd(process: &crate::process::Process, old_fd: i32, new_fd: i32) {
++    if old_fd == new_fd || !(0..256).contains(&new_fd) {
++        return;
++    }
++    if process.fd_table.get(old_fd).is_none() {
++        return;
++    }
++    crate::process::epoll::detach_fd(new_fd, process);
++}
++
+ /// Syscall: pipe (47)
+ /// rdi = pointer to int[2] array for (read_fd, write_fd)
+ fn sys_pipe(frame: &mut SyscallFrame) -> u64 {

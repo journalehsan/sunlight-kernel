@@ -1,0 +1,1132 @@
+{
+  "guest_runs": 34,
+  "case_resource_records": 218,
+  "unclean_records": [],
+  "support_exits": [
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-2/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-4/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-SERVICE-EXIT] code=0"
+    }
+  ],
+  "remaining_guest_peer_processes": [],
+  "records": [
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-2-final/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-4-final/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-lifecycle-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/revalidation-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=149 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=1 exit=0 stdout=0 stderr=20 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=2 exit=23 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=3 exit=0 stdout=10 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=4 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=5 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=6 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=7 exit=0 stdout=33 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=8 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=9 exit=0 stdout=34 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=10 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=11 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=12 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=13 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=14 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=15 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=16 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=17 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=18 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=19 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=20 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=21 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=22 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=23 exit=0 stdout=201 stderr=12 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=24 exit=0 stdout=12 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=25 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=26 exit=0 stdout=55 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=27 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=28 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=29 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=30 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=31 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=32 exit=0 stdout=17 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=33 exit=0 stdout=27 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=34 exit=0 stdout=17 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=35 exit=0 stdout=26 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=36 exit=0 stdout=26 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=37 exit=134 stdout=16 stderr=146 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=38 exit=0 stdout=14 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=39 exit=0 stdout=9 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=40 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=41 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=42 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=43 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=44 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=45 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=46 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=47 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=48 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=49 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=50 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=51 exit=20 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=52 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=53 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=54 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=55 exit=138 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=56 exit=139 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=57 exit=31 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=58 exit=139 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=59 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=60 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=61 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=62 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=63 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=64 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=65 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=66 exit=0 stdout=21 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=67 exit=0 stdout=104 stderr=19 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=68 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=69 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=70 exit=0 stdout=9 stderr=10 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=71 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=72 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=73 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=74 exit=0 stdout=3 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=75 exit=0 stdout=3 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=76 exit=0 stdout=32 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=77 exit=27 stdout=1 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=78 exit=29 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=79 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=80 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=81 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=82 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=83 exit=0 stdout=66 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=84 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=85 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=86 exit=0 stdout=268 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=87 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=88 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=89 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=90 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=91 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=92 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-epoll-lifecycle-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-loopback-echo-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=149 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/inet-lt-2/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/inet-lt-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=1 exit=0 stdout=0 stderr=20 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=2 exit=23 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=3 exit=0 stdout=10 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=4 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=5 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=6 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=7 exit=0 stdout=33 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=8 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=9 exit=0 stdout=34 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=10 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=11 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=12 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=13 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=14 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=15 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=16 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=17 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=18 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=19 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=20 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=21 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=22 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=23 exit=0 stdout=201 stderr=12 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=24 exit=0 stdout=12 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=25 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=26 exit=0 stdout=55 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=27 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=28 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=29 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=30 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=31 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=32 exit=0 stdout=17 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=33 exit=0 stdout=27 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=34 exit=0 stdout=17 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=35 exit=0 stdout=26 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=36 exit=0 stdout=26 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=37 exit=134 stdout=16 stderr=146 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=38 exit=0 stdout=14 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=39 exit=0 stdout=9 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=40 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=41 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=42 exit=134 stdout=6 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=43 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=44 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=45 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=46 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=47 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=48 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=49 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=50 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=51 exit=20 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=52 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=53 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=54 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=55 exit=138 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=56 exit=139 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=57 exit=31 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=58 exit=139 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=59 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=60 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=61 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=62 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=63 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=64 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=65 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=66 exit=0 stdout=21 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=67 exit=0 stdout=104 stderr=19 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=68 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=69 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=70 exit=0 stdout=9 stderr=10 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=71 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=72 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=73 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=74 exit=0 stdout=3 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=75 exit=0 stdout=3 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=76 exit=0 stdout=32 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=77 exit=27 stdout=1 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=78 exit=29 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=79 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=80 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=81 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=82 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=83 exit=0 stdout=66 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=84 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=85 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=86 exit=0 stdout=268 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=87 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=88 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=89 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=90 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=91 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/suite-4/serial.log",
+      "record": "[NATIVE-C-RESULT] case=92 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=150 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-echo-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=210 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-external-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=636 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-external-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=1366 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=59 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-stall-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=150 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-external-echo-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=210 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-external-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=636 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-external-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-pressure-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=1435 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/regress-poll-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=59 stderr=0 clean=1 file_before=0 file_after=0 private_before=2381 private_after=1860 pt_before=34 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=1006 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-loopback-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=1079 stderr=0 clean=1 file_before=0 file_after=0 private_before=10575 private_after=1860 pt_before=50 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-2-repeat/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=638 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=637 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-pressure-external-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=637 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-2-repeat/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-4/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    },
+    {
+      "log": "docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/epoll-external-2/guest/serial.log",
+      "record": "[NATIVE-C-RESULT] case=0 exit=0 stdout=157 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2",
+      "clean": true
+    }
+  ]
+}

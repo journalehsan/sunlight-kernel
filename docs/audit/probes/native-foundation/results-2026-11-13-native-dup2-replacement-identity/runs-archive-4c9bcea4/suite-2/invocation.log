@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 2 --timeout 600 --out docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/suite-2

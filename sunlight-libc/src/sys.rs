@@ -25,6 +25,7 @@ pub const SYS_RECV: u64 = 170;
 pub const SYS_EPOLL_CREATE1: u64 = 171;
 pub const SYS_EPOLL_CTL: u64 = 172;
 pub const SYS_EPOLL_WAIT: u64 = 173;
+pub const SYS_EPOLL_BRIDGE: u64 = 177;
 pub const SYS_DUP: u64 = 45;
 pub const SYS_DUP2: u64 = 46;
 pub const SYS_FSTAT: u64 = 48;

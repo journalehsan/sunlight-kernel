@@ -1,0 +1,2 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -I tools/native-c/tests docs/audit/probes/native-foundation/results-2026-11-13-native-tcp-epoll-lt-contract-closure/retry-probe-epoll.c -o docs/audit/probes/native-foundation/results-2026-11-13-native-tcp-epoll-lt-contract-closure/retry-probe-client.elf
+exit=0

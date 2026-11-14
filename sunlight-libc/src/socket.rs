@@ -145,19 +145,27 @@ pub extern "C" fn epoll_create1(flags: i32) -> i32 {
 /// ADD/MOD require a valid `event`; DEL may pass null.
 #[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
 pub unsafe extern "C" fn epoll_ctl(epfd: i32, op: i32, fd: i32, event: *mut EpollEvent) -> i32 {
-    match sys::check(sys::syscall4(
-        sys::SYS_EPOLL_CTL,
+    // Capture the kernel endpoint generation before reading the bridge map.
+    // A close/reuse between these operations makes ctl fail, never attach an
+    // old transport identity to a newly allocated placeholder.
+    let generation = sys::syscall6(sys::SYS_EPOLL_BRIDGE, fd as u64, 0, 0, 0, 0, 3) as i64;
+    if generation < 0 {
+        return fail_i32((-generation) as i32);
+    }
+    let identity = crate::net_bridge::lookup(fd).unwrap_or(u64::MAX);
+    let result = sys::syscall6(
+        sys::SYS_EPOLL_BRIDGE,
         epfd as u64,
         op as u64,
         fd as u64,
         event as u64,
-    )) {
-        Ok(_) => 0,
-        Err(error) => {
-            errno::set_from_errno(error);
-            -1
-        }
+        identity,
+        2 | ((generation as u64) << 8),
+    ) as i64;
+    if result < 0 {
+        return fail_i32((-result) as i32);
     }
+    0
 }
 
 /// # Safety
@@ -175,20 +183,89 @@ pub unsafe extern "C" fn epoll_wait(
     if events.is_null() {
         return fail_i32(errno::EFAULT);
     }
-    match sys::check(sys::syscall4(
-        sys::SYS_EPOLL_WAIT,
-        epfd as u64,
-        events as u64,
-        maxevents as u64,
-        timeout_ms as u64,
-    )) {
-        Ok(n) => n as i32,
-        Err(error) => {
-            errno::set_from_errno(error);
-            -1
+    // One deadline covers snapshots, IPC, and every internal wait slice.
+    let Some(started) = crate::multiplex::monotonic_ms() else {
+        return -1;
+    };
+    let deadline = (timeout_ms > 0).then(|| started.saturating_add(timeout_ms as u64));
+    loop {
+        let mut observations = [ExternalObservation::default(); 64];
+        let count = sys::syscall6(
+            sys::SYS_EPOLL_BRIDGE,
+            epfd as u64,
+            observations.as_mut_ptr() as u64,
+            64,
+            0,
+            0,
+            0,
+        ) as i64;
+        if count < 0 {
+            return fail_i32((-count) as i32);
+        }
+        for observation in &mut observations[..count as usize] {
+            let Some(identity) = crate::net_bridge::lookup(observation.fd) else {
+                continue;
+            };
+            if observation.identity == u64::MAX {
+                observation.identity = identity;
+            } else if identity != observation.identity {
+                continue;
+            }
+            let interest = crate::multiplex::requested_interest(observation.events as i16);
+            let ready = match crate::net_bridge::wait_any_per_interest(
+                &[observation.identity],
+                &[interest],
+                0,
+            ) {
+                Ok(crate::net_bridge::WaitOutcome::Ready(id, bits))
+                    if id == observation.identity =>
+                {
+                    crate::multiplex::map_ready(bits, observation.events as i16)
+                }
+                Ok(crate::net_bridge::WaitOutcome::Gone) => (EPOLLERR | EPOLLHUP) as i16,
+                Ok(_) => 0,
+                Err(error) => return fail_i32(error),
+            };
+            if crate::net_bridge::lookup(observation.fd) == Some(observation.identity) {
+                observation.ready = ready as u32;
+            }
+        }
+        // Kernel tokens reject observations made before MOD, DEL, or close.
+        let result = sys::syscall6(
+            sys::SYS_EPOLL_BRIDGE,
+            epfd as u64,
+            observations.as_ptr() as u64,
+            count as u64,
+            events as u64,
+            (maxevents as u64).min(128),
+            1,
+        ) as i64;
+        if result < 0 {
+            return fail_i32((-result) as i32);
+        }
+        if result != 0 || timeout_ms == 0 {
+            return result as i32;
+        }
+        let Some(now) = crate::multiplex::monotonic_ms() else {
+            return -1;
+        };
+        let remaining = deadline.map_or(20, |end| end.saturating_sub(now).min(20));
+        if remaining == 0 {
+            return 0;
+        }
+        // Bounded sleep revisits every registration, including sets larger
+        // than NetWait's batch capacity. No registration lock spans IPC/sleep.
+        let delay = crate::time::Timespec {
+            tv_sec: 0,
+            tv_nsec: (remaining * 1_000_000) as i64,
+        };
+        if crate::time::nanosleep(&delay, core::ptr::null_mut()) != 0 {
+            return -1;
         }
     }
 }
+
+use sunlight_ipc::native_epoll::ExternalObservation;
 
 /// Attach an AF_INET/SOCK_STREAM descriptor to the `net` service.
 ///

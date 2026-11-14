@@ -1,0 +1,3 @@
+$ /usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror tools/native-c/tests/tcp-poll-external-client.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/regressions/poll-external-2cpu/tcp-poll-client.elf
+
+exit=0

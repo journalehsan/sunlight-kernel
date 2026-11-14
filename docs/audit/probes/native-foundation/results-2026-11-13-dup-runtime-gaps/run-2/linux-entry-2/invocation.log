@@ -1,0 +1,1 @@
+$ /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry.elf --cpus 2 --timeout 110 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-entry-2

@@ -1,0 +1,44 @@
+{
+  "mode": "loopback",
+  "cpus": 2,
+  "memory_mib": 2048,
+  "run_id": "loopback-2cpu-20261113T190951Z",
+  "net_subnet": null,
+  "host_alias": "10.0.2.2",
+  "commands": [
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Wl,-t tools/native-c/tests/tcp-epoll-pressure-loopback-client.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-pressure-loopback-2/tcp-poll-pressure-client.elf",
+    "/usr/bin/python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Wl,-t tools/native-c/tests/tcp-poll-pressure-service.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-pressure-loopback-2/tcp-poll-pressure-service.elf",
+    "/usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-pressure-loopback-2/tcp-poll-pressure-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-pressure-loopback-2/guest --timeout 400 --service /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/epoll-pressure-loopback-2/tcp-poll-pressure-service.elf"
+  ],
+  "checks": {
+    "native_archive": true,
+    "client_build": true,
+    "service_build": true,
+    "guest_runner": true,
+    "guest_pass_line": true,
+    "guest_clean": true,
+    "guest_done": true,
+    "dhcp_lease_present": true,
+    "loopback_no_nic_tcp": true
+  },
+  "guest_stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=2 filled=32768 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=3 filled=54708 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=4 filled=77824 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=5 filled=102400 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=6 filled=122880 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=7 filled=147456 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=8 filled=172032 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=9 filled=192512 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=10 filled=211816 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=11 filled=232296 held_ms=150 recovery_ms=20\npoll-pressure-loopback: cycle=12 filled=249856 held_ms=150 recovery_ms=20\npoll-pressure-loopback: PASS cycles=12 unstable=20 saturated_bytes=259508 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+  "guest_pass_line": "poll-pressure-loopback: PASS cycles=12 unstable=20 saturated_bytes=259508 bytes=262152 socket_live=0 listener_live=0 stream_live=0",
+  "guest_fail_line": null,
+  "guest_clean": true,
+  "guest_done": true,
+  "dhcp_lease": {
+    "address": "10.0.2.15",
+    "prefix": 24,
+    "gateway": "10.0.2.2",
+    "dns": "10.0.2.3"
+  },
+  "nic_capture": "frames=4\nipv4-proto-17=4\n",
+  "pcap": {
+    "frames": 4,
+    "arp": 0,
+    "ipv4": 4,
+    "tcp": 0,
+    "udp": 4
+  },
+  "result": "PASS"
+}

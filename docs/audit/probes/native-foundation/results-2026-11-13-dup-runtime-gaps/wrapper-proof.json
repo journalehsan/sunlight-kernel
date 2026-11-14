@@ -1,0 +1,7 @@
+{
+  "production_archive_in_map": true,
+  "no_host_library_path": true,
+  "wrapper_call_in_adapter": true,
+  "forwarding_real_release_call": true,
+  "one_bridge_lookup_definition": true
+}

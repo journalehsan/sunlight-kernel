@@ -1,0 +1,34 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0   400000     1 . = 0x0000000000400000
+          400000           400000     2242    16 .text
+          400000           400000     2242    16         /tmp/unix-replacement-e172e7.o:(.text)
+          400000           400000        0     1                 _start
+          400020           400020     200d     1                 main
+          402030           402030      19c     1                 sc
+          4021d0           4021d0       37     1                 ctl
+          402210           402210       32     1                 wait
+          402242           402242      dbe     1 . = ALIGN(4096)
+          403000           403000      f08     2 .rodata
+          403000           403000       a0     2         <internal>:(.rodata.cst32)
+          4030a0           4030a0      e50     1         <internal>:(.rodata.str1.1)
+          403ef0           403ef0       18     1         /tmp/unix-replacement-e172e7.o:(.rodata)
+          403f08           403f08       f8     1 . = ALIGN(4096)
+          404000           404000        0     1 .tdata
+          404000           404000        0     1         __tls_tdata_start = .
+          404000           404000        0     1         __tls_tdata_end = .
+          404000           404000        0     1 .tbss
+          404000           404000        0     1         __tls_tbss_start = .
+          404000           404000        0     1         __tls_tbss_end = .
+          404000           404000        0     1 __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss))
+          404000           404000        0     1 __tls_size = __tls_tbss_end - __tls_tdata_start
+          404000           404000        0     1 . = ALIGN(4096)
+          404000           404000        0     1 . = ALIGN(4096)
+          404000           404000        4     4 .bss
+          404000           404000        4     4         /tmp/unix-replacement-e172e7.o:(.bss)
+          404000           404000        4     1                 failures
+               0                0      150     8 .symtab
+               0                0      150     8         <internal>:(.symtab)
+               0                0       3b     1 .shstrtab
+               0                0       3b     1         <internal>:(.shstrtab)
+               0                0       8e     1 .strtab
+               0                0       8e     1         <internal>:(.strtab)

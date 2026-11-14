@@ -1,0 +1,3 @@
+$ llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-cpp-runtime-link-closure/cxx-runtime-link-check/execution.elf
+
+exit=0

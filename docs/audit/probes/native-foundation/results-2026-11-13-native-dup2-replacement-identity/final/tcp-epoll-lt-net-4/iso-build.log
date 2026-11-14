@@ -1,0 +1,30 @@
+$ bash tools/make_hybrid_iso.sh /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/kernel.elf /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/guest.iso /home/ehsantor/Projects/sunlightos-kernel/target/limine /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/media
+[limine] Limine already built (BIOS + UEFI CD artifacts present).
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Drive current: -outdev 'stdio:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is blank
+Media summary: 0 sessions, 0 data blocks, 0 data, 54.8g free
+Added to ISO image: directory '/'='/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/media/target/iso_root'
+xorriso : UPDATE :      11 files added in 1 seconds
+xorriso : UPDATE :      11 files added in 1 seconds
+xorriso : UPDATE :  98.39% done
+ISO image produced: 27601 sectors
+Written to medium : 27601 sectors at LBA 0
+Writing to 'stdio:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/guest.iso' completed successfully.
+
+Physical block size of 512 bytes.
+Installing to GPT. Logical block size of 512 bytes.
+Secondary header at LBA 0x1af43.
+Secondary header valid.
+GPT partition NOT specified. Attempting GPT embedding.
+New maximum count of partition entries: 44.
+Stage 2 to be located at 0x3e00 and 0x35e4400.
+Reminder: Remember to copy the limine-bios.sys file in either
+          the root, /boot, /limine, or /boot/limine directories of
+          one of the partitions on the device, or boot will fail!
+Limine BIOS stages installed successfully!
+hybrid ISO ready: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/tcp-epoll-lt-net-4/guest.iso
+
+exit=0

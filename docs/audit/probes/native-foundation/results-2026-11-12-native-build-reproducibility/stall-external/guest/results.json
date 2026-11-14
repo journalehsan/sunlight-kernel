@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "tcp-stall: run=stall-2cpu-20261112T204947Z dest=10.0.2.2:43575\ntcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

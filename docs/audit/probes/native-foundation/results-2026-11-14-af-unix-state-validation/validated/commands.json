@@ -1,0 +1,137 @@
+[
+  {
+    "name": "linux-link",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-mno-red-zone",
+      "-ffreestanding",
+      "-fno-stack-protector",
+      "-fno-pie",
+      "-nostdlib",
+      "-static",
+      "-fuse-ld=lld",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "tools/native-c/tests/unix-state-validation.c",
+      "-Wl,-T,services/user-space.ld",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-2",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "70",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux-2",
+      "--linux-actor"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "linux-4",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "70",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/linux-4",
+      "--linux-actor"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "native-link",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-mno-red-zone",
+      "-ffreestanding",
+      "-fno-stack-protector",
+      "-fno-pie",
+      "-nostdlib",
+      "-static",
+      "-fuse-ld=lld",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-DNATIVE_ACTOR",
+      "tools/native-c/tests/unix-state-validation.c",
+      "-Wl,-T,services/user-space.ld",
+      "-Wl,-Map=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native.map",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "native-2",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "70",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "native-4",
+    "command": [
+      "timeout",
+      "--kill-after=10",
+      "300",
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "70",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-state-validation/validated/native-4"
+    ],
+    "exit": 0
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "tools/native-c/tests/dup-runtime.c": "91f1ac77ada515777a12621c942869f956bcd80af6a4c820f6d22cbd94b678b3",
+  "tools/native-c/tests/dup2-wrapper-adapter.rs": "7d010db8a8acffc6acedffcda34c8fba8c1b49e219426d1f6081ac3b3ce46802",
+  "tools/native-c/tests/dup3-linux-entry.c": "4162ccab1ac4ef1b9ca891bc397f00376d6a29140be4d58297258734d026872b",
+  "tools/native-c/tests/run_dup_runtime.py": "c8064c5d5c7ac501dacbc4576f901e0d305af7bd843316a9928e773794ac319b",
+  "tools/native-c/guest.py": "fb398af92f49d151440fb95ea82282435757b5f7e446af35e8c36622526d8791",
+  "tools/native-c/tests/dup2-replacement.c": "be6a7aae0d7f14295986d07403671900511a79e80d2c6241daa037372829a2e7"
+}

@@ -1,0 +1,369 @@
+{
+  "native-build": {
+    "build": "PASS"
+  },
+  "archive-symbols": {
+    "build": "PASS"
+  },
+  "adapter-build": {
+    "build": "PASS"
+  },
+  "wrapper-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "linux-handler-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "linux-entry-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "dup2-replacement-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "epoll-lifecycle-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "epoll-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "inet-socket-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "tcp-epoll-lt-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "tcp-epoll-revalidation-link": {
+    "link": "PASS",
+    "build": "PASS"
+  },
+  "adapter.o-symbols": {
+    "build": "PASS"
+  },
+  "adapter.o-assembly": {
+    "build": "PASS"
+  },
+  "wrapper.elf-symbols": {
+    "build": "PASS"
+  },
+  "wrapper.elf-assembly": {
+    "build": "PASS"
+  },
+  "wrapper.elf-headers": {
+    "build": "PASS"
+  },
+  "wrapper.elf-undefined": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-symbols": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-assembly": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-headers": {
+    "build": "PASS"
+  },
+  "linux-handler.elf-undefined": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-symbols": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-assembly": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-headers": {
+    "build": "PASS"
+  },
+  "linux-entry.elf-undefined": {
+    "build": "PASS"
+  },
+  "wrapper-2": {
+    "runtime": "PASS",
+    "assertion_passes": 408,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=22462 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "linux-handler-2": {
+    "runtime": "PASS",
+    "assertion_passes": 415,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=21818 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "linux-entry-2": {
+    "runtime": "PASS",
+    "assertion_passes": 45,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=1773 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "dup2-replacement-2": {
+    "runtime": "PASS",
+    "assertion_passes": 51,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=2635 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "epoll-lifecycle-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "epoll-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "inet-socket-2": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "tcp-epoll-lt-2": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "tcp-epoll-revalidation-2": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "suite-2": {
+    "runtime": "PASS",
+    "total": 94,
+    "passed": 94
+  },
+  "wrapper-4": {
+    "runtime": "PASS",
+    "assertion_passes": 408,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=22462 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "linux-handler-4": {
+    "runtime": "PASS",
+    "assertion_passes": 415,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=21818 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "linux-entry-4": {
+    "runtime": "PASS",
+    "assertion_passes": 45,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=1773 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "dup2-replacement-4": {
+    "runtime": "PASS",
+    "assertion_passes": 51,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=2635 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "epoll-lifecycle-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "epoll-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "inet-socket-4": {
+    "runtime": "PASS",
+    "assertion_passes": 0,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=0 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "tcp-epoll-lt-4": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=194 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "tcp-epoll-revalidation-4": {
+    "runtime": "PASS",
+    "assertion_passes": 1,
+    "assertion_failures": [],
+    "inet_refs": [
+      [
+        "0",
+        "0"
+      ]
+    ],
+    "kernel_cleanup": [
+      "[NATIVE-C-RESULT] case=0 exit=0 stdout=135 stderr=0 clean=1 file_before=0 file_after=0 private_before=1860 private_after=1860 pt_before=24 pt_after=24 handles_before=0 handles_after=0 names_before=2 names_after=2"
+    ]
+  },
+  "suite-4": {
+    "runtime": "PASS",
+    "total": 94,
+    "passed": 94
+  },
+  "cxx-checker": {
+    "build": "PASS"
+  },
+  "poll-abi": {
+    "build": "PASS"
+  },
+  "kernel-check": {
+    "build": "PASS"
+  },
+  "libc-check": {
+    "build": "PASS"
+  },
+  "network-check": {
+    "build": "PASS"
+  },
+  "diff-check": {
+    "build": "PASS"
+  }
+}

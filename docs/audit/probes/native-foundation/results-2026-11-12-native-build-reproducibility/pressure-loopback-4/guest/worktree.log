@@ -1,0 +1,12 @@
+$ git status --short
+ M tools/native-c/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/
+?? docs/networking/2026-11-12_NATIVE_POLL_TCP_WRITE_BACKPRESSURE.md
+?? tools/native-c/run_poll_pressure.py
+?? tools/native-c/tcp_pressure_peer.py
+?? tools/native-c/tests/tcp-poll-pressure-client.c
+?? tools/native-c/tests/tcp-poll-pressure-loopback-client.c
+?? tools/native-c/tests/tcp-poll-pressure-service.c
+
+exit=0

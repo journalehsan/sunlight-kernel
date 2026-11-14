@@ -1,0 +1,852 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-objdump -dr --demangle /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/regression/linux-entry.elf
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/regression/linux-entry.elf:	file format elf64-x86-64
+
+Disassembly of section .text:
+
+0000000000400000 <_start>:
+  400000: 31 ed                        	xorl	%ebp, %ebp
+  400002: 48 83 e4 f0                  	andq	$-0x10, %rsp
+  400006: e8 15 00 00 00               	callq	0x400020 <main>
+  40000b: 89 c7                        	movl	%eax, %edi
+  40000d: b8 3c 00 00 00               	movl	$0x3c, %eax
+  400012: 0f 05                        	syscall
+  400014: 0f 0b                        	ud2
+  400016: 66 2e 0f 1f 84 00 00 00 00 00	nopw	%cs:(%rax,%rax)
+
+0000000000400020 <main>:
+  400020: 55                           	pushq	%rbp
+  400021: 48 89 e5                     	movq	%rsp, %rbp
+  400024: 48 83 ec 40                  	subq	$0x40, %rsp
+  400028: c6 45 ef 78                  	movb	$0x78, -0x11(%rbp)
+  40002c: c6 45 ee 79                  	movb	$0x79, -0x12(%rbp)
+  400030: c6 45 ed 00                  	movb	$0x0, -0x13(%rbp)
+  400034: 48 8d 75 f8                  	leaq	-0x8(%rbp), %rsi
+  400038: bf 16 00 00 00               	movl	$0x16, %edi
+  40003d: 31 c0                        	xorl	%eax, %eax
+  40003f: 41 89 c0                     	movl	%eax, %r8d
+  400042: 4c 89 c2                     	movq	%r8, %rdx
+  400045: 4c 89 c1                     	movq	%r8, %rcx
+  400048: e8 e3 0c 00 00               	callq	0x400d30 <sc>
+  40004d: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400051: 75 42                        	jne	0x400095 <main+0x75>
+  400053: 48 8d 75 f0                  	leaq	-0x10(%rbp), %rsi
+  400057: bf 16 00 00 00               	movl	$0x16, %edi
+  40005c: 31 c0                        	xorl	%eax, %eax
+  40005e: 41 89 c0                     	movl	%eax, %r8d
+  400061: 4c 89 c2                     	movq	%r8, %rdx
+  400064: 4c 89 c1                     	movq	%r8, %rcx
+  400067: e8 c4 0c 00 00               	callq	0x400d30 <sc>
+  40006c: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400070: 75 23                        	jne	0x400095 <main+0x75>
+  400072: be 01 00 00 00               	movl	$0x1, %esi
+  400077: 48 ba 66 16 40 00 00 00 00 00	movabsq	$0x401666, %rdx         # imm = 0x401666
+  400081: b9 1d 00 00 00               	movl	$0x1d, %ecx
+  400086: 31 c0                        	xorl	%eax, %eax
+  400088: 41 89 c0                     	movl	%eax, %r8d
+  40008b: 48 89 f7                     	movq	%rsi, %rdi
+  40008e: e8 9d 0c 00 00               	callq	0x400d30 <sc>
+  400093: eb 32                        	jmp	0x4000c7 <main+0xa7>
+  400095: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  40009c: 83 c0 01                     	addl	$0x1, %eax
+  40009f: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4000a6: be 01 00 00 00               	movl	$0x1, %esi
+  4000ab: 48 ba 27 12 40 00 00 00 00 00	movabsq	$0x401227, %rdx         # imm = 0x401227
+  4000b5: b9 1d 00 00 00               	movl	$0x1d, %ecx
+  4000ba: 31 c0                        	xorl	%eax, %eax
+  4000bc: 41 89 c0                     	movl	%eax, %r8d
+  4000bf: 48 89 f7                     	movq	%rsi, %rdi
+  4000c2: e8 69 0c 00 00               	callq	0x400d30 <sc>
+  4000c7: eb 00                        	jmp	0x4000c9 <main+0xa9>
+  4000c9: bf 23 01 00 00               	movl	$0x123, %edi            # imm = 0x123
+  4000ce: 31 c0                        	xorl	%eax, %eax
+  4000d0: 41 89 c0                     	movl	%eax, %r8d
+  4000d3: 4c 89 c6                     	movq	%r8, %rsi
+  4000d6: 4c 89 c2                     	movq	%r8, %rdx
+  4000d9: 4c 89 c1                     	movq	%r8, %rcx
+  4000dc: e8 4f 0c 00 00               	callq	0x400d30 <sc>
+  4000e1: 48 89 45 e0                  	movq	%rax, -0x20(%rbp)
+  4000e5: 48 83 7d e0 00               	cmpq	$0x0, -0x20(%rbp)
+  4000ea: 7c 23                        	jl	0x40010f <main+0xef>
+  4000ec: be 01 00 00 00               	movl	$0x1, %esi
+  4000f1: 48 ba 5d 11 40 00 00 00 00 00	movabsq	$0x40115d, %rdx         # imm = 0x40115D
+  4000fb: b9 1e 00 00 00               	movl	$0x1e, %ecx
+  400100: 31 c0                        	xorl	%eax, %eax
+  400102: 41 89 c0                     	movl	%eax, %r8d
+  400105: 48 89 f7                     	movq	%rsi, %rdi
+  400108: e8 23 0c 00 00               	callq	0x400d30 <sc>
+  40010d: eb 32                        	jmp	0x400141 <main+0x121>
+  40010f: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400116: 83 c0 01                     	addl	$0x1, %eax
+  400119: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400120: be 01 00 00 00               	movl	$0x1, %esi
+  400125: 48 ba e8 14 40 00 00 00 00 00	movabsq	$0x4014e8, %rdx         # imm = 0x4014E8
+  40012f: b9 1e 00 00 00               	movl	$0x1e, %ecx
+  400134: 31 c0                        	xorl	%eax, %eax
+  400136: 41 89 c0                     	movl	%eax, %r8d
+  400139: 48 89 f7                     	movq	%rsi, %rdi
+  40013c: e8 ef 0b 00 00               	callq	0x400d30 <sc>
+  400141: eb 00                        	jmp	0x400143 <main+0x123>
+  400143: 48 8b 04 25 88 17 40 00      	movq	0x401788, %rax
+  40014b: 48 89 45 d4                  	movq	%rax, -0x2c(%rbp)
+  40014f: 8b 04 25 90 17 40 00         	movl	0x401790, %eax
+  400156: 89 45 dc                     	movl	%eax, -0x24(%rbp)
+  400159: 48 63 75 fc                  	movslq	-0x4(%rbp), %rsi
+  40015d: 48 8d 55 ef                  	leaq	-0x11(%rbp), %rdx
+  400161: b9 01 00 00 00               	movl	$0x1, %ecx
+  400166: 31 c0                        	xorl	%eax, %eax
+  400168: 41 89 c0                     	movl	%eax, %r8d
+  40016b: 48 89 cf                     	movq	%rcx, %rdi
+  40016e: e8 bd 0b 00 00               	callq	0x400d30 <sc>
+  400173: 48 83 f8 01                  	cmpq	$0x1, %rax
+  400177: 75 43                        	jne	0x4001bc <main+0x19c>
+  400179: 48 63 75 f4                  	movslq	-0xc(%rbp), %rsi
+  40017d: 48 8d 55 ee                  	leaq	-0x12(%rbp), %rdx
+  400181: b9 01 00 00 00               	movl	$0x1, %ecx
+  400186: 31 c0                        	xorl	%eax, %eax
+  400188: 41 89 c0                     	movl	%eax, %r8d
+  40018b: 48 89 cf                     	movq	%rcx, %rdi
+  40018e: e8 9d 0b 00 00               	callq	0x400d30 <sc>
+  400193: 48 83 f8 01                  	cmpq	$0x1, %rax
+  400197: 75 23                        	jne	0x4001bc <main+0x19c>
+  400199: be 01 00 00 00               	movl	$0x1, %esi
+  40019e: 48 ba 95 14 40 00 00 00 00 00	movabsq	$0x401495, %rdx         # imm = 0x401495
+  4001a8: b9 2b 00 00 00               	movl	$0x2b, %ecx
+  4001ad: 31 c0                        	xorl	%eax, %eax
+  4001af: 41 89 c0                     	movl	%eax, %r8d
+  4001b2: 48 89 f7                     	movq	%rsi, %rdi
+  4001b5: e8 76 0b 00 00               	callq	0x400d30 <sc>
+  4001ba: eb 32                        	jmp	0x4001ee <main+0x1ce>
+  4001bc: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4001c3: 83 c0 01                     	addl	$0x1, %eax
+  4001c6: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4001cd: be 01 00 00 00               	movl	$0x1, %esi
+  4001d2: 48 ba 6e 10 40 00 00 00 00 00	movabsq	$0x40106e, %rdx         # imm = 0x40106E
+  4001dc: b9 2b 00 00 00               	movl	$0x2b, %ecx
+  4001e1: 31 c0                        	xorl	%eax, %eax
+  4001e3: 41 89 c0                     	movl	%eax, %r8d
+  4001e6: 48 89 f7                     	movq	%rsi, %rdi
+  4001e9: e8 42 0b 00 00               	callq	0x400d30 <sc>
+  4001ee: eb 00                        	jmp	0x4001f0 <main+0x1d0>
+  4001f0: eb 00                        	jmp	0x4001f2 <main+0x1d2>
+  4001f2: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4001f6: 48 63 4d f8                  	movslq	-0x8(%rbp), %rcx
+  4001fa: 4c 8d 45 d4                  	leaq	-0x2c(%rbp), %r8
+  4001fe: bf e9 00 00 00               	movl	$0xe9, %edi
+  400203: ba 01 00 00 00               	movl	$0x1, %edx
+  400208: e8 23 0b 00 00               	callq	0x400d30 <sc>
+  40020d: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400211: 75 23                        	jne	0x400236 <main+0x216>
+  400213: be 01 00 00 00               	movl	$0x1, %esi
+  400218: 48 ba 4b 10 40 00 00 00 00 00	movabsq	$0x40104b, %rdx         # imm = 0x40104B
+  400222: b9 22 00 00 00               	movl	$0x22, %ecx
+  400227: 31 c0                        	xorl	%eax, %eax
+  400229: 41 89 c0                     	movl	%eax, %r8d
+  40022c: 48 89 f7                     	movq	%rsi, %rdi
+  40022f: e8 fc 0a 00 00               	callq	0x400d30 <sc>
+  400234: eb 32                        	jmp	0x400268 <main+0x248>
+  400236: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  40023d: 83 c0 01                     	addl	$0x1, %eax
+  400240: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400247: be 01 00 00 00               	movl	$0x1, %esi
+  40024c: 48 ba 4e 13 40 00 00 00 00 00	movabsq	$0x40134e, %rdx         # imm = 0x40134E
+  400256: b9 22 00 00 00               	movl	$0x22, %ecx
+  40025b: 31 c0                        	xorl	%eax, %eax
+  40025d: 41 89 c0                     	movl	%eax, %r8d
+  400260: 48 89 f7                     	movq	%rsi, %rdi
+  400263: e8 c8 0a 00 00               	callq	0x400d30 <sc>
+  400268: eb 00                        	jmp	0x40026a <main+0x24a>
+  40026a: eb 00                        	jmp	0x40026c <main+0x24c>
+  40026c: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400270: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  400274: bf e8 00 00 00               	movl	$0xe8, %edi
+  400279: b9 01 00 00 00               	movl	$0x1, %ecx
+  40027e: 31 c0                        	xorl	%eax, %eax
+  400280: 41 89 c0                     	movl	%eax, %r8d
+  400283: e8 a8 0a 00 00               	callq	0x400d30 <sc>
+  400288: 48 83 f8 01                  	cmpq	$0x1, %rax
+  40028c: 75 2d                        	jne	0x4002bb <main+0x29b>
+  40028e: 48 8b 45 cc                  	movq	-0x34(%rbp), %rax
+  400292: 48 3b 45 d8                  	cmpq	-0x28(%rbp), %rax
+  400296: 75 23                        	jne	0x4002bb <main+0x29b>
+  400298: be 01 00 00 00               	movl	$0x1, %esi
+  40029d: 48 ba 71 13 40 00 00 00 00 00	movabsq	$0x401371, %rdx         # imm = 0x401371
+  4002a7: b9 29 00 00 00               	movl	$0x29, %ecx
+  4002ac: 31 c0                        	xorl	%eax, %eax
+  4002ae: 41 89 c0                     	movl	%eax, %r8d
+  4002b1: 48 89 f7                     	movq	%rsi, %rdi
+  4002b4: e8 77 0a 00 00               	callq	0x400d30 <sc>
+  4002b9: eb 32                        	jmp	0x4002ed <main+0x2cd>
+  4002bb: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4002c2: 83 c0 01                     	addl	$0x1, %eax
+  4002c5: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4002cc: be 01 00 00 00               	movl	$0x1, %esi
+  4002d1: 48 ba c1 13 40 00 00 00 00 00	movabsq	$0x4013c1, %rdx         # imm = 0x4013C1
+  4002db: b9 29 00 00 00               	movl	$0x29, %ecx
+  4002e0: 31 c0                        	xorl	%eax, %eax
+  4002e2: 41 89 c0                     	movl	%eax, %r8d
+  4002e5: 48 89 f7                     	movq	%rsi, %rdi
+  4002e8: e8 43 0a 00 00               	callq	0x400d30 <sc>
+  4002ed: eb 00                        	jmp	0x4002ef <main+0x2cf>
+  4002ef: eb 00                        	jmp	0x4002f1 <main+0x2d1>
+  4002f1: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  4002f5: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  4002fa: 48 c7 c6 ff ff ff ff         	movq	$-0x1, %rsi
+  400301: 31 c0                        	xorl	%eax, %eax
+  400303: 41 89 c0                     	movl	%eax, %r8d
+  400306: 4c 89 c1                     	movq	%r8, %rcx
+  400309: e8 22 0a 00 00               	callq	0x400d30 <sc>
+  40030e: 48 83 f8 f7                  	cmpq	$-0x9, %rax
+  400312: 75 23                        	jne	0x400337 <main+0x317>
+  400314: be 01 00 00 00               	movl	$0x1, %esi
+  400319: 48 ba 9e 11 40 00 00 00 00 00	movabsq	$0x40119e, %rdx         # imm = 0x40119E
+  400323: b9 27 00 00 00               	movl	$0x27, %ecx
+  400328: 31 c0                        	xorl	%eax, %eax
+  40032a: 41 89 c0                     	movl	%eax, %r8d
+  40032d: 48 89 f7                     	movq	%rsi, %rdi
+  400330: e8 fb 09 00 00               	callq	0x400d30 <sc>
+  400335: eb 32                        	jmp	0x400369 <main+0x349>
+  400337: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  40033e: 83 c0 01                     	addl	$0x1, %eax
+  400341: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400348: be 01 00 00 00               	movl	$0x1, %esi
+  40034d: 48 ba b4 12 40 00 00 00 00 00	movabsq	$0x4012b4, %rdx         # imm = 0x4012B4
+  400357: b9 27 00 00 00               	movl	$0x27, %ecx
+  40035c: 31 c0                        	xorl	%eax, %eax
+  40035e: 41 89 c0                     	movl	%eax, %r8d
+  400361: 48 89 f7                     	movq	%rsi, %rdi
+  400364: e8 c7 09 00 00               	callq	0x400d30 <sc>
+  400369: eb 00                        	jmp	0x40036b <main+0x34b>
+  40036b: eb 00                        	jmp	0x40036d <main+0x34d>
+  40036d: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  400371: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  400376: ba 2c 01 00 00               	movl	$0x12c, %edx            # imm = 0x12C
+  40037b: 31 c0                        	xorl	%eax, %eax
+  40037d: 41 89 c0                     	movl	%eax, %r8d
+  400380: 4c 89 c1                     	movq	%r8, %rcx
+  400383: e8 a8 09 00 00               	callq	0x400d30 <sc>
+  400388: 48 83 f8 f7                  	cmpq	$-0x9, %rax
+  40038c: 75 23                        	jne	0x4003b1 <main+0x391>
+  40038e: be 01 00 00 00               	movl	$0x1, %esi
+  400393: 48 ba ed 16 40 00 00 00 00 00	movabsq	$0x4016ed, %rdx         # imm = 0x4016ED
+  40039d: b9 27 00 00 00               	movl	$0x27, %ecx
+  4003a2: 31 c0                        	xorl	%eax, %eax
+  4003a4: 41 89 c0                     	movl	%eax, %r8d
+  4003a7: 48 89 f7                     	movq	%rsi, %rdi
+  4003aa: e8 81 09 00 00               	callq	0x400d30 <sc>
+  4003af: eb 32                        	jmp	0x4003e3 <main+0x3c3>
+  4003b1: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4003b8: 83 c0 01                     	addl	$0x1, %eax
+  4003bb: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4003c2: be 01 00 00 00               	movl	$0x1, %esi
+  4003c7: 48 ba 84 16 40 00 00 00 00 00	movabsq	$0x401684, %rdx         # imm = 0x401684
+  4003d1: b9 27 00 00 00               	movl	$0x27, %ecx
+  4003d6: 31 c0                        	xorl	%eax, %eax
+  4003d8: 41 89 c0                     	movl	%eax, %r8d
+  4003db: 48 89 f7                     	movq	%rsi, %rdi
+  4003de: e8 4d 09 00 00               	callq	0x400d30 <sc>
+  4003e3: eb 00                        	jmp	0x4003e5 <main+0x3c5>
+  4003e5: eb 00                        	jmp	0x4003e7 <main+0x3c7>
+  4003e7: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  4003eb: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  4003ef: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  4003f4: 31 c0                        	xorl	%eax, %eax
+  4003f6: 41 89 c0                     	movl	%eax, %r8d
+  4003f9: 4c 89 c1                     	movq	%r8, %rcx
+  4003fc: e8 2f 09 00 00               	callq	0x400d30 <sc>
+  400401: 48 83 f8 ea                  	cmpq	$-0x16, %rax
+  400405: 75 23                        	jne	0x40042a <main+0x40a>
+  400407: be 01 00 00 00               	movl	$0x1, %esi
+  40040c: 48 ba dc 12 40 00 00 00 00 00	movabsq	$0x4012dc, %rdx         # imm = 0x4012DC
+  400416: b9 21 00 00 00               	movl	$0x21, %ecx
+  40041b: 31 c0                        	xorl	%eax, %eax
+  40041d: 41 89 c0                     	movl	%eax, %r8d
+  400420: 48 89 f7                     	movq	%rsi, %rdi
+  400423: e8 08 09 00 00               	callq	0x400d30 <sc>
+  400428: eb 32                        	jmp	0x40045c <main+0x43c>
+  40042a: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400431: 83 c0 01                     	addl	$0x1, %eax
+  400434: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  40043b: be 01 00 00 00               	movl	$0x1, %esi
+  400440: 48 ba 7c 11 40 00 00 00 00 00	movabsq	$0x40117c, %rdx         # imm = 0x40117C
+  40044a: b9 21 00 00 00               	movl	$0x21, %ecx
+  40044f: 31 c0                        	xorl	%eax, %eax
+  400451: 41 89 c0                     	movl	%eax, %r8d
+  400454: 48 89 f7                     	movq	%rsi, %rdi
+  400457: e8 d4 08 00 00               	callq	0x400d30 <sc>
+  40045c: eb 00                        	jmp	0x40045e <main+0x43e>
+  40045e: eb 00                        	jmp	0x400460 <main+0x440>
+  400460: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  400464: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  400468: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  40046d: b9 01 00 00 00               	movl	$0x1, %ecx
+  400472: 31 c0                        	xorl	%eax, %eax
+  400474: 41 89 c0                     	movl	%eax, %r8d
+  400477: e8 b4 08 00 00               	callq	0x400d30 <sc>
+  40047c: 48 83 f8 ea                  	cmpq	$-0x16, %rax
+  400480: 75 23                        	jne	0x4004a5 <main+0x485>
+  400482: be 01 00 00 00               	movl	$0x1, %esi
+  400487: 48 ba 15 17 40 00 00 00 00 00	movabsq	$0x401715, %rdx         # imm = 0x401715
+  400491: b9 2b 00 00 00               	movl	$0x2b, %ecx
+  400496: 31 c0                        	xorl	%eax, %eax
+  400498: 41 89 c0                     	movl	%eax, %r8d
+  40049b: 48 89 f7                     	movq	%rsi, %rdi
+  40049e: e8 8d 08 00 00               	callq	0x400d30 <sc>
+  4004a3: eb 32                        	jmp	0x4004d7 <main+0x4b7>
+  4004a5: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4004ac: 83 c0 01                     	addl	$0x1, %eax
+  4004af: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4004b6: be 01 00 00 00               	movl	$0x1, %esi
+  4004bb: 48 ba eb 13 40 00 00 00 00 00	movabsq	$0x4013eb, %rdx         # imm = 0x4013EB
+  4004c5: b9 2b 00 00 00               	movl	$0x2b, %ecx
+  4004ca: 31 c0                        	xorl	%eax, %eax
+  4004cc: 41 89 c0                     	movl	%eax, %r8d
+  4004cf: 48 89 f7                     	movq	%rsi, %rdi
+  4004d2: e8 59 08 00 00               	callq	0x400d30 <sc>
+  4004d7: eb 00                        	jmp	0x4004d9 <main+0x4b9>
+  4004d9: eb 00                        	jmp	0x4004db <main+0x4bb>
+  4004db: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4004df: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  4004e3: bf e8 00 00 00               	movl	$0xe8, %edi
+  4004e8: b9 01 00 00 00               	movl	$0x1, %ecx
+  4004ed: 31 c0                        	xorl	%eax, %eax
+  4004ef: 41 89 c0                     	movl	%eax, %r8d
+  4004f2: e8 39 08 00 00               	callq	0x400d30 <sc>
+  4004f7: 48 83 f8 01                  	cmpq	$0x1, %rax
+  4004fb: 75 2d                        	jne	0x40052a <main+0x50a>
+  4004fd: 48 8b 45 cc                  	movq	-0x34(%rbp), %rax
+  400501: 48 3b 45 d8                  	cmpq	-0x28(%rbp), %rax
+  400505: 75 23                        	jne	0x40052a <main+0x50a>
+  400507: be 01 00 00 00               	movl	$0x1, %esi
+  40050c: 48 ba c6 11 40 00 00 00 00 00	movabsq	$0x4011c6, %rdx         # imm = 0x4011C6
+  400516: b9 33 00 00 00               	movl	$0x33, %ecx
+  40051b: 31 c0                        	xorl	%eax, %eax
+  40051d: 41 89 c0                     	movl	%eax, %r8d
+  400520: 48 89 f7                     	movq	%rsi, %rdi
+  400523: e8 08 08 00 00               	callq	0x400d30 <sc>
+  400528: eb 32                        	jmp	0x40055c <main+0x53c>
+  40052a: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400531: 83 c0 01                     	addl	$0x1, %eax
+  400534: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  40053b: be 01 00 00 00               	movl	$0x1, %esi
+  400540: 48 ba fe 12 40 00 00 00 00 00	movabsq	$0x4012fe, %rdx         # imm = 0x4012FE
+  40054a: b9 33 00 00 00               	movl	$0x33, %ecx
+  40054f: 31 c0                        	xorl	%eax, %eax
+  400551: 41 89 c0                     	movl	%eax, %r8d
+  400554: 48 89 f7                     	movq	%rsi, %rdi
+  400557: e8 d4 07 00 00               	callq	0x400d30 <sc>
+  40055c: eb 00                        	jmp	0x40055e <main+0x53e>
+  40055e: eb 00                        	jmp	0x400560 <main+0x540>
+  400560: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  400564: 48 8d 55 ed                  	leaq	-0x13(%rbp), %rdx
+  400568: 31 c0                        	xorl	%eax, %eax
+  40056a: 41 89 c0                     	movl	%eax, %r8d
+  40056d: b9 01 00 00 00               	movl	$0x1, %ecx
+  400572: 4c 89 c7                     	movq	%r8, %rdi
+  400575: e8 b6 07 00 00               	callq	0x400d30 <sc>
+  40057a: 48 83 f8 01                  	cmpq	$0x1, %rax
+  40057e: 75 2c                        	jne	0x4005ac <main+0x58c>
+  400580: 0f be 45 ed                  	movsbl	-0x13(%rbp), %eax
+  400584: 83 f8 78                     	cmpl	$0x78, %eax
+  400587: 75 23                        	jne	0x4005ac <main+0x58c>
+  400589: be 01 00 00 00               	movl	$0x1, %esi
+  40058e: 48 ba 45 12 40 00 00 00 00 00	movabsq	$0x401245, %rdx         # imm = 0x401245
+  400598: b9 36 00 00 00               	movl	$0x36, %ecx
+  40059d: 31 c0                        	xorl	%eax, %eax
+  40059f: 41 89 c0                     	movl	%eax, %r8d
+  4005a2: 48 89 f7                     	movq	%rsi, %rdi
+  4005a5: e8 86 07 00 00               	callq	0x400d30 <sc>
+  4005aa: eb 32                        	jmp	0x4005de <main+0x5be>
+  4005ac: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4005b3: 83 c0 01                     	addl	$0x1, %eax
+  4005b6: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4005bd: be 01 00 00 00               	movl	$0x1, %esi
+  4005c2: 48 ba f9 10 40 00 00 00 00 00	movabsq	$0x4010f9, %rdx         # imm = 0x4010F9
+  4005cc: b9 36 00 00 00               	movl	$0x36, %ecx
+  4005d1: 31 c0                        	xorl	%eax, %eax
+  4005d3: 41 89 c0                     	movl	%eax, %r8d
+  4005d6: 48 89 f7                     	movq	%rsi, %rdi
+  4005d9: e8 52 07 00 00               	callq	0x400d30 <sc>
+  4005de: eb 00                        	jmp	0x4005e0 <main+0x5c0>
+  4005e0: eb 00                        	jmp	0x4005e2 <main+0x5c2>
+  4005e2: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  4005e6: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  4005ea: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  4005ef: b9 00 00 08 00               	movl	$0x80000, %ecx          # imm = 0x80000
+  4005f4: 31 c0                        	xorl	%eax, %eax
+  4005f6: 41 89 c0                     	movl	%eax, %r8d
+  4005f9: e8 32 07 00 00               	callq	0x400d30 <sc>
+  4005fe: 48 63 4d f8                  	movslq	-0x8(%rbp), %rcx
+  400602: 48 39 c8                     	cmpq	%rcx, %rax
+  400605: 75 23                        	jne	0x40062a <main+0x60a>
+  400607: be 01 00 00 00               	movl	$0x1, %esi
+  40060c: 48 ba a1 15 40 00 00 00 00 00	movabsq	$0x4015a1, %rdx         # imm = 0x4015A1
+  400616: b9 25 00 00 00               	movl	$0x25, %ecx
+  40061b: 31 c0                        	xorl	%eax, %eax
+  40061d: 41 89 c0                     	movl	%eax, %r8d
+  400620: 48 89 f7                     	movq	%rsi, %rdi
+  400623: e8 08 07 00 00               	callq	0x400d30 <sc>
+  400628: eb 32                        	jmp	0x40065c <main+0x63c>
+  40062a: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400631: 83 c0 01                     	addl	$0x1, %eax
+  400634: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  40063b: be 01 00 00 00               	movl	$0x1, %esi
+  400640: 48 ba 0f 16 40 00 00 00 00 00	movabsq	$0x40160f, %rdx         # imm = 0x40160F
+  40064a: b9 25 00 00 00               	movl	$0x25, %ecx
+  40064f: 31 c0                        	xorl	%eax, %eax
+  400651: 41 89 c0                     	movl	%eax, %r8d
+  400654: 48 89 f7                     	movq	%rsi, %rdi
+  400657: e8 d4 06 00 00               	callq	0x400d30 <sc>
+  40065c: eb 00                        	jmp	0x40065e <main+0x63e>
+  40065e: eb 00                        	jmp	0x400660 <main+0x640>
+  400660: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  400664: bf 48 00 00 00               	movl	$0x48, %edi
+  400669: ba 01 00 00 00               	movl	$0x1, %edx
+  40066e: 31 c0                        	xorl	%eax, %eax
+  400670: 41 89 c0                     	movl	%eax, %r8d
+  400673: 4c 89 c1                     	movq	%r8, %rcx
+  400676: e8 b5 06 00 00               	callq	0x400d30 <sc>
+  40067b: 48 83 f8 01                  	cmpq	$0x1, %rax
+  40067f: 75 44                        	jne	0x4006c5 <main+0x6a5>
+  400681: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  400685: bf 48 00 00 00               	movl	$0x48, %edi
+  40068a: ba 01 00 00 00               	movl	$0x1, %edx
+  40068f: 31 c0                        	xorl	%eax, %eax
+  400691: 41 89 c0                     	movl	%eax, %r8d
+  400694: 4c 89 c1                     	movq	%r8, %rcx
+  400697: e8 94 06 00 00               	callq	0x400d30 <sc>
+  40069c: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4006a0: 75 23                        	jne	0x4006c5 <main+0x6a5>
+  4006a2: be 01 00 00 00               	movl	$0x1, %esi
+  4006a7: 48 ba 41 17 40 00 00 00 00 00	movabsq	$0x401741, %rdx         # imm = 0x401741
+  4006b1: b9 26 00 00 00               	movl	$0x26, %ecx
+  4006b6: 31 c0                        	xorl	%eax, %eax
+  4006b8: 41 89 c0                     	movl	%eax, %r8d
+  4006bb: 48 89 f7                     	movq	%rsi, %rdi
+  4006be: e8 6d 06 00 00               	callq	0x400d30 <sc>
+  4006c3: eb 32                        	jmp	0x4006f7 <main+0x6d7>
+  4006c5: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4006cc: 83 c0 01                     	addl	$0x1, %eax
+  4006cf: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4006d6: be 01 00 00 00               	movl	$0x1, %esi
+  4006db: 48 ba d2 10 40 00 00 00 00 00	movabsq	$0x4010d2, %rdx         # imm = 0x4010D2
+  4006e5: b9 26 00 00 00               	movl	$0x26, %ecx
+  4006ea: 31 c0                        	xorl	%eax, %eax
+  4006ec: 41 89 c0                     	movl	%eax, %r8d
+  4006ef: 48 89 f7                     	movq	%rsi, %rdi
+  4006f2: e8 39 06 00 00               	callq	0x400d30 <sc>
+  4006f7: eb 00                        	jmp	0x4006f9 <main+0x6d9>
+  4006f9: eb 00                        	jmp	0x4006fb <main+0x6db>
+  4006fb: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4006ff: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  400703: bf e8 00 00 00               	movl	$0xe8, %edi
+  400708: b9 01 00 00 00               	movl	$0x1, %ecx
+  40070d: 31 c0                        	xorl	%eax, %eax
+  40070f: 41 89 c0                     	movl	%eax, %r8d
+  400712: e8 19 06 00 00               	callq	0x400d30 <sc>
+  400717: 48 83 f8 00                  	cmpq	$0x0, %rax
+  40071b: 75 23                        	jne	0x400740 <main+0x720>
+  40071d: be 01 00 00 00               	movl	$0x1, %esi
+  400722: 48 ba 9a 10 40 00 00 00 00 00	movabsq	$0x40109a, %rdx         # imm = 0x40109A
+  40072c: b9 37 00 00 00               	movl	$0x37, %ecx
+  400731: 31 c0                        	xorl	%eax, %eax
+  400733: 41 89 c0                     	movl	%eax, %r8d
+  400736: 48 89 f7                     	movq	%rsi, %rdi
+  400739: e8 f2 05 00 00               	callq	0x400d30 <sc>
+  40073e: eb 32                        	jmp	0x400772 <main+0x752>
+  400740: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400747: 83 c0 01                     	addl	$0x1, %eax
+  40074a: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400751: be 01 00 00 00               	movl	$0x1, %esi
+  400756: 48 ba 7c 12 40 00 00 00 00 00	movabsq	$0x40127c, %rdx         # imm = 0x40127C
+  400760: b9 37 00 00 00               	movl	$0x37, %ecx
+  400765: 31 c0                        	xorl	%eax, %eax
+  400767: 41 89 c0                     	movl	%eax, %r8d
+  40076a: 48 89 f7                     	movq	%rsi, %rdi
+  40076d: e8 be 05 00 00               	callq	0x400d30 <sc>
+  400772: eb 00                        	jmp	0x400774 <main+0x754>
+  400774: eb 00                        	jmp	0x400776 <main+0x756>
+  400776: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  40077a: 48 8d 55 ed                  	leaq	-0x13(%rbp), %rdx
+  40077e: 31 c0                        	xorl	%eax, %eax
+  400780: 41 89 c0                     	movl	%eax, %r8d
+  400783: b9 01 00 00 00               	movl	$0x1, %ecx
+  400788: 4c 89 c7                     	movq	%r8, %rdi
+  40078b: e8 a0 05 00 00               	callq	0x400d30 <sc>
+  400790: 48 83 f8 01                  	cmpq	$0x1, %rax
+  400794: 75 2c                        	jne	0x4007c2 <main+0x7a2>
+  400796: 0f be 45 ed                  	movsbl	-0x13(%rbp), %eax
+  40079a: 83 f8 79                     	cmpl	$0x79, %eax
+  40079d: 75 23                        	jne	0x4007c2 <main+0x7a2>
+  40079f: be 01 00 00 00               	movl	$0x1, %esi
+  4007a4: 48 ba 74 15 40 00 00 00 00 00	movabsq	$0x401574, %rdx         # imm = 0x401574
+  4007ae: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  4007b3: 31 c0                        	xorl	%eax, %eax
+  4007b5: 41 89 c0                     	movl	%eax, %r8d
+  4007b8: 48 89 f7                     	movq	%rsi, %rdi
+  4007bb: e8 70 05 00 00               	callq	0x400d30 <sc>
+  4007c0: eb 32                        	jmp	0x4007f4 <main+0x7d4>
+  4007c2: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4007c9: 83 c0 01                     	addl	$0x1, %eax
+  4007cc: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4007d3: be 01 00 00 00               	movl	$0x1, %esi
+  4007d8: 48 ba fa 11 40 00 00 00 00 00	movabsq	$0x4011fa, %rdx         # imm = 0x4011FA
+  4007e2: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  4007e7: 31 c0                        	xorl	%eax, %eax
+  4007e9: 41 89 c0                     	movl	%eax, %r8d
+  4007ec: 48 89 f7                     	movq	%rsi, %rdi
+  4007ef: e8 3c 05 00 00               	callq	0x400d30 <sc>
+  4007f4: eb 00                        	jmp	0x4007f6 <main+0x7d6>
+  4007f6: eb 00                        	jmp	0x4007f8 <main+0x7d8>
+  4007f8: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  4007fc: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  400800: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  400805: 31 c0                        	xorl	%eax, %eax
+  400807: 41 89 c0                     	movl	%eax, %r8d
+  40080a: 4c 89 c1                     	movq	%r8, %rcx
+  40080d: e8 1e 05 00 00               	callq	0x400d30 <sc>
+  400812: 48 63 4d f8                  	movslq	-0x8(%rbp), %rcx
+  400816: 48 39 c8                     	cmpq	%rcx, %rax
+  400819: 75 44                        	jne	0x40085f <main+0x83f>
+  40081b: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  40081f: bf 48 00 00 00               	movl	$0x48, %edi
+  400824: ba 01 00 00 00               	movl	$0x1, %edx
+  400829: 31 c0                        	xorl	%eax, %eax
+  40082b: 41 89 c0                     	movl	%eax, %r8d
+  40082e: 4c 89 c1                     	movq	%r8, %rcx
+  400831: e8 fa 04 00 00               	callq	0x400d30 <sc>
+  400836: 48 83 f8 00                  	cmpq	$0x0, %rax
+  40083a: 75 23                        	jne	0x40085f <main+0x83f>
+  40083c: be 01 00 00 00               	movl	$0x1, %esi
+  400841: 48 ba 30 11 40 00 00 00 00 00	movabsq	$0x401130, %rdx         # imm = 0x401130
+  40084b: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  400850: 31 c0                        	xorl	%eax, %eax
+  400852: 41 89 c0                     	movl	%eax, %r8d
+  400855: 48 89 f7                     	movq	%rsi, %rdi
+  400858: e8 d3 04 00 00               	callq	0x400d30 <sc>
+  40085d: eb 32                        	jmp	0x400891 <main+0x871>
+  40085f: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400866: 83 c0 01                     	addl	$0x1, %eax
+  400869: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400870: be 01 00 00 00               	movl	$0x1, %esi
+  400875: 48 ba e2 15 40 00 00 00 00 00	movabsq	$0x4015e2, %rdx         # imm = 0x4015E2
+  40087f: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  400884: 31 c0                        	xorl	%eax, %eax
+  400886: 41 89 c0                     	movl	%eax, %r8d
+  400889: 48 89 f7                     	movq	%rsi, %rdi
+  40088c: e8 9f 04 00 00               	callq	0x400d30 <sc>
+  400891: eb 00                        	jmp	0x400893 <main+0x873>
+  400893: c7 45 c4 00 00 00 00         	movl	$0x0, -0x3c(%rbp)
+  40089a: 83 7d c4 08                  	cmpl	$0x8, -0x3c(%rbp)
+  40089e: 0f 8d 81 01 00 00            	jge	0x400a25 <main+0xa05>
+  4008a4: eb 00                        	jmp	0x4008a6 <main+0x886>
+  4008a6: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4008aa: 48 63 4d f8                  	movslq	-0x8(%rbp), %rcx
+  4008ae: 4c 8d 45 d4                  	leaq	-0x2c(%rbp), %r8
+  4008b2: bf e9 00 00 00               	movl	$0xe9, %edi
+  4008b7: ba 01 00 00 00               	movl	$0x1, %edx
+  4008bc: e8 6f 04 00 00               	callq	0x400d30 <sc>
+  4008c1: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4008c5: 75 23                        	jne	0x4008ea <main+0x8ca>
+  4008c7: be 01 00 00 00               	movl	$0x1, %esi
+  4008cc: 48 ba 17 14 40 00 00 00 00 00	movabsq	$0x401417, %rdx         # imm = 0x401417
+  4008d6: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  4008db: 31 c0                        	xorl	%eax, %eax
+  4008dd: 41 89 c0                     	movl	%eax, %r8d
+  4008e0: 48 89 f7                     	movq	%rsi, %rdi
+  4008e3: e8 48 04 00 00               	callq	0x400d30 <sc>
+  4008e8: eb 32                        	jmp	0x40091c <main+0x8fc>
+  4008ea: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4008f1: 83 c0 01                     	addl	$0x1, %eax
+  4008f4: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4008fb: be 01 00 00 00               	movl	$0x1, %esi
+  400900: 48 ba 68 14 40 00 00 00 00 00	movabsq	$0x401468, %rdx         # imm = 0x401468
+  40090a: b9 2c 00 00 00               	movl	$0x2c, %ecx
+  40090f: 31 c0                        	xorl	%eax, %eax
+  400911: 41 89 c0                     	movl	%eax, %r8d
+  400914: 48 89 f7                     	movq	%rsi, %rdi
+  400917: e8 14 04 00 00               	callq	0x400d30 <sc>
+  40091c: eb 00                        	jmp	0x40091e <main+0x8fe>
+  40091e: eb 00                        	jmp	0x400920 <main+0x900>
+  400920: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  400924: 48 63 55 f8                  	movslq	-0x8(%rbp), %rdx
+  400928: bf 24 01 00 00               	movl	$0x124, %edi            # imm = 0x124
+  40092d: 31 c0                        	xorl	%eax, %eax
+  40092f: 41 89 c0                     	movl	%eax, %r8d
+  400932: 4c 89 c1                     	movq	%r8, %rcx
+  400935: e8 f6 03 00 00               	callq	0x400d30 <sc>
+  40093a: 48 63 4d f8                  	movslq	-0x8(%rbp), %rcx
+  40093e: 48 39 c8                     	cmpq	%rcx, %rax
+  400941: 75 23                        	jne	0x400966 <main+0x946>
+  400943: be 01 00 00 00               	movl	$0x1, %esi
+  400948: 48 ba c7 16 40 00 00 00 00 00	movabsq	$0x4016c7, %rdx         # imm = 0x4016C7
+  400952: b9 25 00 00 00               	movl	$0x25, %ecx
+  400957: 31 c0                        	xorl	%eax, %eax
+  400959: 41 89 c0                     	movl	%eax, %r8d
+  40095c: 48 89 f7                     	movq	%rsi, %rdi
+  40095f: e8 cc 03 00 00               	callq	0x400d30 <sc>
+  400964: eb 32                        	jmp	0x400998 <main+0x978>
+  400966: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  40096d: 83 c0 01                     	addl	$0x1, %eax
+  400970: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400977: be 01 00 00 00               	movl	$0x1, %esi
+  40097c: 48 ba 9b 13 40 00 00 00 00 00	movabsq	$0x40139b, %rdx         # imm = 0x40139B
+  400986: b9 25 00 00 00               	movl	$0x25, %ecx
+  40098b: 31 c0                        	xorl	%eax, %eax
+  40098d: 41 89 c0                     	movl	%eax, %r8d
+  400990: 48 89 f7                     	movq	%rsi, %rdi
+  400993: e8 98 03 00 00               	callq	0x400d30 <sc>
+  400998: eb 00                        	jmp	0x40099a <main+0x97a>
+  40099a: eb 00                        	jmp	0x40099c <main+0x97c>
+  40099c: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  4009a0: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  4009a4: bf e8 00 00 00               	movl	$0xe8, %edi
+  4009a9: b9 01 00 00 00               	movl	$0x1, %ecx
+  4009ae: 31 c0                        	xorl	%eax, %eax
+  4009b0: 41 89 c0                     	movl	%eax, %r8d
+  4009b3: e8 78 03 00 00               	callq	0x400d30 <sc>
+  4009b8: 48 83 f8 00                  	cmpq	$0x0, %rax
+  4009bc: 75 23                        	jne	0x4009e1 <main+0x9c1>
+  4009be: be 01 00 00 00               	movl	$0x1, %esi
+  4009c3: 48 ba 00 10 40 00 00 00 00 00	movabsq	$0x401000, %rdx         # imm = 0x401000
+  4009cd: b9 26 00 00 00               	movl	$0x26, %ecx
+  4009d2: 31 c0                        	xorl	%eax, %eax
+  4009d4: 41 89 c0                     	movl	%eax, %r8d
+  4009d7: 48 89 f7                     	movq	%rsi, %rdi
+  4009da: e8 51 03 00 00               	callq	0x400d30 <sc>
+  4009df: eb 32                        	jmp	0x400a13 <main+0x9f3>
+  4009e1: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  4009e8: 83 c0 01                     	addl	$0x1, %eax
+  4009eb: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  4009f2: be 01 00 00 00               	movl	$0x1, %esi
+  4009f7: 48 ba c1 14 40 00 00 00 00 00	movabsq	$0x4014c1, %rdx         # imm = 0x4014C1
+  400a01: b9 26 00 00 00               	movl	$0x26, %ecx
+  400a06: 31 c0                        	xorl	%eax, %eax
+  400a08: 41 89 c0                     	movl	%eax, %r8d
+  400a0b: 48 89 f7                     	movq	%rsi, %rdi
+  400a0e: e8 1d 03 00 00               	callq	0x400d30 <sc>
+  400a13: eb 00                        	jmp	0x400a15 <main+0x9f5>
+  400a15: eb 00                        	jmp	0x400a17 <main+0x9f7>
+  400a17: 8b 45 c4                     	movl	-0x3c(%rbp), %eax
+  400a1a: 83 c0 01                     	addl	$0x1, %eax
+  400a1d: 89 45 c4                     	movl	%eax, -0x3c(%rbp)
+  400a20: e9 75 fe ff ff               	jmp	0x40089a <main+0x87a>
+  400a25: 8b 45 f8                     	movl	-0x8(%rbp), %eax
+  400a28: 89 45 c0                     	movl	%eax, -0x40(%rbp)
+  400a2b: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  400a2f: bf 03 00 00 00               	movl	$0x3, %edi
+  400a34: 31 c0                        	xorl	%eax, %eax
+  400a36: 41 89 c0                     	movl	%eax, %r8d
+  400a39: 4c 89 c2                     	movq	%r8, %rdx
+  400a3c: 4c 89 c1                     	movq	%r8, %rcx
+  400a3f: e8 ec 02 00 00               	callq	0x400d30 <sc>
+  400a44: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400a48: 75 42                        	jne	0x400a8c <main+0xa6c>
+  400a4a: 48 63 75 fc                  	movslq	-0x4(%rbp), %rsi
+  400a4e: bf 03 00 00 00               	movl	$0x3, %edi
+  400a53: 31 c0                        	xorl	%eax, %eax
+  400a55: 41 89 c0                     	movl	%eax, %r8d
+  400a58: 4c 89 c2                     	movq	%r8, %rdx
+  400a5b: 4c 89 c1                     	movq	%r8, %rcx
+  400a5e: e8 cd 02 00 00               	callq	0x400d30 <sc>
+  400a63: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400a67: 75 23                        	jne	0x400a8c <main+0xa6c>
+  400a69: be 01 00 00 00               	movl	$0x1, %esi
+  400a6e: 48 ba 07 15 40 00 00 00 00 00	movabsq	$0x401507, %rdx         # imm = 0x401507
+  400a78: b9 1f 00 00 00               	movl	$0x1f, %ecx
+  400a7d: 31 c0                        	xorl	%eax, %eax
+  400a7f: 41 89 c0                     	movl	%eax, %r8d
+  400a82: 48 89 f7                     	movq	%rsi, %rdi
+  400a85: e8 a6 02 00 00               	callq	0x400d30 <sc>
+  400a8a: eb 32                        	jmp	0x400abe <main+0xa9e>
+  400a8c: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400a93: 83 c0 01                     	addl	$0x1, %eax
+  400a96: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400a9d: be 01 00 00 00               	movl	$0x1, %esi
+  400aa2: 48 ba 68 17 40 00 00 00 00 00	movabsq	$0x401768, %rdx         # imm = 0x401768
+  400aac: b9 1f 00 00 00               	movl	$0x1f, %ecx
+  400ab1: 31 c0                        	xorl	%eax, %eax
+  400ab3: 41 89 c0                     	movl	%eax, %r8d
+  400ab6: 48 89 f7                     	movq	%rsi, %rdi
+  400ab9: e8 72 02 00 00               	callq	0x400d30 <sc>
+  400abe: eb 00                        	jmp	0x400ac0 <main+0xaa0>
+  400ac0: eb 00                        	jmp	0x400ac2 <main+0xaa2>
+  400ac2: 48 8d 75 f8                  	leaq	-0x8(%rbp), %rsi
+  400ac6: bf 16 00 00 00               	movl	$0x16, %edi
+  400acb: 31 c0                        	xorl	%eax, %eax
+  400acd: 41 89 c0                     	movl	%eax, %r8d
+  400ad0: 4c 89 c2                     	movq	%r8, %rdx
+  400ad3: 4c 89 c1                     	movq	%r8, %rcx
+  400ad6: e8 55 02 00 00               	callq	0x400d30 <sc>
+  400adb: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400adf: 75 2b                        	jne	0x400b0c <main+0xaec>
+  400ae1: 8b 45 f8                     	movl	-0x8(%rbp), %eax
+  400ae4: 3b 45 c0                     	cmpl	-0x40(%rbp), %eax
+  400ae7: 75 23                        	jne	0x400b0c <main+0xaec>
+  400ae9: be 01 00 00 00               	movl	$0x1, %esi
+  400aee: 48 ba 27 10 40 00 00 00 00 00	movabsq	$0x401027, %rdx         # imm = 0x401027
+  400af8: b9 23 00 00 00               	movl	$0x23, %ecx
+  400afd: 31 c0                        	xorl	%eax, %eax
+  400aff: 41 89 c0                     	movl	%eax, %r8d
+  400b02: 48 89 f7                     	movq	%rsi, %rdi
+  400b05: e8 26 02 00 00               	callq	0x400d30 <sc>
+  400b0a: eb 32                        	jmp	0x400b3e <main+0xb1e>
+  400b0c: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400b13: 83 c0 01                     	addl	$0x1, %eax
+  400b16: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400b1d: be 01 00 00 00               	movl	$0x1, %esi
+  400b22: 48 ba 44 14 40 00 00 00 00 00	movabsq	$0x401444, %rdx         # imm = 0x401444
+  400b2c: b9 23 00 00 00               	movl	$0x23, %ecx
+  400b31: 31 c0                        	xorl	%eax, %eax
+  400b33: 41 89 c0                     	movl	%eax, %r8d
+  400b36: 48 89 f7                     	movq	%rsi, %rdi
+  400b39: e8 f2 01 00 00               	callq	0x400d30 <sc>
+  400b3e: eb 00                        	jmp	0x400b40 <main+0xb20>
+  400b40: eb 00                        	jmp	0x400b42 <main+0xb22>
+  400b42: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400b46: 48 8d 55 c8                  	leaq	-0x38(%rbp), %rdx
+  400b4a: bf e8 00 00 00               	movl	$0xe8, %edi
+  400b4f: b9 01 00 00 00               	movl	$0x1, %ecx
+  400b54: 31 c0                        	xorl	%eax, %eax
+  400b56: 41 89 c0                     	movl	%eax, %r8d
+  400b59: e8 d2 01 00 00               	callq	0x400d30 <sc>
+  400b5e: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400b62: 75 23                        	jne	0x400b87 <main+0xb67>
+  400b64: be 01 00 00 00               	movl	$0x1, %esi
+  400b69: 48 ba 35 16 40 00 00 00 00 00	movabsq	$0x401635, %rdx         # imm = 0x401635
+  400b73: b9 30 00 00 00               	movl	$0x30, %ecx
+  400b78: 31 c0                        	xorl	%eax, %eax
+  400b7a: 41 89 c0                     	movl	%eax, %r8d
+  400b7d: 48 89 f7                     	movq	%rsi, %rdi
+  400b80: e8 ab 01 00 00               	callq	0x400d30 <sc>
+  400b85: eb 32                        	jmp	0x400bb9 <main+0xb99>
+  400b87: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400b8e: 83 c0 01                     	addl	$0x1, %eax
+  400b91: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400b98: be 01 00 00 00               	movl	$0x1, %esi
+  400b9d: 48 ba 27 15 40 00 00 00 00 00	movabsq	$0x401527, %rdx         # imm = 0x401527
+  400ba7: b9 30 00 00 00               	movl	$0x30, %ecx
+  400bac: 31 c0                        	xorl	%eax, %eax
+  400bae: 41 89 c0                     	movl	%eax, %r8d
+  400bb1: 48 89 f7                     	movq	%rsi, %rdi
+  400bb4: e8 77 01 00 00               	callq	0x400d30 <sc>
+  400bb9: eb 00                        	jmp	0x400bbb <main+0xb9b>
+  400bbb: eb 00                        	jmp	0x400bbd <main+0xb9d>
+  400bbd: 48 63 75 f8                  	movslq	-0x8(%rbp), %rsi
+  400bc1: bf 03 00 00 00               	movl	$0x3, %edi
+  400bc6: 31 c0                        	xorl	%eax, %eax
+  400bc8: 41 89 c0                     	movl	%eax, %r8d
+  400bcb: 4c 89 c2                     	movq	%r8, %rdx
+  400bce: 4c 89 c1                     	movq	%r8, %rcx
+  400bd1: e8 5a 01 00 00               	callq	0x400d30 <sc>
+  400bd6: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400bda: 0f 85 a3 00 00 00            	jne	0x400c83 <main+0xc63>
+  400be0: 48 63 75 fc                  	movslq	-0x4(%rbp), %rsi
+  400be4: bf 03 00 00 00               	movl	$0x3, %edi
+  400be9: 31 c0                        	xorl	%eax, %eax
+  400beb: 41 89 c0                     	movl	%eax, %r8d
+  400bee: 4c 89 c2                     	movq	%r8, %rdx
+  400bf1: 4c 89 c1                     	movq	%r8, %rcx
+  400bf4: e8 37 01 00 00               	callq	0x400d30 <sc>
+  400bf9: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400bfd: 0f 85 80 00 00 00            	jne	0x400c83 <main+0xc63>
+  400c03: 48 63 75 f0                  	movslq	-0x10(%rbp), %rsi
+  400c07: bf 03 00 00 00               	movl	$0x3, %edi
+  400c0c: 31 c0                        	xorl	%eax, %eax
+  400c0e: 41 89 c0                     	movl	%eax, %r8d
+  400c11: 4c 89 c2                     	movq	%r8, %rdx
+  400c14: 4c 89 c1                     	movq	%r8, %rcx
+  400c17: e8 14 01 00 00               	callq	0x400d30 <sc>
+  400c1c: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400c20: 75 61                        	jne	0x400c83 <main+0xc63>
+  400c22: 48 63 75 f4                  	movslq	-0xc(%rbp), %rsi
+  400c26: bf 03 00 00 00               	movl	$0x3, %edi
+  400c2b: 31 c0                        	xorl	%eax, %eax
+  400c2d: 41 89 c0                     	movl	%eax, %r8d
+  400c30: 4c 89 c2                     	movq	%r8, %rdx
+  400c33: 4c 89 c1                     	movq	%r8, %rcx
+  400c36: e8 f5 00 00 00               	callq	0x400d30 <sc>
+  400c3b: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400c3f: 75 42                        	jne	0x400c83 <main+0xc63>
+  400c41: 48 8b 75 e0                  	movq	-0x20(%rbp), %rsi
+  400c45: bf 03 00 00 00               	movl	$0x3, %edi
+  400c4a: 31 c0                        	xorl	%eax, %eax
+  400c4c: 41 89 c0                     	movl	%eax, %r8d
+  400c4f: 4c 89 c2                     	movq	%r8, %rdx
+  400c52: 4c 89 c1                     	movq	%r8, %rcx
+  400c55: e8 d6 00 00 00               	callq	0x400d30 <sc>
+  400c5a: 48 83 f8 00                  	cmpq	$0x0, %rax
+  400c5e: 75 23                        	jne	0x400c83 <main+0xc63>
+  400c60: be 01 00 00 00               	movl	$0x1, %esi
+  400c65: 48 ba ac 16 40 00 00 00 00 00	movabsq	$0x4016ac, %rdx         # imm = 0x4016AC
+  400c6f: b9 1a 00 00 00               	movl	$0x1a, %ecx
+  400c74: 31 c0                        	xorl	%eax, %eax
+  400c76: 41 89 c0                     	movl	%eax, %r8d
+  400c79: 48 89 f7                     	movq	%rsi, %rdi
+  400c7c: e8 af 00 00 00               	callq	0x400d30 <sc>
+  400c81: eb 32                        	jmp	0x400cb5 <main+0xc95>
+  400c83: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400c8a: 83 c0 01                     	addl	$0x1, %eax
+  400c8d: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400c94: be 01 00 00 00               	movl	$0x1, %esi
+  400c99: 48 ba c7 15 40 00 00 00 00 00	movabsq	$0x4015c7, %rdx         # imm = 0x4015C7
+  400ca3: b9 1a 00 00 00               	movl	$0x1a, %ecx
+  400ca8: 31 c0                        	xorl	%eax, %eax
+  400caa: 41 89 c0                     	movl	%eax, %r8d
+  400cad: 48 89 f7                     	movq	%rsi, %rdi
+  400cb0: e8 7b 00 00 00               	callq	0x400d30 <sc>
+  400cb5: eb 00                        	jmp	0x400cb7 <main+0xc97>
+  400cb7: eb 00                        	jmp	0x400cb9 <main+0xc99>
+  400cb9: 83 3c 25 00 20 40 00 00      	cmpl	$0x0, 0x402000
+  400cc1: 75 23                        	jne	0x400ce6 <main+0xcc6>
+  400cc3: be 01 00 00 00               	movl	$0x1, %esi
+  400cc8: 48 ba 58 15 40 00 00 00 00 00	movabsq	$0x401558, %rdx         # imm = 0x401558
+  400cd2: b9 1b 00 00 00               	movl	$0x1b, %ecx
+  400cd7: 31 c0                        	xorl	%eax, %eax
+  400cd9: 41 89 c0                     	movl	%eax, %r8d
+  400cdc: 48 89 f7                     	movq	%rsi, %rdi
+  400cdf: e8 4c 00 00 00               	callq	0x400d30 <sc>
+  400ce4: eb 32                        	jmp	0x400d18 <main+0xcf8>
+  400ce6: 8b 04 25 00 20 40 00         	movl	0x402000, %eax
+  400ced: 83 c0 01                     	addl	$0x1, %eax
+  400cf0: 89 04 25 00 20 40 00         	movl	%eax, 0x402000
+  400cf7: be 01 00 00 00               	movl	$0x1, %esi
+  400cfc: 48 ba 32 13 40 00 00 00 00 00	movabsq	$0x401332, %rdx         # imm = 0x401332
+  400d06: b9 1b 00 00 00               	movl	$0x1b, %ecx
+  400d0b: 31 c0                        	xorl	%eax, %eax
+  400d0d: 41 89 c0                     	movl	%eax, %r8d
+  400d10: 48 89 f7                     	movq	%rsi, %rdi
+  400d13: e8 18 00 00 00               	callq	0x400d30 <sc>
+  400d18: eb 00                        	jmp	0x400d1a <main+0xcfa>
+  400d1a: 83 3c 25 00 20 40 00 00      	cmpl	$0x0, 0x402000
+  400d22: 0f 95 c0                     	setne	%al
+  400d25: 24 01                        	andb	$0x1, %al
+  400d27: 0f b6 c0                     	movzbl	%al, %eax
+  400d2a: 48 83 c4 40                  	addq	$0x40, %rsp
+  400d2e: 5d                           	popq	%rbp
+  400d2f: c3                           	retq
+
+0000000000400d30 <sc>:
+  400d30: 55                           	pushq	%rbp
+  400d31: 48 89 e5                     	movq	%rsp, %rbp
+  400d34: 48 83 ec 30                  	subq	$0x30, %rsp
+  400d38: 48 89 7d f8                  	movq	%rdi, -0x8(%rbp)
+  400d3c: 48 89 75 f0                  	movq	%rsi, -0x10(%rbp)
+  400d40: 48 89 55 e8                  	movq	%rdx, -0x18(%rbp)
+  400d44: 48 89 4d e0                  	movq	%rcx, -0x20(%rbp)
+  400d48: 4c 89 45 d8                  	movq	%r8, -0x28(%rbp)
+  400d4c: 48 8b 45 d8                  	movq	-0x28(%rbp), %rax
+  400d50: 48 89 45 d0                  	movq	%rax, -0x30(%rbp)
+  400d54: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+  400d58: 48 8b 7d f0                  	movq	-0x10(%rbp), %rdi
+  400d5c: 48 8b 75 e8                  	movq	-0x18(%rbp), %rsi
+  400d60: 48 8b 55 e0                  	movq	-0x20(%rbp), %rdx
+  400d64: 4c 8b 55 d0                  	movq	-0x30(%rbp), %r10
+  400d68: 0f 05                        	syscall
+  400d6a: 48 89 45 f8                  	movq	%rax, -0x8(%rbp)
+  400d6e: 48 8b 45 f8                  	movq	-0x8(%rbp), %rax
+  400d72: 48 83 c4 30                  	addq	$0x30, %rsp
+  400d76: 5d                           	popq	%rbp
+  400d77: c3                           	retq
+
+exit=0

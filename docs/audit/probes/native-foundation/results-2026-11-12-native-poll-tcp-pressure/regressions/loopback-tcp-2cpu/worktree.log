@@ -1,0 +1,9 @@
+$ git status --short
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/
+?? tools/native-c/run_poll_pressure.py
+?? tools/native-c/tcp_pressure_peer.py
+?? tools/native-c/tests/tcp-poll-pressure-client.c
+?? tools/native-c/tests/tcp-poll-pressure-loopback-client.c
+?? tools/native-c/tests/tcp-poll-pressure-service.c
+
+exit=0

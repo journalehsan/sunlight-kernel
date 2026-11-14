@@ -1,0 +1,3 @@
+$ llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/regression/cxx/execution.elf
+
+exit=0

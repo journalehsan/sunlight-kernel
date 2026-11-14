@@ -1,0 +1,60 @@
+captured: 2026-11-13T18:45:50+03:30
+head: 5b08147001be963e468711d03284b349fa8b2089
+branch: main
+
+== status --porcelain (before task) ==
+ M docs/audit/std-progress.md
+ M ipc/src/lib.rs
+ M kernel/src/arch/x86_64/syscall.rs
+ M kernel/src/process/epoll.rs
+ M kernel/src/process/inet_socket.rs
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/src/multiplex.rs
+ M sunlight-libc/src/net_bridge.rs
+ M sunlight-libc/src/socket.rs
+ M sunlight-libc/src/sys.rs
+ M tools/native-c/Cargo.lock
+ M tools/native-c/guest.py
+ M tools/native-c/tests/inet-socket.c
+ M tools/native-c/tests/run_cxx_runtime.py
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/
+?? docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-inventory/
+?? docs/audit/probes/native-foundation/results-2026-11-13-cpp-runtime-link-closure/
+?? docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/
+?? docs/audit/probes/native-foundation/results-2026-11-13-native-tcp-epoll-lt-contract-closure/
+?? docs/networking/2026-11-12_NATIVE_POLL_TCP_WRITE_BACKPRESSURE.md
+?? docs/networking/2026-11-12_NATIVE_TCP_EPOLL_LT.md
+?? ipc/src/native_epoll.rs
+?? tools/native-c/run_epoll_pressure.py
+?? tools/native-c/run_epoll_tcp.py
+?? tools/native-c/run_poll_pressure.py
+?? tools/native-c/tcp_pressure_peer.py
+?? tools/native-c/tests/epoll-observe.h
+?? tools/native-c/tests/inet-socket-epoll-lt.c
+?? tools/native-c/tests/tcp-epoll-external-client.c
+?? tools/native-c/tests/tcp-epoll-lt.c
+?? tools/native-c/tests/tcp-epoll-pressure-client.c
+?? tools/native-c/tests/tcp-epoll-pressure-loopback-client.c
+?? tools/native-c/tests/tcp-epoll-revalidation.c
+?? tools/native-c/tests/tcp-poll-pressure-client.c
+?? tools/native-c/tests/tcp-poll-pressure-loopback-client.c
+?? tools/native-c/tests/tcp-poll-pressure-service.c
+
+== diff --stat (incoming tracked changes) ==
+ docs/audit/std-progress.md              |  54 ++++++++++++
+ ipc/src/lib.rs                          |   1 +
+ kernel/src/arch/x86_64/syscall.rs       | 149 ++++++++++++++++++++++++++++++--
+ kernel/src/process/epoll.rs             |  80 ++++++++++++++++-
+ kernel/src/process/inet_socket.rs       |   9 ++
+ sunlight-libc/include/errno.h           |   1 +
+ sunlight-libc/src/multiplex.rs          |   6 +-
+ sunlight-libc/src/net_bridge.rs         |   4 +-
+ sunlight-libc/src/socket.rs             | 115 ++++++++++++++++++++----
+ sunlight-libc/src/sys.rs                |   1 +
+ tools/native-c/Cargo.lock               |   6 +-
+ tools/native-c/guest.py                 |  16 ++--
+ tools/native-c/tests/inet-socket.c      |  15 +++-
+ tools/native-c/tests/run_cxx_runtime.py |  15 ++++
+ 14 files changed, 425 insertions(+), 47 deletions(-)

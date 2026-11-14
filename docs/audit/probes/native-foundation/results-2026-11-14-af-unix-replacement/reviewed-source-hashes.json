@@ -1,0 +1,14 @@
+{
+  "kernel/src/arch/x86_64/syscall.rs": "287dfb5baf2b079c663f3c0c4da739590bb23f6712f9d5d71fd42bf0e367dbb3",
+  "kernel/src/process/fd_table.rs": "380d2730bc798256a4017ff253b346736271e2644ce9e4657c708c0442cd6440",
+  "kernel/src/process/unix_socket.rs": "96f64996fb69c1457c50db63ae5a0fae57fc2f5d66b435bc1d7dfcfaaf41f59d",
+  "kernel/src/process/pipe.rs": "4588b0f5e82c35868ffa88543868a2e771787a732d6630e6666ace4cd3c23581",
+  "kernel/src/process/epoll.rs": "f7ad7a15e57e0de6f2f7c60da9373dd635f9cfffc2f94cd753408ed51f5658d1",
+  "sunlight-libc/src/socket.rs": "26eb950cd676d9f5683e6cc2d65287854a7d7cb10d16dd34eb1ee289d48f46e6",
+  "sunlight-libc/src/multiplex.rs": "9e4c929a44234e686d78fb65461281b39156fe88cd0818b69b984d9386ac00e9",
+  "tools/native-c/guest.py": "fb398af92f49d151440fb95ea82282435757b5f7e446af35e8c36622526d8791",
+  "tools/build_native_c.sh": "db46411df76215dfe96cfcb1ded0e4341713660fdddeecb051ce0e9b185a7613",
+  "tools/native-c/tests/unix-replacement.c": "9772e86b5f5e918e32c4571a439032c4b74dbde00f3166b8299e085362d1ba0d",
+  "tools/native-c/tests/unix-replacement-public.c": "68d38ad81297358d923a3391a6f4fbec8620c712b710094ad0a4032c025492c8",
+  "tools/native-c/tests/run_unix_replacement.py": "ba7ca17d1b0f478355c0e23598aa1d5b76506571eed773fc326f4d87d7498221"
+}

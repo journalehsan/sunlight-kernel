@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/dup2-replacement.elf --net --cpus 4 --expect-exit 0 --timeout 300 --out docs/audit/probes/native-foundation/results-2026-11-13-native-dup2-replacement-identity/final/dup2-replacement-net-4

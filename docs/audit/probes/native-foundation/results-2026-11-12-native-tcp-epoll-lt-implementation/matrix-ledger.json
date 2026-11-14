@@ -1,0 +1,149 @@
+[
+  {
+    "name": "lt-4-final",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/tcp-epoll-lt-final2.elf",
+      "--expect-exit",
+      "0",
+      "--net",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/lt-4-final"
+    ],
+    "exit": 0,
+    "seconds": 6.68,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-external-2",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_tcp.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "2",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-2"
+    ],
+    "exit": 0,
+    "seconds": 7.33,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-external-4",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_tcp.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "4",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-4"
+    ],
+    "exit": 0,
+    "seconds": 6.03,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-external-2-repeat",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_tcp.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "2",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-external-2-repeat"
+    ],
+    "exit": 0,
+    "seconds": 7.93,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-pressure-external-2",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_pressure.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "2",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-pressure-external-2"
+    ],
+    "exit": 0,
+    "seconds": 18.01,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-pressure-external-4",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_pressure.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "4",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-pressure-external-4"
+    ],
+    "exit": 0,
+    "seconds": 16.6,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-pressure-external-2-repeat",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_pressure.py",
+      "--mode",
+      "external",
+      "--cpus",
+      "2",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-pressure-external-2-repeat"
+    ],
+    "exit": 0,
+    "seconds": 18.28,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  },
+  {
+    "name": "epoll-pressure-loopback-2",
+    "argv": [
+      "/usr/bin/python3",
+      "tools/native-c/run_epoll_pressure.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "2",
+      "--skip-build",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/epoll-pressure-loopback-2"
+    ],
+    "exit": 0,
+    "seconds": 12.5,
+    "archive_before": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31",
+    "archive_after": "4b0a067437a58dd1abc05e53376df6f707729dd6f1a9af396e20494bc40aca31"
+  }
+]

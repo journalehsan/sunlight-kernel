@@ -1,0 +1,9 @@
+{
+  "tools/native-c/tests/dup-runtime.c": "91f1ac77ada515777a12621c942869f956bcd80af6a4c820f6d22cbd94b678b3",
+  "tools/native-c/tests/dup2-wrapper-adapter.rs": "e08e3eed38a964d75d544c0227f44f3a18a650d1eb2094c7a286e05bc341a1ad",
+  "tools/native-c/tests/dup3-linux-entry.c": "4162ccab1ac4ef1b9ca891bc397f00376d6a29140be4d58297258734d026872b",
+  "tools/native-c/tests/run_dup_runtime.py": "f01db80d5ad2d110609b04115473c136f373da83a33f175aa9ae9b54b9e84c26",
+  "tools/native-c/guest.py": "fb398af92f49d151440fb95ea82282435757b5f7e446af35e8c36622526d8791",
+  "tools/native-c/tests/dup2-replacement.c": "be6a7aae0d7f14295986d07403671900511a79e80d2c6241daa037372829a2e7",
+  "docs/networking/2026-11-13_NATIVE_DUP_RUNTIME_COVERAGE.md": "55c8cec9d61de7c372e8ae2ec7e0e404b063683b3d697d01cd3843cb3b6cc823"
+}

@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/regressions/external-echo-2cpu/tcp-echo-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/regressions/external-echo-2cpu/guest --timeout 300 --arg 35719 --arg 10.0.2.2 --arg regress-external-echo-2cpu
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/regressions/external-echo-2cpu/guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'tcp-echo: run=regress-external-echo-2cpu dest=10.0.2.2:35719\ntcp-echo: refused errno=111\ntcp-echo: nonblocking-connect errno=95\ntcp-echo: PASS exchanges=5 bytes=1371 socket_live=0 listener_live=0 stream_live=0\n'
+
+exit=0

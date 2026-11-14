@@ -1,0 +1,125 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-nm --demangle /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-dup-runtime-gaps/run-2/linux-handler.elf
+00000000004082f0 t __rustc::rust_begin_unwind
+0000000000407e60 T sunlight_ipc::ipc_call_timeout
+00000000004080b0 T sunlight_ipc::nameserver_lookup_timeout
+0000000000408210 T sunlight_ipc::shm_alloc
+00000000004083e0 T <core::fmt::Formatter>::pad_integral
+000000000040d9a9 b sunlight_libc::net_bridge::TABLE_LOCK (.llvm.17331505550573148227)
+0000000000405a40 t sunlight_libc::net_bridge::wait_ready
+000000000040d9b0 b sunlight_libc::net_bridge::GENERATIONS (.llvm.17331505550573148227)
+0000000000405c00 t sunlight_libc::net_bridge::close_net_socket
+0000000000405c70 T sunlight_libc::net_bridge::wait_any_per_interest
+000000000040e1b0 b sunlight_libc::net_bridge::IDS (.llvm.17331505550573148227)
+0000000000405ee0 T sunlight_libc::net_bridge::bind
+00000000004062c0 T sunlight_libc::net_bridge::recv
+0000000000406910 T sunlight_libc::net_bridge::send
+0000000000407030 T sunlight_libc::net_bridge::accept
+0000000000407400 T sunlight_libc::net_bridge::listen
+000000000040e9b0 b sunlight_libc::net_bridge::NET_CAP (.0.llvm.17331505550573148227)
+0000000000407630 T sunlight_libc::net_bridge::connect
+0000000000407bb0 t sunlight_libc::net_bridge::endpoint (.llvm.17331505550573148227)
+000000000040d018 b sunlight_libc::std_runtime::START_ARGC (.0)
+000000000040d020 b sunlight_libc::std_runtime::START_ARGV (.0)
+000000000040d028 b sunlight_libc::std_runtime::START_ENVP (.0)
+000000000040d030 b sunlight_libc::std_runtime::DETACHED_LOCK
+0000000000404e50 t sunlight_libc::std_runtime::reap_detached
+000000000040d038 b sunlight_libc::std_runtime::DETACHED
+000000000040d838 b sunlight_libc::termination::CALLBACKS
+000000000040d010 b sunlight_libc::env::ENVP (.0.llvm.12728956855724013060)
+00000000004044a0 T sunlight_libc::tls::init_tls
+000000000040d948 b sunlight_libc::alloc::FREE_COUNT
+000000000040d950 b sunlight_libc::alloc::REALLOC_COUNT
+000000000040d958 b sunlight_libc::alloc::ALLOCATION_COUNT
+0000000000404f50 t sunlight_libc::alloc::validated_header
+00000000004050d0 t sunlight_libc::alloc::allocation_layout
+000000000040d960 b sunlight_libc::alloc::REQUESTED_USER_BYTES
+000000000040d968 b sunlight_libc::alloc::LIVE_ALLOCATION_COUNT
+000000000040d970 b sunlight_libc::alloc::ALLOCATED_BACKING_BYTES
+000000000040d978 b sunlight_libc::alloc::FAILED_ALLOCATION_COUNT
+000000000040d980 b sunlight_libc::alloc::HIGH_WATER_ALLOCATED_BYTES
+000000000040d988 b sunlight_libc::alloc::HEAP
+0000000000405150 t sunlight_libc::alloc::release (.llvm.7953834211537957776)
+0000000000405340 t sunlight_libc::alloc::allocate (.llvm.7953834211537957776)
+000000000040d9a8 b sunlight_libc::alloc::HEAP_LOCK
+000000000040d004 b sunlight_libc::errno::ERRNO_FALLBACK (.llvm.8594765235908461126)
+000000000040d008 b sunlight_libc::errno::TLS_READY (.0.llvm.8594765235908461126)
+000000000040c008 D sunlight_libc::stdio::OUTPUT
+00000000004045f0 t sunlight_libc::thread::thread_start
+0000000000404620 T sunlight_libc::thread::spawn_with_stack
+000000000040448c t sunlight_libc::thread::thread_trampoline
+0000000000408278 T core::panicking::panic_bounds_check
+00000000004082c0 T core::panicking::panic_fmt
+0000000000402c80 t sunlight_libc::stdio::format::print
+0000000000408a30 T core::str::count::do_count_chars
+0000000000408300 T core::slice::index::slice_index_fail
+00000000004088c0 t <core::fmt::Formatter>::pad_integral::write_prefix
+0000000000408920 T <u64 as core::fmt::Display>::fmt
+0000000000408920 T <usize as core::fmt::Display>::fmt
+000000000040b01c R __eh_frame_end
+000000000040b020 R __eh_frame_hdr_end
+000000000040b020 R __eh_frame_hdr_start
+000000000040b000 R __eh_frame_start
+0000000000402ac0 T __errno_location
+000000000040a270 R __sl_exports_end
+000000000040a1f0 R __sl_exports_start
+000000000040c018 D __sl_init_array_end
+000000000040c018 D __sl_init_array_start
+0000000000408fe8 T __sl_text_end
+0000000000400000 T __sl_text_start
+0000000000000001 A __tls_align
+0000000000000000 A __tls_size
+000000000040c000 R __tls_tbss_end
+000000000040c000 R __tls_tbss_start
+000000000040c000 R __tls_tdata_end
+000000000040c000 R __tls_tdata_start
+0000000000404e2c T _start
+0000000000401d30 T accept
+000000000040a020 r anon.8f3f705b01df2e1661b3c19f9c398bb5.4.llvm.17331505550573148227
+000000000040a108 r anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105
+0000000000401820 t attached_rejections
+0000000000401d40 T bind
+0000000000401610 t call3
+0000000000405610 T calloc
+0000000000401140 t check
+0000000000404900 T clock_gettime
+0000000000401d50 T close
+0000000000401ed0 T connect
+0000000000401240 t connect_pair
+0000000000401570 T coverage_linux_replace
+0000000000401520 t delay_ms
+0000000000401ee0 T epoll_create1
+0000000000401f20 T epoll_ctl
+0000000000402060 T epoll_wait
+0000000000405640 T exit
+000000000040d000 b failures
+0000000000405700 T free
+0000000000407e40 T htonl
+0000000000407e50 T htons
+0000000000402600 T listen
+0000000000401650 T main
+00000000004011b0 t make_pipe
+0000000000405710 T malloc
+0000000000402ae0 T memcpy
+0000000000402be0 T memset
+0000000000404a20 T nanosleep
+00000000004014c0 t now_ms
+0000000000407e40 T ntohl
+0000000000407e50 T ntohs
+0000000000404c60 T printf
+0000000000401220 t raw_dup2
+0000000000402610 T read
+0000000000405720 T realloc
+00000000004013c0 t replace_worker
+0000000000400000 T replacement_base_main
+00000000004057f0 T sl_std_exit
+0000000000405810 T sl_std_init_tls
+0000000000405840 T sl_std_join
+0000000000405910 T sl_std_spawn
+00000000004059f0 T sl_std_start
+00000000004027b0 T socket
+000000000040c000 D stdout
+0000000000404e10 T strlen
+0000000000402850 T sunlight_net_diagnostic
+0000000000402920 T write
+
+exit=0

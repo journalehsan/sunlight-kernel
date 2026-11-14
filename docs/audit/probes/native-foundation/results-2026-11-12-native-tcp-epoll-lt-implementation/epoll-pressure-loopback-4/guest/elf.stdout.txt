@@ -1,0 +1,14 @@
+poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=2 filled=32768 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=3 filled=52072 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=4 filled=71376 held_ms=160 recovery_ms=20
+poll-pressure-loopback: cycle=5 filled=90680 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=6 filled=109984 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=7 filled=129288 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=8 filled=151552 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=9 filled=170856 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=10 filled=192512 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=11 filled=211816 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=12 filled=231120 held_ms=150 recovery_ms=20
+poll-pressure-loopback: cycle=13 filled=253952 held_ms=150 recovery_ms=20
+poll-pressure-loopback: PASS cycles=13 unstable=18 saturated_bytes=253952 bytes=262152 socket_live=0 listener_live=0 stream_live=0

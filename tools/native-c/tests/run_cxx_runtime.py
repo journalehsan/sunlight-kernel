@@ -46,6 +46,21 @@ assert probe.read_bytes()==subprocess.check_output(['git','show','HEAD:docs/audi
 # Preserve original command literally; it has no native startup/libraries.
 diag=run('historical-original',['clang++','--target=x86_64-unknown-none-elf','-nostdinc','-I'+str(ROOT/'sunlight-libc/include'),'-nostdlib','-fuse-ld=lld',probe,'-o',out/'original.elf'],1)
 assert b'undefined symbol' in diag and b'file not found' not in diag
+# Diagnosed failure: the bare recipe omits native link inputs, it does not
+# reference a missing libc export. cpp-runtime never calls close, and close is
+# a strong definition in the target-built native C archive.
+native=ROOT/'target/native-c/sysroot/lib/libsunlight_native_c.a'
+native_symbols=run('native-close-symbols',['llvm-nm','-g','--defined-only',native])
+assert any(f==[b'T',b'close'] for f in (l.split()[-2:] for l in native_symbols.splitlines())),'close is not a strong native export'
+obj=out/'cpp-runtime.o'
+run('cpp-runtime-object',['clang++','--target=x86_64-unknown-none-elf','-nostdinc','-I'+str(ROOT/'sunlight-libc/include'),'-c',probe,'-o',obj])
+object_undefined=run('cpp-runtime-object-undefined',['llvm-nm','-u',obj])
+assert b'close' not in object_undefined.split()
+assert b'__cxa_atexit' in object_undefined and b'__gxx_personality_v0' in object_undefined
+assert b'undefined symbol: close' not in diag
+historical_map=(out/'historical.map').read_text()
+for archive in ('libsunlight_native_c.a','libsunlight_cxx.a','libsunlight_eh.a'):
+ assert archive in historical_map,archive
 local=out/'local-static.cpp';local.write_text('#include <string>\nstd::string& f() { static std::string s("x"); return s; }\nint main() { return f().empty(); }\n')
 run('local-static-link',['python3','tools/native-c/cxx.py',local,'-o',out/'local-static.elf'])
 guard=run('local-static-symbols',['llvm-nm','-g','--defined-only',out/'local-static.elf'])

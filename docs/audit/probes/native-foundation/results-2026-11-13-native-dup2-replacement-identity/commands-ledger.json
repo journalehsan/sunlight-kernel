@@ -1,0 +1,332 @@
+{
+ "head": "5b08147001be963e468711d03284b349fa8b2089",
+ "archive_before": "f1fe24486aa0152688408c16cb3ddddb793ef1024d582111f92cd33da4787441",
+ "archive_final": "2fb382ef6c2b83b48e034645a078d5e36e40f036d98b00a00eace35d222696c7",
+ "kernel_elf_final": "97d9bb2204549ec7548b14fc6d2c90af0d3986dfdd5292aa5eec8ba21e931594",
+ "rows": [
+  {
+   "name": "archive-before",
+   "command": "sha256sum target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a target/native-c/sysroot/lib/libsunlight_native_c.a",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "f1fe2448... both paths (reported baseline confirmed)",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "abi-symbols",
+   "command": "nm -g --defined-only target/native-c/sysroot/lib/libsunlight_native_c.a | grep -E ' [TDBR] (dup|dup2|dup3)$'",
+   "exit": 1,
+   "classification": "FAIL",
+   "note": "no dup/dup2/dup3 export (empty match)",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "abi-negative-link",
+   "command": "python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror <D>/probe-dup2-abi.c -o <D>/probe-dup2-abi.elf",
+   "exit": 1,
+   "classification": "FAIL",
+   "note": "undefined symbol: dup2; C ABI boundary proven",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "build-dup2-before",
+   "command": "python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -Wl,-t tools/native-c/tests/dup2-replacement.c -o <D>/dup2-replacement.elf",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "47-check baseline fixture linked to archive f1fe2448",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "dup2-2-before",
+   "command": "python3 tools/native-c/guest.py <D>/dup2-replacement.elf --net --cpus 2 --expect-exit 0 --timeout 240 --out <D>/dup2-2-before",
+   "exit": 1,
+   "classification": "FAIL",
+   "note": "FAIL: 6/46 assertions reproduce the stale identity defect",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "cargo-kernel",
+   "command": "cargo check -p sunlight-kernel",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "cargo-libc",
+   "command": "cargo check -p sunlight-libc --features native-c",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS (pre-existing warnings)",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "build-native-after",
+   "command": "bash tools/build_native_c.sh",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "archive 264d2ac0 (intermediate formatting state)",
+   "watchdog": "timeout 900"
+  },
+  {
+   "name": "dup2-2-after",
+   "command": "python3 tools/native-c/guest.py <D>/dup2-replacement.elf --net --cpus 2 --expect-exit 0 --out <D>/dup2-2-after",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "48/48 PASS (pre-concurrency phase)",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "dup2-4-after",
+   "command": "python3 tools/native-c/guest.py <D>/dup2-replacement.elf --net --cpus 4 --expect-exit 0 --out <D>/dup2-4-after",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "48/48 PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "build-native-after-fmt",
+   "command": "bash tools/build_native_c.sh",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "final archive 2fb382ef",
+   "watchdog": "timeout 900"
+  },
+  {
+   "name": "final-builds",
+   "command": "python3 tools/native-c/cc.py ... tools/native-c/tests/<fixture>.c -o <D>/final/<fixture>.elf",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "all final fixtures relinked to 2fb382ef",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "final-dup2-net-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/dup2-replacement.elf --net --cpus 2 --expect-exit 0 --timeout 300 --out <D>/final/dup2-replacement-net-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 50/50, counters zero",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-dup2-net-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/dup2-replacement.elf --net --cpus 4 --expect-exit 0 --timeout 300 --out <D>/final/dup2-replacement-net-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 50/50, counters zero",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-tcp-epoll-lt-net-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/tcp-epoll-lt.elf --net --cpus 2 --expect-exit 0 --out <D>/final/tcp-epoll-lt-net-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-tcp-epoll-lt-net-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/tcp-epoll-lt.elf --net --cpus 4 --expect-exit 0 --out <D>/final/tcp-epoll-lt-net-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-tcp-epoll-revalidation-net-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/tcp-epoll-revalidation.elf --net --cpus 2 --expect-exit 0 --out <D>/final/tcp-epoll-revalidation-net-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-tcp-epoll-revalidation-net-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/tcp-epoll-revalidation.elf --net --cpus 4 --expect-exit 0 --out <D>/final/tcp-epoll-revalidation-net-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 480"
+  },
+  {
+   "name": "final-epoll-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/epoll.elf --cpus 2 --expect-exit 0 --out <D>/final/epoll-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-epoll-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/epoll.elf --cpus 4 --expect-exit 0 --out <D>/final/epoll-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-epoll-lifecycle-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/epoll-lifecycle.elf --cpus 2 --expect-exit 0 --out <D>/final/epoll-lifecycle-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-epoll-lifecycle-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/epoll-lifecycle.elf --cpus 4 --expect-exit 0 --out <D>/final/epoll-lifecycle-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-inet-socket-2",
+   "command": "python3 tools/native-c/guest.py <D>/final/inet-socket.elf --cpus 2 --expect-exit 0 --out <D>/final/inet-socket-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-inet-socket-4",
+   "command": "python3 tools/native-c/guest.py <D>/final/inet-socket.elf --cpus 4 --expect-exit 0 --out <D>/final/inet-socket-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 420"
+  },
+  {
+   "name": "final-tcp-epoll-external-2",
+   "command": "python3 tools/native-c/run_epoll_tcp.py --mode external --cpus 2 --out <D>/final/tcp-epoll-external-2 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 5 exchanges 1371 bytes",
+   "watchdog": "timeout 1200"
+  },
+  {
+   "name": "final-tcp-epoll-external-4",
+   "command": "python3 tools/native-c/run_epoll_tcp.py --mode external --cpus 4 --out <D>/final/tcp-epoll-external-4 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 1200"
+  },
+  {
+   "name": "final-tcp-poll-loopback-2",
+   "command": "python3 tools/native-c/run_poll_tcp.py --mode loopback --cpus 2 --out <D>/final/tcp-poll-loopback-2 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS counters zero",
+   "watchdog": "timeout 1200"
+  },
+  {
+   "name": "final-poll-pressure-loopback-2",
+   "command": "python3 tools/native-c/run_poll_pressure.py --mode loopback --cpus 2 --out <D>/final/poll-pressure-loopback-2 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 15 cycles",
+   "watchdog": "timeout 1500"
+  },
+  {
+   "name": "final-poll-pressure-external-2",
+   "command": "python3 tools/native-c/run_poll_pressure.py --mode external --cpus 2 --out <D>/final/poll-pressure-external-2 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 5 cycles",
+   "watchdog": "timeout 1500"
+  },
+  {
+   "name": "final-epoll-pressure-loopback-2",
+   "command": "python3 tools/native-c/run_epoll_pressure.py --mode loopback --cpus 2 --out <D>/final/epoll-pressure-loopback-2 --timeout 400",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 12 cycles",
+   "watchdog": "timeout 1800"
+  },
+  {
+   "name": "final-epoll-pressure-external-2",
+   "command": "python3 tools/native-c/run_epoll_pressure.py --mode external --cpus 2 --out <D>/final/epoll-pressure-external-2 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 5 cycles",
+   "watchdog": "timeout 1500"
+  },
+  {
+   "name": "final-suite-2",
+   "command": "python3 tools/native-c/guest.py --suite --cpus 2 --timeout 600 --out <D>/final/suite-2",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "94/94 PASS",
+   "watchdog": "timeout 5400"
+  },
+  {
+   "name": "final-suite-4",
+   "command": "python3 tools/native-c/guest.py --suite --cpus 4 --timeout 600 --out <D>/final/suite-4",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "94/94 PASS",
+   "watchdog": "timeout 5400"
+  },
+  {
+   "name": "final-abi-poll",
+   "command": "python3 tools/native-c/tests/run_poll.py --out <D>/final/abi-poll",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 12 ABI checks",
+   "watchdog": "timeout 600"
+  },
+  {
+   "name": "final-cxx-runtime",
+   "command": "python3 tools/native-c/tests/run_cxx_runtime.py --out <D>/final/cxx-runtime",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 900"
+  },
+  {
+   "name": "final-kernel-locked",
+   "command": "cargo build --package sunlight-kernel --locked",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "kernel ELF 97d9bb22...",
+   "watchdog": "timeout 1800"
+  },
+  {
+   "name": "final-cargo-net",
+   "command": "cargo check -p sunlight-net -p sunlight-ipc -p sunlight-net-server",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "timeout 900"
+  },
+  {
+   "name": "final-diff-check",
+   "command": "git diff --check",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS",
+   "watchdog": "n/a"
+  },
+  {
+   "name": "final-poll-pressure-loopback-4",
+   "command": "python3 tools/native-c/run_poll_pressure.py --mode loopback --cpus 4 --out <D>/final/poll-pressure-loopback-4 --timeout 300",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 16 cycles",
+   "watchdog": "timeout 1500"
+  },
+  {
+   "name": "final-epoll-pressure-loopback-4",
+   "command": "python3 tools/native-c/run_epoll_pressure.py --mode loopback --cpus 4 --out <D>/final/epoll-pressure-loopback-4 --timeout 400",
+   "exit": 0,
+   "classification": "PASS",
+   "note": "PASS 11 cycles",
+   "watchdog": "timeout 1800"
+  }
+ ],
+ "superseded_archives": [
+  "264d2ac0 (formatting-intermediate)",
+  "4c9bcea4 (pre attach-time generation refinement, runs-archive-4c9bcea4/)"
+ ]
+}

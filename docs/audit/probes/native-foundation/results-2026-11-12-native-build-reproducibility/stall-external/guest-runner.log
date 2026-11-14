@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/tcp-stall-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/guest --timeout 300 --arg 43575 --arg 10.0.2.2 --arg stall-2cpu-20261112T204947Z
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/stall-external/guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'tcp-stall: run=stall-2cpu-20261112T204947Z dest=10.0.2.2:43575\ntcp-stall: PASS errno=110 elapsed_ms=10000 socket_live=0 listener_live=0 stream_live=0\n'
+
+exit=0

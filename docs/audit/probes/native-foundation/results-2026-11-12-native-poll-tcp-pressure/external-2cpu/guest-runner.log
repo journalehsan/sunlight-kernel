@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/external-2cpu/tcp-poll-pressure-client.elf --net --cpus 2 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/external-2cpu/guest --timeout 420 --arg 10.0.2.2 --arg 41359 --arg 40997 --arg 32987 --arg external-2cpu
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/external-2cpu/guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=None
+guest elf stdout: b'poll-pressure: run=external-2cpu dest=10.0.2.2:40997 stream=16777224\npoll-pressure: cycle=1 filled=4193492 held_ms=800 recovery_ms=10\npoll-pressure: cycle=2 filled=8741992 held_ms=800 recovery_ms=10\npoll-pressure: cycle=3 filled=13298320 held_ms=800 recovery_ms=10\npoll-pressure: reset revents=0x10 elapsed_ms=0 write_errno=111\npoll-pressure: PASS cycles=3 unstable=1 stream_saturated_bytes=13298320 reset_saturated_bytes=2669528 bytes=16777228 socket_live=0 listener_live=0 stream_live=0\n'
+
+exit=0

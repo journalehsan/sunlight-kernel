@@ -1,0 +1,8 @@
+$ /usr/bin/python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/tcp-epoll-lt-final2.elf --expect-exit 0 --net --cpus 4 --timeout 180 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-4-final
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-12-native-tcp-epoll-lt-implementation/final/lt-4-final
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'tcp-epoll-lt: capacity=40 net_batch=32 registered=41 ready=9 maxevents=1 fairness=PASS\ntcp-epoll-lt: PASS ABI ctl listener receive drain MOD DEL multi EOF reuse timeout concurrent socket_live=0\n'
+
+exit=0

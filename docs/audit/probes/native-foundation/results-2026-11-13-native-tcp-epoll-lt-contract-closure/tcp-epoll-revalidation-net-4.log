@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-13-native-tcp-epoll-lt-contract-closure/tcp-epoll-revalidation-net-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'epoll-revalidation: PASS stale MOD DEL reADD identity generation close-reuse input-validation concurrent-deadline capacity64 maxevents\n'

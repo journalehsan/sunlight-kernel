@@ -1,0 +1,16 @@
+{
+  "docs/audit/std-progress.md": true,
+  "ipc/src/lib.rs": true,
+  "kernel/src/arch/x86_64/syscall.rs": true,
+  "kernel/src/process/epoll.rs": true,
+  "kernel/src/process/inet_socket.rs": true,
+  "sunlight-libc/include/errno.h": true,
+  "sunlight-libc/src/lib.rs": true,
+  "sunlight-libc/src/multiplex.rs": true,
+  "sunlight-libc/src/net_bridge.rs": true,
+  "sunlight-libc/src/socket.rs": true,
+  "sunlight-libc/src/sys.rs": true,
+  "tools/native-c/Cargo.lock": true,
+  "tools/native-c/tests/inet-socket.c": true,
+  "tools/native-c/tests/run_cxx_runtime.py": true
+}

@@ -1,0 +1,3 @@
+HOST-PEER READY mode=stall addr=127.0.0.1 port=46747
+HOST-PEER ACCEPTED mode=stall peer=127.0.0.1:57224
+HOST-PEER PASS mode=stall received_frames=1 bytes=8

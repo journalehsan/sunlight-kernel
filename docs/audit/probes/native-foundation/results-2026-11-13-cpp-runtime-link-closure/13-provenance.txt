@@ -1,0 +1,8 @@
+== fixture sha256
+6de2fb45e998caf973f0f02f904155b4082a8ca74c87d1bd4f373c242a1e19e3  docs/audit/probes/cpp-runtime.cpp
+== HEAD blob sha256
+6de2fb45e998caf973f0f02f904155b4082a8ca74c87d1bd4f373c242a1e19e3  -
+== suite cpp-runtime.elf undefined
+(end)
+== ELF header/dynamic
+  Type:                              EXEC (Executable file)

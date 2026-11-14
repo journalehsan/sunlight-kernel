@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "poll-pressure-loopback: cycle=1 filled=12288 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=2 filled=32768 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=3 filled=45056 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=4 filled=60272 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=5 filled=81036 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=6 filled=94208 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=7 filled=106496 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=8 filled=118784 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=9 filled=131072 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=10 filled=143360 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=11 filled=159144 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=12 filled=171432 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=13 filled=184320 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=14 filled=199528 held_ms=170 recovery_ms=10\npoll-pressure-loopback: cycle=15 filled=219408 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=16 filled=233156 held_ms=150 recovery_ms=10\npoll-pressure-loopback: cycle=17 filled=245444 held_ms=150 recovery_ms=0\npoll-pressure-loopback: cycle=18 filled=258048 held_ms=150 recovery_ms=0\npoll-pressure-loopback: PASS cycles=18 unstable=34 saturated_bytes=261828 bytes=262152 socket_live=0 listener_live=0 stream_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

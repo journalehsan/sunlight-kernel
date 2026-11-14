@@ -1,0 +1,21 @@
+counts: before=1413 after=1416
+== diff of exported T symbols ==
+109c109
+< _RNvCs790hijwktEa_13sunlight_libc10spawn_impl.llvm.17751729617970671712
+---
+> _RNvCs790hijwktEa_13sunlight_libc10spawn_impl.llvm.7088203163826111728
+360a361
+> _RNvNtCs790hijwktEa_13sunlight_libc10net_bridge16release_detached
+366a368
+> _RNvNtCs790hijwktEa_13sunlight_libc10net_bridge6detach
+372c374,375
+< _RNvNtCs790hijwktEa_13sunlight_libc10net_bridge8endpoint.llvm.16470574255880877395
+---
+> _RNvNtCs790hijwktEa_13sunlight_libc10net_bridge8endpoint.llvm.4363254936106640842
+> _RNvNtCs790hijwktEa_13sunlight_libc10net_bridge8reattach
+393,394c396,397
+< _RNvNtCs790hijwktEa_13sunlight_libc5alloc7release.llvm.9490324186911948575
+< _RNvNtCs790hijwktEa_13sunlight_libc5alloc8allocate.llvm.9490324186911948575
+---
+> _RNvNtCs790hijwktEa_13sunlight_libc5alloc7release.llvm.16287145134035437362
+> _RNvNtCs790hijwktEa_13sunlight_libc5alloc8allocate.llvm.16287145134035437362

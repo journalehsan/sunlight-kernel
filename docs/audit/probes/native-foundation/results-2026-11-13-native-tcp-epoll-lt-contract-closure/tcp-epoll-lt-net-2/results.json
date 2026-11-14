@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "tcp-epoll-lt: capacity=40 net_batch=32 registered=41 ready=9 maxevents=1 fairness=PASS\ntcp-epoll-lt: PASS ABI ctl listener receive drain MOD DEL multi EOF reuse timeout concurrent socket_live=0\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

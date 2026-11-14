@@ -1,0 +1,45 @@
+{
+  "head": {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit": 0,
+    "stdout": "5b08147001be963e468711d03284b349fa8b2089\n",
+    "stderr": ""
+  },
+  "status": {
+    "command": [
+      "git",
+      "status",
+      "--short"
+    ],
+    "exit": 0,
+    "stdout": " M tools/native-c/Cargo.lock\n?? docs/audit/probes/native-foundation/results-2026-11-12-native-build-reproducibility/\n?? docs/audit/probes/native-foundation/results-2026-11-12-native-poll-tcp-pressure/\n?? docs/networking/2026-11-12_NATIVE_POLL_TCP_WRITE_BACKPRESSURE.md\n?? tools/native-c/run_poll_pressure.py\n?? tools/native-c/tcp_pressure_peer.py\n?? tools/native-c/tests/tcp-poll-pressure-client.c\n?? tools/native-c/tests/tcp-poll-pressure-loopback-client.c\n?? tools/native-c/tests/tcp-poll-pressure-service.c\n",
+    "stderr": ""
+  },
+  "toolchain": {
+    "command": [
+      "rustc",
+      "-Vv"
+    ],
+    "exit": 0,
+    "stdout": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n",
+    "stderr": ""
+  },
+  "diff-check": {
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "hashes": {
+    "target/native-c/sysroot/lib/libsunlight_native_c.a": "87bfcf73706f88243b6f60000da3ff4230bb2cd041fdd67736065fdbffa76ab7",
+    "tools/native-c/Cargo.lock": "25b66a46d88aea8b90df110d4301b1f674fd764adf868a07f3db0479a6894d66"
+  }
+}

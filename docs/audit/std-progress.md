@@ -4761,3 +4761,57 @@ attachment transfer, `bind`-then-`connect`, non-default QEMU user-mode
 subnets, and guest-to-guest topology. The next smallest useful step is the same
 external exchange under an explicit non-default slirp subnet to prove the path
 follows the DHCP-advertised gateway rather than a hardcoded alias.
+
+## Phase 23 follow-up — historical cpp-runtime LINK_FAIL root cause and closure (2026-11-13)
+
+Scope: the historical native suite row `cpp-runtime: LINK_FAIL, runtime
+NOT_RUN`. TCP LT epoll contract-closure work is untouched. Evidence:
+`docs/audit/probes/native-foundation/results-2026-11-13-cpp-runtime-link-closure/`.
+
+### Root cause (Category A: build/link recipe defect)
+
+The reported `undefined symbol: close` is **not** the cpp-runtime failure; it is
+the historical `socket.c` bare-command failure
+(`results-2026-11-12-native-net/historical/original-command.log`). The
+cpp-runtime cell failed with **20 unresolved C++ runtime symbols**
+(`_Unwind_Resume`, `__cxa_*`, `__gxx_personality_v0`, `_ZTISt13runtime_error`,
+`std::string`, `std::cout`, `_Znwm`/`_ZdlPvm`, `atexit`, `pthread_*`,
+`__dso_handle`), because the historical C++ cell used a bare
+`clang++ --target=x86_64-unknown-none-elf -nostdinc -I<libc>/include -nostdlib -fuse-ld=lld`
+command with no native startup, libc archive, C++/EH archives or linker script.
+
+- `close` is a strong export (`T close`) in the target-built
+  `libsunlight_native_c.a`; `cpp-runtime.o` never references it (no missing libc
+  export — B ruled out; no C++ integration defect — C ruled out; no unsupported
+  functionality — D ruled out).
+- C fixtures link `close` because they use `cc.py`, which passes
+  `libsunlight_native_c.a`, `-nostdlib -static` and `user-space.ld`; only the
+  historical C++ cell used the bare recipe.
+
+### Fix
+
+`tools/native-c/guest.py` routes every C++ cell (historical probe sources
+included) through the configured `tools/native-c/cxx.py` driver, matching every
+other native cell. `tools/native-c/tests/run_cxx_runtime.py` retains the bare
+command as an explicit LINK_FAIL regression and asserts the diagnosed facts
+(`close` strong native export, `cpp-runtime.o` undefined set, linked ELF map
+contains all three native archives). `-nostdlib`, the fixture and archive
+contents are unchanged; no stub, no host libc, no hosted build, no networking
+change.
+
+### Fresh validation
+
+| Gate | Result |
+| --- | --- |
+| Locked native-C build | PASS; archives byte-identical, `libsunlight_native_c.a = f1fe24…7441` |
+| cpp-runtime, 2 CPUs | LINK PASS, runtime **PASS** exit 0, `exception OK`/`TLS OK`/`static initialization OK`/`atexit OK` |
+| cpp-runtime, 4 CPUs | LINK PASS, runtime **PASS** exit 0, identical |
+| Full native suite, 2 CPUs | 94 rows, all PASS; `Historical 21: PASS=21` |
+| Full native suite, 4 CPUs | 94 rows, all PASS; `Historical 21: PASS=21` |
+| `run_cxx_runtime.py` | PASS |
+| Kernel check | PASS |
+| `git diff --check` | clean |
+
+All prior `cpp-runtime` LINK_FAIL reports are unchanged; these PASS results are
+new evidence. The bare historical command remains LINK_FAIL by design and is
+never reclassified as a production-driver defect. No commit was created.

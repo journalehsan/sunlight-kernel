@@ -1,0 +1,4 @@
+rustc 1.98.0-nightly (8954863c8 2026-06-05)
+cargo 1.98.0-nightly (0b1123a48 2026-06-01)
+QEMU emulator version 11.1.2
+clang version 23.1.4

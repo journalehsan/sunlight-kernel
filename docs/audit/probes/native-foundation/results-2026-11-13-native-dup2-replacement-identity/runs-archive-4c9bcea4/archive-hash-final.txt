@@ -1,0 +1,1 @@
+4c9bcea48eaa189e3ea318d8846bc968254924f196fc07c937cb275404b0e773  target/native-c/x86_64-sunlightos/release/libsunlight_native_c.a

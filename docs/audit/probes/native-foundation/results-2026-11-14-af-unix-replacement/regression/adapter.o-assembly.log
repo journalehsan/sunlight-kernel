@@ -1,0 +1,126 @@
+$ timeout --signal=TERM --kill-after=10 240 llvm-objdump -dr --demangle /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/regression/adapter.o
+
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-af-unix-replacement/regression/adapter.o:	file format elf64-x86-64
+
+Disassembly of section .text._RINvMNtCsg6my6oZXuye_4core6optionINtB3_6OptionyE6map_oryNCNvCsiyBs90dcBf7_20dup2_wrapper_adapter18coverage_bridge_id0EBW_:
+
+0000000000000000 <<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>>:
+       0: 48 83 ec 28                  	subq	$0x28, %rsp
+       4: 48 89 54 24 08               	movq	%rdx, 0x8(%rsp)
+       9: 48 89 7c 24 10               	movq	%rdi, 0x10(%rsp)
+       e: 48 89 74 24 18               	movq	%rsi, 0x18(%rsp)
+      13: 48 f7 44 24 10 01 00 00 00   	testq	$0x1, 0x10(%rsp)
+      1c: 74 11                        	je	0x2f <<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>+0x2f>
+      1e: 48 8b 7c 24 18               	movq	0x18(%rsp), %rdi
+      23: e8 00 00 00 00               	callq	0x28 <<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>+0x28>
+		0000000000000024:  R_X86_64_PLT32	.text._RNCNvCsiyBs90dcBf7_20dup2_wrapper_adapter18coverage_bridge_id0B3_-0x4
+      28: 48 89 44 24 20               	movq	%rax, 0x20(%rsp)
+      2d: eb 0a                        	jmp	0x39 <<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>+0x39>
+      2f: 48 8b 44 24 08               	movq	0x8(%rsp), %rax
+      34: 48 89 44 24 20               	movq	%rax, 0x20(%rsp)
+      39: 48 8b 44 24 20               	movq	0x20(%rsp), %rax
+      3e: 48 83 c4 28                  	addq	$0x28, %rsp
+      42: c3                           	retq
+
+Disassembly of section .text._RNCNvCsiyBs90dcBf7_20dup2_wrapper_adapter18coverage_bridge_id0B3_:
+
+0000000000000000 <dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>:
+       0: 50                           	pushq	%rax
+       1: 48 89 f8                     	movq	%rdi, %rax
+       4: 48 89 c7                     	movq	%rax, %rdi
+       7: 48 83 c7 01                  	addq	$0x1, %rdi
+       b: 48 89 3c 24                  	movq	%rdi, (%rsp)
+       f: 48 39 c7                     	cmpq	%rax, %rdi
+      12: 72 06                        	jb	0x1a <dup2_wrapper_adapter::coverage_bridge_id::{closure#0}+0x1a>
+      14: 48 8b 04 24                  	movq	(%rsp), %rax
+      18: 59                           	popq	%rcx
+      19: c3                           	retq
+      1a: 48 bf 00 00 00 00 00 00 00 00	movabsq	$0x0, %rdi
+		000000000000001c:  R_X86_64_64	.rodata..Lanon.f3cd3129e9253a5a5c47110e2781cee2.1
+      24: e8 00 00 00 00               	callq	0x29 <dup2_wrapper_adapter::coverage_bridge_id::{closure#0}+0x29>
+		0000000000000025:  R_X86_64_PLT32	core::panicking::panic_const::panic_const_add_overflow-0x4
+
+Disassembly of section .text._RNvNtCs790hijwktEa_13sunlight_libc3sys8syscall6CsiyBs90dcBf7_20dup2_wrapper_adapter:
+
+0000000000000000 <sunlight_libc::sys::syscall6>:
+       0: 48 83 ec 28                  	subq	$0x28, %rsp
+       4: 4c 89 0c 24                  	movq	%r9, (%rsp)
+       8: 4d 89 c2                     	movq	%r8, %r10
+       b: 4c 8b 04 24                  	movq	(%rsp), %r8
+       f: 48 89 4c 24 08               	movq	%rcx, 0x8(%rsp)
+      14: 48 89 d0                     	movq	%rdx, %rax
+      17: 48 8b 54 24 08               	movq	0x8(%rsp), %rdx
+      1c: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+      21: 48 89 f0                     	movq	%rsi, %rax
+      24: 48 8b 74 24 10               	movq	0x10(%rsp), %rsi
+      29: 48 89 44 24 18               	movq	%rax, 0x18(%rsp)
+      2e: 48 89 f8                     	movq	%rdi, %rax
+      31: 48 8b 7c 24 18               	movq	0x18(%rsp), %rdi
+      36: 4c 8b 4c 24 30               	movq	0x30(%rsp), %r9
+      3b: 0f 05                        	syscall
+      3d: 48 89 44 24 20               	movq	%rax, 0x20(%rsp)
+      42: 48 8b 44 24 20               	movq	0x20(%rsp), %rax
+      47: 48 83 c4 28                  	addq	$0x28, %rsp
+      4b: c3                           	retq
+
+Disassembly of section .text.coverage_bridge_id:
+
+0000000000000000 <coverage_bridge_id>:
+       0: 50                           	pushq	%rax
+       1: e8 00 00 00 00               	callq	0x6 <coverage_bridge_id+0x6>
+		0000000000000002:  R_X86_64_PLT32	sunlight_libc::net_bridge::lookup-0x4
+       6: 48 89 c7                     	movq	%rax, %rdi
+       9: 48 89 d6                     	movq	%rdx, %rsi
+       c: 31 c0                        	xorl	%eax, %eax
+       e: 89 c2                        	movl	%eax, %edx
+      10: e8 00 00 00 00               	callq	0x15 <coverage_bridge_id+0x15>
+		0000000000000011:  R_X86_64_PLT32	<core::option::Option<u64>>::map_or::<u64, dup2_wrapper_adapter::coverage_bridge_id::{closure#0}>-0x4
+      15: 59                           	popq	%rcx
+      16: c3                           	retq
+
+Disassembly of section .text.coverage_generation:
+
+0000000000000000 <coverage_generation>:
+       0: 50                           	pushq	%rax
+       1: 48 63 f7                     	movslq	%edi, %rsi
+       4: bf b1 00 00 00               	movl	$0xb1, %edi
+       9: 31 c0                        	xorl	%eax, %eax
+       b: 41 89 c1                     	movl	%eax, %r9d
+       e: 4c 89 ca                     	movq	%r9, %rdx
+      11: 4c 89 c9                     	movq	%r9, %rcx
+      14: 4d 89 c8                     	movq	%r9, %r8
+      17: 48 c7 04 24 03 00 00 00      	movq	$0x3, (%rsp)
+      1f: e8 00 00 00 00               	callq	0x24 <coverage_generation+0x24>
+		0000000000000020:  R_X86_64_PLT32	.text._RNvNtCs790hijwktEa_13sunlight_libc3sys8syscall6CsiyBs90dcBf7_20dup2_wrapper_adapter-0x4
+      24: 59                           	popq	%rcx
+      25: c3                           	retq
+
+Disassembly of section .text.coverage_replace:
+
+0000000000000000 <coverage_replace>:
+       0: 48 83 ec 18                  	subq	$0x18, %rsp
+       4: e8 00 00 00 00               	callq	0x9 <coverage_replace+0x9>
+		0000000000000005:  R_X86_64_PLT32	sunlight_libc::dup2-0x4
+       9: 48 89 44 24 10               	movq	%rax, 0x10(%rsp)
+       e: 48 8b 44 24 10               	movq	0x10(%rsp), %rax
+      13: 48 89 44 24 08               	movq	%rax, 0x8(%rsp)
+      18: 8a 44 24 08                  	movb	0x8(%rsp), %al
+      1c: 24 01                        	andb	$0x1, %al
+      1e: 0f b6 c0                     	movzbl	%al, %eax
+      21: 48 a9 01 00 00 00            	testq	$0x1, %rax
+      27: 74 0d                        	je	0x36 <coverage_replace+0x36>
+      29: 0f b6 44 24 09               	movzbl	0x9(%rsp), %eax
+      2e: 48 83 f8 06                  	cmpq	$0x6, %rax
+      32: 74 13                        	je	0x47 <coverage_replace+0x47>
+      34: eb 1b                        	jmp	0x51 <coverage_replace+0x51>
+      36: 8b 44 24 0c                  	movl	0xc(%rsp), %eax
+      3a: 48 89 04 24                  	movq	%rax, (%rsp)
+      3e: 48 8b 04 24                  	movq	(%rsp), %rax
+      42: 48 83 c4 18                  	addq	$0x18, %rsp
+      46: c3                           	retq
+      47: 48 c7 04 24 fb ff ff ff      	movq	$-0x5, (%rsp)
+      4f: eb ed                        	jmp	0x3e <coverage_replace+0x3e>
+      51: 48 c7 04 24 19 fc ff ff      	movq	$-0x3e7, (%rsp)         # imm = 0xFC19
+      59: eb e3                        	jmp	0x3e <coverage_replace+0x3e>
+
+exit=0
