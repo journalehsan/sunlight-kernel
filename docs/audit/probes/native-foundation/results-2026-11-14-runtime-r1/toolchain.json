@@ -1,0 +1,9 @@
+{
+  "cargo -Vv": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\nrelease: 1.98.0-nightly\ncommit-hash: 0b1123a48825309b697312b44fdb64b3df00c958\ncommit-date: 2026-06-01\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.4 (sys:0.21.0 vendored)\nlibcurl: 8.20.0-DEV (sys:0.4.88+curl-8.20.0 vendored ssl:OpenSSL/3.6.2)\nssl: OpenSSL 3.6.2 7 Apr 2026\nos: Manjaro 27.0.0 (Caldonia) [64-bit]",
+  "rustc -Vv": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6",
+  "clang --version": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin",
+  "ld.lld --version": "LLD 23.1.4 (compatible with GNU linkers)",
+  "qemu-system-x86_64 --version": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers",
+  "python3 --version": "Python 3.14.8",
+  "git log -3 --oneline -- tools/native-c/Cargo.lock tools/native-c/Cargo.toml ipc/Cargo.toml sunlight-libc/Cargo.toml": "f6b5ccb24 fix: repair native TLS and polish Tasks Monitor UI\n496d4aa06 feat(libc): complete native TCP epoll and descriptor replacement support\n5b0814700 feat(libc): add native C++ runtime, termios/wchar and TCP bridge"
+}

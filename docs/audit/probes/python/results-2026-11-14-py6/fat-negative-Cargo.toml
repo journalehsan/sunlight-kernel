@@ -1,0 +1,9 @@
+[package]
+name="py6-fat-lifetime"
+version="0.0.0"
+edition="2021"
+[dependencies]
+sunlight-fs={path="/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs"}
+sunlight-block={path="/home/ehsantor/Projects/sunlightos-kernel/sunlight-block"}
+sunlight-fat={path="/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat",features=["testutil"]}
+[workspace]

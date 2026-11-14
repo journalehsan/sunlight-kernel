@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/math-probes/modf.c -o docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/math-probes/modf.elf
+ld.lld: error: undefined symbol: modf
+>>> referenced by modf.c
+>>>               /tmp/modf-9c5823.o:(requirement)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

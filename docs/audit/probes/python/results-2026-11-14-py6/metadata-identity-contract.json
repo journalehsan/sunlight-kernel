@@ -1,0 +1,22 @@
+{
+  "status": "PARTIAL",
+  "path": "Names are mutable observations, not object identities or authority",
+  "file_identity": "Tmpfs object_id is mount lifetime only; no permanent inode guarantee. FAT None",
+  "mount_identity": "Existing mount tag+1, within this VFS lifetime only; not POSIX dev_t",
+  "handle_identity": "Existing mount tag + slot + local generation; exhausted slots retire instead of wrapping",
+  "stale_generation": {
+    "before": "FAIL reproduced in generation-before.log",
+    "after": "PASS host exhaustion tests for Tmpfs and FAT; native internal token exhaustion NOT_RUN",
+    "limit": "Slots retire after 65535 incarnations; bounded availability loss rather than aliasing"
+  },
+  "native_ABI": "Existing24-byte Stat unchanged; new Metadata type is internal Rust API, not a new userspace stat ABI",
+  "descriptor_cases": {
+    "rename": "Tmpfs identity preserved",
+    "unlink": "Tmpfs retained identity, nlinks0 regular files",
+    "replacement": "New monotonic Tmpfs identity",
+    "close": "BadHandle",
+    "duplication": "Existing shared description behavior retained; no new forced duplication/close race qualification",
+    "concurrent_mutation": "Exclusive VFS borrow serializes each metadata operation; fd-table snapshot/close schedules UNQUALIFIED"
+  },
+  "POSIX": "Full mandatory stat fields not available; no struct stat declared or fabricated"
+}

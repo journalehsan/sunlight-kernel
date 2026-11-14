@@ -1,0 +1,51 @@
+{
+  "configured": 180,
+  "attempted": 180,
+  "passed": 163,
+  "failed": 17,
+  "unattempted": 0,
+  "status": "FAIL",
+  "previous_configured": 180,
+  "object_set_unchanged": true,
+  "first_remaining_failure": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+  "newly_successful": [
+    "Modules/getbuildinfo.o",
+    "Python/formatter_unicode.o",
+    "Python/initconfig.o"
+  ],
+  "mandatory_failed": [
+    "Modules/_io/fileio.o",
+    "Modules/_localemodule.o",
+    "Modules/_stat.o",
+    "Modules/_threadmodule.o",
+    "Modules/faulthandler.o",
+    "Modules/getpath.o",
+    "Modules/main.o",
+    "Modules/posixmodule.o",
+    "Modules/signalmodule.o",
+    "Modules/timemodule.o",
+    "Objects/obmalloc.o",
+    "Python/bootstrap_hash.o",
+    "Python/fileutils.o",
+    "Python/marshal.o",
+    "Python/pylifecycle.o",
+    "Python/pytime.o",
+    "Python/sysmodule.o"
+  ],
+  "notes": [
+    "Modules/getbuildinfo.o independently compiled with exact upstream shell recipe; make target itself remains blocked by dependencies.",
+    "Core-make log is interleaved; first failing diagnostic for each object is taken from its independent log.",
+    "No mandatory object removed and no optional module newly reclassified."
+  ],
+  "serial_reproduction": {
+    "command": [
+      "make",
+      "-j1",
+      "python"
+    ],
+    "cwd": "/tmp/sunlight-py3-cpython/cross-static",
+    "exit": 2,
+    "first_error": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+    "log": "core-serial.log"
+  }
+}

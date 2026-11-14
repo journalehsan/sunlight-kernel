@@ -1,0 +1,80 @@
+{
+  "configurations": {
+    "1": {
+      "handle-reuse": "PASS",
+      "handle-admission": "PASS",
+      "initial-exit": "BLOCKED (required contract FAIL; observation runner PASS)",
+      "focused": "PASS",
+      "tls-controlled": "PASS",
+      "detached-accounting": "PASS",
+      "detached-capacity": "PASS",
+      "handle-claim": "PASS",
+      "exit-mode-0": "PASS",
+      "exit-mode-1": "PASS",
+      "exit-mode-2": "PASS",
+      "exit-mode-3": "PASS",
+      "C_C++_suite": "PASS",
+      "heap_ABI": "PASS",
+      "TCP_loopback": "NOT_RUN",
+      "E5": "BLOCKED",
+      "E7": "NOT_RUN",
+      "E8_kernel_stale_generation": "UNQUALIFIED",
+      "TLS_exact_registry_overlap": "UNQUALIFIED",
+      "once_exact_registration": "UNQUALIFIED"
+    },
+    "2": {
+      "handle-reuse": "PASS",
+      "handle-admission": "PASS",
+      "initial-exit": "BLOCKED (required contract FAIL; observation runner PASS)",
+      "focused": "PASS",
+      "tls-controlled": "PASS",
+      "detached-accounting": "PASS",
+      "detached-capacity": "PASS",
+      "handle-claim": "PASS",
+      "exit-mode-0": "PASS",
+      "exit-mode-1": "PASS",
+      "exit-mode-2": "PASS",
+      "exit-mode-3": "PASS",
+      "C_C++_suite": "PASS",
+      "heap_ABI": "PASS",
+      "TCP_loopback": "PASS",
+      "E5": "BLOCKED",
+      "E7": "NOT_RUN",
+      "E8_kernel_stale_generation": "UNQUALIFIED",
+      "TLS_exact_registry_overlap": "UNQUALIFIED",
+      "once_exact_registration": "UNQUALIFIED"
+    },
+    "4": {
+      "handle-reuse": "PASS",
+      "handle-admission": "PASS",
+      "initial-exit": "BLOCKED (required contract FAIL; observation runner PASS)",
+      "focused": "PASS",
+      "tls-controlled": "PASS",
+      "detached-accounting": "PASS",
+      "detached-capacity": "PASS",
+      "handle-claim": "PASS",
+      "exit-mode-0": "PASS",
+      "exit-mode-1": "PASS",
+      "exit-mode-2": "PASS",
+      "exit-mode-3": "PASS",
+      "C_C++_suite": "PASS",
+      "heap_ABI": "PASS",
+      "TCP_loopback": "PASS",
+      "E5": "BLOCKED",
+      "E7": "NOT_RUN",
+      "E8_kernel_stale_generation": "UNQUALIFIED",
+      "TLS_exact_registry_overlap": "UNQUALIFIED",
+      "once_exact_registration": "UNQUALIFIED"
+    }
+  },
+  "12_CPUs": {
+    "status": "NOT_RUN",
+    "reason": "Unchanged native C runner accepts1/2/4 only"
+  },
+  "TCP_1_CPU": {
+    "status": "NOT_RUN",
+    "reason": "Unchanged TCP runner accepts2/4 only"
+  },
+  "ABI_compile_and_vendor_checks": "CPU-independent checks; guest C++ static initialization/unwind/RTTI cells run in each suite",
+  "individual_exit_cases": "exit-scenario-matrix.json"
+}

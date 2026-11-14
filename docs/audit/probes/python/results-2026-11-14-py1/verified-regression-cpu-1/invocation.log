@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 1 --timeout 240 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/verified-regression-cpu-1

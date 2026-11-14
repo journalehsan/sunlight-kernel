@@ -1,0 +1,14 @@
+{
+  "status": "NOT_RUN",
+  "prerequisite": "Successful native static link and valid SunlightOS executable",
+  "blocking_reason": "No linked CPython interpreter",
+  "process_startup": "NOT_RUN",
+  "initialization": "NOT_RUN",
+  "expression": "NOT_RUN",
+  "print": "NOT_RUN",
+  "clean_exit": "NOT_RUN",
+  "actual_python_stdout": null,
+  "guest_log": null,
+  "exit_status": null,
+  "note": "Native libc fixture output is not Python execution."
+}

@@ -1,0 +1,14 @@
+["/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-foreground"]
+
+running 8 tests
+test full_session_teardown_reaches_idle_and_reparented_members ... ok
+test exit_race_and_descendants_preserve_already_recorded_status ... ok
+test numeric_signals_respect_scope_and_parent_incarnation ... ok
+test session_identity_is_qualified_by_broker_publication ... ok
+test retained_owner_session_termination_uses_exact_session_generation ... ok
+test members_cannot_detach_and_scope_storage_is_bounded ... ok
+test stale_process_slots_and_duplicate_cancel_cannot_target_new_work ... ok
+test concurrent_scope_creation_never_reuses_identity ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

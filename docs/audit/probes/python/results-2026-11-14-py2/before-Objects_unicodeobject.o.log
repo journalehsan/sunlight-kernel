@@ -1,0 +1,98 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:45:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_ceval.h:13:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_interp.h:23:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:514:27: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  514 |     if (errors == NULL || wcscmp(errors, L"strict") == 0) {
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:880:16: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  880 |         size = sprintf(str, "&#%d;", PyUnicode_READ(kind, data, i));
+      |                ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:1001:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/fastsearch.h:58:13: error: call to undeclared function 'wmemchr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   58 |         p = STRINGLIB_FAST_MEMCHR(s, ch, n);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/ucs4lib.h:26:16: note: expanded from macro 'STRINGLIB_FAST_MEMCHR'
+   26 |     (Py_UCS4 *)wmemchr((const wchar_t *)(s), c, n)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/fastsearch.h:58:13: note: did you mean 'memchr'?
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/ucs4lib.h:26:16: note: expanded from macro 'STRINGLIB_FAST_MEMCHR'
+   26 |     (Py_UCS4 *)wmemchr((const wchar_t *)(s), c, n)
+      |                ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/string.h:20:7: note: 'memchr' declared here
+   20 | void *memchr(const void *s, int c, size_t n);
+      |       ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:1001:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/fastsearch.h:58:13: warning: cast to 'Py_UCS4 *' (aka 'unsigned int *') from smaller integer type 'int' [-Wint-to-pointer-cast]
+   58 |         p = STRINGLIB_FAST_MEMCHR(s, ch, n);
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/ucs4lib.h:26:5: note: expanded from macro 'STRINGLIB_FAST_MEMCHR'
+   26 |     (Py_UCS4 *)wmemchr((const wchar_t *)(s), c, n)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:1006:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/replace.h:34:25: error: call to undeclared function 'wmemchr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   34 |                     s = STRINGLIB_FAST_MEMCHR(s, u1, end - s);
+      |                         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/ucs4lib.h:26:16: note: expanded from macro 'STRINGLIB_FAST_MEMCHR'
+   26 |     (Py_UCS4 *)wmemchr((const wchar_t *)(s), c, n)
+      |                ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:1006:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/replace.h:34:25: warning: cast to 'Py_UCS4 *' (aka 'unsigned int *') from smaller integer type 'int' [-Wint-to-pointer-cast]
+   34 |                     s = STRINGLIB_FAST_MEMCHR(s, u1, end - s);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/stringlib/ucs4lib.h:26:5: note: expanded from macro 'STRINGLIB_FAST_MEMCHR'
+   26 |     (Py_UCS4 *)wmemchr((const wchar_t *)(s), c, n)
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:1945:16: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1945 |         size = wcslen(u);
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:2563:18: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2563 |         length = wcslen(str);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:2745:21: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2745 |                     sprintf(buffer, fmt, va_arg(*vargs, long)) :
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:2821:15: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2821 |         len = sprintf(number, "%p", va_arg(*vargs, void*));
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:3235:14: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3235 |     else if (wcslen(buffer) != (size_t)buflen) {
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:3235:29: warning: comparison of integers of different signs: 'int' and 'size_t' (aka 'unsigned long') [-Wsign-compare]
+ 3235 |     else if (wcslen(buffer) != (size_t)buflen) {
+      |              ~~~~~~~~~~~~~~ ^  ~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:3620:25: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3620 |     if ((size_t)wlen != wcslen(wstr)) {
+      |                         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:3620:22: warning: comparison of integers of different signs: 'size_t' (aka 'unsigned long') and 'int' [-Wsign-compare]
+ 3620 |     if ((size_t)wlen != wcslen(wstr)) {
+      |         ~~~~~~~~~~~~ ^  ~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:5203:22: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 5203 |     Py_ssize_t len = wcslen(text);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c:8505:13: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 8505 |             sprintf(buffer, "&#%d;", (int)PyUnicode_READ_CHAR(unicode, collpos));
+      |             ^
+9 warnings and 12 errors generated.

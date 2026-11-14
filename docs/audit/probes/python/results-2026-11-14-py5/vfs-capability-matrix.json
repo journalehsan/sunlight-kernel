@@ -1,0 +1,89 @@
+{
+  "status": "PARTIAL",
+  "authority": "Kernel KERNEL_VFS owns native syscall filesystem; Vfs owns mount routing/backend handles. services/vfs_server owns a separate Vfs plus read-only FAT share and limited32-byte path IPC. Do not substitute the service namespace for kernel namespace.",
+  "layers": [
+    {
+      "operation": "native libc",
+      "contract": "Rust stat/open/read_dir syscall wrappers; C fstat is native24-byte subset, not POSIX struct stat.",
+      "source": "sunlight-libc/src/lib.rs:384,482; sunlight-libc/src/c_file.rs",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "kernel",
+      "contract": "User copies and actor/credential checks; cwd stored in shared process; global VFS mutex; scheduler released before VFS locking in fstat.",
+      "source": "kernel/src/arch/x86_64/syscall.rs:1417,5317,5706,9208,9298,10578",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "service IPC",
+      "contract": "OPEN/STAT/FSTAT operations on independent VFS; special passwd/group FSTAT re-stats a path; cannot supply descriptor identity for kernel fd. AUTHORIZE_EXEC consumes kernel grants, separate authority.",
+      "source": "services/vfs_server/src/main.rs:335,481,660,690",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "backends",
+      "contract": "tmpfs full-path exact lookup, in-memory entries/inodes/open handles; FAT adapter delegates volume path ops and native policy metadata.",
+      "source": "sunlight-fs/src/tmpfs.rs:98,219,549; sunlight-fs/src/vfs.rs:419,447",
+      "native_evidence": "NOT_RUN"
+    }
+  ],
+  "resolver": [
+    {
+      "operation": "absolute",
+      "contract": "validate_absolute requires leading slash, rejects empty/NUL/dot/dotdot/trailing slash; repeated separators not rejected at common validation but backend exact lookup differs.",
+      "source": "sunlight-fs/src/path.rs:3",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "relative/cwd",
+      "contract": "open/chdir prefix current shared-process cwd; native stat61/readdir60/148 do not. No authoritative component walk.",
+      "source": "kernel/src/arch/x86_64/syscall.rs:1417,5317,5706,9298,9208",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "component/parents",
+      "contract": "tmpfs looks up full path, parent validation for mutation; no common lookup of every search ancestor for reads/stat.",
+      "source": "sunlight-fs/src/tmpfs.rs:98,381",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "FAT component lookup",
+      "contract": "Fat32::stat_path walks directory components, skips repeated separators and compares case-insensitively; it does not return authoritative name spelling or enforce credentials. Common VFS validation rejects dot/dotdot before it. Reuse this backend mechanism, not a second libc walker.",
+      "source": "sunlight-fat/src/fat.rs:270,295",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "native Rust std",
+      "contract": "overlay lstat/readlink/symlink/canonicalize explicitly unsupported; its FileType predicate alone is not symlink support.",
+      "source": "tools/native-std/overlay/fs/sunlightos.rs:334,351,356",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "symlink follow/no-follow/intermediate/loops",
+      "contract": "BLOCKED: FileType only File/Directory, no link storage/readlink, no loop limit; Linux readlinkat returns EINVAL for existing entries.",
+      "source": "sunlight-fs/src/vfs.rs:51; kernel/src/arch/x86_64/syscall.rs:7012",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "mounts",
+      "contract": "Longest valid component prefix, bounded8 mounts; tagged mount incarnation and local generation handles, open handles pin mount; runtime mount target policy /mnt.",
+      "source": "sunlight-fs/src/vfs.rs:17,837,1067,1228,1238",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "canonical reconstruction",
+      "contract": "handle_path returns backend-associated name plus mount; mount prefix bug repaired. tmpfs current linked entry path, FAT open spelling; unlinked tmpfs has no name. This is not permission-checked canonicalization.",
+      "source": "sunlight-fs/src/vfs.rs:1198; sunlight-fs/src/tmpfs.rs:326,796",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "permission",
+      "contract": "Final open read/write and readdir Read checks; no credential-aware common path resolver, native stat/chdir lack ancestor Execute checks. Actor policy protects write subtrees; do not weaken it.",
+      "source": "kernel/src/arch/x86_64/syscall.rs:5516,5706,9246,9298; sunlight-fs/src/policy.rs",
+      "native_evidence": "NOT_RUN"
+    }
+  ],
+  "namespaces": "Global kernel mount namespace; no new per-process namespace introduced. Service VFS is separate; process cwd does not change mount authority.",
+  "identity": "Finite generation fields reject ordinary stale handles; wrap exists. Not a permanently unique inode identity or proof against adversarial full wrap.",
+  "TOCTOU": "Separate stat/open and name-based service queries race rename/unlink/mount changes. handle_path is observation, never authorization. No canonical return remains valid atomically after return."
+}

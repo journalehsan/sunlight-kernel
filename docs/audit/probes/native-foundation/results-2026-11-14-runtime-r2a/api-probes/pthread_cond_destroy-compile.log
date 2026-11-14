@@ -1,0 +1,11 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_cond_destroy.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_cond_destroy.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_cond_destroy.c:2:44: error: use of undeclared identifier 'pthread_cond_destroy'; did you mean 'pthread_attr_destroy'?
+    2 | void * volatile required_symbol = (void *)&pthread_cond_destroy;
+      |                                            ^~~~~~~~~~~~~~~~~~~~
+      |                                            pthread_attr_destroy
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:41:5: note: 'pthread_attr_destroy' declared here
+   41 | int pthread_attr_destroy(pthread_attr_t *attr);
+      |     ^
+1 error generated.
+
+exit=1

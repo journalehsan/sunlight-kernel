@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Run arbitrary cc.py native ELFs in a fresh headless SunlightOS guest.
 
-No disk, network, shared folder or existing VM is attached. --suite builds and
+No disk, network, shared folder or existing VM is attached by default.
+--fat-fixture attaches only a private writable copy of an explicit test image. --suite builds and
 classifies all 21 historical executable cells plus focused runtime fixtures.
 Single-ELF mode returns the observed guest status unless --expect-exit is set.
 Infrastructure, timeout, exception and cleanup failures always return nonzero.
@@ -65,6 +66,7 @@ def main():
     choice = parser.add_mutually_exclusive_group(required=True)
     choice.add_argument('elf', nargs='?', type=Path)
     choice.add_argument('--suite', action='store_true')
+    choice.add_argument('--cases', type=Path, help='JSON list of prebuilt native ELF cases')
     parser.add_argument('--linux-actor', action='store_true',
                         help='single raw Linux syscall actor (explicit OSABI=3); never the native suite')
     parser.add_argument('--out', type=Path, help='new evidence directory; default: unique path under target/native-c-guest-runs')
@@ -73,6 +75,7 @@ def main():
     parser.add_argument('--expect-exit', type=int)
     parser.add_argument('--arg', action='append', default=[])
     parser.add_argument('--stdin-file', type=Path)
+    parser.add_argument('--fat-fixture', type=Path, help='copy a disposable FAT test image into this run and attach that copy')
     parser.add_argument('--locale-conf', type=Path, help='fixture contents for /etc/locale.conf')
     parser.add_argument('--env', action='append', default=[], help='single-ELF startup KEY=VALUE')
     parser.add_argument('--net', action='store_true',
@@ -83,6 +86,8 @@ def main():
     parser.add_argument('--service', type=Path,
                         help='optional native C service ELF run as support PID 4 (requires --net)')
     opts = parser.parse_args()
+    if opts.cases and (opts.net or opts.linux_actor):
+        parser.error('--cases is a native non-network batch')
     if opts.service and not opts.net:
         parser.error('--service requires --net')
     if opts.net_subnet and not opts.net:
@@ -280,6 +285,9 @@ def main():
                 command('elf-' + name, ['llvm-readelf', '-h', '-l', elf])
                 add(name, elf, code, args, input, stdout, stderr, historical,
                     environment=(b'TMPDIR=/tmp', b'LANG=en_US.UTF-8') if name == 'locale-environment' else (b'TMPDIR=/tmp',))
+    elif opts.cases:
+        for case in json.loads(opts.cases.read_text()):
+            add(case['name'], Path(case['elf']), case['expected_exit'], case.get('args', ()))
     else:
         add('elf', opts.elf, opts.expect_exit, opts.arg,
             opts.stdin_file.read_bytes() if opts.stdin_file else b'',
@@ -347,6 +355,15 @@ def main():
             '-serial', 'file:' + str(serial),
             '-device', 'virtio-rng-pci,disable-modern=on',
             '-device', 'isa-debug-exit,iobase=0xf4,iosize=0x04', '-no-reboot']
+    if opts.fat_fixture:
+        disk = out / 'fat-fixture.img'
+        shutil.copyfile(opts.fat_fixture.resolve(strict=True), disk)
+        (out / 'fat-fixture-source.json').write_text(json.dumps(dict(
+            source=str(opts.fat_fixture.resolve()),
+            sha256=hashlib.sha256(disk.read_bytes()).hexdigest(),
+            contract='Disposable fixture copy; no existing VM or ordinary disk attached'), indent=2))
+        argv += ['-drive', f'file={disk},format=raw,if=none,id=fixture',
+                 '-device', 'virtio-blk-pci,drive=fixture,disable-modern=on']
     if opts.net:
         netdev = 'user,id=net0' + (',net=' + opts.net_subnet if opts.net_subnet else '')
         argv += ['-netdev', netdev,

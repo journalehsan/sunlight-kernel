@@ -479,3 +479,156 @@ mod tests {
         }
     }
 }
+
+/// Stable immutable C-locale error messages; callers must not modify them.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn strerror(error: i32) -> *mut u8 {
+    let message: &'static [u8] = match error {
+        0 => b"Success\0",
+        1 => b"Operation not permitted\0",
+        2 => b"No such file or directory\0",
+        5 => b"Input/output error\0",
+        7 => b"Argument list too long\0",
+        9 => b"Bad file descriptor\0",
+        11 => b"Resource temporarily unavailable\0",
+        12 => b"Cannot allocate memory\0",
+        13 => b"Permission denied\0",
+        14 => b"Bad address\0",
+        16 => b"Device or resource busy\0",
+        17 => b"File exists\0",
+        20 => b"Not a directory\0",
+        21 => b"Is a directory\0",
+        22 => b"Invalid argument\0",
+        24 => b"Too many open files\0",
+        25 => b"Inappropriate ioctl for device\0",
+        28 => b"No space left on device\0",
+        32 => b"Broken pipe\0",
+        33 => b"Numerical argument out of domain\0",
+        34 => b"Numerical result out of range\0",
+        35 => b"Resource deadlock avoided\0",
+        38 => b"Function not implemented\0",
+        84 => b"Invalid or incomplete multibyte or wide character\0",
+        93 => b"Protocol not supported\0",
+        94 => b"Socket type not supported\0",
+        95 => b"Operation not supported\0",
+        97 => b"Address family not supported\0",
+        98 => b"Address already in use\0",
+        101 => b"Network is unreachable\0",
+        103 => b"Software caused connection abort\0",
+        104 => b"Connection reset by peer\0",
+        105 => b"No buffer space available\0",
+        106 => b"Transport endpoint is already connected\0",
+        107 => b"Transport endpoint is not connected\0",
+        110 => b"Connection timed out\0",
+        111 => b"Connection refused\0",
+        113 => b"No route to host\0",
+        114 => b"Operation already in progress\0",
+        115 => b"Operation now in progress\0",
+        _ => b"Unknown error\0",
+    };
+    message.as_ptr() as *mut u8
+}
+/// POSIX int-returning ABI; errno is unchanged. Unknown errors return EINVAL.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn strerror_r(error: i32, buffer: *mut u8, length: usize) -> i32 {
+    let message = strerror(error);
+    let size = strlen(message);
+    if length == 0 {
+        return 34;
+    }
+    if buffer.is_null() {
+        return 22;
+    }
+    let count = size.min(length - 1);
+    core::ptr::copy_nonoverlapping(message, buffer, count);
+    buffer.add(count).write(0);
+    if length <= size {
+        34
+    } else if *message == b'U' && *message.add(1) == b'n' {
+        22
+    } else {
+        0
+    }
+}
+
+/// Copy at most n bytes and pad the remaining destination with zeroes.
+/// The caller provides disjoint valid source and destination regions.
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
+pub unsafe extern "C" fn strncpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    let mut ended = false;
+    for i in 0..n {
+        let byte = if ended { 0 } else { src.add(i).read() };
+        ended |= byte == 0;
+        dest.add(i).write(byte);
+    }
+    dest
+}
+
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
+pub unsafe extern "C" fn strcpy(dest: *mut u8, src: *const u8) -> *mut u8 {
+    let mut i = 0;
+    loop {
+        let b = src.add(i).read();
+        dest.add(i).write(b);
+        if b == 0 {
+            return dest;
+        }
+        i += 1;
+    }
+}
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
+pub unsafe extern "C" fn strcspn(src: *const u8, reject: *const u8) -> usize {
+    let mut i = 0;
+    while src.add(i).read() != 0 {
+        let mut j = 0;
+        while reject.add(j).read() != 0 {
+            if src.add(i).read() == reject.add(j).read() {
+                return i;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    i
+}
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
+pub unsafe extern "C" fn strpbrk(src: *const u8, accept: *const u8) -> *mut u8 {
+    let i = strcspn(src, accept);
+    if src.add(i).read() == 0 {
+        core::ptr::null_mut()
+    } else {
+        src.add(i) as *mut u8
+    }
+}
+#[cfg_attr(
+    all(not(test), any(target_os = "none", target_os = "sunlightos")),
+    no_mangle
+)]
+pub unsafe extern "C" fn strstr(src: *const u8, needle: *const u8) -> *mut u8 {
+    let mut i = 0;
+    loop {
+        let mut j = 0;
+        while needle.add(j).read() != 0 && src.add(i + j).read() == needle.add(j).read() {
+            j += 1;
+        }
+        if needle.add(j).read() == 0 {
+            return src.add(i) as *mut u8;
+        }
+        if src.add(i).read() == 0 {
+            return core::ptr::null_mut();
+        }
+        i += 1;
+    }
+}

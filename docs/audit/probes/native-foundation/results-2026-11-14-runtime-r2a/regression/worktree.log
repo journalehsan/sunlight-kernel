@@ -1,0 +1,21 @@
+$ git status --short
+ M Cargo.lock
+ M sunlight-libc/Cargo.toml
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/math.h
+ M sunlight-libc/include/sys/mman.h
+ M sunlight-libc/include/time.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/lib.rs
+ M tools/native-c/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/
+?? docs/runtime/
+?? sunlight-libc/include/assert.h
+?? sunlight-libc/include/inttypes.h
+?? sunlight-libc/include/sys/types.h
+?? sunlight-libc/src/inttypes.rs
+?? sunlight-libc/src/math.rs
+?? sunlight-libc/vendor/
+
+exit=0

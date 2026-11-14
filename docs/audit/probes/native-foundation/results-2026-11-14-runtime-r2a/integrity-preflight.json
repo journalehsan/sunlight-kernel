@@ -1,0 +1,53 @@
+{
+  "changes": {
+    ".threading-evidence/t4a/clippy/initial-tree-completion/Cargo.lock": {
+      "before": "ed9a78277a8de9767e89a043f5c87f79d160e66c4d4b32c83113d3fb951cd4b6",
+      "after": "13f0a0af97e57a55c9b443f3f75a965f2901ae2fad143bc2b33736b9a4bcdeb2"
+    },
+    ".threading-evidence/t4a/clippy/initial-tree/Cargo.lock": {
+      "before": "ed9a78277a8de9767e89a043f5c87f79d160e66c4d4b32c83113d3fb951cd4b6",
+      "after": "13f0a0af97e57a55c9b443f3f75a965f2901ae2fad143bc2b33736b9a4bcdeb2"
+    },
+    "Cargo.lock": {
+      "before": "ed9a78277a8de9767e89a043f5c87f79d160e66c4d4b32c83113d3fb951cd4b6",
+      "after": "13f0a0af97e57a55c9b443f3f75a965f2901ae2fad143bc2b33736b9a4bcdeb2"
+    },
+    "sunlight-libc/Cargo.toml": {
+      "before": "99836a2592842a6d838ed97820f2d01f4aa9adf7164a894f8f30043d4844bc44",
+      "after": "bc564abb8080e7ddf0d787c26873f89faaed4334bfdfe9f099618fcdb949104a"
+    },
+    "sunlight-libc/include/errno.h": {
+      "before": "7ed432841b81ef25a6bf890e3c4fab208a302551f9e7d0105a5e4c9da61b258a",
+      "after": "8df54fa8cc70cc822ac2e6babb71100c19d03a96cc2f12d650d91a77d2fdbfe1"
+    },
+    "sunlight-libc/include/limits.h": {
+      "before": "8e485761d506cfe932d8cca0dd2e77fe2d4ae9ea080f4c6c656d360a3fc24845",
+      "after": "cebbaaf9c4b26388a27dba0fec58ab66f091a4d214eeecc06a181aabb3d6e865"
+    },
+    "sunlight-libc/include/math.h": {
+      "before": "ca48876670d887752bbeaf111c0d0f2b97c345dfe2212925f5cbebfcc619088d",
+      "after": "15ee8bd930ed6c5fc8ba7b9ff288d1a873e388b059f83c9c42a18d22d047285a"
+    },
+    "sunlight-libc/include/sys/mman.h": {
+      "before": "36f1aeea0b1b3c26714da765f98889332d7a5c16d96780311fb71de3ace98cc5",
+      "after": "4673320da87959415d7be544a36d83fc32e151d16b0dae97e9ebb04875c219cc"
+    },
+    "sunlight-libc/include/time.h": {
+      "before": "dd069359596c617050249dfbd47f4358a6bb2439411bd907b1a59b3f73572f8c",
+      "after": "9311b14dbde3d58b7da4f25b0601e6168ee11a64feeac970c422029bc925eed0"
+    },
+    "sunlight-libc/include/unistd.h": {
+      "before": "c9a4764a2bf41d21c961dcd992867502fb47b34d1025a8ac03448161284e0170",
+      "after": "239f355efe484447b4b52950a1c49e69df9895ffc7a82d748a9f203fa1bcd7b0"
+    },
+    "sunlight-libc/src/lib.rs": {
+      "before": "1ccd626bc818b47695783b5784f8cf40280bad4e0022a344e9873ea0d70686a9",
+      "after": "7e7a10236a51a3eef46c56d509c48a150d9f4b3a685ab890965e361e9509783a"
+    },
+    "tools/native-c/Cargo.lock": {
+      "before": "ce44a7e91517a71b81e4347861237b70c0ec5412d4886a7fd398a7b3dfcb3633",
+      "after": "3b78952de383896a117533a25831d9c31e39d5ce9614019f522c5e89a3e6f4f0"
+    }
+  },
+  "missing": []
+}

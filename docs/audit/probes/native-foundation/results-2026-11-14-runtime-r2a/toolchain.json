@@ -1,0 +1,54 @@
+{
+  "rustc -Vv": {
+    "exit": 0,
+    "output": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n"
+  },
+  "cargo -Vv": {
+    "exit": 0,
+    "output": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\nrelease: 1.98.0-nightly\ncommit-hash: 0b1123a48825309b697312b44fdb64b3df00c958\ncommit-date: 2026-06-01\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.4 (sys:0.21.0 vendored)\nlibcurl: 8.20.0-DEV (sys:0.4.88+curl-8.20.0 vendored ssl:OpenSSL/3.6.2)\nssl: OpenSSL 3.6.2 7 Apr 2026\nos: Manjaro 27.0.0 (Caldonia) [64-bit]\n"
+  },
+  "clang --version": {
+    "exit": 0,
+    "output": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n"
+  },
+  "ld.lld --version": {
+    "exit": 0,
+    "output": "LLD 23.1.4 (compatible with GNU linkers)\n"
+  },
+  "qemu-system-x86_64 --version": {
+    "exit": 0,
+    "output": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n"
+  },
+  "ldd --version": {
+    "exit": 0,
+    "output": "ldd (GNU libc) 2.44\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\nWritten by Roland McGrath and Ulrich Drepper.\n"
+  },
+  "python3 --version": {
+    "exit": 0,
+    "output": "Python 3.14.8\n"
+  },
+  "tools/targets/x86_64-sunlightos.json": {
+    "sha256": "cd69f17597fbc17ef20141acdf3e703a6ae06ad5511e445290bb65a5c3de65c2",
+    "content": "{\n  \"arch\": \"x86_64\",\n  \"cpu\": \"x86-64\",\n  \"data-layout\": \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\",\n  \"disable-redzone\": true,\n  \"features\": \"-mmx,+sse,+sse2,-avx,-avx2\",\n  \"linker\": \"rust-lld\",\n  \"linker-flavor\": \"gnu-lld\",\n  \"llvm-target\": \"x86_64-unknown-none-elf\",\n  \"max-atomic-width\": 64,\n  \"os\": \"sunlightos\",\n  \"panic-strategy\": \"abort\",\n  \"plt-by-default\": false,\n  \"relocation-model\": \"static\",\n  \"target-pointer-width\": 64,\n  \"metadata\": {\n    \"description\": \"Experimental native SunlightOS userspace, System V x87/SSE ABI\",\n    \"host_tools\": false,\n    \"std\": false\n  }\n}\n"
+  },
+  "tools/native-c/cc.py": {
+    "sha256": "872a0ec7c7e756e0952b4c92c6f34e602c547e0aacf03726c5831f58190cbd91",
+    "content": "#!/usr/bin/env python3\n\"\"\"Narrow native C driver. Run tools/build_native_c.sh before executable links.\"\"\"\nimport os\nfrom pathlib import Path\nimport subprocess\nimport sys\n\nROOT = Path(__file__).resolve().parents[2]\nSYSROOT = ROOT / \"target/native-c/sysroot\"\nargs = sys.argv[1:]\nresource = subprocess.check_output([\"clang\", \"-print-resource-dir\"], text=True).strip()\n# Match tools/targets/x86_64-sunlightos.json: static SysV x86-64/SSE2,\n# no red zone, no host headers, libraries, startup, or Linux personality stamp.\ncommand = [\"clang\", \"--target=x86_64-unknown-none-elf\", \"-march=x86-64\",\n           \"-mno-red-zone\", \"-mno-mmx\", \"-mno-avx\", \"-mno-avx2\",\n           \"-ffreestanding\", \"-fno-pic\", \"-fno-pie\", \"-fno-stack-protector\",\n           \"-nostdinc\", \"-isystem\", resource + \"/include\",\n           \"-I\" + str(ROOT / \"sunlight-libc/include\"),\n           \"--sysroot=\" + str(SYSROOT)]\nlink = bool(args) and not any(x in args for x in (\"-E\", \"-S\", \"-c\", \"-fsyntax-only\", \"--version\"))\nif link and not (SYSROOT / \"lib/libsunlight_native_c.a\").is_file():\n    sys.exit(\"native C archive missing; run bash tools/build_native_c.sh\")\ncommand += args\nif link:\n    command += [\"-nostdlib\", \"-static\", \"-fuse-ld=lld\",\n                \"-Wl,-T,\" + str(ROOT / \"tools/native-c/user-space.ld\"),\n                \"-Wl,--gc-sections,--undefined=_start,--no-undefined,--fatal-warnings\",\n                str(SYSROOT / \"lib/libsunlight_native_c.a\")]\nos.execvp(command[0], command)\n"
+  },
+  "tools/native-c/cxx.py": {
+    "sha256": "ec49c34bdae9918fa0d2bb15743ea41ede146c75b2fc5520f34a067e36984aee",
+    "content": "#!/usr/bin/env python3\n\"\"\"Bounded native C++ driver with target-built LLVM ABI/unwind/guard support.\nNo host C++ headers, objects or runtime libraries are used.\n\"\"\"\nfrom pathlib import Path\nimport subprocess\nimport sys\nROOT = Path(__file__).resolve().parents[2]\nargs = sys.argv[1:]\nlink = bool(args) and not any(x in args for x in ('-E', '-S', '-c', '-fsyntax-only', '--version'))\nif link:\n    archive = ROOT / 'target/native-c/sysroot/lib/libsunlight_cxx.a'\n    if not archive.is_file():\n        sys.exit('run bash tools/build_native_cxx.sh first')\n    args += [str(archive), str(archive.with_name('libsunlight_eh.a')),\n             '-Wl,--wrap=main,--undefined=__wrap_main,--eh-frame-hdr']\nsys.exit(subprocess.call([sys.executable, str(ROOT/'tools/native-c/cc.py'), '-std=c++17', '-fhosted',\n                         '-I'+str(ROOT/'sunlight-cxx/include'), *args]))\n"
+  },
+  "tools/native-c/user-space.ld": {
+    "sha256": "49f5f46740f59447a6541f918474e4c19b2da5200a95b5b9195cde5c64587210",
+    "content": "/* Native C ET_EXEC export ABI: 24-byte name, absolute function address. */\nOUTPUT_FORMAT(elf64-x86-64)\nENTRY(_start)\n\nSECTIONS\n{\n    . = 0x0000000000400000;\n\n    .text : {\n        __sl_text_start = .;\n        *(.text .text.*)\n        __sl_text_end = .;\n    }\n\n    . = ALIGN(4096);\n\n    .rodata : {\n        *(.rodata .rodata.*)\n        . = ALIGN(8);\n        __sl_exports_start = .;\n        /* malloc: GLOBAL DEFAULT function, retained by the address reference. */\n        BYTE(109); BYTE(97); BYTE(108); BYTE(108); BYTE(111); BYTE(99); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0);\n        QUAD(malloc);\n        /* free: GLOBAL DEFAULT function, retained by the address reference. */\n        BYTE(102); BYTE(114); BYTE(101); BYTE(101); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0);\n        QUAD(free);\n        /* calloc: GLOBAL DEFAULT function, retained by the address reference. */\n        BYTE(99); BYTE(97); BYTE(108); BYTE(108); BYTE(111); BYTE(99); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0);\n        QUAD(calloc);\n        /* realloc: GLOBAL DEFAULT function, retained by the address reference. */\n        BYTE(114); BYTE(101); BYTE(97); BYTE(108); BYTE(108); BYTE(111); BYTE(99); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0); BYTE(0);\n        QUAD(realloc);\n        __sl_exports_end = .;\n    }\n\n    . = ALIGN(4096);\n\n    .eh_frame : ALIGN(8) {\n        __eh_frame_start = .;\n        KEEP(*(.eh_frame))\n        __eh_frame_end = .;\n    }\n    .eh_frame_hdr : ALIGN(8) {\n        __eh_frame_hdr_start = .;\n        KEEP(*(.eh_frame_hdr))\n        __eh_frame_hdr_end = .;\n    }\n    .gcc_except_table : ALIGN(8) { KEEP(*(.gcc_except_table .gcc_except_table.*)) }\n    . = ALIGN(4096);\n\n    /* Static TLS image. The runtime copies [tdata_start, tdata_end) to\n       thread_pointer - block_size and zeroes the remainder. */\n    .tdata : {\n        __tls_tdata_start = .;\n        *(.tdata .tdata.*)\n        __tls_tdata_end = .;\n    }\n\n    .tbss : {\n        __tls_tbss_start = .;\n        *(.tbss .tbss.*)\n        __tls_tbss_end = .;\n    }\n\n    __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss));\n    __tls_size = __tls_tbss_end - __tls_tdata_start;\n\n    . = ALIGN(4096);\n\n    .data : {\n        *(.data .data.*)\n    }\n    .init_array : ALIGN(8) {\n        __sl_init_array_start = .;\n        KEEP(*(SORT_BY_INIT_PRIORITY(.init_array.*)))\n        KEEP(*(.init_array))\n        __sl_init_array_end = .;\n    }\n\n    . = ALIGN(4096);\n\n    .bss : {\n        *(.bss .bss.*)\n        *(COMMON)\n    }\n\n    /DISCARD/ : {\n        *(.comment)\n        *(.note)\n        *(.note.*)\n    }\n}\n"
+  },
+  "rust-toolchain.toml": {
+    "sha256": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0",
+    "content": "[toolchain]\nchannel = \"nightly\"\ncomponents = [\"rust-src\", \"llvm-tools-preview\", \"rustfmt\", \"clippy\"]\ntargets = [\"x86_64-unknown-none\"]\n"
+  },
+  ".cargo/config.toml": {
+    "sha256": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+    "content": "# Workspace default target for kernel build.\n# Legacy userspace overrides linker flags; std applications select the native\n# target through tools/build_native_std.sh. See docs/workspace-checks.md.\n[build]\ntarget = \"x86_64-unknown-none\"\n\n# Kernel-only flags: conservative baseline (x86-64), no SIMD.\n# Userspace uses -C target-cpu=x86-64-v2 via SERVICE_RUSTFLAGS in build scripts,\n# which overrides these when RUSTFLAGS env is set.\n[target.x86_64-unknown-none]\nrustflags = [\n    \"-C\", \"link-arg=-Tkernel/src/arch/x86_64/linker.ld\",\n    \"-C\", \"relocation-model=static\",\n    # No target-cpu here \u2014 kernel stays at x86-64 baseline (soft-float, no SSE)\n]\n\n# Fast combined host-library check. Full platform-aware validation is\n# `python3 tools/check_workspace.py`; see docs/workspace-checks.md.\n[alias]\ncheck-host-libs = \"check --workspace --lib --target x86_64-unknown-linux-gnu\"\n"
+  }
+}

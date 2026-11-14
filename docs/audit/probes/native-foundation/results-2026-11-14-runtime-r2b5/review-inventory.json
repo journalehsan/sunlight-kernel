@@ -1,0 +1,23 @@
+{
+  "documents": {
+    "docs/runtime/native-runtime-r2b3-thread-group-reclamation-races.md": "2fac8c14aac7dc0971f46d551984dd64b5cbe4d09710b78b8a4cee95c2dff24b",
+    "docs/runtime/native-runtime-r2b4-group-authority-migration.md": "f542e322a8a90eeed4ce468eb3fb9782605605563ee8bb5dc0a1263ba423409d",
+    "docs/kernel/threading-t2r-lifecycle-race-closure.md": "641344e20eb7cfe57667c0a528f29be9c00383e91664378ae920264f6ff20ed9",
+    "docs/kernel/kfp-2a2-persistent-retirement-ownership.md": "9baa1971a73b3a1dd835d41f5a11826114d12ef0077322662f6c45930454a658",
+    "docs/kernel/kfp-2a6-concurrency-lifetime-closure.md": "cd8b16b976d1cd24d406450a60eb8e844438c0ee0e30c3095d2d5e47632add54",
+    "docs/kernel/kfp-2a6d-concurrent-cleanup-closure.md": "09bbfd6b3468f534d154e3a93d868fc3b93bab053cd4312de47f94a7556ae3e3",
+    "docs/terminal/per-tab-session-lifecycle.md": "1c839162a9951cd8148422b66507282294e42eff7e0238075c1d21832ebb28fd",
+    "docs/ipc/fastlane-m53r54-restricted-retirement.md": "f01c52e14f7f7422a39dcdd74678e5a77b9022b33b8ffa0c6810856036db2954",
+    "docs/ipc/fastlane-m53r3-security-contract.md": "3f43294470565b07697f2b7316b8d271bd20ba791bb8d09257fa07814157f094"
+  },
+  "source_scope": [
+    "native task/group exit and force kill",
+    "admission/publication and owner resolution",
+    "wait/reap and physical handoff",
+    "endpoint capability and queue closure",
+    "SHM view/backing/quota and ledger",
+    "TLB persistent retirement and uncertainty",
+    "foreground/session/PTY authority"
+  ],
+  "native_evidence_boundary": "Source observations remain source observations; integrated missing witnesses are not PASS"
+}

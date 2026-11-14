@@ -1,0 +1,4 @@
+{
+  "pid": 3482490,
+  "reason": "Audit identified process-wide adapter and ProcessIsAlive integration; preserve intermediate guests before final-source rerun."
+}

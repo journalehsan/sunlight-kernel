@@ -1,0 +1,81 @@
+patching file config.sub
+patching file configure
+king for --with-libc=STRING... default LIBC=""
+checking for x64 gcc inline assembler... yes
+checking whether float word ordering is bigendian... no
+checking whether we can use gcc inline assembler to get and set x87 control word... yes
+checking whether we can use gcc inline assembler to get and set mc68881 fpcr... no
+checking for x87-style double rounding... no
+checking for acosh... yes
+checking for asinh... yes
+checking for atanh... yes
+checking for erf... yes
+checking for erfc... yes
+checking for expm1... yes
+checking for log1p... yes
+checking for log2... yes
+checking whether POSIX semaphores are enabled... (cached) no
+checking for broken sem_getvalue... yes
+checking whether RTLD_LAZY is declared... no
+checking whether RTLD_NOW is declared... yes
+checking whether RTLD_GLOBAL is declared... no
+checking whether RTLD_LOCAL is declared... no
+checking whether RTLD_NODELETE is declared... no
+checking whether RTLD_NOLOAD is declared... no
+checking whether RTLD_DEEPBIND is declared... no
+checking whether RTLD_MEMBER is declared... no
+checking digit size for Python's longs... no value specified
+checking for wchar.h... (cached) yes
+checking size of wchar_t... 4
+checking whether wchar_t is signed... yes
+checking whether wchar_t is usable... no
+checking whether byte ordering is bigendian... no
+checking ABIFLAGS... 
+checking SOABI... cpython-313
+checking LDVERSION... $(VERSION)$(ABIFLAGS)
+checking for --with-platlibdir... no
+checking for --with-wheel-pkg-dir... no
+checking whether right shift extends the sign bit... yes
+checking for getc_unlocked() and friends... no
+checking for readline... no
+checking for readline/readline.h... no
+checking how to link readline... no
+checking for broken nice()... no
+checking for broken poll()... no
+checking for working tzset()... no
+checking for tv_nsec in struct stat... no
+checking for tv_nsec2 in struct stat... no
+checking for ncursesw... no
+checking for ncurses... no
+checking for ncursesw/curses.h... no
+checking for ncursesw/ncurses.h... no
+checking for ncursesw/panel.h... no
+checking for ncurses/curses.h... no
+checking for ncurses/ncurses.h... no
+checking for ncurses/panel.h... no
+checking for curses.h... no
+checking for ncurses.h... no
+checking for panel.h... no
+checking for library containing initscr... no
+checking for library containing update_panels... no
+checking for term.h... no
+checking whether mvwdelch is an expression... no
+checking whether WINDOW has _flags... no
+checking for curses function is_pad... no
+checking for curses function is_term_resized... no
+checking for curses function resize_term... no
+checking for curses function resizeterm... no
+checking for curses function immedok... no
+checking for curses function syncok... no
+checking for curses function wchgat... no
+checking for curses function filter... no
+checking for curses function has_key... no
+checking for curses function typeahead... no
+checking for curses function use_env... no
+configure: checking for device files
+checking for /dev/ptmx... not set
+configure: WARNING: using cross tools not prefixed with host triplet
+configure: WARNING: x86_64-unknown-sunlightos/clang is not supported
+configure: WARNING: no system libmpdecimal found; falling back to bundled libmpdecimal (deprecated and scheduled for removal in Python 3.15)
+configure: error: set ac_cv_file__dev_ptmx to yes/no in your CONFIG_SITE file when cross compiling
+

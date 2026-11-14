@@ -1,0 +1,6 @@
+$ cargo build -p sunlight-init -p rand_service --release --target x86_64-unknown-none --target-dir /home/ehsantor/Projects/sunlightos-kernel/target/native-c-guest/support
+error: multiple workspace roots found in the same workspace:
+  /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/vendor/libm
+  /home/ehsantor/Projects/sunlightos-kernel
+
+exit=101

@@ -1,0 +1,81 @@
+{
+  "status": "BLOCKED",
+  "fields": [
+    {
+      "field": "file type",
+      "classification": "Authoritative and exposed",
+      "limits": "Only regular/directory; no links/special files"
+    },
+    {
+      "field": "size",
+      "classification": "Authoritative and exposed",
+      "limits": "tmpfs current length; FAT fstat open-slot cached size must not imply concurrent freshness"
+    },
+    {
+      "field": "mode",
+      "classification": "Available with a weaker contract",
+      "limits": "tmpfs stored mode; FAT adapter root/default mode with /state user policy, not on-disk POSIX mode"
+    },
+    {
+      "field": "uid/gid",
+      "classification": "Available with a weaker contract",
+      "limits": "tmpfs stored; FAT policy values"
+    },
+    {
+      "field": "link count",
+      "classification": "Available with a weaker contract",
+      "limits": "Native conventions file1/dir2; unlinked dynamic tmpfs fd0; no hardlinks"
+    },
+    {
+      "field": "device identity",
+      "classification": "Missing in the backend",
+      "limits": "MountInfo id/source internal, no stable POSIX dev_t across incarnation defined"
+    },
+    {
+      "field": "inode identity",
+      "classification": "Authoritative but internal",
+      "limits": "tmpfs lookup stable mount-local IDs: seed index+1 retained at materialization, dynamic monotonic IDs, implicit root0. No fd inode export; FAT cluster alone is insufficient (empty files/rename); no common POSIX inode contract"
+    },
+    {
+      "field": "timestamps",
+      "classification": "Missing in the backend",
+      "limits": "No authoritative atime/mtime/ctime in shared FileStat or tmpfs entry"
+    },
+    {
+      "field": "symlink identity",
+      "classification": "Missing in the backend",
+      "limits": "No symlink type/storage"
+    },
+    {
+      "field": "mount identity",
+      "classification": "Authoritative but internal",
+      "limits": "Vfs MountInfo tag/source; not POSIX device ABI"
+    },
+    {
+      "field": "descriptor metadata",
+      "classification": "Authoritative and exposed",
+      "limits": "Native subset through generation-qualified backend handle; full concurrent fd pin semantics not proven"
+    }
+  ],
+  "sources": [
+    "sunlight-fs/src/vfs.rs:81,419,447,817,1067",
+    "sunlight-fs/src/tmpfs.rs:30,219,549,578",
+    "kernel/src/arch/x86_64/syscall.rs:6453,6466,10578"
+  ],
+  "ABI": {
+    "size": 24,
+    "alignment": 8,
+    "offsets": {
+      "size": 0,
+      "uid": 8,
+      "gid": 12,
+      "mode": 16,
+      "file_type": 18,
+      "pad": 19,
+      "nlinks": 20
+    },
+    "contract": "Existing native subset only; no new struct stat"
+  },
+  "Linux_compatibility": "synthetic_ino hashes path; fill_linux_stat dev1, zero timestamps, computed blocks. Excluded as authoritative native POSIX metadata.",
+  "decision": "Do not return POSIX success with missing/invented metadata. Backend validity and identity/time policy plus versioned wire ABI required."
+}

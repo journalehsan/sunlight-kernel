@@ -1,0 +1,133 @@
+{
+  "status": "PASS",
+  "oracle": {
+    "oracle": "host libc snprintf through ctypes.CDLL(None)",
+    "host_libc": [
+      "glibc",
+      "2.44"
+    ],
+    "seed": 31300,
+    "binary64_patterns": 89,
+    "formats": [
+      "%f",
+      "%e",
+      "%g",
+      "%.0f",
+      "%.0e",
+      "%.0g",
+      "%.17g",
+      "%#.0f",
+      "%#.6g",
+      "%+024.9e",
+      "%-24.7G",
+      "% 018.3f",
+      "%.1101f",
+      "%.1101e",
+      "%.1101g",
+      "%#.1101g",
+      "%F",
+      "%E",
+      "%G",
+      "%lf"
+    ],
+    "cases": 1780
+  },
+  "cpu_results": {
+    "1": {
+      "py2-format": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-wide": {
+        "exit": 0,
+        "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-header": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      }
+    },
+    "2": {
+      "py2-format": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-wide": {
+        "exit": 0,
+        "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-header": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      }
+    },
+    "4": {
+      "py2-format": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-wide": {
+        "exit": 0,
+        "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "py2-header": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      }
+    }
+  },
+  "coverage": [
+    "empty output",
+    "signed/unsigned LP64 boundaries",
+    "integer flags/width/precision/lengths",
+    "zero-sized NULL destination",
+    "NUL termination",
+    "truncation and required-length return",
+    "va_list wrappers",
+    "100000-byte generated output",
+    "binary64 f/F/e/E/g/G",
+    "signed zero/subnormals/DBL_MAX/infinity/quiet NaNs",
+    "precision 1101",
+    "C/C++ ABI",
+    "C ASCII/UTF-8 lc/ls and byte precision",
+    "explicit EOVERFLOW/ENOSYS/EILSEQ"
+  ],
+  "limitations": [
+    "No full printf conformance claim",
+    "hexadecimal float, long double, %n and positional formats explicitly ENOSYS",
+    "no public fenv or alternate-rounding guarantee",
+    "no signaling-NaN qualification",
+    "sprintf requires sufficient caller-owned storage",
+    "wide tests are bounded known expectations; binary64 decimal tests use independent host libc oracle"
+  ],
+  "failed_attempts": [
+    {
+      "evidence": "format-first-cpu-1/",
+      "observation": "fixture expected length 21; correct literal length is 18",
+      "classification": "fixture error"
+    },
+    {
+      "evidence": "wide-debug-v2/",
+      "observation": "right-aligned %8.3ls returned 13 and padded both sides",
+      "classification": "production formatter defect, fixed; subsequent final native tests pass"
+    }
+  ]
+}

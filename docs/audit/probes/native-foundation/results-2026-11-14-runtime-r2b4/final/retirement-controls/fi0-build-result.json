@@ -1,0 +1,1 @@
+{"command": ["cargo", "build", "--locked", "--offline", "-p", "sunlight-kernel", "--bin", "sunlight-kernel", "--features", "mm2d_munmap_test"], "exit_code": 0}

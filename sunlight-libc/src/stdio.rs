@@ -16,6 +16,7 @@ struct State {
     eof: bool,
     error: bool,
     closed: bool,
+    pushback: Option<u8>,
 }
 #[repr(C)]
 pub struct SunlightFile {
@@ -35,6 +36,7 @@ impl SunlightFile {
                 eof: false,
                 error: false,
                 closed: false,
+                pushback: None,
             }),
         }
     }
@@ -135,6 +137,12 @@ fn read_bytes(state: &mut State, bytes: &mut [u8]) -> usize {
         return 0;
     }
     let mut done = 0;
+    if !bytes.is_empty() {
+        if let Some(byte) = state.pushback.take() {
+            bytes[0] = byte;
+            done = 1;
+        }
+    }
     while done < bytes.len() {
         let end = bytes
             .len()
@@ -466,9 +474,21 @@ pub unsafe extern "C" fn fseek(file: *mut SunlightFile, offset: c_long, whence: 
         fail(&mut state, Errno::Inval);
         return -1;
     }
+    let offset = if whence == crate::SEEK_CUR && state.pushback.is_some() {
+        match offset.checked_sub(1) {
+            Some(n) => n,
+            None => {
+                fail(&mut state, Errno::Inval);
+                return -1;
+            }
+        }
+    } else {
+        offset
+    };
     match crate::lseek(state.fd, offset, whence) {
         Ok(_) => {
             state.eof = false;
+            state.pushback = None;
             0
         }
         Err(e) => {
@@ -483,7 +503,13 @@ pub unsafe extern "C" fn ftell(file: *mut SunlightFile) -> c_long {
         return -1;
     };
     match crate::lseek(state.fd, 0, crate::SEEK_CUR) {
-        Ok(n) if n <= c_long::MAX as u64 => n as c_long,
+        Ok(n) if n <= c_long::MAX as u64 => {
+            if state.pushback.is_some() {
+                n as c_long - 1
+            } else {
+                n as c_long
+            }
+        }
         Ok(_) => {
             fail(&mut state, Errno::TooBig);
             -1
@@ -528,4 +554,125 @@ pub unsafe extern "C" fn printf(fmt: *const u8, args: ...) -> c_int {
 #[cfg_attr(not(test), no_mangle)]
 pub unsafe extern "C" fn vprintf(fmt: *const u8, args: VaList<'_>) -> c_int {
     vfprintf(stdout, fmt, args)
+}
+
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn vsnprintf(
+    destination: *mut u8,
+    size: usize,
+    fmt: *const u8,
+    args: VaList<'_>,
+) -> c_int {
+    if fmt.is_null() || (size > 0 && destination.is_null()) {
+        errno::set_errno(errno::EINVAL);
+        return -1;
+    }
+    format::memory(destination, size, cbytes(fmt), args)
+}
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn snprintf(
+    destination: *mut u8,
+    size: usize,
+    fmt: *const u8,
+    args: ...
+) -> c_int {
+    vsnprintf(destination, size, fmt, args)
+}
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn vsprintf(destination: *mut u8, fmt: *const u8, args: VaList<'_>) -> c_int {
+    vsnprintf(destination, usize::MAX, fmt, args)
+}
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn sprintf(destination: *mut u8, fmt: *const u8, args: ...) -> c_int {
+    vsprintf(destination, fmt, args)
+}
+
+#[cfg_attr(not(test), no_mangle)]
+pub unsafe extern "C" fn ungetc(ch: c_int, file: *mut SunlightFile) -> c_int {
+    let Some(mut state) = lock(file) else {
+        return EOF;
+    };
+    if ch == EOF {
+        return EOF;
+    }
+    if !state.readable {
+        fail(&mut state, Errno::BadFd);
+        return EOF;
+    }
+    if state.pushback.is_some() {
+        return EOF;
+    }
+    let byte = ch as u8;
+    state.pushback = Some(byte);
+    state.eof = false;
+    byte as c_int
+}
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+#[no_mangle]
+pub unsafe extern "C" fn fdopen(fd: c_int, mode: *const u8) -> *mut SunlightFile {
+    if mode.is_null() {
+        errno::set_errno(errno::EINVAL);
+        return core::ptr::null_mut();
+    }
+    let mode = cbytes(mode);
+    let Some((flags, read, write)) = mode_flags(mode) else {
+        errno::set_errno(errno::EINVAL);
+        return core::ptr::null_mut();
+    };
+    // Exclusive creation belongs to fopen, never descriptor adoption.
+    if mode.contains(&b'x') {
+        errno::set_errno(errno::EINVAL);
+        return core::ptr::null_mut();
+    }
+    let status = crate::c_file::control(fd, 3, 0);
+    if status < 0 {
+        return core::ptr::null_mut();
+    }
+    if (read && status & 3 == 1) || (write && status & 3 == 0) {
+        errno::set_errno(errno::EINVAL);
+        return core::ptr::null_mut();
+    }
+    let file = crate::alloc::malloc(core::mem::size_of::<SunlightFile>()).cast::<SunlightFile>();
+    if file.is_null() {
+        errno::set_errno(errno::ENOMEM);
+        return file;
+    }
+    if flags & crate::O_APPEND != 0
+        && crate::c_file::control(fd, 4, status | crate::O_APPEND as c_int) < 0
+    {
+        crate::alloc::free(file.cast());
+        return core::ptr::null_mut();
+    }
+    file.write(SunlightFile::new(fd as u32, read, write));
+    file
+}
+
+/// Select the implemented unbuffered policy. Buffered policies fail explicitly
+/// and leave the stream unchanged; supplied buffer storage is never retained.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn setvbuf(
+    stream: *mut SunlightFile,
+    _buffer: *mut core::ffi::c_char,
+    mode: c_int,
+    _size: usize,
+) -> c_int {
+    let Some(_guard) = lock(stream) else {
+        return -1;
+    };
+    match mode {
+        2 => 0,
+        0 | 1 => {
+            errno::set_errno(errno::ENOSYS);
+            -1
+        }
+        _ => {
+            errno::set_errno(errno::EINVAL);
+            -1
+        }
+    }
+}
+
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn setbuf(stream: *mut SunlightFile, buffer: *mut core::ffi::c_char) {
+    let _ = setvbuf(stream, buffer, if buffer.is_null() { 2 } else { 0 }, 8192);
 }

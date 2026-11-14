@@ -1,0 +1,96 @@
+['python3', 'tools/native-c/guest.py', '--cases', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/all-functional-cases.json', '--cpus', '1', '--timeout', '240', '--out', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/validated-functional-cpu-1']
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/validated-functional-cpu-1
+Building isolated native C guest (47 ELFs, 1 CPUs)
+Booting disposable TCG guest
+condvar: PASS exit=0 expected=0
+guest condvar stdout: b'PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n'
+libc: PASS exit=0 expected=0
+guest libc stdout: b'PY1 strings and strtol PASS\nPY1 strncpy PASS: 81 boundary cases and canaries\n'
+exit: PASS exit=37 expected=37
+guest exit stdout: b'PY1 worker _Exit(37)\n'
+heap: PASS exit=0 expected=0
+guest heap stdout: b'R1 heap and SysV ABI PASS\n'
+admission: PASS exit=0 expected=0
+guest admission stdout: b'A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n'
+pthread-tsd-once: PASS exit=0 expected=0
+guest pthread-tsd-once stdout: b'TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n'
+pthread-tsd-exit-race: PASS exit=0 expected=0
+guest pthread-tsd-exit-race stdout: b'in-flight destructor delete/reuse witness PASS\n'
+pthread-once-recursive: PASS exit=0 expected=0
+guest pthread-once-recursive stdout: b'recursive once: no completion in bounded window; independent thread progressed\n'
+strerror-threads: PASS exit=0 expected=0
+guest strerror-threads stdout: b'strerror all 40 supported numbers across four threads PASS\n'
+condvar-timeout: PASS exit=0 expected=0
+guest condvar-timeout stdout: b'PY1 signal/timeout stress PASS wakes=40 timeouts=20; exact race UNQUALIFIED\n'
+string-guard: PASS exit=0 expected=0
+guest string-guard stdout: b'PY1 strncpy guard-page PASS\n'
+header-abi: PASS exit=0 expected=0
+owner-exit-0: PASS exit=0 expected=0
+guest owner-exit-0 stdout: b'PY1 initial owner immediate group exit\n'
+owner-exit-37: PASS exit=37 expected=37
+guest owner-exit-37 stdout: b'PY1 initial owner immediate group exit\n'
+owner-exit-255: PASS exit=255 expected=255
+guest owner-exit-255 stdout: b'PY1 initial owner immediate group exit\n'
+lifecycle-initial: PASS exit=0 expected=0
+guest lifecycle-initial stdout: b'W alive actor=0 tid=458 owner=115 mode=0\nW initial pthread_exit owner=115 workers=1\nW tls actor=3 tid=115\nW progress actor=0 tid=458 after-owner-query\nW tls actor=1 tid=458\n'
+lifecycle-multiple: PASS exit=0 expected=0
+guest lifecycle-multiple stdout: b'W alive actor=0 tid=459 owner=116 mode=1\nW alive actor=1 tid=460 owner=116 mode=1\nW initial pthread_exit owner=116 workers=2\nW tls actor=3 tid=116\nW progress actor=0 tid=459 after-owner-query\nW tls actor=1 tid=459\nW progress actor=1 tid=460 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=460\n'
+lifecycle-forced-after-owner: PASS exit=137 expected=137
+guest lifecycle-forced-after-owner stdout: b'W alive actor=0 tid=461 owner=117 mode=2\nW alive actor=1 tid=462 owner=117 mode=2\nW initial pthread_exit owner=117 workers=2\nW tls actor=3 tid=117\nW progress actor=0 tid=461 after-owner-query\nW forced retained-owner SIGKILL\n'
+lifecycle-exit-0: PASS exit=17 expected=17
+guest lifecycle-exit-0 stdout: b'EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n'
+lifecycle-exit-1: PASS exit=23 expected=23
+guest lifecycle-exit-1 stdout: b'EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n'
+lifecycle-exit-2: PASS exit=29 expected=29
+guest lifecycle-exit-2 stdout: b'EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n'
+lifecycle-exit-3: PASS exit=137 expected=137
+guest lifecycle-exit-3 stdout: b'EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n'
+lifecycle-churn-0: PASS exit=0 expected=0
+guest lifecycle-churn-0 stdout: b'W alive actor=0 tid=467 owner=122 mode=1\nW alive actor=1 tid=468 owner=122 mode=1\nW initial pthread_exit owner=122 workers=2\nW tls actor=3 tid=122\nW progress actor=0 tid=467 after-owner-query\nW tls actor=1 tid=467\nW progress actor=1 tid=468 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=468\n'
+lifecycle-churn-1: PASS exit=0 expected=0
+guest lifecycle-churn-1 stdout: b'W alive actor=0 tid=469 owner=123 mode=1\nW alive actor=1 tid=470 owner=123 mode=1\nW initial pthread_exit owner=123 workers=2\nW tls actor=3 tid=123\nW progress actor=0 tid=469 after-owner-query\nW tls actor=1 tid=469\nW progress actor=1 tid=470 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=470\n'
+lifecycle-churn-2: PASS exit=0 expected=0
+guest lifecycle-churn-2 stdout: b'W alive actor=0 tid=471 owner=124 mode=1\nW alive actor=1 tid=472 owner=124 mode=1\nW initial pthread_exit owner=124 workers=2\nW tls actor=3 tid=124\nW progress actor=0 tid=471 after-owner-query\nW tls actor=1 tid=471\nW progress actor=1 tid=472 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=472\n'
+lifecycle-churn-3: PASS exit=0 expected=0
+guest lifecycle-churn-3 stdout: b'W alive actor=0 tid=473 owner=125 mode=1\nW alive actor=1 tid=474 owner=125 mode=1\nW initial pthread_exit owner=125 workers=2\nW tls actor=3 tid=125\nW progress actor=0 tid=473 after-owner-query\nW tls actor=1 tid=473\nW progress actor=1 tid=474 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=474\n'
+lifecycle-churn-4: PASS exit=0 expected=0
+guest lifecycle-churn-4 stdout: b'W alive actor=0 tid=475 owner=126 mode=1\nW alive actor=1 tid=476 owner=126 mode=1\nW initial pthread_exit owner=126 workers=2\nW tls actor=3 tid=126\nW progress actor=0 tid=475 after-owner-query\nW tls actor=1 tid=475\nW progress actor=1 tid=476 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=476\n'
+lifecycle-churn-5: PASS exit=0 expected=0
+guest lifecycle-churn-5 stdout: b'W alive actor=0 tid=477 owner=127 mode=1\nW alive actor=1 tid=478 owner=127 mode=1\nW initial pthread_exit owner=127 workers=2\nW tls actor=3 tid=127\nW progress actor=0 tid=477 after-owner-query\nW tls actor=1 tid=477\nW progress actor=1 tid=478 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=478\n'
+lifecycle-churn-6: PASS exit=0 expected=0
+guest lifecycle-churn-6 stdout: b'W alive actor=0 tid=479 owner=128 mode=1\nW alive actor=1 tid=480 owner=128 mode=1\nW initial pthread_exit owner=128 workers=2\nW tls actor=3 tid=128\nW progress actor=0 tid=479 after-owner-query\nW tls actor=1 tid=479\nW progress actor=1 tid=480 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=480\n'
+lifecycle-churn-7: PASS exit=0 expected=0
+guest lifecycle-churn-7 stdout: b'W alive actor=0 tid=481 owner=129 mode=1\nW alive actor=1 tid=482 owner=129 mode=1\nW initial pthread_exit owner=129 workers=2\nW tls actor=3 tid=129\nW progress actor=0 tid=481 after-owner-query\nW tls actor=1 tid=481\nW progress actor=1 tid=482 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=482\n'
+lifecycle-churn-8: PASS exit=0 expected=0
+guest lifecycle-churn-8 stdout: b'W alive actor=0 tid=483 owner=130 mode=1\nW alive actor=1 tid=484 owner=130 mode=1\nW initial pthread_exit owner=130 workers=2\nW tls actor=3 tid=130\nW progress actor=0 tid=483 after-owner-query\nW tls actor=1 tid=483\nW progress actor=1 tid=484 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=484\n'
+lifecycle-churn-9: PASS exit=0 expected=0
+guest lifecycle-churn-9 stdout: b'W alive actor=0 tid=485 owner=131 mode=1\nW alive actor=1 tid=486 owner=131 mode=1\nW initial pthread_exit owner=131 workers=2\nW tls actor=3 tid=131\nW progress actor=0 tid=485 after-owner-query\nW tls actor=1 tid=485\nW progress actor=1 tid=486 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=486\n'
+py2-format: PASS exit=0 expected=0
+guest py2-format stdout: b'PY2 FORMAT PASS oracle=1780\n'
+py2-stream: PASS exit=0 expected=0
+guest py2-stream stdout: b'PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n'
+py2-wide: PASS exit=0 expected=0
+guest py2-wide stdout: b'PY2 WIDE/ENV/SORT PASS\n'
+py2-header: PASS exit=0 expected=0
+py2-math-declarations: PASS exit=0 expected=0
+guest py2-math-declarations stdout: b'PY2 MATH DECL PASS native archive ABI/value checks\n'
+py3-contracts: PASS exit=0 expected=0
+guest py3-contracts stdout: b'PY3 CONTRACTS PASS bulk-conversion locale stream-policy resolution strncpy concurrency\n'
+py3-exit: PASS exit=38 expected=38
+guest py3-exit stdout: b'PY3 worker _exit(38)\n'
+py3-filesystem: PASS exit=0 expected=0
+guest py3-filesystem stdout: b'PY3 NATIVE METADATA SUBSET PASS; POSIX stat/realpath BLOCKED\n'
+py4-langinfo: PASS exit=0 expected=0
+guest py4-langinfo stdout: b'PY4 C LOCALE METADATA PASS; calendar execution NOT_IMPLEMENTED\n'
+py4-process: PASS exit=0 expected=0
+guest py4-process stdout: b'PY4 PROCESS IDENTITY live group/thread/parent PASS\n'
+py4-contracts: PASS exit=0 expected=0
+guest py4-contracts stdout: b'PY4 CONTRACT LIMITS PASS native_owner=142 worker=501 generation=91; historical task IDs distinct; masking, nonblocking entropy BLOCKED\n'
+py4-filesystem: PASS exit=0 expected=0
+guest py4-filesystem stdout: b'PY4 NATIVE METADATA SUBSET PASS root/mount/error/concurrent-size; POSIX stat/lstat/realpath BLOCKED\n'
+py4-process-owner-exit: PASS exit=0 expected=0
+guest py4-process-owner-exit stdout: b'PY4 PROCESS IDENTITY retained owner=144 parent=0 tid=503 PASS\n'
+py5-filesystem: PASS exit=0 expected=0
+guest py5-filesystem stdout: b'PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n'
+py6-filesystem: PASS exit=0 expected=0
+guest py6-filesystem stdout: b'PY6 canonical PASS: component existence, cwd, mount, whitespace, allocation, bounds, errno; symlinks NOT_RUN\n'

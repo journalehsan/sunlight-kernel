@@ -1,0 +1,29 @@
+['python3', 'tools/native-c/guest.py', '--suite', '--cpus', '1', '--timeout', '240', '--out', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/validated-legacy-cpu-1']
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/validated-legacy-cpu-1
+Building isolated native C guest (94 ELFs, 1 CPUs)
+Booting disposable TCG guest
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 442, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 364, in main
+    rc = command('qemu', argv, timeout=opts.timeout)
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 120, in command
+    p = subprocess.run(argv, cwd=ROOT, env=env, stdout=stream,
+                       stderr=subprocess.STDOUT, timeout=timeout)
+  File "/usr/lib/python3.14/subprocess.py", line 557, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1221, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 2179, in _communicate
+    self.wait(timeout=self._remaining_time(endtime))
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 1279, in wait
+    return self._wait(timeout=timeout)
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/subprocess.py", line 2078, in _wait
+    time.sleep(delay)
+    ~~~~~~~~~~^^^^^^^
+KeyboardInterrupt

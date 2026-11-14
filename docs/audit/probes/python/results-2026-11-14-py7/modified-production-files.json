@@ -1,0 +1,32 @@
+[
+  {
+    "path": "sunlight-fat/src/fat/write.rs",
+    "role": "production",
+    "incoming_sha256": "e6c8378da80e80b46412d7e275695e08bedaae8ec677349c977e4615620d99ef",
+    "final_sha256": "10ac29d33912e0d6a5adc94e08517f578b99e0aa732085da843f0ac49af2f615"
+  },
+  {
+    "path": "sunlight-fs/src/vfs.rs",
+    "role": "production",
+    "incoming_sha256": "c8049a6349029c99bc62e53a5a754a485ee0837aa347fb4b57d80267579ecabd",
+    "final_sha256": "c32c9dc20d7e1006716747a2b40ca997b88a4458af59e4cebb45ddb70bc72e7d"
+  },
+  {
+    "path": "sunlight-fs/src/vfs/storage_tests.rs",
+    "role": "host tests",
+    "incoming_sha256": "d333816438f80118a4101df42fc03ca73f75dd8d96e748796cff14d897a51fcc",
+    "final_sha256": "403da7594e16c7198d798f957b3caa0c838365918e6fe4ecaa06d1decb77be48"
+  },
+  {
+    "path": "kernel/src/arch/x86_64/syscall.rs",
+    "role": "production",
+    "incoming_sha256": "c0a6ca310fdccb8bd7727acede13c598817815b532e4e9fd9a610cf19bfc8f02",
+    "final_sha256": "97dcaaa3ee1ea03e00b7265eeb9b8aad9afd5395225187ca4a3095c8f98fa737"
+  },
+  {
+    "path": "tools/native-c/guest.py",
+    "role": "guest runner",
+    "incoming_sha256": "a94bcb425cf455cbb9eab0c1ee8213aeecb6dd61e4eec4ee58f271e6602c2ef1",
+    "final_sha256": "6fec9d153408496803cd15cdbe0496edfce98b210ddc2217362db53be918525f"
+  }
+]

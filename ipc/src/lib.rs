@@ -94,7 +94,10 @@ pub enum SunlightSyscall {
     /// Make one receive attempt without blocking the calling process.
     IpcTryRecv = 18,
     Foreground = 160,
+    /// Retire only the calling native thread.
     ProcessExit = 20,
+    /// Terminate the native process and all of its threads.
+    ProcessExitGroup = 157,
     ProcessYield = 21,
     /// Native readiness wait for descriptor-table handles.
     NativePoll = 159,
@@ -189,6 +192,11 @@ pub enum SunlightSyscall {
     ConsumeAccountGrant = 152,
     /// Current process generation (address-space identity generation).
     GetProcessGeneration = 141,
+    /// Read-only caller identity: rdi 0=retained native pid, 1=ppid, 2=task tid.
+    /// No target PID input; native error sentinels, including EINVAL selector.
+    NativeProcessIdentity = 178,
+    /// Canonical path: rdi input, rsi output, rdx capacity incl NUL; r10 bit0 requires searchable directory.
+    ResolvePath = 179,
     /// Braind-only: capture the authenticated caller of its current IPC request.
     WiseOwlDelegateCaller = 142,
     /// Sessiond-only: consume a fixed Wise Owl session-attestation delegation.
@@ -6172,7 +6180,7 @@ impl ProcessExit {
     pub fn exit(code: i32) -> ! {
         // SAFETY: ProcessExit terminates the current process.
         unsafe {
-            raw_syscall(SunlightSyscall::ProcessExit, code as u64, 0, 0, 0, 0, 0, 0);
+            raw_syscall(SunlightSyscall::ProcessExitGroup, code as u64, 0, 0, 0, 0, 0, 0);
         }
         loop {
             // SAFETY: hlt is safe in a non-returning fallback loop.

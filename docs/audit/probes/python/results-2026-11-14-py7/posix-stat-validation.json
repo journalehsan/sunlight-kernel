@@ -1,0 +1,16 @@
+{
+  "status": "BLOCKED",
+  "stat": "BLOCKED",
+  "lstat": "BLOCKED",
+  "fstat": "BLOCKED",
+  "native_fstat_subset": "PARTIAL",
+  "native_errno": "sys_fstat now maps backend FsError through native or Linux error mapper; stale FAT handle returns native -5/EBADF",
+  "compile_probe": "posix-stat-probe.log",
+  "reason": "No sys/stat.h, full authoritative metadata/time policy, symlink following/no-follow semantics or retained directory contract. Full stat/lstat/fstat are not verified.",
+  "native_regular_and_directory_fixtures": [
+    "filesystem-test.c",
+    "directory-test.c"
+  ],
+  "concurrent_namespace_tests": "NOT_RUN",
+  "native_mount": "Actual /state FAT via disposable virtio fixture; ordinary regressions also use root Tmpfs"
+}

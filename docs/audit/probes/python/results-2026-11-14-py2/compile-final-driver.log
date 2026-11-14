@@ -1,0 +1,1 @@
+{'configured': 180, 'before_configured': 180, 'attempted': 179, 'passed': 155, 'failed': 24, 'unattempted': ['Modules/getbuildinfo.o'], 'first_serial_error': "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/file_tokenizer.c:59:44: error: use of undeclared identifier 'BUFSIZ'", 'denominator_change_reason': None}

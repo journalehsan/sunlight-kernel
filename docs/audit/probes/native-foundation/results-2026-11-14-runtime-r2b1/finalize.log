@@ -1,0 +1,14 @@
+{
+  "overall": "PARTIAL (not R2B.1 COMPLETE)",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PARTIAL",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS"
+  },
+  "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "runtime_input_fingerprint_sha256": "56083eddca57569779ae90c7cf758afa9cfcea5d94e5b0a9a9130b06796543bc"
+}

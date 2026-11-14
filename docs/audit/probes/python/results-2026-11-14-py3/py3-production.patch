@@ -1,0 +1,298 @@
+--- a/sunlight-libc/include/locale.h
++++ b/sunlight-libc/include/locale.h
+@@ -11,6 +11,19 @@
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
++/* All installed names use C numeric and monetary conventions; en_US.UTF-8
++ * currently provides UTF-8 character encoding, not US monetary formatting.
++ * Returned metadata has process lifetime and must not be modified. */
++struct lconv {
++    char *decimal_point, *thousands_sep, *grouping;
++    char *int_curr_symbol, *currency_symbol, *mon_decimal_point;
++    char *mon_thousands_sep, *mon_grouping, *positive_sign, *negative_sign;
++    char int_frac_digits, frac_digits, p_cs_precedes, p_sep_by_space;
++    char n_cs_precedes, n_sep_by_space, p_sign_posn, n_sign_posn;
++    char int_p_cs_precedes, int_p_sep_by_space, int_n_cs_precedes;
++    char int_n_sep_by_space, int_p_sign_posn, int_n_sign_posn;
++};
++struct lconv *localeconv(void);
+ char *setlocale(int category, const char *locale);
+ #ifdef __cplusplus
+ }
+--- a/sunlight-libc/include/stdio.h
++++ b/sunlight-libc/include/stdio.h
+@@ -10,6 +10,14 @@
+ #define EOF (-1)
+ /* Recommended application I/O block size; streams remain unbuffered. */
+ #define BUFSIZ 8192
++#define _IOFBF 0
++#define _IOLBF 1
++#define _IONBF 2
++/* Only _IONBF succeeds. Buffered requests fail ENOSYS, invalid modes EINVAL.
++ * Buffer storage is neither used nor retained. setbuf reports failure via errno.
++ * Call before other operations, as required by the C stream contract. */
++int setvbuf(FILE *stream, char *buffer, int mode, size_t size);
++void setbuf(FILE *stream, char *buffer);
+ #define SEEK_SET 0
+ #define SEEK_CUR 1
+ #define SEEK_END 2
+--- a/sunlight-libc/include/stdlib.h
++++ b/sunlight-libc/include/stdlib.h
+@@ -10,6 +10,10 @@
+  * a writable NUL-terminated template. Caller must close and unlink the file. */
+ int mkstemp(char *path_template);
+ char *getenv(const char *name);
++/* Private per-call conversion state; NULL destination counts all input.
++ * ASCII in C, strict UTF-8 in installed UTF-8 locales. No partial encoding. */
++size_t mbstowcs(wchar_t *destination, const char *source, size_t count);
++size_t wcstombs(char *destination, const wchar_t *source, size_t count);
+ unsigned long strtoul(const char *s, char **end, int base);
+ long strtol(const char *s, char **end, int base);
+ void qsort(void *base, size_t count, size_t size,
+--- a/sunlight-libc/include/time.h
++++ b/sunlight-libc/include/time.h
+@@ -11,6 +11,8 @@
+  * granularity. No wall-clock accuracy guarantee. Success preserves errno.
+  * NULL output fails EFAULT, unsupported IDs fail EINVAL. Non-NULL storage
+  * must be valid and writable; arbitrary mapping faults are not recovered. */
++/* NULL resolution output is permitted; unknown IDs fail EINVAL. */
++int clock_getres(clockid_t clock_id, struct timespec *resolution);
+ int clock_gettime(clockid_t clock_id, struct timespec *tp);
+ /* Relative monotonic sleep. Negative seconds or nanoseconds outside
+  * [0, 1000000000) fail EINVAL. Duration and absolute deadline must fit below
+--- a/sunlight-libc/include/unistd.h
++++ b/sunlight-libc/include/unistd.h
+@@ -17,6 +17,11 @@
+  * only for count zero. Zero count follows the native no-transfer contract;
+  * it does not establish that a nonnegative descriptor exists or is writable.
+  * Arbitrary bad non-NULL user memory retains the native generic EIO result. */
++#ifdef __cplusplus
++[[noreturn]] void _exit(int status);
++#else
++_Noreturn void _exit(int status);
++#endif
+ int isatty(int fd);
+ int close(int fd);
+ int unlink(const char *path);
+--- a/sunlight-libc/src/locale.rs
++++ b/sunlight-libc/src/locale.rs
+@@ -324,3 +324,65 @@
+         assert_eq!(identify(b"en_US.UTF-8"), Some(2));
+     }
+ }
++
++/// Native LP64 C lconv layout. Every installed locale currently shares the C
++/// numeric/monetary baseline. UTF-8 selection changes LC_CTYPE only in effect.
++#[repr(C)]
++pub struct Lconv {
++    decimal_point: *mut c_char,
++    thousands_sep: *mut c_char,
++    grouping: *mut c_char,
++    int_curr_symbol: *mut c_char,
++    currency_symbol: *mut c_char,
++    mon_decimal_point: *mut c_char,
++    mon_thousands_sep: *mut c_char,
++    mon_grouping: *mut c_char,
++    positive_sign: *mut c_char,
++    negative_sign: *mut c_char,
++    int_frac_digits: c_char,
++    frac_digits: c_char,
++    p_cs_precedes: c_char,
++    p_sep_by_space: c_char,
++    n_cs_precedes: c_char,
++    n_sep_by_space: c_char,
++    p_sign_posn: c_char,
++    n_sign_posn: c_char,
++    int_p_cs_precedes: c_char,
++    int_p_sep_by_space: c_char,
++    int_n_cs_precedes: c_char,
++    int_n_sep_by_space: c_char,
++    int_p_sign_posn: c_char,
++    int_n_sign_posn: c_char,
++}
++// Immutable process-lifetime metadata; C callers may not mutate the result.
++unsafe impl Sync for Lconv {}
++static C_CONVENTIONS: Lconv = Lconv {
++    decimal_point: c".".as_ptr().cast_mut(),
++    thousands_sep: c"".as_ptr().cast_mut(),
++    grouping: c"".as_ptr().cast_mut(),
++    int_curr_symbol: c"".as_ptr().cast_mut(),
++    currency_symbol: c"".as_ptr().cast_mut(),
++    mon_decimal_point: c"".as_ptr().cast_mut(),
++    mon_thousands_sep: c"".as_ptr().cast_mut(),
++    mon_grouping: c"".as_ptr().cast_mut(),
++    positive_sign: c"".as_ptr().cast_mut(),
++    negative_sign: c"".as_ptr().cast_mut(),
++    int_frac_digits: 127,
++    frac_digits: 127,
++    p_cs_precedes: 127,
++    p_sep_by_space: 127,
++    n_cs_precedes: 127,
++    n_sep_by_space: 127,
++    p_sign_posn: 127,
++    n_sign_posn: 127,
++    int_p_cs_precedes: 127,
++    int_p_sep_by_space: 127,
++    int_n_cs_precedes: 127,
++    int_n_sep_by_space: 127,
++    int_p_sign_posn: 127,
++    int_n_sign_posn: 127,
++};
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub extern "C" fn localeconv() -> *mut Lconv {
++    (&C_CONVENTIONS as *const Lconv).cast_mut()
++}
+--- a/sunlight-libc/src/stdio.rs
++++ b/sunlight-libc/src/stdio.rs
+@@ -646,3 +646,33 @@
+     file.write(SunlightFile::new(fd as u32, read, write));
+     file
+ }
++
++/// Select the implemented unbuffered policy. Buffered policies fail explicitly
++/// and leave the stream unchanged; supplied buffer storage is never retained.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn setvbuf(
++    stream: *mut SunlightFile,
++    _buffer: *mut core::ffi::c_char,
++    mode: c_int,
++    _size: usize,
++) -> c_int {
++    let Some(_guard) = lock(stream) else {
++        return -1;
++    };
++    match mode {
++        2 => 0,
++        0 | 1 => {
++            errno::set_errno(errno::ENOSYS);
++            -1
++        }
++        _ => {
++            errno::set_errno(errno::EINVAL);
++            -1
++        }
++    }
++}
++
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn setbuf(stream: *mut SunlightFile, buffer: *mut core::ffi::c_char) {
++    let _ = setvbuf(stream, buffer, if buffer.is_null() { 2 } else { 0 }, 8192);
++}
+--- a/sunlight-libc/src/termination.rs
++++ b/sunlight-libc/src/termination.rs
+@@ -141,3 +141,10 @@
+ pub unsafe extern "C" fn _Exit(status: i32) -> ! {
+     crate::std_runtime::sl_std_exit(status)
+ }
++
++/// POSIX spelling of the same immediate process-group exit operation.
++#[cfg(all(not(test), feature = "native-c", target_os = "sunlightos"))]
++#[no_mangle]
++pub unsafe extern "C" fn _exit(status: i32) -> ! {
++    crate::std_runtime::sl_std_exit(status)
++}
+--- a/sunlight-libc/src/time.rs
++++ b/sunlight-libc/src/time.rs
+@@ -549,3 +549,27 @@
+         );
+     }
+ }
++
++/// Resolution of the two native clock sources, matching the current syscall
++/// ABI: RTC epoch seconds and the canonical 100 Hz monotonic timekeeper.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn clock_getres(clockid: i32, out: *mut Timespec) -> i32 {
++    let resolution = match clockid {
++        CLOCK_REALTIME => Timespec {
++            tv_sec: 1,
++            tv_nsec: 0,
++        },
++        CLOCK_MONOTONIC => Timespec {
++            tv_sec: 0,
++            tv_nsec: 10_000_000,
++        },
++        _ => {
++            set_errno(EINVAL);
++            return -1;
++        }
++    };
++    if !out.is_null() {
++        out.write(resolution);
++    }
++    0
++}
+--- a/sunlight-libc/src/wchar.rs
++++ b/sunlight-libc/src/wchar.rs
+@@ -175,3 +175,71 @@
+         }
+     }
+ }
++
++/// Stateless bulk conversion with a private restartable state. A bounded
++/// destination stops before reading the next character; NULL counts all input.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn mbstowcs(out: *mut i32, mut s: *const c_char, n: usize) -> usize {
++    let mut count = 0;
++    let mut state = MbState::default();
++    while out.is_null() || count < n {
++        let mut value = 0;
++        // Feed one byte at a time, so a short NUL-terminated input never
++        // requires a readable MB_CUR_MAX-byte region beyond its terminator.
++        loop {
++            let result = decode(&mut value, s, 1, &mut state);
++            if result == usize::MAX {
++                return usize::MAX;
++            }
++            s = s.add(1);
++            if result != usize::MAX - 1 {
++                break;
++            }
++        }
++        if !out.is_null() {
++            out.add(count).write(value);
++        }
++        if value == 0 {
++            return count;
++        }
++        let Some(next) = count.checked_add(1) else {
++            crate::errno::set_errno(crate::errno::EOVERFLOW);
++            return usize::MAX;
++        };
++        count = next;
++    }
++    count
++}
++
++/// Encode whole characters only; the return count excludes a stored NUL.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn wcstombs(out: *mut c_char, mut s: *const i32, n: usize) -> usize {
++    let mut count = 0usize;
++    let utf8 = crate::locale::ctype_is_utf8();
++    while out.is_null() || count < n {
++        let raw = s.read();
++        let value = u32::try_from(raw).ok().and_then(char::from_u32);
++        let Some(value) = value.filter(|v| utf8 || v.is_ascii()) else {
++            crate::errno::set_errno(crate::errno::EILSEQ);
++            return usize::MAX;
++        };
++        let mut buffer = [0; 4];
++        let bytes = value.encode_utf8(&mut buffer).as_bytes();
++        if !out.is_null() {
++            if bytes.len() > n - count {
++                return count;
++            }
++            core::ptr::copy_nonoverlapping(bytes.as_ptr(), out.add(count).cast(), bytes.len());
++        }
++        if raw == 0 {
++            return count;
++        }
++        let Some(next) = count.checked_add(bytes.len()) else {
++            crate::errno::set_errno(crate::errno::EOVERFLOW);
++            return usize::MAX;
++        };
++        count = next;
++        s = s.add(1);
++    }
++    count
++}

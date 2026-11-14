@@ -1,0 +1,5 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+py2-format,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,429d1c3f3060ce5988cc598089615da999ca4df7913927a33561bdfbaf051074
+py2-stream,False,PASS,FAIL,FAIL,0,0,guest contract or infrastructure failed,b0e6f7934cbaf0aa1229929e2c7f6169b7fb09638e291270a5c13d9dac7e1071
+py2-wide,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,7484691cdfd9f06c041f235b75e62d42edf4a282cfac04163e431c0fcd587883
+py2-header,False,PASS,FAIL,FAIL,,0,no unique completed guest result; inspect serial.log and qemu.log,e39a053c81d2e7c80d697852b27c7ca2f4e3debe6b9f37a169f0cb41d979318b

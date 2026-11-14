@@ -1,0 +1,187 @@
+[
+  {
+    "name": "exit-race-final-build",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "tools/native-c/tests/pthread-tsd-exit-race.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/exit-race.elf"
+    ]
+  },
+  {
+    "name": "exit-race-guest-2",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/exit-race.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/exit-race-guest-2"
+    ]
+  },
+  {
+    "name": "exit-race-guest-4",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/exit-race.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/exit-race-guest-4"
+    ]
+  },
+  {
+    "name": "recursion-final-build",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "tools/native-c/tests/pthread-once-recursive.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/recursion.elf"
+    ]
+  },
+  {
+    "name": "recursion-guest-2",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/recursion.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/recursion-guest-2"
+    ]
+  },
+  {
+    "name": "strerror-threads-final-build",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "tools/native-c/tests/strerror-threads.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/strerror-threads.elf"
+    ]
+  },
+  {
+    "name": "strerror-threads-guest-2",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/strerror-threads.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/strerror-threads-guest-2"
+    ]
+  },
+  {
+    "name": "strerror-threads-guest-4",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/strerror-threads.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/strerror-threads-guest-4"
+    ]
+  },
+  {
+    "name": "process-exit-final-build",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/process-exit-no-tsd.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/process-exit.elf"
+    ]
+  },
+  {
+    "name": "process-exit-guest-2",
+    "exit": 0,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/process-exit.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/process-exit-guest-2"
+    ]
+  },
+  {
+    "name": "host-tcb-final",
+    "exit": 0,
+    "command": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-libc",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "tls::tests",
+      "--",
+      "--nocapture"
+    ]
+  },
+  {
+    "name": "locked-final-repeat",
+    "exit": 0,
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ]
+  }
+]

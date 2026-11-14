@@ -1,0 +1,6 @@
+['env', 'SUNLIGHT_TRUST_LEGACY_STATE=1', 'python3', 'tools/native-c/guest.py', '/home/ehsantor/Projects/sunlightos-kernel/target/py7-filesystem.elf', '--expect-exit', '0', '--fat-fixture', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/fat-fixture.img', '--cpus', '4', '--timeout', '150', '--out', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/fat-native-cpu-4']
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/fat-native-cpu-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'PY7 FAT PASS: unlink read/write/dup rejected; replacement bytes preserved; rename source retained; destination revoked; valid closes\n'

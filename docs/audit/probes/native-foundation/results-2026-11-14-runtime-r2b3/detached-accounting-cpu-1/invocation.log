@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-accounting.elf --cpus 1 --timeout 120 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-accounting-cpu-1

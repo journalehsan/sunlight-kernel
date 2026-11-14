@@ -1,0 +1,1 @@
+0 FAIL {'complete_normal_gate': False, 'zero_capacity_atomic': True, 'last_slot': True, 'durable_shared_handoff': True}

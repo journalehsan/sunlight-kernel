@@ -1,0 +1,23 @@
+{
+  "status": "NOT_RUN",
+  "native_scenarios": {
+    "owner exit + surviving PTY I/O": "NOT_RUN",
+    "foreground membership": "NOT_RUN",
+    "final borrower cleanup": "NOT_RUN",
+    "forced group termination": "NOT_RUN",
+    "terminal tab close": "NOT_RUN",
+    "stale session generation": "NOT_RUN"
+  },
+  "supplemental": {
+    "pty_host": "PASS 11/11, pty-host-corrected.log",
+    "foreground_host": "PASS 8/8, foreground-host.log"
+  },
+  "runner_limitation": "tools/native-c/guest.py headless nonnetwork batch starts captured-VFS-stream cases, without pty_server, terminal tabs, trusted foreground binding or authenticated session. tools/test_pty_liveness.py runs existing shell stream gates but has no retained-owner borrower scenario. No integrated terminal/session runner was added.",
+  "failed_attempt": "pty-host.log used missing pty_server/Cargo.toml; corrected services/pty_server/Cargo.toml is separate",
+  "authority": "Exact broker publication/session/generation and caller role capabilities; borrower publication clears session_owner and foreground owned scope",
+  "source_references": [
+    "docs/terminal/per-tab-session-lifecycle.md",
+    "kernel/src/process/foreground.rs:142",
+    "kernel/src/sched/thread_admission.rs:139"
+  ]
+}

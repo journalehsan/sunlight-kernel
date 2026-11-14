@@ -1,0 +1,40 @@
+[
+  {
+    "name": "lifecycle",
+    "exit": 0,
+    "before": "aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5",
+    "after": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+    "identical": false,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+      "-o",
+      "target/r2b4-lifecycle.elf"
+    ]
+  },
+  {
+    "name": "exit-matrix",
+    "exit": 0,
+    "before": "19f83ab1daff65849dd9513bf79ff0c6258bcaf0839c8d952d68f3ab5ac4fa43",
+    "after": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+    "identical": false,
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+      "-o",
+      "target/r2b4-exit-matrix.elf"
+    ]
+  }
+]

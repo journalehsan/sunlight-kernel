@@ -1,0 +1,5000 @@
+{
+  "witnesses": [
+    {
+      "case": "initial",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true
+      },
+      "owner_pid": 100,
+      "terminal": [
+        {
+          "pid": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "worker": "101",
+          "wi": "5",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "101",
+          "100"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "101"
+        ]
+      ],
+      "resource_result": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "multiple",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 101,
+      "terminal": [
+        {
+          "pid": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "102",
+          "wi": "8",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "103",
+          "wi": "10",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "102",
+          "101"
+        ],
+        [
+          "1",
+          "103",
+          "101"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "102"
+        ],
+        [
+          "1",
+          "103"
+        ]
+      ],
+      "resource_result": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true
+      },
+      "owner_pid": 102,
+      "terminal": [
+        {
+          "pid": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "worker": "104",
+          "wi": "13",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "104",
+          "102"
+        ],
+        [
+          "1",
+          "105",
+          "102"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "104"
+        ]
+      ],
+      "resource_result": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "224",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 103,
+      "terminal": [
+        {
+          "pid": "103",
+          "incarnation": "17",
+          "vm": "13",
+          "code": "17",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 104,
+      "terminal": [
+        {
+          "pid": "104",
+          "incarnation": "20",
+          "vm": "15",
+          "code": "23",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 105,
+      "terminal": [
+        {
+          "pid": "105",
+          "incarnation": "23",
+          "vm": "17",
+          "code": "29",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 106,
+      "terminal": [
+        {
+          "pid": "106",
+          "incarnation": "26",
+          "vm": "19",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 107,
+      "terminal": [
+        {
+          "pid": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "110",
+          "wi": "30",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "111",
+          "wi": "32",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "110",
+          "107"
+        ],
+        [
+          "1",
+          "111",
+          "107"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "110"
+        ],
+        [
+          "1",
+          "111"
+        ]
+      ],
+      "resource_result": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 108,
+      "terminal": [
+        {
+          "pid": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "112",
+          "wi": "35",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "113",
+          "wi": "37",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "112",
+          "108"
+        ],
+        [
+          "1",
+          "113",
+          "108"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "112"
+        ],
+        [
+          "1",
+          "113"
+        ]
+      ],
+      "resource_result": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 109,
+      "terminal": [
+        {
+          "pid": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "114",
+          "wi": "40",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "115",
+          "wi": "42",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "114",
+          "109"
+        ],
+        [
+          "1",
+          "115",
+          "109"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "114"
+        ],
+        [
+          "1",
+          "115"
+        ]
+      ],
+      "resource_result": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 110,
+      "terminal": [
+        {
+          "pid": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "116",
+          "wi": "45",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "117",
+          "wi": "47",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "116",
+          "110"
+        ],
+        [
+          "1",
+          "117",
+          "110"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "116"
+        ],
+        [
+          "1",
+          "117"
+        ]
+      ],
+      "resource_result": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 111,
+      "terminal": [
+        {
+          "pid": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "118",
+          "wi": "50",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "119",
+          "wi": "52",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "118",
+          "111"
+        ],
+        [
+          "1",
+          "119",
+          "111"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "118"
+        ],
+        [
+          "1",
+          "119"
+        ]
+      ],
+      "resource_result": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 112,
+      "terminal": [
+        {
+          "pid": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "120",
+          "wi": "55",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "121",
+          "wi": "57",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "120",
+          "112"
+        ],
+        [
+          "1",
+          "121",
+          "112"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "120"
+        ],
+        [
+          "1",
+          "121"
+        ]
+      ],
+      "resource_result": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 113,
+      "terminal": [
+        {
+          "pid": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "122",
+          "wi": "60",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "123",
+          "wi": "62",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "122",
+          "113"
+        ],
+        [
+          "1",
+          "123",
+          "113"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "122"
+        ],
+        [
+          "1",
+          "123"
+        ]
+      ],
+      "resource_result": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 114,
+      "terminal": [
+        {
+          "pid": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "124",
+          "wi": "65",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "125",
+          "wi": "67",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "124",
+          "114"
+        ],
+        [
+          "1",
+          "125",
+          "114"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "124"
+        ],
+        [
+          "1",
+          "125"
+        ]
+      ],
+      "resource_result": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 115,
+      "terminal": [
+        {
+          "pid": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "126",
+          "wi": "70",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "127",
+          "wi": "72",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "126",
+          "115"
+        ],
+        [
+          "1",
+          "127",
+          "115"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "126"
+        ],
+        [
+          "1",
+          "127"
+        ]
+      ],
+      "resource_result": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 1,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 116,
+      "terminal": [
+        {
+          "pid": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "128",
+          "wi": "75",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "129",
+          "wi": "77",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "128",
+          "116"
+        ],
+        [
+          "1",
+          "129",
+          "116"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "128"
+        ],
+        [
+          "1",
+          "129"
+        ]
+      ],
+      "resource_result": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-1",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "initial",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true
+      },
+      "owner_pid": 100,
+      "terminal": [
+        {
+          "pid": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "worker": "101",
+          "wi": "5",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "101",
+          "100"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "101"
+        ]
+      ],
+      "resource_result": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "multiple",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 101,
+      "terminal": [
+        {
+          "pid": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "103",
+          "wi": "10",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "102",
+          "wi": "8",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "103",
+          "101"
+        ],
+        [
+          "0",
+          "102",
+          "101"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "103"
+        ],
+        [
+          "0",
+          "102"
+        ]
+      ],
+      "resource_result": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true
+      },
+      "owner_pid": 102,
+      "terminal": [
+        {
+          "pid": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "worker": "105",
+          "wi": "15",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "worker": "104",
+          "wi": "13",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "105",
+          "102"
+        ],
+        [
+          "0",
+          "104",
+          "102"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "105"
+        ],
+        [
+          "0",
+          "104"
+        ]
+      ],
+      "resource_result": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "269",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 103,
+      "terminal": [
+        {
+          "pid": "103",
+          "incarnation": "17",
+          "vm": "13",
+          "code": "17",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 104,
+      "terminal": [
+        {
+          "pid": "104",
+          "incarnation": "20",
+          "vm": "15",
+          "code": "23",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 105,
+      "terminal": [
+        {
+          "pid": "105",
+          "incarnation": "23",
+          "vm": "17",
+          "code": "29",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 106,
+      "terminal": [
+        {
+          "pid": "106",
+          "incarnation": "26",
+          "vm": "19",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 107,
+      "terminal": [
+        {
+          "pid": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "111",
+          "wi": "32",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "110",
+          "wi": "30",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "110",
+          "107"
+        ],
+        [
+          "1",
+          "111",
+          "107"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "111"
+        ],
+        [
+          "0",
+          "110"
+        ]
+      ],
+      "resource_result": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 108,
+      "terminal": [
+        {
+          "pid": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "112",
+          "wi": "35",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "113",
+          "wi": "37",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "112",
+          "108"
+        ],
+        [
+          "1",
+          "113",
+          "108"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "112"
+        ],
+        [
+          "1",
+          "113"
+        ]
+      ],
+      "resource_result": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 109,
+      "terminal": [
+        {
+          "pid": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "114",
+          "wi": "40",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "115",
+          "wi": "42",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "114",
+          "109"
+        ],
+        [
+          "1",
+          "115",
+          "109"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "114"
+        ],
+        [
+          "1",
+          "115"
+        ]
+      ],
+      "resource_result": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 110,
+      "terminal": [
+        {
+          "pid": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "116",
+          "wi": "45",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "117",
+          "wi": "47",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "116",
+          "110"
+        ],
+        [
+          "1",
+          "117",
+          "110"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "116"
+        ],
+        [
+          "1",
+          "117"
+        ]
+      ],
+      "resource_result": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 111,
+      "terminal": [
+        {
+          "pid": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "118",
+          "wi": "50",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "119",
+          "wi": "52",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "119",
+          "111"
+        ],
+        [
+          "0",
+          "118",
+          "111"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "118"
+        ],
+        [
+          "1",
+          "119"
+        ]
+      ],
+      "resource_result": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 112,
+      "terminal": [
+        {
+          "pid": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "121",
+          "wi": "57",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "120",
+          "wi": "55",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "120",
+          "112"
+        ],
+        [
+          "1",
+          "121",
+          "112"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "121"
+        ],
+        [
+          "0",
+          "120"
+        ]
+      ],
+      "resource_result": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 113,
+      "terminal": [
+        {
+          "pid": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "123",
+          "wi": "62",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "122",
+          "wi": "60",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "122",
+          "113"
+        ],
+        [
+          "1",
+          "123",
+          "113"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "123"
+        ],
+        [
+          "0",
+          "122"
+        ]
+      ],
+      "resource_result": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 114,
+      "terminal": [
+        {
+          "pid": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "125",
+          "wi": "67",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "124",
+          "wi": "65",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "124",
+          "114"
+        ],
+        [
+          "1",
+          "125",
+          "114"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "125"
+        ],
+        [
+          "0",
+          "124"
+        ]
+      ],
+      "resource_result": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 115,
+      "terminal": [
+        {
+          "pid": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "127",
+          "wi": "72",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "126",
+          "wi": "70",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "126",
+          "115"
+        ],
+        [
+          "1",
+          "127",
+          "115"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "127"
+        ],
+        [
+          "0",
+          "126"
+        ]
+      ],
+      "resource_result": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 2,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 116,
+      "terminal": [
+        {
+          "pid": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "129",
+          "wi": "77",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "128",
+          "wi": "75",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "128",
+          "116"
+        ],
+        [
+          "1",
+          "129",
+          "116"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "129"
+        ],
+        [
+          "0",
+          "128"
+        ]
+      ],
+      "resource_result": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-2",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "initial",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true
+      },
+      "owner_pid": 100,
+      "terminal": [
+        {
+          "pid": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "100",
+          "incarnation": "4",
+          "vm": "7",
+          "worker": "101",
+          "wi": "5",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "101",
+          "100"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "101"
+        ]
+      ],
+      "resource_result": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "multiple",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 101,
+      "terminal": [
+        {
+          "pid": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "102",
+          "wi": "8",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "101",
+          "incarnation": "7",
+          "vm": "9",
+          "worker": "103",
+          "wi": "10",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "102",
+          "101"
+        ],
+        [
+          "1",
+          "103",
+          "101"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "102"
+        ],
+        [
+          "1",
+          "103"
+        ]
+      ],
+      "resource_result": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true
+      },
+      "owner_pid": 102,
+      "terminal": [
+        {
+          "pid": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "worker": "104",
+          "wi": "13",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "102",
+          "incarnation": "12",
+          "vm": "11",
+          "worker": "105",
+          "wi": "15",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "104",
+          "102"
+        ],
+        [
+          "1",
+          "105",
+          "102"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "104"
+        ],
+        [
+          "1",
+          "105"
+        ]
+      ],
+      "resource_result": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "269",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 103,
+      "terminal": [
+        {
+          "pid": "103",
+          "incarnation": "17",
+          "vm": "13",
+          "code": "17",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 104,
+      "terminal": [
+        {
+          "pid": "104",
+          "incarnation": "20",
+          "vm": "15",
+          "code": "23",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 105,
+      "terminal": [
+        {
+          "pid": "105",
+          "incarnation": "23",
+          "vm": "17",
+          "code": "29",
+          "reason": "exit"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true
+      },
+      "owner_pid": 106,
+      "terminal": [
+        {
+          "pid": "106",
+          "incarnation": "26",
+          "vm": "19",
+          "code": "137",
+          "reason": "signal(SIGKILL)"
+        }
+      ],
+      "handoff_observations": [],
+      "thread_identities": [],
+      "progress_identities": [],
+      "resource_result": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 107,
+      "terminal": [
+        {
+          "pid": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "110",
+          "wi": "30",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "107",
+          "incarnation": "29",
+          "vm": "21",
+          "worker": "111",
+          "wi": "32",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "110",
+          "107"
+        ],
+        [
+          "1",
+          "111",
+          "107"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "110"
+        ],
+        [
+          "1",
+          "111"
+        ]
+      ],
+      "resource_result": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 108,
+      "terminal": [
+        {
+          "pid": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "112",
+          "wi": "35",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "108",
+          "incarnation": "34",
+          "vm": "23",
+          "worker": "113",
+          "wi": "37",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "112",
+          "108"
+        ],
+        [
+          "1",
+          "113",
+          "108"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "112"
+        ],
+        [
+          "1",
+          "113"
+        ]
+      ],
+      "resource_result": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 109,
+      "terminal": [
+        {
+          "pid": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "114",
+          "wi": "40",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "109",
+          "incarnation": "39",
+          "vm": "25",
+          "worker": "115",
+          "wi": "42",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "114",
+          "109"
+        ],
+        [
+          "1",
+          "115",
+          "109"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "114"
+        ],
+        [
+          "1",
+          "115"
+        ]
+      ],
+      "resource_result": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 110,
+      "terminal": [
+        {
+          "pid": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "116",
+          "wi": "45",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "110",
+          "incarnation": "44",
+          "vm": "27",
+          "worker": "117",
+          "wi": "47",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "116",
+          "110"
+        ],
+        [
+          "1",
+          "117",
+          "110"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "116"
+        ],
+        [
+          "1",
+          "117"
+        ]
+      ],
+      "resource_result": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 111,
+      "terminal": [
+        {
+          "pid": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "118",
+          "wi": "50",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "111",
+          "incarnation": "49",
+          "vm": "29",
+          "worker": "119",
+          "wi": "52",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "119",
+          "111"
+        ],
+        [
+          "0",
+          "118",
+          "111"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "118"
+        ],
+        [
+          "1",
+          "119"
+        ]
+      ],
+      "resource_result": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 112,
+      "terminal": [
+        {
+          "pid": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "121",
+          "wi": "57",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        },
+        {
+          "owner": "112",
+          "incarnation": "54",
+          "vm": "31",
+          "worker": "120",
+          "wi": "55",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "121",
+          "112"
+        ],
+        [
+          "0",
+          "120",
+          "112"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "1",
+          "121"
+        ],
+        [
+          "0",
+          "120"
+        ]
+      ],
+      "resource_result": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 113,
+      "terminal": [
+        {
+          "pid": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "122",
+          "wi": "60",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "113",
+          "incarnation": "59",
+          "vm": "33",
+          "worker": "123",
+          "wi": "62",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "123",
+          "113"
+        ],
+        [
+          "0",
+          "122",
+          "113"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "122"
+        ],
+        [
+          "1",
+          "123"
+        ]
+      ],
+      "resource_result": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 114,
+      "terminal": [
+        {
+          "pid": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "124",
+          "wi": "65",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "114",
+          "incarnation": "64",
+          "vm": "35",
+          "worker": "125",
+          "wi": "67",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "124",
+          "114"
+        ],
+        [
+          "1",
+          "125",
+          "114"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "124"
+        ],
+        [
+          "1",
+          "125"
+        ]
+      ],
+      "resource_result": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 115,
+      "terminal": [
+        {
+          "pid": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "126",
+          "wi": "70",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "115",
+          "incarnation": "69",
+          "vm": "37",
+          "worker": "127",
+          "wi": "72",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "0",
+          "126",
+          "115"
+        ],
+        [
+          "1",
+          "127",
+          "115"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "126"
+        ],
+        [
+          "1",
+          "127"
+        ]
+      ],
+      "resource_result": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 4,
+      "status": "PASS",
+      "checks": {
+        "runner_pass": true,
+        "expected_exit": true,
+        "one_group_terminal": true,
+        "one_owner_reap": true,
+        "owner_resources_zero": true,
+        "balanced_frames_fds_names": true,
+        "live_borrowers_before_exit": true,
+        "initial_tls_cleanup": true,
+        "quiescent_owner_observed": true,
+        "independent_post_query_progress": true,
+        "observed_progress_workers_bound": true,
+        "tls_cleanup": true,
+        "first_reaped_before_final": true
+      },
+      "owner_pid": 116,
+      "terminal": [
+        {
+          "pid": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "code": "0",
+          "reason": "last-native-thread"
+        }
+      ],
+      "handoff_observations": [
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "128",
+          "wi": "75",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "0"
+        },
+        {
+          "owner": "116",
+          "incarnation": "74",
+          "vm": "39",
+          "worker": "129",
+          "wi": "77",
+          "owner_finished": "1",
+          "quiescent": "1",
+          "group_live": "1",
+          "cpu": "1"
+        }
+      ],
+      "thread_identities": [
+        [
+          "1",
+          "129",
+          "116"
+        ],
+        [
+          "0",
+          "128",
+          "116"
+        ]
+      ],
+      "progress_identities": [
+        [
+          "0",
+          "128"
+        ],
+        [
+          "1",
+          "129"
+        ]
+      ],
+      "resource_result": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "elf_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+      "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_manifest": "validated/validated-source.json",
+      "evidence": "validated/lifecycle-cpu-4",
+      "coordination": "TLS exit announcement; actual same-VM worker syscall156 observation; snapshot must show original Finished and physical handoff complete before worker returns to emit progress; no sleep duration is accepted as proof",
+      "overlap": "W6 overlap NOT_RUN; these are handoff/survival and sequential retirement witnesses"
+    }
+  ],
+  "coverage": {
+    "W1": "PASS",
+    "W2": "PASS",
+    "W3": "PASS",
+    "W4": "PASS",
+    "W5": "PASS",
+    "W6": "NOT_RUN",
+    "W7": "PARTIAL",
+    "W8": "PARTIAL",
+    "W9": "PARTIAL",
+    "W10": "PARTIAL"
+  },
+  "missing": {
+    "W6": "No native external group terminator coordinated to overlap the final living thread exit before scheduler serialization; ordinary kill is not this race",
+    "W7": "Host exact-session scan only; live authenticated PTY/tab/session retained-owner witness NOT_RUN",
+    "W8": "Host broker/PID/VM identity checks only; native stale generation operations across group retirement/reuse NOT_RUN",
+    "W9": "Existing standalone retirement controls do not exercise retained native thread-group retirement failure",
+    "W10": "Ten native group rounds per CPU balance frames/FDs/names and show task/owner Reaped; full heap/ledger-slot census NOT_RUN"
+  }
+}

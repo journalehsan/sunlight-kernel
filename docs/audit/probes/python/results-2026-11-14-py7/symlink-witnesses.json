@@ -1,0 +1,19 @@
+{
+  "status": "NOT_RUN",
+  "reason": "No native symlink/readlink representation or traversal enabled",
+  "scenarios": {
+    "direct": "NOT_RUN",
+    "relative": "NOT_RUN",
+    "absolute": "NOT_RUN",
+    "intermediate": "NOT_RUN",
+    "dangling": "NOT_RUN",
+    "chain": "NOT_RUN",
+    "loop": "NOT_RUN",
+    "directory": "NOT_RUN",
+    "mount_crossing": "NOT_RUN",
+    "unlink_during_lookup": "NOT_RUN",
+    "rename_during_lookup": "NOT_RUN",
+    "readlink_buffer": "NOT_RUN",
+    "stat_lstat_identity": "NOT_RUN"
+  }
+}

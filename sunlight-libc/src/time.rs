@@ -549,3 +549,27 @@ mod tests {
         );
     }
 }
+
+/// Resolution of the two native clock sources, matching the current syscall
+/// ABI: RTC epoch seconds and the canonical 100 Hz monotonic timekeeper.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn clock_getres(clockid: i32, out: *mut Timespec) -> i32 {
+    let resolution = match clockid {
+        CLOCK_REALTIME => Timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        },
+        CLOCK_MONOTONIC => Timespec {
+            tv_sec: 0,
+            tv_nsec: 10_000_000,
+        },
+        _ => {
+            set_errno(EINVAL);
+            return -1;
+        }
+    };
+    if !out.is_null() {
+        out.write(resolution);
+    }
+    0
+}

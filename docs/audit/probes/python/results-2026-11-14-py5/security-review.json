@@ -1,0 +1,36 @@
+{
+  "status": "PARTIAL",
+  "scope": "One Vfs::handle_path mount-prefix repair, docs and regression test; inherited architecture findings are not closed",
+  "delta": {
+    "locks": "No new lock/IPC/callback; existing caller VFS lock covers lookup/join",
+    "progress": "Bounded8 mount validation and bounded256 local buffer; no recursion or new retries",
+    "authority": "No capability, credential, namespace or mount-admission changes",
+    "ownership": "Owned local String; capacity checked before caller copy; backend buffer remains stack-local",
+    "identity": "Existing generation/tag checks unchanged",
+    "ABI": "No wire/C/Rust public structure or syscall-number changes"
+  },
+  "findings": [
+    {
+      "status": "BLOCKED",
+      "finding": "No component ancestor Execute permission policy common to stat/chdir/read operations; required before authoritative realpath",
+      "source": "kernel/src/arch/x86_64/syscall.rs:5706,9298; sunlight-fs/src/tmpfs.rs:98"
+    },
+    {
+      "status": "UNQUALIFIED",
+      "finding": "fstat copies fd backend handle under scheduler then releases before VFS; generation prevents ordinary reuse but no in-flight descriptor pin; concurrent close/full generation wrap not forced",
+      "source": "kernel/src/arch/x86_64/syscall.rs:10578; sunlight-fs/src/vfs.rs:42"
+    },
+    {
+      "status": "PARTIAL",
+      "finding": "Service VFS is a different namespace; passwd/group FSTAT path round trip is weaker than actual opened-descriptor identity",
+      "source": "services/vfs_server/src/main.rs:690"
+    },
+    {
+      "status": "UNQUALIFIED",
+      "finding": "Concurrent rename/mount mutation, FAT stale-name behavior, path cache invalidation and non-root permission failures not guest-qualified",
+      "source": "sunlight-fs/src/vfs.rs:1198; sunlight-fs/src/tmpfs.rs:654"
+    }
+  ],
+  "TOCTOU": "Path lookup results can change after lock release. tmpfs unlink retains fd inode, but path reconstruction then fails. Directory paging is not snapshot atomic. No new security boundary is claimed.",
+  "broader_changes": "Deferred: backend identity/time/symlink storage, one credential-aware resolver with bounded traversal, versioned metadata ABI and in-flight descriptor ownership. No scheduler/IPC redesign performed."
+}

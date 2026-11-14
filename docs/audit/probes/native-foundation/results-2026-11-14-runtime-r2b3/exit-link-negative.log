@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c -o /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-link.elf
+ld.lld: error: undefined symbol: _Exit
+>>> referenced by exit-link-probe.c
+>>>               /tmp/exit-link-probe-500484.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

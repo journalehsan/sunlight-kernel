@@ -387,6 +387,17 @@ impl<D: BlockDevice> Fat32<D> {
             .map_err(|_| FatError::Io)
     }
 
+    /// Physical short-entry location, only meaningful under exclusive volume
+    /// ownership. This is not an inode or a lifetime token: callers must revoke
+    /// references before namespace removal/replacement allows slot reuse.
+    pub fn entry_location(&mut self, path: &[u8]) -> Result<(u64, u16), FatError> {
+        if path == b"/" {
+            return Ok((0, 0));
+        }
+        let entry = self.resolve_entry(path)?;
+        Ok((entry.short_location.lba, entry.short_location.offset))
+    }
+
     pub fn write_path(
         &mut self,
         path: &[u8],

@@ -1,0 +1,20 @@
+{
+  "status": "pre-implementation review",
+  "confirmed_missing_contract": "Native syscall 33 reports task pid for workers, syscall 34 reports task parent; neither is a stable native group query.",
+  "existing_authority": "Scheduler::native_group_owner_index matches the full address-space identity and retains the owner until borrowers reap.",
+  "proposed_abi": {
+    "number": 178,
+    "name": "NativeProcessIdentity",
+    "input": "rdi selector: 0 retained group pid; 1 retained group ppid; 2 calling task pid",
+    "output": "rax native result/error sentinel; no user pointers",
+    "invalid": "EINVAL for selector outside 0..2 or Linux caller; EIO if no current task or retained owner"
+  },
+  "security_review": {
+    "authority": "Observes only the calling group. Accepts no target pid or generation and grants no authority.",
+    "generation": "Existing complete address-space identity is the membership key; never match solely by pid.",
+    "lifetime": "All lookup and read occur under SCHEDULER. No cached reference, allocation, mutation, callbacks or new locks.",
+    "termination": "No changes to termination/reaping/retirement; _Exit/_exit and pthread_exit retain existing paths.",
+    "parent": "Returns retained group record ppid; existing reparenting policy remains authoritative.",
+    "ABI": "Separate syscall preserves historical raw syscall33 thread-identity callers; C pid_t overflow must fail EOVERFLOW."
+  }
+}

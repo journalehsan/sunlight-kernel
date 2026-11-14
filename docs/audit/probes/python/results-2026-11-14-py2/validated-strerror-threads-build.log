@@ -1,0 +1,1 @@
+['python3', 'tools/native-c/cc.py', '-O2', '-fno-builtin', '-Wall', '-Wextra', '/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/strerror-threads.c', '-o', '/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-strerror-threads.elf']

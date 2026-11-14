@@ -1,0 +1,3 @@
+CLAIM round=0 target=0x2 tid=101 joiner=0x3 joining=1 target=live detach=EINVAL second_join=EINVAL
+CLAIM round=31 target=0x40 tid=163 joiner=0x41 joining=1 target=live detach=EINVAL second_join=EINVAL
+CLAIM 32 native reserved-join overlaps; exactly one join owner; registry controls=0 after each round

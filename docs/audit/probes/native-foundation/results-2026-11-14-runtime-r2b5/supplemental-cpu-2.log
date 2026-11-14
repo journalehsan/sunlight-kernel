@@ -1,0 +1,8 @@
+["python3", "tools/native-c/guest.py", "--cases", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/supplemental-cases.json", "--cpus", "2", "--timeout", "120", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/supplemental-cpu-2"]
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/supplemental-cpu-2
+Building isolated native C guest (2 ELFs, 2 CPUs)
+Booting disposable TCG guest
+heap-abi: PASS exit=0 expected=0
+guest heap-abi stdout: b'R1 heap and SysV ABI PASS\n'
+retained-admission: PASS exit=0 expected=0
+guest retained-admission stdout: b'A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n'

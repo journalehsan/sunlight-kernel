@@ -1,0 +1,11 @@
+{
+  "sunlight-libc/src/condvar.rs": "b571d04410e36cc8c26309c9a7ac65283ad1e0f61823d4cc8aa130c3d217e9ea",
+  "sunlight-libc/src/string.rs": "509215696c8f0678d01914c8dd02ed837bf6917e73b05532257597af44101803",
+  "sunlight-libc/src/inttypes.rs": "e435fdecc7c0883ad9e7186d967b0f800222609d1f1424e37079a532bda99d16",
+  "sunlight-libc/src/termination.rs": "e62cf43b8b9a056a94bda4206ed2f701573de1ed0de6f5407cfe4302abbd3e5b",
+  "sunlight-libc/src/lib.rs": "786a1bcafff44e4db95de1c7b0a7f49956329bfdd9839e5b1265b7351c2b94f0",
+  "sunlight-libc/include/pthread.h": "65fa3e4f27ed25594940f1f3c0f41ae047b269c13a93e606a77c5ee1d67fe400",
+  "sunlight-libc/include/string.h": "1351a734e24f9b72d593d26073e3503a85d08806224f1fa62092eefcd0f9db64",
+  "sunlight-libc/include/stdlib.h": "7768b6370c284e49b68a2c2a339f2cc1a65f95cb4eae15c3b182af93f38f0caf",
+  "sunlight-libc/include/unistd.h": "00dd3620f4010d0a35e7350d31afed17a35a2c1450d79bd2de4af0098a6d5dd5"
+}

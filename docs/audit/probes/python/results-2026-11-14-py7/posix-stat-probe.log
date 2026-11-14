@@ -1,0 +1,4 @@
+docs/audit/probes/python/results-2026-11-14-py7/posix-stat-probe.c:1:10: fatal error: 'sys/stat.h' file not found
+    1 | #include <sys/stat.h>
+      |          ^~~~~~~~~~~~
+1 error generated.

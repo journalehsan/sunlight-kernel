@@ -1,0 +1,245 @@
+[
+  {
+    "name": "format-types-c",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fsyntax-only",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/format-types.c"
+    ]
+  },
+  {
+    "name": "format-types-cxx",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "-x",
+      "c++",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fsyntax-only",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/format-types.c"
+    ]
+  },
+  {
+    "name": "final-math-build",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fno-builtin",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/math-native.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-math.elf"
+    ]
+  },
+  {
+    "name": "final-headers-c-build",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fno-builtin",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/headers-native.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-c.elf"
+    ]
+  },
+  {
+    "name": "final-ctype-build",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-fno-builtin",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/ctype-native.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-ctype.elf"
+    ]
+  },
+  {
+    "name": "final-headers-cxx-object",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "-x",
+      "c++",
+      "-std=c++17",
+      "-O2",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-c",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/headers-native.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx.o"
+    ]
+  },
+  {
+    "name": "final-headers-cxx-link",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx.o",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx.elf"
+    ]
+  },
+  {
+    "name": "final-math-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-math.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-math-guest"
+    ]
+  },
+  {
+    "name": "final-headers-c-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-c.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-c-guest"
+    ]
+  },
+  {
+    "name": "final-headers-cxx-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx-guest"
+    ]
+  },
+  {
+    "name": "final-ctype-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-ctype.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-ctype-guest"
+    ]
+  },
+  {
+    "name": "final-headers-c-assert-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-c.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "134",
+      "--arg",
+      "fail",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-c-assert-guest"
+    ]
+  },
+  {
+    "name": "final-headers-cxx-assert-runner",
+    "exit": 0,
+    "expected": 0,
+    "status": "PASS",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--expect-exit",
+      "134",
+      "--arg",
+      "fail",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-focused/final-headers-cxx-assert-guest"
+    ]
+  }
+]

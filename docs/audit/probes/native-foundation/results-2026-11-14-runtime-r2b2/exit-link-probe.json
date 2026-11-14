@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "tools/native-c/cc.py",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c",
+    "-o",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.elf"
+  ],
+  "exit": 1,
+  "status": "FAIL"
+}

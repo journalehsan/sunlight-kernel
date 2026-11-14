@@ -1,0 +1,1 @@
+PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency

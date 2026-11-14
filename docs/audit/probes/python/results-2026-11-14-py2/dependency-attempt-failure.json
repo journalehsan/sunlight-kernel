@@ -1,0 +1,6 @@
+{
+  "status": "FAIL",
+  "tool": "dependencies-final.py initial invocation",
+  "observation": "FileNotFoundError for relative generated source Modules/config.c; dependency extraction ran but JSON update aborted",
+  "repair": "resolve final generated source relative to configured build directory; do not attribute current generated hash to before phase"
+}

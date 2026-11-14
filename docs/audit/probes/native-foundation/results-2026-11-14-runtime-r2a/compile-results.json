@@ -1,0 +1,26 @@
+[
+  {
+    "translation_unit": "Python/pyctype.c",
+    "exit": 1,
+    "evidence": "compile-partial/pyctype.log",
+    "configuration": "INCOMPLETE actual configure confdefs, NOT host pyconfig; isolated compile only"
+  },
+  {
+    "translation_unit": "Python/pymath.c",
+    "exit": 1,
+    "evidence": "compile-partial/pymath.log",
+    "configuration": "INCOMPLETE actual configure confdefs, NOT host pyconfig; isolated compile only"
+  },
+  {
+    "translation_unit": "Python/thread.c",
+    "exit": 1,
+    "evidence": "compile-partial/thread.log",
+    "configuration": "INCOMPLETE actual configure confdefs, NOT host pyconfig; isolated compile only"
+  },
+  {
+    "translation_unit": "Objects/longobject.c",
+    "exit": 1,
+    "evidence": "compile-partial/longobject.log",
+    "configuration": "INCOMPLETE actual configure confdefs, NOT host pyconfig; isolated compile only"
+  }
+]

@@ -1,0 +1,6 @@
+$ git status --short
+ M tools/native-c/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/
+?? docs/runtime/
+
+exit=0

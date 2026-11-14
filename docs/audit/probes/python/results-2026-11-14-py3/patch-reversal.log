@@ -1,0 +1,12 @@
+patching file sunlight-libc/include/locale.h
+patching file sunlight-libc/include/stdio.h
+patching file sunlight-libc/include/stdlib.h
+patching file sunlight-libc/include/time.h
+patching file sunlight-libc/include/unistd.h
+patching file sunlight-libc/src/locale.rs
+patching file sunlight-libc/src/stdio.rs
+patching file sunlight-libc/src/termination.rs
+patching file sunlight-libc/src/time.rs
+patching file sunlight-libc/src/wchar.rs
+
+exact_originals=True

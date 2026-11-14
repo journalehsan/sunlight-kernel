@@ -1,0 +1,1685 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU-ID] logical=2 apic=2 bsp=false
+[CPU-ID] logical=3 apic=3 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 14
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 4 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=unknown
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x1c90518 (7313 frames, 28 MiB)
+[PMM] 1936/1963 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=0 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2440
+[ACPI] Found table: FACP at 0x7ffe22dc
+[ACPI] Found table: APIC at 0x7ffe2350
+[ACPI] Found table: HPET at 0x7ffe23e0
+[ACPI] Found table: WAET at 0x7ffe2418
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11832 end_count=7827 elapsed_counts=4005 tsc_delta=8339453 tsc_hz=2484515657
+[TIME] TSC calibrated ~2484515657 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff81197e28 ist_df=0xffffffff814595c8 ist_nmi=0xffffffff8125bae0
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=63523400 lapic_initial_count=635234 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2484515657
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x14 hour=0x12 minute=0x27 second=0x37 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-14T12:27:37Z assumed_basis=UTC
+wall: utc=2026-11-14T12:27:37Z unix=1794659257 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  2  apic_id=  2  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  3  apic_id=  3  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 4 logical processor(s) found, 4 usable
+[ACPI] MADT: 4 logical processor(s) detected (4 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[SYSCALL] OK
+[SMP] Limine MP response: 4 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8145a5b0..0xffffffff8146a5b0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff81197ee8 ist_df=0xffffffff8146a5b0 ist_nmi=0xffffffff8125fae0
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP1  proc_id=2  lapic_id=2  stack=0xffffffff8146a5b0..0xffffffff8147a5b0
+[CPU] x87/SSE enabled; NXE active cpu_count=3
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[CPU-ID] online logical=2 apic=2 tss=0xffffffff81197f50 ist_df=0xffffffff8147a5b0 ist_nmi=0xffffffff81263ae0
+[SMP] AP2 (LAPIC 2) online — TSS loaded, LAPIC timer armed
+[SMP] Starting AP2  proc_id=3  lapic_id=3  stack=0xffffffff8147a5b0..0xffffffff8148a5b0
+[CPU] x87/SSE enabled; NXE active cpu_count=4
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[CPU-ID] online logical=3 apic=3 tss=0xffffffff81197fb8 ist_df=0xffffffff8148a5b0 ist_nmi=0xffffffff81267ae0
+[SMP] AP3 (LAPIC 3) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 3 AP(s) online (4 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 4 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 4 CPU(s)
+[CAP]  Capability broker initialized
+[NATIVE-C-RUNNER] cases=4 cpus=4 entropy=true
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=526d memsz=526d prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400e20, stack=0x7fffffffefa0
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bdf memsz=1bdf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400410, stack=0x7fffffffefa0
+[SCHED] CREATED process #2 'rand_service' idx=1 burst_score=256 tier=High
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff90008fb0
+[RAND] Starting rand_service
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 0 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[CAP] Created endpoint 1 for pid=2
+[init] nameserver registry integrity tests: OK
+[init] Registered kernel spawn endpoint
+[SYSCALL] spawn: load failed: UnsupportedPersonality
+[FSTAB] REQUIRED FAILURE: boot degraded; inspect storagectl diagnostics
+[init] FAILED to launch base service
+[RAND] Registered as 'rand'
+[NATIVE-C-SUPPORT] nameserver=production rand=production receive_wait=ready
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=72b8 memsz=72b8 prot=ReadExec
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=3000 memsz=3000 prot=Read
+[ELF] PT_LOAD off=c000 vaddr=40b000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=d000 vaddr=40c000 filesz=0 memsz=1030 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x4057fe, stack=0x7fffffffef80
+[SCHED] CREATED process #3 'pthread-tsd-once' idx=2 burst_score=256 tier=High
+[NATIVE-C-START] case=0 name=pthread-tsd-once pid=100 bytes=64400 owned_frames=526 uid=1000
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=100 tid=101 trampoline=0x405818
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000304000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000504000
+[init] FAILED to launch base service
+[SYSCALL] thread_spawn: parent=100 tid=102 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000506000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000706000
+[SYSCALL] thread_spawn: parent=100 tid=103 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000708000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000908000
+[SYSCALL] thread_spawn: parent=100 tid=104 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100090a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000b0a000
+[SYSCALL] thread_spawn: parent=100 tid=105 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000b0c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000d0c000
+[SYSCALL] thread_spawn: parent=100 tid=106 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000d0e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000f0e000
+[SYSCALL] thread_spawn: parent=100 tid=107 trampoline=0x405818
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000f10000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001110000
+[SYSCALL] thread_spawn: parent=100 tid=108 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001112000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001312000
+[SYSCALL] thread_spawn: parent=100 tid=109 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001314000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001514000
+[SYSCALL] thread_spawn: parent=100 tid=110 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001516000
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001716000
+[SYSCALL] thread_spawn: parent=100 tid=111 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001718000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001918000
+[SYSCALL] thread_spawn: parent=100 tid=112 trampoline=0x405818
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=102 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=102 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=102 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=112 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=112 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=112 name='pthread-tsd-once'
+[SCHED] process_mark_finished pid=103 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=103 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=103 name='pthread-tsd-once'
+[init] FAILED to launch base service
+[NATIVE-C-REAP-BEGIN] case=2 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=2 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=102 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[NATIVE-C-REAP-BEGIN] case=3 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=3 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=103 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[SCHED] process_reaped pid=112 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=112 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=112 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=101 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=101 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=101 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=111 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=111 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=111 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=105 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=105 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=105 name='pthread-tsd-once'
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=107 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=107 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=107 name='pthread-tsd-once'
+[NATIVE-C-REAP-BEGIN] case=1 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=1 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=101 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[SCHED] process_reaped pid=105 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=105 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=105 cleared_msgs=0
+[SCHED] process_reaped pid=107 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=107 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=107 cleared_msgs=0
+[SCHED] process_reaped pid=111 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=111 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=111 cleared_msgs=0
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=104 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=104 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=104 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=106 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=106 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=106 name='pthread-tsd-once'
+[SCHED] process_reaped pid=104 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=104 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=104 cleared_msgs=0
+[SCHED] process_reaped pid=106 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=106 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=106 cleared_msgs=0
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=108 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=108 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=108 name='pthread-tsd-once'
+[SCHED] process_reaped pid=108 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=108 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=108 cleared_msgs=0
+[SCHED] process_mark_finished pid=110 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=110 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=110 name='pthread-tsd-once'
+[SCHED] process_reaped pid=110 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=110 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=110 cleared_msgs=0
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=109 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=109 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=109 name='pthread-tsd-once'
+[SCHED] process_reaped pid=109 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=109 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=109 cleared_msgs=0
+[THREAD-LIFECYCLE] created=12 finished=12 reaped=12 borrower_reclaim_skipped=12 stale_wake_rejected=0 borrower_slots_reused=0 max_live=12
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100191a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001b1a000
+[SYSCALL] thread_spawn: parent=100 tid=113 trampoline=0x405818
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=113 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=113 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=113 name='pthread-tsd-once'
+[SCHED] process_reaped pid=113 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=113 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=113 cleared_msgs=0
+[THREAD-LIFECYCLE] created=13 finished=13 reaped=13 borrower_reclaim_skipped=13 stale_wake_rejected=0 borrower_slots_reused=1 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001b1c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001d1c000
+[SYSCALL] thread_spawn: parent=100 tid=114 trampoline=0x405818
+[init] base service spawn pass complete
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=114 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=114 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=114 name='pthread-tsd-once'
+[SCHED] process_reaped pid=114 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=114 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=114 cleared_msgs=0
+[THREAD-LIFECYCLE] created=14 finished=14 reaped=14 borrower_reclaim_skipped=14 stale_wake_rejected=0 borrower_slots_reused=2 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001d1e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001f1e000
+[SYSCALL] thread_spawn: parent=100 tid=115 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=115 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=115 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=115 name='pthread-tsd-once'
+[SCHED] process_reaped pid=115 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=115 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=115 cleared_msgs=0
+[THREAD-LIFECYCLE] created=15 finished=15 reaped=15 borrower_reclaim_skipped=15 stale_wake_rejected=0 borrower_slots_reused=3 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001f20000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002120000
+[SYSCALL] thread_spawn: parent=100 tid=116 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=116 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=116 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=116 name='pthread-tsd-once'
+[SCHED] process_reaped pid=116 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=116 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=116 cleared_msgs=0
+[THREAD-LIFECYCLE] created=16 finished=16 reaped=16 borrower_reclaim_skipped=16 stale_wake_rejected=0 borrower_slots_reused=4 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002122000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002322000
+[SYSCALL] thread_spawn: parent=100 tid=117 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002324000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002524000
+[SYSCALL] thread_spawn: parent=100 tid=118 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002526000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002726000
+[SYSCALL] thread_spawn: parent=100 tid=119 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002728000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002928000
+[SYSCALL] thread_spawn: parent=100 tid=120 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100292a000
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=119 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=119 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=119 name='pthread-tsd-once'
+[SCHED] process_reaped pid=119 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=119 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=119 cleared_msgs=0
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002b2a000
+[SYSCALL] thread_spawn: parent=100 tid=121 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002b2c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002d2c000
+[SYSCALL] thread_spawn: parent=100 tid=122 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002d2e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002f2e000
+[SYSCALL] thread_spawn: parent=100 tid=123 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002f30000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003130000
+[SYSCALL] thread_spawn: parent=100 tid=124 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003132000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003332000
+[SYSCALL] thread_spawn: parent=100 tid=125 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003334000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003534000
+[SYSCALL] thread_spawn: parent=100 tid=126 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003536000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003736000
+[SYSCALL] thread_spawn: parent=100 tid=127 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003738000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003938000
+[SYSCALL] thread_spawn: parent=100 tid=128 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=118 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=118 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=118 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=120 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=120 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=120 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=128 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=128 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=128 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=117 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=117 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=117 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=123 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=123 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=123 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=125 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=125 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=125 name='pthread-tsd-once'
+[SCHED] process_reaped pid=117 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=117 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=117 cleared_msgs=0
+[SCHED] process_reaped pid=118 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=118 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=118 cleared_msgs=0
+[SCHED] process_reaped pid=120 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=120 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=120 cleared_msgs=0
+[SCHED] process_reaped pid=123 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=123 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=123 cleared_msgs=0
+[SCHED] process_reaped pid=125 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=125 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=125 cleared_msgs=0
+[SCHED] process_reaped pid=128 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=128 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=128 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=127 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=127 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=127 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=121 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=121 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=121 name='pthread-tsd-once'
+[SCHED] process_reaped pid=121 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=121 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=121 cleared_msgs=0
+[SCHED] process_reaped pid=127 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=127 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=127 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=122 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=122 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=122 name='pthread-tsd-once'
+[SCHED] process_reaped pid=122 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=122 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=122 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=126 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=126 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=126 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=124 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=124 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=124 name='pthread-tsd-once'
+[SCHED] process_reaped pid=124 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=124 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=124 cleared_msgs=0
+[SCHED] process_reaped pid=126 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=126 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=126 cleared_msgs=0
+[THREAD-LIFECYCLE] created=28 finished=28 reaped=28 borrower_reclaim_skipped=28 stale_wake_rejected=0 borrower_slots_reused=16 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100393a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003b3a000
+[SYSCALL] thread_spawn: parent=100 tid=129 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003b3c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003d3c000
+[SYSCALL] thread_spawn: parent=100 tid=130 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003d3e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003f3e000
+[SYSCALL] thread_spawn: parent=100 tid=131 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003f40000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004140000
+[SYSCALL] thread_spawn: parent=100 tid=132 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004142000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004342000
+[SYSCALL] thread_spawn: parent=100 tid=133 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004344000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004544000
+[SYSCALL] thread_spawn: parent=100 tid=134 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004546000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004746000
+[SYSCALL] thread_spawn: parent=100 tid=135 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004748000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004948000
+[SYSCALL] thread_spawn: parent=100 tid=136 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100494a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004b4a000
+[SYSCALL] thread_spawn: parent=100 tid=137 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004b4c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004d4c000
+[SYSCALL] thread_spawn: parent=100 tid=138 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004d4e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004f4e000
+[SYSCALL] thread_spawn: parent=100 tid=139 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004f50000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005150000
+[SYSCALL] thread_spawn: parent=100 tid=140 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=129 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=129 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=129 name='pthread-tsd-once'
+[SCHED] process_mark_finished pid=131 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=131 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=131 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=130 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=130 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=130 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=132 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=132 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=132 name='pthread-tsd-once'
+[SCHED] process_mark_finished pid=135 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=135 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=135 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=134 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=134 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=134 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=139 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=139 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=139 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=133 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=133 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=133 name='pthread-tsd-once'
+[SCHED] process_reaped pid=129 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=129 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=129 cleared_msgs=0
+[SCHED] process_reaped pid=130 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=130 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=130 cleared_msgs=0
+[SCHED] process_reaped pid=131 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=131 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=131 cleared_msgs=0
+[SCHED] process_reaped pid=132 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=132 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=132 cleared_msgs=0
+[SCHED] process_reaped pid=133 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=133 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=133 cleared_msgs=0
+[SCHED] process_reaped pid=134 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=134 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=134 cleared_msgs=0
+[SCHED] process_reaped pid=135 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=135 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=135 cleared_msgs=0
+[SCHED] process_reaped pid=139 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=139 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=139 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=138 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=138 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=138 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=136 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=136 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=136 name='pthread-tsd-once'
+[SCHED] process_reaped pid=136 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=136 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=136 cleared_msgs=0
+[SCHED] process_reaped pid=138 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=138 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=138 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=140 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=140 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=140 name='pthread-tsd-once'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=137 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=137 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=137 name='pthread-tsd-once'
+[SCHED] process_reaped pid=137 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=137 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=137 cleared_msgs=0
+[SCHED] process_reaped pid=140 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=140 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=140 cleared_msgs=0
+[THREAD-LIFECYCLE] created=40 finished=40 reaped=40 borrower_reclaim_skipped=40 stale_wake_rejected=0 borrower_slots_reused=28 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005152000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005352000
+[SYSCALL] thread_spawn: parent=100 tid=141 trampoline=0x405818
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005354000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005554000
+[SYSCALL] thread_spawn: parent=100 tid=142 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=141 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=141 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=141 name='pthread-tsd-once'
+[SCHED] process_reaped pid=141 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=141 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=141 cleared_msgs=0
+[SCHED] process_mark_finished pid=142 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=142 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=142 name='pthread-tsd-once'
+[SCHED] process_reaped pid=142 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=142 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=142 cleared_msgs=0
+[THREAD-LIFECYCLE] created=42 finished=42 reaped=42 borrower_reclaim_skipped=42 stale_wake_rejected=0 borrower_slots_reused=30 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005556000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005756000
+[SYSCALL] thread_spawn: parent=100 tid=143 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=143 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=143 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=143 name='pthread-tsd-once'
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005758000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005958000
+[SYSCALL] thread_spawn: parent=100 tid=144 trampoline=0x405818
+[SCHED] process_reaped pid=143 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=143 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=143 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=144 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=144 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=144 name='pthread-tsd-once'
+[SCHED] process_reaped pid=144 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=144 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=144 cleared_msgs=0
+[THREAD-LIFECYCLE] created=44 finished=44 reaped=44 borrower_reclaim_skipped=44 stale_wake_rejected=0 borrower_slots_reused=32 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100595a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005b5a000
+[SYSCALL] thread_spawn: parent=100 tid=145 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=145 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=145 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=145 name='pthread-tsd-once'
+[SCHED] process_reaped pid=145 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=145 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=145 cleared_msgs=0
+[THREAD-LIFECYCLE] created=45 finished=45 reaped=45 borrower_reclaim_skipped=45 stale_wake_rejected=0 borrower_slots_reused=33 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005b5c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005d5c000
+[SYSCALL] thread_spawn: parent=100 tid=146 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=146 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=146 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=146 name='pthread-tsd-once'
+[SCHED] process_reaped pid=146 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=146 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=146 cleared_msgs=0
+[THREAD-LIFECYCLE] created=46 finished=46 reaped=46 borrower_reclaim_skipped=46 stale_wake_rejected=0 borrower_slots_reused=34 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005d5e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005f5e000
+[SYSCALL] thread_spawn: parent=100 tid=147 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=147 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=147 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=147 name='pthread-tsd-once'
+[SCHED] process_reaped pid=147 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=147 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=147 cleared_msgs=0
+[THREAD-LIFECYCLE] created=47 finished=47 reaped=47 borrower_reclaim_skipped=47 stale_wake_rejected=0 borrower_slots_reused=35 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005f60000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006160000
+[SYSCALL] thread_spawn: parent=100 tid=148 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=148 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=148 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=148 name='pthread-tsd-once'
+[SCHED] process_reaped pid=148 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=148 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=148 cleared_msgs=0
+[THREAD-LIFECYCLE] created=48 finished=48 reaped=48 borrower_reclaim_skipped=48 stale_wake_rejected=0 borrower_slots_reused=36 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006162000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006362000
+[SYSCALL] thread_spawn: parent=100 tid=149 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=149 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=149 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=149 name='pthread-tsd-once'
+[SCHED] process_reaped pid=149 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=149 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=149 cleared_msgs=0
+[THREAD-LIFECYCLE] created=49 finished=49 reaped=49 borrower_reclaim_skipped=49 stale_wake_rejected=0 borrower_slots_reused=37 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006364000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006564000
+[SYSCALL] thread_spawn: parent=100 tid=150 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=150 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=150 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=150 name='pthread-tsd-once'
+[SCHED] process_reaped pid=150 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=150 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=150 cleared_msgs=0
+[THREAD-LIFECYCLE] created=50 finished=50 reaped=50 borrower_reclaim_skipped=50 stale_wake_rejected=0 borrower_slots_reused=38 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006566000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006766000
+[SYSCALL] thread_spawn: parent=100 tid=151 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=151 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=151 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=151 name='pthread-tsd-once'
+[SCHED] process_reaped pid=151 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=151 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=151 cleared_msgs=0
+[THREAD-LIFECYCLE] created=51 finished=51 reaped=51 borrower_reclaim_skipped=51 stale_wake_rejected=0 borrower_slots_reused=39 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006768000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006968000
+[SYSCALL] thread_spawn: parent=100 tid=152 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=152 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=152 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=152 name='pthread-tsd-once'
+[SCHED] process_reaped pid=152 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=152 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=152 cleared_msgs=0
+[THREAD-LIFECYCLE] created=52 finished=52 reaped=52 borrower_reclaim_skipped=52 stale_wake_rejected=0 borrower_slots_reused=40 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100696a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006b6a000
+[SYSCALL] thread_spawn: parent=100 tid=153 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=153 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=153 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=153 name='pthread-tsd-once'
+[SCHED] process_reaped pid=153 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=153 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=153 cleared_msgs=0
+[THREAD-LIFECYCLE] created=53 finished=53 reaped=53 borrower_reclaim_skipped=53 stale_wake_rejected=0 borrower_slots_reused=41 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006b6c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006d6c000
+[SYSCALL] thread_spawn: parent=100 tid=154 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=154 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=154 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=154 name='pthread-tsd-once'
+[SCHED] process_reaped pid=154 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=154 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=154 cleared_msgs=0
+[THREAD-LIFECYCLE] created=54 finished=54 reaped=54 borrower_reclaim_skipped=54 stale_wake_rejected=0 borrower_slots_reused=42 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006d6e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006f6e000
+[SYSCALL] thread_spawn: parent=100 tid=155 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=155 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=155 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=155 name='pthread-tsd-once'
+[SCHED] process_reaped pid=155 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=155 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=155 cleared_msgs=0
+[THREAD-LIFECYCLE] created=55 finished=55 reaped=55 borrower_reclaim_skipped=55 stale_wake_rejected=0 borrower_slots_reused=43 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006f70000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007170000
+[SYSCALL] thread_spawn: parent=100 tid=156 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=156 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=156 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=156 name='pthread-tsd-once'
+[SCHED] process_reaped pid=156 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=156 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=156 cleared_msgs=0
+[THREAD-LIFECYCLE] created=56 finished=56 reaped=56 borrower_reclaim_skipped=56 stale_wake_rejected=0 borrower_slots_reused=44 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007172000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007372000
+[SYSCALL] thread_spawn: parent=100 tid=157 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=157 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=157 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=157 name='pthread-tsd-once'
+[SCHED] process_reaped pid=157 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=157 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=157 cleared_msgs=0
+[THREAD-LIFECYCLE] created=57 finished=57 reaped=57 borrower_reclaim_skipped=57 stale_wake_rejected=0 borrower_slots_reused=45 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007374000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007574000
+[SYSCALL] thread_spawn: parent=100 tid=158 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=158 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=158 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=158 name='pthread-tsd-once'
+[SCHED] process_reaped pid=158 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=158 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=158 cleared_msgs=0
+[THREAD-LIFECYCLE] created=58 finished=58 reaped=58 borrower_reclaim_skipped=58 stale_wake_rejected=0 borrower_slots_reused=46 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007576000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007776000
+[SYSCALL] thread_spawn: parent=100 tid=159 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=159 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=159 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=159 name='pthread-tsd-once'
+[SCHED] process_reaped pid=159 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=159 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=159 cleared_msgs=0
+[THREAD-LIFECYCLE] created=59 finished=59 reaped=59 borrower_reclaim_skipped=59 stale_wake_rejected=0 borrower_slots_reused=47 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007778000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007978000
+[SYSCALL] thread_spawn: parent=100 tid=160 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=160 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=160 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=160 name='pthread-tsd-once'
+[SCHED] process_reaped pid=160 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=160 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=160 cleared_msgs=0
+[THREAD-LIFECYCLE] created=60 finished=60 reaped=60 borrower_reclaim_skipped=60 stale_wake_rejected=0 borrower_slots_reused=48 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100797a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007b7a000
+[SYSCALL] thread_spawn: parent=100 tid=161 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=161 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=161 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=161 name='pthread-tsd-once'
+[SCHED] process_reaped pid=161 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=161 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=161 cleared_msgs=0
+[THREAD-LIFECYCLE] created=61 finished=61 reaped=61 borrower_reclaim_skipped=61 stale_wake_rejected=0 borrower_slots_reused=49 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007b7c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007d7c000
+[SYSCALL] thread_spawn: parent=100 tid=162 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=162 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=162 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=162 name='pthread-tsd-once'
+[SCHED] process_reaped pid=162 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=162 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=162 cleared_msgs=0
+[THREAD-LIFECYCLE] created=62 finished=62 reaped=62 borrower_reclaim_skipped=62 stale_wake_rejected=0 borrower_slots_reused=50 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007d7e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007f7e000
+[SYSCALL] thread_spawn: parent=100 tid=163 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=163 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=163 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=163 name='pthread-tsd-once'
+[SCHED] process_reaped pid=163 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=163 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=163 cleared_msgs=0
+[THREAD-LIFECYCLE] created=63 finished=63 reaped=63 borrower_reclaim_skipped=63 stale_wake_rejected=0 borrower_slots_reused=51 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007f80000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008180000
+[SYSCALL] thread_spawn: parent=100 tid=164 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=164 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=164 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=164 name='pthread-tsd-once'
+[SCHED] process_reaped pid=164 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=164 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=164 cleared_msgs=0
+[THREAD-LIFECYCLE] created=64 finished=64 reaped=64 borrower_reclaim_skipped=64 stale_wake_rejected=0 borrower_slots_reused=52 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008182000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008382000
+[SYSCALL] thread_spawn: parent=100 tid=165 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=165 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=165 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=165 name='pthread-tsd-once'
+[SCHED] process_reaped pid=165 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=165 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=165 cleared_msgs=0
+[THREAD-LIFECYCLE] created=65 finished=65 reaped=65 borrower_reclaim_skipped=65 stale_wake_rejected=0 borrower_slots_reused=53 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008384000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008584000
+[SYSCALL] thread_spawn: parent=100 tid=166 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=166 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=166 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=166 name='pthread-tsd-once'
+[SCHED] process_reaped pid=166 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=166 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=166 cleared_msgs=0
+[THREAD-LIFECYCLE] created=66 finished=66 reaped=66 borrower_reclaim_skipped=66 stale_wake_rejected=0 borrower_slots_reused=54 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008586000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008786000
+[SYSCALL] thread_spawn: parent=100 tid=167 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=167 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=167 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=167 name='pthread-tsd-once'
+[SCHED] process_reaped pid=167 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=167 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=167 cleared_msgs=0
+[THREAD-LIFECYCLE] created=67 finished=67 reaped=67 borrower_reclaim_skipped=67 stale_wake_rejected=0 borrower_slots_reused=55 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008788000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008988000
+[SYSCALL] thread_spawn: parent=100 tid=168 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=168 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=168 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=168 name='pthread-tsd-once'
+[SCHED] process_reaped pid=168 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=168 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=168 cleared_msgs=0
+[THREAD-LIFECYCLE] created=68 finished=68 reaped=68 borrower_reclaim_skipped=68 stale_wake_rejected=0 borrower_slots_reused=56 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100898a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008b8a000
+[SYSCALL] thread_spawn: parent=100 tid=169 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=169 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=169 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=169 name='pthread-tsd-once'
+[SCHED] process_reaped pid=169 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=169 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=169 cleared_msgs=0
+[THREAD-LIFECYCLE] created=69 finished=69 reaped=69 borrower_reclaim_skipped=69 stale_wake_rejected=0 borrower_slots_reused=57 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008b8c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008d8c000
+[SYSCALL] thread_spawn: parent=100 tid=170 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=170 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=170 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=170 name='pthread-tsd-once'
+[SCHED] process_reaped pid=170 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=170 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=170 cleared_msgs=0
+[THREAD-LIFECYCLE] created=70 finished=70 reaped=70 borrower_reclaim_skipped=70 stale_wake_rejected=0 borrower_slots_reused=58 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008d8e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1008f8e000
+[SYSCALL] thread_spawn: parent=100 tid=171 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=171 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=171 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=171 name='pthread-tsd-once'
+[SCHED] process_reaped pid=171 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=171 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=171 cleared_msgs=0
+[THREAD-LIFECYCLE] created=71 finished=71 reaped=71 borrower_reclaim_skipped=71 stale_wake_rejected=0 borrower_slots_reused=59 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1008f90000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009190000
+[SYSCALL] thread_spawn: parent=100 tid=172 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=172 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=172 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=172 name='pthread-tsd-once'
+[SCHED] process_reaped pid=172 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=172 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=172 cleared_msgs=0
+[THREAD-LIFECYCLE] created=72 finished=72 reaped=72 borrower_reclaim_skipped=72 stale_wake_rejected=0 borrower_slots_reused=60 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009192000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009392000
+[SYSCALL] thread_spawn: parent=100 tid=173 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=173 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=173 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=173 name='pthread-tsd-once'
+[SCHED] process_reaped pid=173 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=173 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=173 cleared_msgs=0
+[THREAD-LIFECYCLE] created=73 finished=73 reaped=73 borrower_reclaim_skipped=73 stale_wake_rejected=0 borrower_slots_reused=61 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009394000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009594000
+[SYSCALL] thread_spawn: parent=100 tid=174 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=174 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=174 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=174 name='pthread-tsd-once'
+[SCHED] process_reaped pid=174 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=174 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=174 cleared_msgs=0
+[THREAD-LIFECYCLE] created=74 finished=74 reaped=74 borrower_reclaim_skipped=74 stale_wake_rejected=0 borrower_slots_reused=62 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009596000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009796000
+[SYSCALL] thread_spawn: parent=100 tid=175 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=175 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=175 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=175 name='pthread-tsd-once'
+[SCHED] process_reaped pid=175 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=175 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=175 cleared_msgs=0
+[THREAD-LIFECYCLE] created=75 finished=75 reaped=75 borrower_reclaim_skipped=75 stale_wake_rejected=0 borrower_slots_reused=63 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009798000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009998000
+[SYSCALL] thread_spawn: parent=100 tid=176 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=176 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=176 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=176 name='pthread-tsd-once'
+[SCHED] process_reaped pid=176 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=176 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=176 cleared_msgs=0
+[THREAD-LIFECYCLE] created=76 finished=76 reaped=76 borrower_reclaim_skipped=76 stale_wake_rejected=0 borrower_slots_reused=64 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100999a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009b9a000
+[SYSCALL] thread_spawn: parent=100 tid=177 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=177 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=177 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=177 name='pthread-tsd-once'
+[SCHED] process_reaped pid=177 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=177 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=177 cleared_msgs=0
+[THREAD-LIFECYCLE] created=77 finished=77 reaped=77 borrower_reclaim_skipped=77 stale_wake_rejected=0 borrower_slots_reused=65 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009b9c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009d9c000
+[SYSCALL] thread_spawn: parent=100 tid=178 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=178 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=178 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=178 name='pthread-tsd-once'
+[SCHED] process_reaped pid=178 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=178 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=178 cleared_msgs=0
+[THREAD-LIFECYCLE] created=78 finished=78 reaped=78 borrower_reclaim_skipped=78 stale_wake_rejected=0 borrower_slots_reused=66 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009d9e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1009f9e000
+[SYSCALL] thread_spawn: parent=100 tid=179 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=179 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=179 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=179 name='pthread-tsd-once'
+[SCHED] process_reaped pid=179 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=179 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=179 cleared_msgs=0
+[THREAD-LIFECYCLE] created=79 finished=79 reaped=79 borrower_reclaim_skipped=79 stale_wake_rejected=0 borrower_slots_reused=67 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1009fa0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100a1a0000
+[SYSCALL] thread_spawn: parent=100 tid=180 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=180 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=180 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=180 name='pthread-tsd-once'
+[SCHED] process_reaped pid=180 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=180 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=180 cleared_msgs=0
+[THREAD-LIFECYCLE] created=80 finished=80 reaped=80 borrower_reclaim_skipped=80 stale_wake_rejected=0 borrower_slots_reused=68 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a1a2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100a3a2000
+[SYSCALL] thread_spawn: parent=100 tid=181 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=181 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=181 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=181 name='pthread-tsd-once'
+[SCHED] process_reaped pid=181 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=181 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=181 cleared_msgs=0
+[THREAD-LIFECYCLE] created=81 finished=81 reaped=81 borrower_reclaim_skipped=81 stale_wake_rejected=0 borrower_slots_reused=69 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a3a4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100a5a4000
+[SYSCALL] thread_spawn: parent=100 tid=182 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=182 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=182 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=182 name='pthread-tsd-once'
+[SCHED] process_reaped pid=182 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=182 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=182 cleared_msgs=0
+[THREAD-LIFECYCLE] created=82 finished=82 reaped=82 borrower_reclaim_skipped=82 stale_wake_rejected=0 borrower_slots_reused=70 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a5a6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100a7a6000
+[SYSCALL] thread_spawn: parent=100 tid=183 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=183 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=183 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=183 name='pthread-tsd-once'
+[SCHED] process_reaped pid=183 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=183 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=183 cleared_msgs=0
+[THREAD-LIFECYCLE] created=83 finished=83 reaped=83 borrower_reclaim_skipped=83 stale_wake_rejected=0 borrower_slots_reused=71 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a7a8000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100a9a8000
+[SYSCALL] thread_spawn: parent=100 tid=184 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=184 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=184 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=184 name='pthread-tsd-once'
+[SCHED] process_reaped pid=184 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=184 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=184 cleared_msgs=0
+[THREAD-LIFECYCLE] created=84 finished=84 reaped=84 borrower_reclaim_skipped=84 stale_wake_rejected=0 borrower_slots_reused=72 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100a9aa000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100abaa000
+[SYSCALL] thread_spawn: parent=100 tid=185 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=185 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=185 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=185 name='pthread-tsd-once'
+[SCHED] process_reaped pid=185 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=185 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=185 cleared_msgs=0
+[THREAD-LIFECYCLE] created=85 finished=85 reaped=85 borrower_reclaim_skipped=85 stale_wake_rejected=0 borrower_slots_reused=73 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100abac000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100adac000
+[SYSCALL] thread_spawn: parent=100 tid=186 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=186 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=186 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=186 name='pthread-tsd-once'
+[SCHED] process_reaped pid=186 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=186 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=186 cleared_msgs=0
+[THREAD-LIFECYCLE] created=86 finished=86 reaped=86 borrower_reclaim_skipped=86 stale_wake_rejected=0 borrower_slots_reused=74 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100adae000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100afae000
+[SYSCALL] thread_spawn: parent=100 tid=187 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=187 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=187 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=187 name='pthread-tsd-once'
+[SCHED] process_reaped pid=187 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=187 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=187 cleared_msgs=0
+[THREAD-LIFECYCLE] created=87 finished=87 reaped=87 borrower_reclaim_skipped=87 stale_wake_rejected=0 borrower_slots_reused=75 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100afb0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100b1b0000
+[SYSCALL] thread_spawn: parent=100 tid=188 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=188 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=188 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=188 name='pthread-tsd-once'
+[SCHED] process_reaped pid=188 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=188 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=188 cleared_msgs=0
+[THREAD-LIFECYCLE] created=88 finished=88 reaped=88 borrower_reclaim_skipped=88 stale_wake_rejected=0 borrower_slots_reused=76 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b1b2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100b3b2000
+[SYSCALL] thread_spawn: parent=100 tid=189 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=189 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=189 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=189 name='pthread-tsd-once'
+[SCHED] process_reaped pid=189 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=189 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=189 cleared_msgs=0
+[THREAD-LIFECYCLE] created=89 finished=89 reaped=89 borrower_reclaim_skipped=89 stale_wake_rejected=0 borrower_slots_reused=77 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b3b4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100b5b4000
+[SYSCALL] thread_spawn: parent=100 tid=190 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=190 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=190 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=190 name='pthread-tsd-once'
+[SCHED] process_reaped pid=190 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=190 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=190 cleared_msgs=0
+[THREAD-LIFECYCLE] created=90 finished=90 reaped=90 borrower_reclaim_skipped=90 stale_wake_rejected=0 borrower_slots_reused=78 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b5b6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100b7b6000
+[SYSCALL] thread_spawn: parent=100 tid=191 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=191 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=191 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=191 name='pthread-tsd-once'
+[SCHED] process_reaped pid=191 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=191 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=191 cleared_msgs=0
+[THREAD-LIFECYCLE] created=91 finished=91 reaped=91 borrower_reclaim_skipped=91 stale_wake_rejected=0 borrower_slots_reused=79 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b7b8000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100b9b8000
+[SYSCALL] thread_spawn: parent=100 tid=192 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=192 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=192 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=192 name='pthread-tsd-once'
+[SCHED] process_reaped pid=192 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=192 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=192 cleared_msgs=0
+[THREAD-LIFECYCLE] created=92 finished=92 reaped=92 borrower_reclaim_skipped=92 stale_wake_rejected=0 borrower_slots_reused=80 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100b9ba000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100bbba000
+[SYSCALL] thread_spawn: parent=100 tid=193 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=193 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=193 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=193 name='pthread-tsd-once'
+[SCHED] process_reaped pid=193 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=193 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=193 cleared_msgs=0
+[THREAD-LIFECYCLE] created=93 finished=93 reaped=93 borrower_reclaim_skipped=93 stale_wake_rejected=0 borrower_slots_reused=81 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100bbbc000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100bdbc000
+[SYSCALL] thread_spawn: parent=100 tid=194 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=194 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=194 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=194 name='pthread-tsd-once'
+[SCHED] process_reaped pid=194 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=194 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=194 cleared_msgs=0
+[THREAD-LIFECYCLE] created=94 finished=94 reaped=94 borrower_reclaim_skipped=94 stale_wake_rejected=0 borrower_slots_reused=82 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100bdbe000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100bfbe000
+[SYSCALL] thread_spawn: parent=100 tid=195 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=195 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=195 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=195 name='pthread-tsd-once'
+[SCHED] process_reaped pid=195 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=195 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=195 cleared_msgs=0
+[THREAD-LIFECYCLE] created=95 finished=95 reaped=95 borrower_reclaim_skipped=95 stale_wake_rejected=0 borrower_slots_reused=83 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100bfc0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100c1c0000
+[SYSCALL] thread_spawn: parent=100 tid=196 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=196 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=196 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=196 name='pthread-tsd-once'
+[SCHED] process_reaped pid=196 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=196 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=196 cleared_msgs=0
+[THREAD-LIFECYCLE] created=96 finished=96 reaped=96 borrower_reclaim_skipped=96 stale_wake_rejected=0 borrower_slots_reused=84 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c1c2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100c3c2000
+[SYSCALL] thread_spawn: parent=100 tid=197 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=197 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=197 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=197 name='pthread-tsd-once'
+[SCHED] process_reaped pid=197 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=197 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=197 cleared_msgs=0
+[THREAD-LIFECYCLE] created=97 finished=97 reaped=97 borrower_reclaim_skipped=97 stale_wake_rejected=0 borrower_slots_reused=85 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c3c4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100c5c4000
+[SYSCALL] thread_spawn: parent=100 tid=198 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=198 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=198 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=198 name='pthread-tsd-once'
+[SCHED] process_reaped pid=198 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=198 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=198 cleared_msgs=0
+[THREAD-LIFECYCLE] created=98 finished=98 reaped=98 borrower_reclaim_skipped=98 stale_wake_rejected=0 borrower_slots_reused=86 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c5c6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100c7c6000
+[SYSCALL] thread_spawn: parent=100 tid=199 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=199 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=199 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=199 name='pthread-tsd-once'
+[SCHED] process_reaped pid=199 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=199 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=199 cleared_msgs=0
+[THREAD-LIFECYCLE] created=99 finished=99 reaped=99 borrower_reclaim_skipped=99 stale_wake_rejected=0 borrower_slots_reused=87 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c7c8000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100c9c8000
+[SYSCALL] thread_spawn: parent=100 tid=200 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=200 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=200 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=200 name='pthread-tsd-once'
+[SCHED] process_reaped pid=200 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=200 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=200 cleared_msgs=0
+[THREAD-LIFECYCLE] created=100 finished=100 reaped=100 borrower_reclaim_skipped=100 stale_wake_rejected=0 borrower_slots_reused=88 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100c9ca000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100cbca000
+[SYSCALL] thread_spawn: parent=100 tid=201 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=201 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=201 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=201 name='pthread-tsd-once'
+[SCHED] process_reaped pid=201 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=201 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=201 cleared_msgs=0
+[THREAD-LIFECYCLE] created=101 finished=101 reaped=101 borrower_reclaim_skipped=101 stale_wake_rejected=0 borrower_slots_reused=89 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100cbcc000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100cdcc000
+[SYSCALL] thread_spawn: parent=100 tid=202 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=202 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=202 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=202 name='pthread-tsd-once'
+[SCHED] process_reaped pid=202 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=202 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=202 cleared_msgs=0
+[THREAD-LIFECYCLE] created=102 finished=102 reaped=102 borrower_reclaim_skipped=102 stale_wake_rejected=0 borrower_slots_reused=90 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100cdce000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100cfce000
+[SYSCALL] thread_spawn: parent=100 tid=203 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=203 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=203 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=203 name='pthread-tsd-once'
+[SCHED] process_reaped pid=203 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=203 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=203 cleared_msgs=0
+[THREAD-LIFECYCLE] created=103 finished=103 reaped=103 borrower_reclaim_skipped=103 stale_wake_rejected=0 borrower_slots_reused=91 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100cfd0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100d1d0000
+[SYSCALL] thread_spawn: parent=100 tid=204 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=204 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=204 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=204 name='pthread-tsd-once'
+[SCHED] process_reaped pid=204 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=204 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=204 cleared_msgs=0
+[THREAD-LIFECYCLE] created=104 finished=104 reaped=104 borrower_reclaim_skipped=104 stale_wake_rejected=0 borrower_slots_reused=92 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d1d2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100d3d2000
+[SYSCALL] thread_spawn: parent=100 tid=205 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=205 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=205 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=205 name='pthread-tsd-once'
+[SCHED] process_reaped pid=205 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=205 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=205 cleared_msgs=0
+[THREAD-LIFECYCLE] created=105 finished=105 reaped=105 borrower_reclaim_skipped=105 stale_wake_rejected=0 borrower_slots_reused=93 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d3d4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100d5d4000
+[SYSCALL] thread_spawn: parent=100 tid=206 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=206 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=206 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=206 name='pthread-tsd-once'
+[SCHED] process_reaped pid=206 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=206 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=206 cleared_msgs=0
+[THREAD-LIFECYCLE] created=106 finished=106 reaped=106 borrower_reclaim_skipped=106 stale_wake_rejected=0 borrower_slots_reused=94 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d5d6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100d7d6000
+[SYSCALL] thread_spawn: parent=100 tid=207 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=207 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=207 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=207 name='pthread-tsd-once'
+[SCHED] process_reaped pid=207 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=207 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=207 cleared_msgs=0
+[THREAD-LIFECYCLE] created=107 finished=107 reaped=107 borrower_reclaim_skipped=107 stale_wake_rejected=0 borrower_slots_reused=95 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d7d8000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100d9d8000
+[SYSCALL] thread_spawn: parent=100 tid=208 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=208 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=208 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=208 name='pthread-tsd-once'
+[SCHED] process_reaped pid=208 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=208 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=208 cleared_msgs=0
+[THREAD-LIFECYCLE] created=108 finished=108 reaped=108 borrower_reclaim_skipped=108 stale_wake_rejected=0 borrower_slots_reused=96 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100d9da000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100dbda000
+[SYSCALL] thread_spawn: parent=100 tid=209 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=209 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=209 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=209 name='pthread-tsd-once'
+[SCHED] process_reaped pid=209 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=209 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=209 cleared_msgs=0
+[THREAD-LIFECYCLE] created=109 finished=109 reaped=109 borrower_reclaim_skipped=109 stale_wake_rejected=0 borrower_slots_reused=97 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100dbdc000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100dddc000
+[SYSCALL] thread_spawn: parent=100 tid=210 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=210 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=210 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=210 name='pthread-tsd-once'
+[SCHED] process_reaped pid=210 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=210 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=210 cleared_msgs=0
+[THREAD-LIFECYCLE] created=110 finished=110 reaped=110 borrower_reclaim_skipped=110 stale_wake_rejected=0 borrower_slots_reused=98 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ddde000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100dfde000
+[SYSCALL] thread_spawn: parent=100 tid=211 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=211 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=211 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=211 name='pthread-tsd-once'
+[SCHED] process_reaped pid=211 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=211 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=211 cleared_msgs=0
+[THREAD-LIFECYCLE] created=111 finished=111 reaped=111 borrower_reclaim_skipped=111 stale_wake_rejected=0 borrower_slots_reused=99 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100dfe0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100e1e0000
+[SYSCALL] thread_spawn: parent=100 tid=212 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=212 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=212 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=212 name='pthread-tsd-once'
+[SCHED] process_reaped pid=212 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=212 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=212 cleared_msgs=0
+[THREAD-LIFECYCLE] created=112 finished=112 reaped=112 borrower_reclaim_skipped=112 stale_wake_rejected=0 borrower_slots_reused=100 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e1e2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100e3e2000
+[SYSCALL] thread_spawn: parent=100 tid=213 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=213 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=213 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=213 name='pthread-tsd-once'
+[SCHED] process_reaped pid=213 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=213 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=213 cleared_msgs=0
+[THREAD-LIFECYCLE] created=113 finished=113 reaped=113 borrower_reclaim_skipped=113 stale_wake_rejected=0 borrower_slots_reused=101 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e3e4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100e5e4000
+[SYSCALL] thread_spawn: parent=100 tid=214 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=214 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=214 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=214 name='pthread-tsd-once'
+[SCHED] process_reaped pid=214 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=214 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=214 cleared_msgs=0
+[THREAD-LIFECYCLE] created=114 finished=114 reaped=114 borrower_reclaim_skipped=114 stale_wake_rejected=0 borrower_slots_reused=102 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e5e6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100e7e6000
+[SYSCALL] thread_spawn: parent=100 tid=215 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=215 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=215 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=215 name='pthread-tsd-once'
+[SCHED] process_reaped pid=215 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=215 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=215 cleared_msgs=0
+[THREAD-LIFECYCLE] created=115 finished=115 reaped=115 borrower_reclaim_skipped=115 stale_wake_rejected=0 borrower_slots_reused=103 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e7e8000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100e9e8000
+[SYSCALL] thread_spawn: parent=100 tid=216 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=216 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=216 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=216 name='pthread-tsd-once'
+[SCHED] process_reaped pid=216 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=216 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=216 cleared_msgs=0
+[THREAD-LIFECYCLE] created=116 finished=116 reaped=116 borrower_reclaim_skipped=116 stale_wake_rejected=0 borrower_slots_reused=104 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100e9ea000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100ebea000
+[SYSCALL] thread_spawn: parent=100 tid=217 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=217 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=217 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=217 name='pthread-tsd-once'
+[SCHED] process_reaped pid=217 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=217 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=217 cleared_msgs=0
+[THREAD-LIFECYCLE] created=117 finished=117 reaped=117 borrower_reclaim_skipped=117 stale_wake_rejected=0 borrower_slots_reused=105 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100ebec000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100edec000
+[SYSCALL] thread_spawn: parent=100 tid=218 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=218 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=218 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=218 name='pthread-tsd-once'
+[SCHED] process_reaped pid=218 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=218 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=218 cleared_msgs=0
+[THREAD-LIFECYCLE] created=118 finished=118 reaped=118 borrower_reclaim_skipped=118 stale_wake_rejected=0 borrower_slots_reused=106 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100edee000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100efee000
+[SYSCALL] thread_spawn: parent=100 tid=219 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=219 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=219 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=219 name='pthread-tsd-once'
+[SCHED] process_reaped pid=219 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=219 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=219 cleared_msgs=0
+[THREAD-LIFECYCLE] created=119 finished=119 reaped=119 borrower_reclaim_skipped=119 stale_wake_rejected=0 borrower_slots_reused=107 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100eff0000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100f1f0000
+[SYSCALL] thread_spawn: parent=100 tid=220 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=220 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=220 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=220 name='pthread-tsd-once'
+[SCHED] process_reaped pid=220 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=220 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=220 cleared_msgs=0
+[THREAD-LIFECYCLE] created=120 finished=120 reaped=120 borrower_reclaim_skipped=120 stale_wake_rejected=0 borrower_slots_reused=108 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f1f2000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100f3f2000
+[SYSCALL] thread_spawn: parent=100 tid=221 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=221 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=221 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=221 name='pthread-tsd-once'
+[SCHED] process_reaped pid=221 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=221 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=221 cleared_msgs=0
+[THREAD-LIFECYCLE] created=121 finished=121 reaped=121 borrower_reclaim_skipped=121 stale_wake_rejected=0 borrower_slots_reused=109 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f3f4000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100f5f4000
+[SYSCALL] thread_spawn: parent=100 tid=222 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=222 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=222 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=222 name='pthread-tsd-once'
+[SCHED] process_reaped pid=222 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=222 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=222 cleared_msgs=0
+[THREAD-LIFECYCLE] created=122 finished=122 reaped=122 borrower_reclaim_skipped=122 stale_wake_rejected=0 borrower_slots_reused=110 max_live=12
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100f5f6000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x100f7f6000
+[SYSCALL] thread_spawn: parent=100 tid=223 trampoline=0x405818
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=223 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=223 name='pthread-tsd-once' reason=exit
+[SCHED] FINISHED process pid=223 name='pthread-tsd-once'
+[SCHED] process_reaped pid=223 name='pthread-tsd-once' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=223 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=223 cleared_msgs=0
+[THREAD-LIFECYCLE] created=123 finished=123 reaped=123 borrower_reclaim_skipped=123 stale_wake_rejected=0 borrower_slots_reused=111 max_live=12
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=100 name='pthread-tsd-once'
+[NATIVE-GROUP] terminal pid=100 incarnation=4 vm=7 code=0 reason=exit
+[SCHED] process_mark_finished pid=100 name='pthread-tsd-once' reason=exit code=0
+[SCHED] terminating pid=100 name='pthread-tsd-once' reason=exit
+[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=0 exit=0 user_frames=784 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=100 name='pthread-tsd-once' user_frames=784 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=100 frames=784 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=100 cleared_msgs=0
+[NATIVE-C-STREAM] case=0 fd=1 hex=544c532064656c6574696f6e2d6265666f72652d6578697420616e64207374616c652d67656e65726174696f6e207769746e65737320504153530a6f6e636520636f6e74656e74696f6e207075626c69636174696f6e206e65737465642d696e6974206162616e646f6e6d656e7420504153530a544c53206c6966656379636c
+[NATIVE-C-STREAM] case=0 fd=1 hex=652065786861757374696f6e20636875726e20616e64207374726572726f7220504153530a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=0 exit=0 stdout=165 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3c08 memsz=3c08 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fd8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x40222e, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=101 (reused reaped slot)
+[SCHED] CREATED process #127 'pthread-tsd-exit-race' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=1 name=pthread-tsd-exit-race pid=101 bytes=42192 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=101 tid=224 trampoline=0x402248
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=224 name='pthread-tsd-exit-race' reason=exit code=0
+[SCHED] terminating pid=224 name='pthread-tsd-exit-race' reason=exit
+[SCHED] FINISHED process pid=224 name='pthread-tsd-exit-race'
+[SCHED] process_reaped pid=224 name='pthread-tsd-exit-race' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=224 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=224 cleared_msgs=0
+[THREAD-LIFECYCLE] created=124 finished=124 reaped=124 borrower_reclaim_skipped=124 stale_wake_rejected=0 borrower_slots_reused=112 max_live=12
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=101 name='pthread-tsd-exit-race'
+[NATIVE-GROUP] terminal pid=101 incarnation=251 vm=9 code=0 reason=exit
+[SCHED] process_mark_finished pid=101 name='pthread-tsd-exit-race' reason=exit code=0
+[SCHED] terminating pid=101 name='pthread-tsd-exit-race' reason=exit
+[NATIVE-C-REAP-BEGIN] case=1 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=1 exit=0 user_frames=778 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=101 name='pthread-tsd-exit-race' user_frames=778 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=778 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[NATIVE-C-STREAM] case=1 fd=1 hex=696e2d666c696768742064657374727563746f722064656c6574652f7265757365207769746e65737320504153530a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=1 exit=0 stdout=47 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=38e8 memsz=38e8 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fd0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401f0e, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=102 (reused reaped slot)
+[SCHED] CREATED process #129 'pthread-once-recursive' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=2 name=pthread-once-recursive pid=102 bytes=42048 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=102 tid=225 trampoline=0x401f28
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000304000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000504000
+[SYSCALL] thread_spawn: parent=102 tid=226 trampoline=0x401f28
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=226 name='pthread-once-recursive' reason=exit code=0
+[SCHED] terminating pid=226 name='pthread-once-recursive' reason=exit
+[SCHED] FINISHED process pid=226 name='pthread-once-recursive'
+[SCHED] process_reaped pid=226 name='pthread-once-recursive' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=226 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=226 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin external pid=225 reason=exit
+[SCHED] process_mark_finished pid=225 name='pthread-once-recursive' reason=exit code=0 (external)
+[SCHED] FINISHED process pid=225 name='pthread-once-recursive'
+[SCHED] terminating pid=225 name='pthread-once-recursive' reason=exit
+[SCHED] process_reaped pid=225 name='pthread-once-recursive' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=225 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=225 cleared_msgs=0
+[THREAD-LIFECYCLE] created=126 finished=126 reaped=126 borrower_reclaim_skipped=126 stale_wake_rejected=0 borrower_slots_reused=114 max_live=12
+[SCHED] FINISHED process pid=102 name='pthread-once-recursive'
+[NATIVE-GROUP] terminal pid=102 incarnation=254 vm=11 code=0 reason=exit
+[SCHED] process_mark_finished pid=102 name='pthread-once-recursive' reason=exit code=0
+[SCHED] terminating pid=102 name='pthread-once-recursive' reason=exit
+[NATIVE-C-REAP-BEGIN] case=2 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=2 exit=0 user_frames=1292 page_tables=11 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=102 name='pthread-once-recursive' user_frames=1292 page_tables=11 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=1292 pts=11 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[NATIVE-C-STREAM] case=2 fd=1 hex=726563757273697665206f6e63653a206e6f20636f6d706c6574696f6e20696e20626f756e6465642077696e646f773b20696e646570656e64656e74207468726561642070726f677265737365640a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=2 exit=0 stdout=79 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=3868 memsz=3868 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fc0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x4020ce, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=103 (reused reaped slot)
+[SCHED] CREATED process #132 'strerror-threads' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=3 name=strerror-threads pid=103 bytes=41984 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=103 tid=227 trampoline=0x4020e8
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000304000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000504000
+[SYSCALL] thread_spawn: parent=103 tid=228 trampoline=0x4020e8
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000506000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000706000
+[SYSCALL] thread_spawn: parent=103 tid=229 trampoline=0x4020e8
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000708000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000908000
+[SYSCALL] thread_spawn: parent=103 tid=230 trampoline=0x4020e8
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=227 name='strerror-threads' reason=exit code=0
+[SCHED] terminating pid=227 name='strerror-threads' reason=exit
+[SCHED] FINISHED process pid=227 name='strerror-threads'
+[SCHED] process_reaped pid=227 name='strerror-threads' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=227 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=227 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=228 name='strerror-threads' reason=exit code=0
+[SCHED] terminating pid=228 name='strerror-threads' reason=exit
+[SCHED] FINISHED process pid=228 name='strerror-threads'
+[SCHED] process_reaped pid=228 name='strerror-threads' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=228 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=228 cleared_msgs=0
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=230 name='strerror-threads' reason=exit code=0
+[SCHED] terminating pid=230 name='strerror-threads' reason=exit
+[SCHED] FINISHED process pid=230 name='strerror-threads'
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=229 name='strerror-threads' reason=exit code=0
+[SCHED] terminating pid=229 name='strerror-threads' reason=exit
+[SCHED] FINISHED process pid=229 name='strerror-threads'
+[SCHED] process_reaped pid=229 name='strerror-threads' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=229 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=229 cleared_msgs=0
+[SCHED] process_reaped pid=230 name='strerror-threads' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=230 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=230 cleared_msgs=0
+[THREAD-LIFECYCLE] created=130 finished=130 reaped=130 borrower_reclaim_skipped=130 stale_wake_rejected=0 borrower_slots_reused=118 max_live=12
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=103 name='strerror-threads'
+[NATIVE-GROUP] terminal pid=103 incarnation=259 vm=13 code=0 reason=exit
+[SCHED] process_mark_finished pid=103 name='strerror-threads' reason=exit code=0
+[SCHED] terminating pid=103 name='strerror-threads' reason=exit
+[NATIVE-C-REAP-BEGIN] case=3 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=3 exit=0 user_frames=778 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=103 name='strerror-threads' user_frames=778 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=778 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[NATIVE-C-STREAM] case=3 fd=1 hex=7374726572726f7220616c6c20343020737570706f72746564206e756d62657273206163726f737320666f7572207468726561647320504153530a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=3 exit=0 stdout=59 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[NATIVE-C-DONE] cases=4

@@ -1,0 +1,230 @@
+[
+  {
+    "symbol": "acosh",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/acosh.log"
+  },
+  {
+    "symbol": "acos",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/acos.log"
+  },
+  {
+    "symbol": "asin",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/asin.log"
+  },
+  {
+    "symbol": "asinh",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/asinh.log"
+  },
+  {
+    "symbol": "atan",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/atan.log"
+  },
+  {
+    "symbol": "atan2",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/atan2.log"
+  },
+  {
+    "symbol": "atanh",
+    "link_exit": 1,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/atanh.log"
+  },
+  {
+    "symbol": "cbrt",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/cbrt.log"
+  },
+  {
+    "symbol": "ceil",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/ceil.log"
+  },
+  {
+    "symbol": "copysign",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/copysign.log"
+  },
+  {
+    "symbol": "cos",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/cos.log"
+  },
+  {
+    "symbol": "cosh",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/cosh.log"
+  },
+  {
+    "symbol": "erf",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/erf.log"
+  },
+  {
+    "symbol": "erfc",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/erfc.log"
+  },
+  {
+    "symbol": "exp",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/exp.log"
+  },
+  {
+    "symbol": "exp2",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/exp2.log"
+  },
+  {
+    "symbol": "expm1",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/expm1.log"
+  },
+  {
+    "symbol": "fabs",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/fabs.log"
+  },
+  {
+    "symbol": "floor",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/floor.log"
+  },
+  {
+    "symbol": "fmod",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/fmod.log"
+  },
+  {
+    "symbol": "frexp",
+    "link_exit": 1,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/frexp.log"
+  },
+  {
+    "symbol": "hypot",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/hypot.log"
+  },
+  {
+    "symbol": "ldexp",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/ldexp.log"
+  },
+  {
+    "symbol": "lgamma",
+    "link_exit": 1,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/lgamma.log"
+  },
+  {
+    "symbol": "log",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/log.log"
+  },
+  {
+    "symbol": "log10",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/log10.log"
+  },
+  {
+    "symbol": "log1p",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/log1p.log"
+  },
+  {
+    "symbol": "log2",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/log2.log"
+  },
+  {
+    "symbol": "modf",
+    "link_exit": 1,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/modf.log"
+  },
+  {
+    "symbol": "pow",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/pow.log"
+  },
+  {
+    "symbol": "round",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/round.log"
+  },
+  {
+    "symbol": "sin",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/sin.log"
+  },
+  {
+    "symbol": "sinh",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/sinh.log"
+  },
+  {
+    "symbol": "sqrt",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/sqrt.log"
+  },
+  {
+    "symbol": "tan",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/tan.log"
+  },
+  {
+    "symbol": "tanh",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/tanh.log"
+  },
+  {
+    "symbol": "tgamma",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/tgamma.log"
+  },
+  {
+    "symbol": "trunc",
+    "link_exit": 0,
+    "declaration": "synthetic address-only declaration; does not validate header or signature",
+    "evidence": "math-probes/trunc.log"
+  }
+]

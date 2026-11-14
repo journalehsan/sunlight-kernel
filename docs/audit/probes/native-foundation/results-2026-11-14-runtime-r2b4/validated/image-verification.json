@@ -1,0 +1,121 @@
+{
+  "status": "PASS",
+  "images": [
+    {
+      "folder": "validated/lifecycle-cpu-1",
+      "kernel_sha256": "c8a5613ded675b5906fb22a2256ccfe90d455cde81d8bf5e5bc168beccff3f9b",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "e56edec1c88b1bf8ee9648a5269abfa53d0fc127f7aab52657e4d2af0294e43c"
+    },
+    {
+      "folder": "validated/lifecycle-cpu-2",
+      "kernel_sha256": "29e94b20dc9a4b7e3358186d8e6436095790c527b3279ad203aca4e1158dc552",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "34f898bd558b4c9e73e14775d5692e595ae2dda6ea220415e321dc7c7dc6b84f"
+    },
+    {
+      "folder": "validated/lifecycle-cpu-4",
+      "kernel_sha256": "fcfe55e0f34ef3da937e672dbb0e0cd1edb9fab86b5c8801b62b0e5bf4936534",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "edc0284cdf0204c8ac01b6ea701b56fc014e61abd8034d1d16b6cc2ec38c3778"
+    },
+    {
+      "folder": "validated/regression-cpu-1",
+      "kernel_sha256": "c743a9fae5f073be00d5046debb9e19362bd8b952347fe92337403e45329a398",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "423399ab760df1d01231a82809785dbf38a7a7ca79f7eb6d9669cae84c1520af"
+    },
+    {
+      "folder": "validated/regression-cpu-2",
+      "kernel_sha256": "1d5d4babbdecbe316561cd9f8b69014a01e6e5553dc0164e18c64d550f069e17",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "6151ac2eca4fc9748bec2ed58de63a3c2f2f26755dc7684387f2a15c4af309ec"
+    },
+    {
+      "folder": "validated/regression-cpu-4",
+      "kernel_sha256": "510854d4e31a009392e169c74f18d43fd0c6b287ae0b190ce6947c201b151ab4",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "d7943379c2631f7432b484136c406693c28fc0c7c2ee57dad9c60d8f9ea2e575"
+    },
+    {
+      "folder": "validated/supplemental-cpu-1",
+      "kernel_sha256": "33543dbb3276004c2f55f32ebddf27cfe90c3e549105f900143296adbde09047",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "c87d530bf1aef3ec0958c0011eb09fd49f0255f41bd9bad8383df8f82f7885e5"
+    },
+    {
+      "folder": "validated/supplemental-cpu-2",
+      "kernel_sha256": "cb093820ce308170dbfd25efa2b62c516224abef761ef0935b595ca5078df59f",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "00bd44b3def4b08e330042244bf9ad0754f3a52d98497912f33f33618b74d2da"
+    },
+    {
+      "folder": "validated/supplemental-cpu-4",
+      "kernel_sha256": "c8e7f04130b49a3b70b800bd085165a51e45f054d99c544b294bfcbfe825d356",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "f3e6e83e0be18c7fae3fa9ca13e9f5bbf88177a851220e0681b2d794ff98f78e"
+    },
+    {
+      "folder": "validated/tcp-cpu-2/guest",
+      "kernel_sha256": "fe5968bc3c3edfe94105c09ec7ef39fd5922e2fe5c09ee79ff5b61a3bce11e40",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "0eb1f24da8973020e26f969d4fe49ba778cabe61fef2351476b351b1d3ddc290"
+    },
+    {
+      "folder": "validated/tcp-cpu-4/guest",
+      "kernel_sha256": "99a8eb533b0e0386c8b3c34cfc0cd81a489b5bb7dcf532b1ed1803bc584f2a1a",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "06d9ac7f10133073b44c6d12788cfb798f305f19206b47075746f297bc44ecdb"
+    },
+    {
+      "folder": "validated/tls-cpu-1",
+      "kernel_sha256": "4e1133701eb1939a13edab0223a13551cca6e7a6933a16db20e512c9bc182eb1",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "a4c352d0eeac02c9b13783edcc143ec1d56eb3462cb5c5aeaa4b4bc048549927"
+    },
+    {
+      "folder": "validated/tls-cpu-2",
+      "kernel_sha256": "1425dff3f79da75320f90b223988d3abe053863a69e1c94b79073c8a973b8277",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "39433e3e8273d9fbb08a1b25f75308c9efd9d05fc544eee5e145732b170d57ee"
+    },
+    {
+      "folder": "validated/tls-cpu-4",
+      "kernel_sha256": "1549f272bec6cd113c27ab6652a3a04f0726ed6399fe629d295aa216e781de6a",
+      "kernel_log_matches": true,
+      "iso_kernel_matches": true,
+      "iso_sha256": "e531a8b9a4b7bf526ab26084d66427d43ef85fc99d322dba3294455e9ea99480"
+    },
+    {
+      "fault_mode": 0,
+      "kernel_log_matches": true,
+      "iso_hash_matches": true,
+      "serial_hash_matches": true
+    },
+    {
+      "fault_mode": 2,
+      "kernel_log_matches": true,
+      "iso_hash_matches": true,
+      "serial_hash_matches": true
+    },
+    {
+      "fault_mode": 3,
+      "kernel_log_matches": true,
+      "iso_hash_matches": true,
+      "serial_hash_matches": true
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "R2A /dev/ptmx and /dev/ptc absent: ENOENT\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

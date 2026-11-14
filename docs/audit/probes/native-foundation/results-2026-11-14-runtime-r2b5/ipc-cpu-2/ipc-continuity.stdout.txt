@@ -1,0 +1,8 @@
+R2B5 IPC round=0 actor=0 PASS
+R2B5 IPC round=0 actor=1 PASS
+R2B5 original owner pthread_exit
+R2B5 progress actor=1 tid=102 owner=100 vm=7
+R2B5 progress actor=0 tid=101 owner=100 vm=7
+R2B5 IPC round=1 actor=0 PASS
+R2B5 IPC round=1 actor=1 PASS
+R2B5 FAIL send only cannot rederive

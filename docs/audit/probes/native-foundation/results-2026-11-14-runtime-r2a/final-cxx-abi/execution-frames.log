@@ -1,0 +1,2386 @@
+$ llvm-dwarfdump --eh-frame /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-cxx-abi/execution.elf
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/final-cxx-abi/execution.elf:	file format elf64-x86-64
+
+.debug_frame contents:
+
+
+.eh_frame contents:
+
+00000000 00000014 00000000 CIE
+  Format:                DWARF32
+  Version:               1
+  Augmentation:          "zR"
+  Code alignment factor: 1
+  Data alignment factor: -8
+  Return address column: 16
+  Augmentation data:     1B
+
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_offset: RIP -8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  CFA=RSP+8: RIP=[CFA-8]
+
+00000018 0000001c 0000001c FDE cie=00000000 pc=00400000...00400057
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x400001
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400004
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 82 to 0x400056
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400000: CFA=RSP+8: RIP=[CFA-8]
+  0x400001: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400004: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400056: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000038 0000001c 0000003c FDE cie=00000000 pc=00400140...00400165
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x400141
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400144
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 32 to 0x400164
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400140: CFA=RSP+8: RIP=[CFA-8]
+  0x400141: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400144: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400164: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000058 0000001c 0000005c FDE cie=00000000 pc=00400c50...00400c6f
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x400c51
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400c54
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 26 to 0x400c6e
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400c50: CFA=RSP+8: RIP=[CFA-8]
+  0x400c51: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400c54: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400c6e: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000078 0000001c 0000007c FDE cie=00000000 pc=004015f0...00401672
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4015f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4015f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 125 to 0x401671
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4015f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4015f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4015f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401671: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000098 00000018 0000009c FDE cie=00000000 pc=004011c0...00401209
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4011c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4011c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4011c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4011c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4011c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+000000b4 0000001c 000000b8 FDE cie=00000000 pc=00401c10...00401c2d
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x401c11
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401c14
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 24 to 0x401c2c
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401c10: CFA=RSP+8: RIP=[CFA-8]
+  0x401c11: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401c14: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401c2c: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000000d4 0000001c 000000d8 FDE cie=00000000 pc=00401c30...00401c4b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x401c31
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401c34
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 22 to 0x401c4a
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401c30: CFA=RSP+8: RIP=[CFA-8]
+  0x401c31: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401c34: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401c4a: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000000f4 0000001c 000000f8 FDE cie=00000000 pc=004012b0...004012cc
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4012b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4012b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 23 to 0x4012cb
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4012b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4012b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4012b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4012cb: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000114 0000001c 00000118 FDE cie=00000000 pc=00401540...0040155c
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x401541
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401544
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 23 to 0x40155b
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401540: CFA=RSP+8: RIP=[CFA-8]
+  0x401541: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401544: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40155b: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000134 0000001c 00000138 FDE cie=00000000 pc=00401560...0040158e
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x401561
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401564
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 41 to 0x40158d
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401560: CFA=RSP+8: RIP=[CFA-8]
+  0x401561: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401564: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40158d: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000154 0000001c 00000158 FDE cie=00000000 pc=00404920...004049c3
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404921
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404924
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404920: CFA=RSP+8: RIP=[CFA-8]
+  0x404921: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404924: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000174 0000001c 00000178 FDE cie=00000000 pc=004049d0...004049f0
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4049d1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4049d4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 27 to 0x4049ef
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4049d0: CFA=RSP+8: RIP=[CFA-8]
+  0x4049d1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4049d4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4049ef: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000194 0000001c 00000198 FDE cie=00000000 pc=004049f0...00404a13
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4049f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4049f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 30 to 0x404a12
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4049f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4049f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4049f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404a12: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000001b4 0000001c 000001b8 FDE cie=00000000 pc=00404a20...00404a57
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404a21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404a24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 50 to 0x404a56
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404a20: CFA=RSP+8: RIP=[CFA-8]
+  0x404a21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404a24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404a56: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000001d4 00000020 000001d8 FDE cie=00000000 pc=00404c20...00404c56
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404c21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404c24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x404c26
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc: 42 to 0x404c50
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404c51
+  DW_CFA_def_cfa: RBP +16
+
+  0x404c20: CFA=RSP+8: RIP=[CFA-8]
+  0x404c21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c26: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404c50: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404c51: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+000001f8 0000001c 000001fc FDE cie=00000000 pc=00404c60...00404c6a
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404c61
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404c64
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 1 to 0x404c65
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404c60: CFA=RSP+8: RIP=[CFA-8]
+  0x404c61: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c65: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000218 0000001c 0000021c FDE cie=00000000 pc=00404c70...00404cb5
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404c71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404c74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x404c7a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+
+  0x404c70: CFA=RSP+8: RIP=[CFA-8]
+  0x404c71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404c7a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000238 0000001c 0000023c FDE cie=00000000 pc=00404ce0...00404cea
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404ce1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404ce4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 5 to 0x404ce9
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404ce0: CFA=RSP+8: RIP=[CFA-8]
+  0x404ce1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404ce4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404ce9: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000258 00000020 0000025c FDE cie=00000000 pc=00404e40...00404e90
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404e41
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404e44
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x404e46
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc1: 73 to 0x404e8f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404e40: CFA=RSP+8: RIP=[CFA-8]
+  0x404e41: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404e44: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404e46: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404e8f: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+0000027c 00000020 00000280 FDE cie=00000000 pc=00404e90...00404f11
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404e91
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404e94
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 10 to 0x404e9e
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+
+  0x404e90: CFA=RSP+8: RIP=[CFA-8]
+  0x404e91: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404e94: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404e9e: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000002a0 0000001c 000002a4 FDE cie=00000000 pc=00404f20...00404f30
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404f21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404f24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 11 to 0x404f2f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404f20: CFA=RSP+8: RIP=[CFA-8]
+  0x404f21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404f24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404f2f: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000002c0 00000024 000002c4 FDE cie=00000000 pc=00404fc0...00405073
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x404fc1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404fc4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 7 to 0x404fcb
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc1: 162 to 0x40506d
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x40506e
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+
+  0x404fc0: CFA=RSP+8: RIP=[CFA-8]
+  0x404fc1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404fc4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404fcb: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x40506d: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x40506e: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+000002e8 0000002c 000002ec FDE cie=00000000 pc=00405140...004058a6
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405141
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405144
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 16 to 0x405154
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 1410 to 0x4056d6
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x4056d7
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405140: CFA=RSP+8: RIP=[CFA-8]
+  0x405141: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405144: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405154: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4056d6: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4056d7: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000318 00000028 0000031c FDE cie=00000000 pc=00405ad0...00405c88
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405ad1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405ad4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 11 to 0x405adf
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 394 to 0x405c69
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405c6a
+  DW_CFA_def_cfa: RBP +16
+
+  0x405ad0: CFA=RSP+8: RIP=[CFA-8]
+  0x405ad1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405ad4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405adf: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405c69: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405c6a: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000344 0000002c 00000348 FDE cie=00000000 pc=00405c90...00405da3
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405c91
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405c94
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x405ca1
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 222 to 0x405d7f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405d80
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405c90: CFA=RSP+8: RIP=[CFA-8]
+  0x405c91: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405c94: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405ca1: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405d7f: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405d80: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000374 00000018 00000378 FDE cie=00000000 pc=00405e40...00405e4b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405e41
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405e44
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405e40: CFA=RSP+8: RIP=[CFA-8]
+  0x405e41: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405e44: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000390 00000020 00000394 FDE cie=00000000 pc=00405f30...00405f6b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405f31
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405f34
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 19 to 0x405f47
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405f48
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405f30: CFA=RSP+8: RIP=[CFA-8]
+  0x405f31: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f34: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f47: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f48: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+000003b4 00000020 000003b8 FDE cie=00000000 pc=00405f70...00405fab
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x405f71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405f74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 19 to 0x405f87
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405f88
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405f70: CFA=RSP+8: RIP=[CFA-8]
+  0x405f71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f87: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x405f88: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+000003d8 00000018 000003dc FDE cie=00000000 pc=004061f0...0040621d
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4061f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4061f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x4061f6
+  DW_CFA_offset: RBX -24
+
+  0x4061f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4061f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4061f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4061f6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+000003f4 00000018 000003f8 FDE cie=00000000 pc=00406220...0040624d
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406221
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406224
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x406226
+  DW_CFA_offset: RBX -24
+
+  0x406220: CFA=RSP+8: RIP=[CFA-8]
+  0x406221: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406224: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406226: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+00000410 00000024 00000414 FDE cie=00000000 pc=00406250...00406347
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406251
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406254
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 14 to 0x406262
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 228 to 0x406346
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+
+  0x406250: CFA=RSP+8: RIP=[CFA-8]
+  0x406251: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406254: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406262: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406346: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000438 0000002c 0000043c FDE cie=00000000 pc=00406350...00406437
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406351
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406354
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x406361
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 198 to 0x406427
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x406428
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406350: CFA=RSP+8: RIP=[CFA-8]
+  0x406351: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406354: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406361: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406427: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406428: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000468 00000018 0000046c FDE cie=00000000 pc=00406440...0040649e
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406441
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406444
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 8 to 0x40644c
+  DW_CFA_offset: RBX -24
+
+  0x406440: CFA=RSP+8: RIP=[CFA-8]
+  0x406441: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406444: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40644c: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+00000484 00000028 00000488 FDE cie=00000000 pc=004064a0...00406573
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4064a1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4064a4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x4064b1
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 193 to 0x406572
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4064a0: CFA=RSP+8: RIP=[CFA-8]
+  0x4064a1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4064a4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4064b1: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406572: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000004b0 00000024 000004b4 FDE cie=00000000 pc=00406580...004065df
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406581
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406584
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 14 to 0x406592
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 76 to 0x4065de
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+
+  0x406580: CFA=RSP+8: RIP=[CFA-8]
+  0x406581: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406584: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406592: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4065de: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000004d8 0000001c 000004dc FDE cie=00000000 pc=004065e0...00406603
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4065e1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4065e4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 30 to 0x406602
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4065e0: CFA=RSP+8: RIP=[CFA-8]
+  0x4065e1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4065e4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406602: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000004f8 0000001c 000004fc FDE cie=00000000 pc=00406610...00406633
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406611
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406614
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 30 to 0x406632
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406610: CFA=RSP+8: RIP=[CFA-8]
+  0x406611: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406614: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406632: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000518 00000024 0000051c FDE cie=00000000 pc=00406640...0040665a
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406641
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406644
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 18 to 0x406656
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 2 to 0x406658
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_advance_loc: 1 to 0x406659
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406640: CFA=RSP+8: RIP=[CFA-8]
+  0x406641: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406644: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406656: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x406658: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406659: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000540 0000001c 00000544 FDE cie=00000000 pc=00406660...0040667b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406661
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406664
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 22 to 0x40667a
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406660: CFA=RSP+8: RIP=[CFA-8]
+  0x406661: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406664: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40667a: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000560 0000001c 00000564 FDE cie=00000000 pc=00406680...0040668a
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406681
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406684
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 1 to 0x406685
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406680: CFA=RSP+8: RIP=[CFA-8]
+  0x406681: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406684: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406685: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000580 0000001c 00000584 FDE cie=00000000 pc=00406690...004066b0
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406691
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406694
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 27 to 0x4066af
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406690: CFA=RSP+8: RIP=[CFA-8]
+  0x406691: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406694: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4066af: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000005a0 0000001c 000005a4 FDE cie=00000000 pc=004066b0...004066c2
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4066b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4066b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 9 to 0x4066bd
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4066b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4066b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4066b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4066bd: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000005c0 00000020 000005c4 FDE cie=00000000 pc=004066d0...00406726
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4066d1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4066d4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x4066d6
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc1: 79 to 0x406725
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4066d0: CFA=RSP+8: RIP=[CFA-8]
+  0x4066d1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4066d4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4066d6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x406725: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+000005e4 00000020 000005e8 FDE cie=00000000 pc=00406730...00406770
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406731
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406734
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x40673a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc: 53 to 0x40676f
+  DW_CFA_def_cfa: RSP +8
+
+  0x406730: CFA=RSP+8: RIP=[CFA-8]
+  0x406731: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406734: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40673a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x40676f: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000608 00000024 0000060c FDE cie=00000000 pc=00406770...004067fd
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406771
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406774
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 9 to 0x40677d
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 127 to 0x4067fc
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406770: CFA=RSP+8: RIP=[CFA-8]
+  0x406771: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406774: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40677d: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4067fc: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000630 00000020 00000634 FDE cie=00000000 pc=00406800...00406841
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406801
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406804
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x40680a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc: 54 to 0x406840
+  DW_CFA_def_cfa: RSP +8
+
+  0x406800: CFA=RSP+8: RIP=[CFA-8]
+  0x406801: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406804: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40680a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406840: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000654 00000020 00000658 FDE cie=00000000 pc=00406850...00406891
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406851
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406854
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 7 to 0x40685b
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc: 53 to 0x406890
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406850: CFA=RSP+8: RIP=[CFA-8]
+  0x406851: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406854: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40685b: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x406890: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+00000678 0000001c 0000067c FDE cie=00000000 pc=004068a0...004068ad
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4068a1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4068a4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x4068aa
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4068a0: CFA=RSP+8: RIP=[CFA-8]
+  0x4068a1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068a4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068aa: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000698 0000001c 0000069c FDE cie=00000000 pc=004068b0...004068c0
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4068b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4068b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 9 to 0x4068bd
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4068b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4068b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068bd: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000006b8 0000001c 000006bc FDE cie=00000000 pc=004068c0...004068e5
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4068c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4068c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x4068c6
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc: 30 to 0x4068e4
+  DW_CFA_def_cfa: RSP +8
+
+  0x4068c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4068c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068c6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x4068e4: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+000006d8 0000001c 000006dc FDE cie=00000000 pc=004068f0...00406901
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4068f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4068f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 12 to 0x406900
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4068f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4068f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4068f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406900: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000006f8 0000001c 000006fc FDE cie=00000000 pc=00406910...00406928
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406911
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406914
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 19 to 0x406927
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406910: CFA=RSP+8: RIP=[CFA-8]
+  0x406911: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406914: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406927: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000718 0000001c 0000071c FDE cie=00000000 pc=00406930...0040693f
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406931
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406934
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 10 to 0x40693e
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406930: CFA=RSP+8: RIP=[CFA-8]
+  0x406931: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406934: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40693e: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000738 0000001c 0000073c FDE cie=00000000 pc=00406940...0040694b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406941
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406944
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 4 to 0x406948
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406940: CFA=RSP+8: RIP=[CFA-8]
+  0x406941: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406944: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406948: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000758 0000001c 0000075c FDE cie=00000000 pc=00406950...0040695f
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406951
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406954
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 10 to 0x40695e
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406950: CFA=RSP+8: RIP=[CFA-8]
+  0x406951: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406954: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40695e: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000778 00000020 0000077c FDE cie=00000000 pc=00406960...004069bc
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406961
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406964
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 3 to 0x406967
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc1: 80 to 0x4069b7
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+
+  0x406960: CFA=RSP+8: RIP=[CFA-8]
+  0x406961: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406964: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406967: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x4069b7: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+0000079c 0000001c 000007a0 FDE cie=00000000 pc=004069c0...004069e6
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4069c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4069c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 33 to 0x4069e5
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4069c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4069c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4069c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4069e5: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000007bc 00000028 000007c0 FDE cie=00000000 pc=00406b80...00406d3c
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406b81
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406b84
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x406b91
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 426 to 0x406d3b
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406b80: CFA=RSP+8: RIP=[CFA-8]
+  0x406b81: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406b84: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406b91: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406d3b: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000007e8 00000020 000007ec FDE cie=00000000 pc=004069f0...00406a5e
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4069f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4069f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x4069f6
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc1: 99 to 0x406a59
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4069f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4069f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4069f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4069f6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x406a59: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+0000080c 00000024 00000810 FDE cie=00000000 pc=00406a60...00406b06
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406a61
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406a64
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 11 to 0x406a6f
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 150 to 0x406b05
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+
+  0x406a60: CFA=RSP+8: RIP=[CFA-8]
+  0x406a61: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406a64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406a6f: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406b05: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000834 00000028 00000838 FDE cie=00000000 pc=00406d40...00407090
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406d41
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406d44
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x406d51
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 830 to 0x40708f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406d40: CFA=RSP+8: RIP=[CFA-8]
+  0x406d41: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406d44: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406d51: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x40708f: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000860 00000020 00000864 FDE cie=00000000 pc=00406b10...00406b7e
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x406b11
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406b14
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x406b16
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc1: 99 to 0x406b79
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406b10: CFA=RSP+8: RIP=[CFA-8]
+  0x406b11: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406b14: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406b16: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x406b79: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+00000884 0000001c 00000888 FDE cie=00000000 pc=004070a0...004070af
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4070a1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4070a4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 10 to 0x4070ae
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4070a0: CFA=RSP+8: RIP=[CFA-8]
+  0x4070a1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4070a4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4070ae: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000008a4 00000018 000008a8 FDE cie=00000000 pc=004070b0...0040715a
+  Format:       DWARF32
+  DW_CFA_advance_loc1: 162 to 0x407152
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407155
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4070b0: CFA=RSP+8: RIP=[CFA-8]
+  0x407152: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407155: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+000008c0 00000018 000008c4 FDE cie=00000000 pc=00407160...0040717f
+  Format:       DWARF32
+  DW_CFA_advance_loc: 23 to 0x407177
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x40717a
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407160: CFA=RSP+8: RIP=[CFA-8]
+  0x407177: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40717a: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+000008dc 0000001c 000008e0 FDE cie=00000000 pc=00407180...00407188
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x407181
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407184
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 3 to 0x407187
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407180: CFA=RSP+8: RIP=[CFA-8]
+  0x407181: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407184: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407187: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000008fc 00000018 00000900 FDE cie=00000000 pc=00407190...00407199
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x407191
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407194
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407190: CFA=RSP+8: RIP=[CFA-8]
+  0x407191: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407194: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000918 00000018 0000091c FDE cie=00000000 pc=004071a0...004071a9
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4071a1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4071a4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4071a0: CFA=RSP+8: RIP=[CFA-8]
+  0x4071a1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4071a4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000934 00000024 00000938 FDE cie=00000000 pc=004071b0...0040722a
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4071b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4071b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 7 to 0x4071bb
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 110 to 0x407229
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+
+  0x4071b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4071b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4071b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4071bb: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x407229: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+0000095c 00000024 00000960 FDE cie=00000000 pc=00407230...00407285
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x407231
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407234
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 20 to 0x407248
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 5 to 0x40724d
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_advance_loc: 55 to 0x407284
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407230: CFA=RSP+8: RIP=[CFA-8]
+  0x407231: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407234: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407248: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x40724d: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407284: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000984 0000001c 00000988 FDE cie=00000000 pc=00407290...0040729e
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x407291
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407294
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 5 to 0x407299
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407290: CFA=RSP+8: RIP=[CFA-8]
+  0x407291: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407294: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407299: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000009a4 0000001c 000009a8 FDE cie=00000000 pc=004072b0...004072c3
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4072b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4072b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 14 to 0x4072c2
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4072b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4072b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4072b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4072c2: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+000009c4 00000024 000009c8 FDE cie=00000000 pc=004072d0...004074aa
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4072d1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4072d4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 12 to 0x4072e0
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 457 to 0x4074a9
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4072d0: CFA=RSP+8: RIP=[CFA-8]
+  0x4072d1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4072d4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4072e0: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4074a9: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000009ec 0000001c 000009f0 FDE cie=00000000 pc=004074b0...004074cd
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4074b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4074b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 24 to 0x4074cc
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4074b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4074b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4074b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4074cc: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000a0c 0000002c 00000a10 FDE cie=00000000 pc=004074d0...00407958
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4074d1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4074d4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 16 to 0x4074e4
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 1134 to 0x407952
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x407953
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4074d0: CFA=RSP+8: RIP=[CFA-8]
+  0x4074d1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4074d4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4074e4: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x407952: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x407953: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000a3c 0000002c 00000a40 FDE cie=00000000 pc=00407960...00408685
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x407961
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x407964
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 16 to 0x407974
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 3335 to 0x40867b
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x40867c
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x407960: CFA=RSP+8: RIP=[CFA-8]
+  0x407961: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407964: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x407974: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x40867b: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x40867c: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000a6c 00000028 00000a70 FDE cie=00000000 pc=00408690...004087b1
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x408691
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x408694
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 86 to 0x4086ea
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 5 to 0x4086ef
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_advance_loc: 7 to 0x4086f6
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x4086f7
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x408690: CFA=RSP+8: RIP=[CFA-8]
+  0x408691: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x408694: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4086ea: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x4086ef: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4086f6: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x4086f7: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000a98 00000028 00000a9c FDE cie=00000000 pc=004087c0...0040894b
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4087c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4087c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 11 to 0x4087cf
+  DW_CFA_offset: RBX -48
+  DW_CFA_offset: R12 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 360 to 0x408937
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x408938
+  DW_CFA_def_cfa: RBP +16
+
+  0x4087c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4087c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4087c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4087cf: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x408937: CFA=RSP+8: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x408938: CFA=RBP+16: RBX=[CFA-48], RBP=[CFA-16], R12=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000ac4 0000002c 00000ac8 FDE cie=00000000 pc=00408ad0...0040948c
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x408ad1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x408ad4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 16 to 0x408ae4
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 2466 to 0x409486
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x409487
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x408ad0: CFA=RSP+8: RIP=[CFA-8]
+  0x408ad1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x408ad4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x408ae4: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409486: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409487: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000af4 00000028 00000af8 FDE cie=00000000 pc=00409490...00409690
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x409491
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x409494
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 16 to 0x4094a4
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 491 to 0x40968f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x409490: CFA=RSP+8: RIP=[CFA-8]
+  0x409491: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x409494: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4094a4: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x40968f: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000b20 0000002c 00000b24 FDE cie=00000000 pc=00409690...004098b5
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x409691
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x409694
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x4096a1
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 487 to 0x409888
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x409889
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x409690: CFA=RSP+8: RIP=[CFA-8]
+  0x409691: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x409694: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4096a1: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409888: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409889: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000b50 0000002c 00000b54 FDE cie=00000000 pc=004098c0...00409a39
+  Format:       DWARF32
+  DW_CFA_advance_loc: 1 to 0x4098c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4098c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x4098d1
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc2: 354 to 0x409a33
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x409a34
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4098c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4098c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4098c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4098d1: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409a33: CFA=RSP+8: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409a34: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000b80 0000002c 00000b84 FDE cie=00000000 pc=00409a40...00409b31
+  Format:       DWARF32
+  DW_CFA_advance_loc: 16 to 0x409a50
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x409a53
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x409a60
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 208 to 0x409b30
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_restore: RBX
+  DW_CFA_restore: R12
+  DW_CFA_restore: R13
+  DW_CFA_restore: R14
+  DW_CFA_restore: R15
+  DW_CFA_restore: RBP
+  DW_CFA_nop:
+
+  0x409a40: CFA=RSP+8: RIP=[CFA-8]
+  0x409a50: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x409a53: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x409a60: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x409b30: CFA=RSP+8: RIP=[CFA-8]
+
+00000bb0 0000001c 00000000 CIE
+  Format:                DWARF32
+  Version:               1
+  Augmentation:          "zPLR"
+  Code alignment factor: 1
+  Data alignment factor: -8
+  Return address column: 16
+  Personality Address: 0000000000405140
+  Augmentation data:     03 40 51 40 00 03 1B
+
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_offset: RIP -8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  CFA=RSP+8: RIP=[CFA-8]
+
+00000bd0 00000024 00000024 FDE cie=00000bb0 pc=00400170...00400c45
+  Format:       DWARF32
+  LSDA Address: 0000000000415438
+  DW_CFA_advance_loc: 1 to 0x400171
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400174
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc2: 2751 to 0x400c33
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x400c34
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+
+  0x400170: CFA=RSP+8: RIP=[CFA-8]
+  0x400171: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400174: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400c33: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x400c34: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000bf8 00000024 0000004c FDE cie=00000bb0 pc=00400c70...00400d6d
+  Format:       DWARF32
+  LSDA Address: 000000000041553c
+  DW_CFA_advance_loc: 1 to 0x400c71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400c74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 239 to 0x400d63
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x400d64
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400c70: CFA=RSP+8: RIP=[CFA-8]
+  0x400c71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400c74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400d63: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x400d64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000c20 00000024 00000074 FDE cie=00000bb0 pc=00400d70...00400e6d
+  Format:       DWARF32
+  LSDA Address: 0000000000415550
+  DW_CFA_advance_loc: 1 to 0x400d71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400d74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 239 to 0x400e63
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x400e64
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400d70: CFA=RSP+8: RIP=[CFA-8]
+  0x400d71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400d74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400e63: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x400e64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000c48 00000024 0000009c FDE cie=00000bb0 pc=00401780...00401886
+  Format:       DWARF32
+  LSDA Address: 0000000000415618
+  DW_CFA_advance_loc: 1 to 0x401781
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401784
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 248 to 0x40187c
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x40187d
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401780: CFA=RSP+8: RIP=[CFA-8]
+  0x401781: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401784: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40187c: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x40187d: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000c70 00000024 000000c4 FDE cie=00000bb0 pc=00400e70...00400f6d
+  Format:       DWARF32
+  LSDA Address: 0000000000415564
+  DW_CFA_advance_loc: 1 to 0x400e71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400e74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 239 to 0x400f63
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x400f64
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400e70: CFA=RSP+8: RIP=[CFA-8]
+  0x400e71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400e74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400f63: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x400f64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000c98 00000024 000000ec FDE cie=00000bb0 pc=00400f70...0040106d
+  Format:       DWARF32
+  LSDA Address: 0000000000415578
+  DW_CFA_advance_loc: 1 to 0x400f71
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x400f74
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 239 to 0x401063
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x401064
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x400f70: CFA=RSP+8: RIP=[CFA-8]
+  0x400f71: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x400f74: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401063: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x401064: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000cc0 00000020 00000114 FDE cie=00000bb0 pc=00401090...00401110
+  Format:       DWARF32
+  LSDA Address: 000000000041558c
+  DW_CFA_advance_loc: 1 to 0x401091
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401094
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 123 to 0x40110f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401090: CFA=RSP+8: RIP=[CFA-8]
+  0x401091: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401094: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40110f: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000ce4 00000020 00000138 FDE cie=00000bb0 pc=00401140...004011c0
+  Format:       DWARF32
+  LSDA Address: 00000000004155a0
+  DW_CFA_advance_loc: 1 to 0x401141
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401144
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 123 to 0x4011bf
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401140: CFA=RSP+8: RIP=[CFA-8]
+  0x401141: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401144: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4011bf: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000d08 00000020 0000015c FDE cie=00000bb0 pc=00401b20...00401bb2
+  Format:       DWARF32
+  LSDA Address: 000000000041562c
+  DW_CFA_advance_loc: 1 to 0x401b21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401b24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 141 to 0x401bb1
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401b20: CFA=RSP+8: RIP=[CFA-8]
+  0x401b21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401b24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401bb1: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000d2c 00000020 00000180 FDE cie=00000bb0 pc=00401230...004012b0
+  Format:       DWARF32
+  LSDA Address: 00000000004155b4
+  DW_CFA_advance_loc: 1 to 0x401231
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x401234
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 123 to 0x4012af
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x401230: CFA=RSP+8: RIP=[CFA-8]
+  0x401231: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401234: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4012af: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000d50 00000024 000001a4 FDE cie=00000bb0 pc=004012d0...00401493
+  Format:       DWARF32
+  LSDA Address: 00000000004155c8
+  DW_CFA_advance_loc: 1 to 0x4012d1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4012d4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc2: 429 to 0x401481
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x401482
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+
+  0x4012d0: CFA=RSP+8: RIP=[CFA-8]
+  0x4012d1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4012d4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x401481: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x401482: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000d78 00000020 000001cc FDE cie=00000bb0 pc=004014c0...00401540
+  Format:       DWARF32
+  LSDA Address: 0000000000415604
+  DW_CFA_advance_loc: 1 to 0x4014c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4014c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc1: 123 to 0x40153f
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4014c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4014c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4014c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40153f: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+
+00000d9c 00000028 000001f0 FDE cie=00000bb0 pc=00404a60...00404aab
+  Format:       DWARF32
+  LSDA Address: 0000000000415640
+  DW_CFA_advance_loc: 1 to 0x404a61
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404a64
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 3 to 0x404a67
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc: 54 to 0x404a9d
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404a9e
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404a60: CFA=RSP+8: RIP=[CFA-8]
+  0x404a61: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404a64: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404a67: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404a9d: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404a9e: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+00000dc8 00000030 0000021c FDE cie=00000bb0 pc=00404ab0...00404b1d
+  Format:       DWARF32
+  LSDA Address: 0000000000415654
+  DW_CFA_advance_loc: 1 to 0x404ab1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_advance_loc: 2 to 0x404ab3
+  DW_CFA_def_cfa_offset: +24
+  DW_CFA_advance_loc: 1 to 0x404ab4
+  DW_CFA_def_cfa_offset: +32
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc1: 88 to 0x404b0c
+  DW_CFA_def_cfa_offset: +24
+  DW_CFA_advance_loc: 2 to 0x404b0e
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_advance_loc: 1 to 0x404b0f
+  DW_CFA_def_cfa_offset: +8
+  DW_CFA_advance_loc: 1 to 0x404b10
+  DW_CFA_def_cfa_offset: +32
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404ab0: CFA=RSP+8: RIP=[CFA-8]
+  0x404ab1: CFA=RSP+16: RIP=[CFA-8]
+  0x404ab3: CFA=RSP+24: RIP=[CFA-8]
+  0x404ab4: CFA=RSP+32: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404b0c: CFA=RSP+24: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404b0e: CFA=RSP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404b0f: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404b10: CFA=RSP+32: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+00000dfc 00000024 00000250 FDE cie=00000bb0 pc=00404b20...00404b37
+  Format:       DWARF32
+  LSDA Address: 0000000000415668
+  DW_CFA_advance_loc: 1 to 0x404b21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404b24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 10 to 0x404b2e
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404b2f
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404b20: CFA=RSP+8: RIP=[CFA-8]
+  0x404b21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404b24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404b2e: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x404b2f: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000e24 0000002c 00000278 FDE cie=00000bb0 pc=00404b40...00404bb7
+  Format:       DWARF32
+  LSDA Address: 0000000000415678
+  DW_CFA_advance_loc: 1 to 0x404b41
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404b44
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x404b4a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 100 to 0x404bae
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404baf
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404b40: CFA=RSP+8: RIP=[CFA-8]
+  0x404b41: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404b44: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404b4a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x404bae: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x404baf: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000e54 00000024 000002a8 FDE cie=00000bb0 pc=00404bc0...00404c13
+  Format:       DWARF32
+  LSDA Address: 0000000000415688
+  DW_CFA_advance_loc: 1 to 0x404bc1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404bc4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x404bc6
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc: 51 to 0x404bf9
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404bfa
+  DW_CFA_def_cfa: RBP +16
+
+  0x404bc0: CFA=RSP+8: RIP=[CFA-8]
+  0x404bc1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404bc4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404bc6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404bf9: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404bfa: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+00000e7c 0000002c 000002d0 FDE cie=00000bb0 pc=00404d00...00404de5
+  Format:       DWARF32
+  LSDA Address: 000000000041569c
+  DW_CFA_advance_loc: 1 to 0x404d01
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404d04
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x404d0a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 189 to 0x404dc7
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404dc8
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x404d00: CFA=RSP+8: RIP=[CFA-8]
+  0x404d01: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404d04: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404d0a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x404dc7: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x404dc8: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000eac 00000024 00000300 FDE cie=00000bb0 pc=00404df0...00404e33
+  Format:       DWARF32
+  LSDA Address: 00000000004156c0
+  DW_CFA_advance_loc: 1 to 0x404df1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404df4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 2 to 0x404df6
+  DW_CFA_offset: RBX -24
+  DW_CFA_advance_loc: 44 to 0x404e22
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404e23
+  DW_CFA_def_cfa: RBP +16
+
+  0x404df0: CFA=RSP+8: RIP=[CFA-8]
+  0x404df1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404df4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404df6: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404e22: CFA=RSP+8: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+  0x404e23: CFA=RBP+16: RBX=[CFA-24], RBP=[CFA-16], RIP=[CFA-8]
+
+00000ed4 00000028 00000328 FDE cie=00000bb0 pc=00404f30...00404fbe
+  Format:       DWARF32
+  LSDA Address: 00000000004156d4
+  DW_CFA_advance_loc: 1 to 0x404f31
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x404f34
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 7 to 0x404f3b
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc1: 108 to 0x404fa7
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x404fa8
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+
+  0x404f30: CFA=RSP+8: RIP=[CFA-8]
+  0x404f31: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404f34: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x404f3b: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404fa7: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x404fa8: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+00000f00 00000028 00000354 FDE cie=00000bb0 pc=00405080...004050e2
+  Format:       DWARF32
+  LSDA Address: 00000000004156e4
+  DW_CFA_advance_loc: 1 to 0x405081
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405084
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 3 to 0x405087
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc: 61 to 0x4050c4
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 5 to 0x4050c9
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405080: CFA=RSP+8: RIP=[CFA-8]
+  0x405081: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405084: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405087: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x4050c4: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x4050c9: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+00000f2c 0000002c 00000380 FDE cie=00000bb0 pc=004050f0...00405113
+  Format:       DWARF32
+  LSDA Address: 00000000004156fc
+  DW_CFA_advance_loc: 1 to 0x4050f1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4050f4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 18 to 0x405106
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405107
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_advance_loc: 3 to 0x40510a
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x40510b
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4050f0: CFA=RSP+8: RIP=[CFA-8]
+  0x4050f1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4050f4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405106: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x405107: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40510a: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x40510b: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000f5c 00000030 000003b0 FDE cie=00000bb0 pc=00405120...0040513f
+  Format:       DWARF32
+  LSDA Address: 000000000041570c
+  DW_CFA_advance_loc: 1 to 0x405121
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405124
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 14 to 0x405132
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405133
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_advance_loc: 3 to 0x405136
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405137
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405120: CFA=RSP+8: RIP=[CFA-8]
+  0x405121: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405124: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405132: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x405133: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405136: CFA=RSP+8: RBP=[CFA-16], RIP=[CFA-8]
+  0x405137: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000f90 00000028 000003e4 FDE cie=00000bb0 pc=004058b0...00405acd
+  Format:       DWARF32
+  LSDA Address: 000000000041571c
+  DW_CFA_advance_loc: 1 to 0x4058b1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4058b4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 13 to 0x4058c1
+  DW_CFA_offset: RBX -56
+  DW_CFA_offset: R12 -48
+  DW_CFA_offset: R13 -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x4058b0: CFA=RSP+8: RIP=[CFA-8]
+  0x4058b1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4058b4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4058c1: CFA=RBP+16: RBX=[CFA-56], RBP=[CFA-16], R12=[CFA-48], R13=[CFA-40], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00000fbc 00000020 00000410 FDE cie=00000bb0 pc=00405e20...00405e38
+  Format:       DWARF32
+  LSDA Address: 0000000000415774
+  DW_CFA_advance_loc: 1 to 0x405e21
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405e24
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405e20: CFA=RSP+8: RIP=[CFA-8]
+  0x405e21: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405e24: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+
+00000fe0 0000002c 00000434 FDE cie=00000bb0 pc=00405ec0...00405f2e
+  Format:       DWARF32
+  LSDA Address: 0000000000415788
+  DW_CFA_advance_loc: 1 to 0x405ec1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405ec4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x405eca
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 84 to 0x405f1e
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x405f1f
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405ec0: CFA=RSP+8: RIP=[CFA-8]
+  0x405ec1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405ec4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405eca: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405f1e: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x405f1f: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00001010 0000002c 00000464 FDE cie=00000bb0 pc=00405ff0...0040605e
+  Format:       DWARF32
+  LSDA Address: 00000000004157a0
+  DW_CFA_advance_loc: 1 to 0x405ff1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x405ff4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x405ffa
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 86 to 0x406050
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x406051
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x405ff0: CFA=RSP+8: RIP=[CFA-8]
+  0x405ff1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405ff4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x405ffa: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406050: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x406051: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+00001040 00000028 00000494 FDE cie=00000bb0 pc=004060c0...0040611f
+  Format:       DWARF32
+  LSDA Address: 00000000004157b4
+  DW_CFA_advance_loc: 1 to 0x4060c1
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x4060c4
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 3 to 0x4060c7
+  DW_CFA_offset: RBX -32
+  DW_CFA_offset: R14 -24
+  DW_CFA_advance_loc1: 74 to 0x406111
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x406112
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+
+  0x4060c0: CFA=RSP+8: RIP=[CFA-8]
+  0x4060c1: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4060c4: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x4060c7: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x406111: CFA=RSP+8: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+  0x406112: CFA=RBP+16: RBX=[CFA-32], RBP=[CFA-16], R14=[CFA-24], RIP=[CFA-8]
+
+0000106c 00000030 000004c0 FDE cie=00000bb0 pc=00406120...004061e4
+  Format:       DWARF32
+  LSDA Address: 00000000004157c8
+  DW_CFA_advance_loc: 1 to 0x406121
+  DW_CFA_def_cfa_offset: +16
+  DW_CFA_offset: RBP -16
+  DW_CFA_advance_loc: 3 to 0x406124
+  DW_CFA_def_cfa_register: RBP
+  DW_CFA_advance_loc: 6 to 0x40612a
+  DW_CFA_offset: RBX -40
+  DW_CFA_offset: R14 -32
+  DW_CFA_offset: R15 -24
+  DW_CFA_advance_loc1: 157 to 0x4061c7
+  DW_CFA_def_cfa: RSP +8
+  DW_CFA_advance_loc: 1 to 0x4061c8
+  DW_CFA_def_cfa: RBP +16
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+  DW_CFA_nop:
+
+  0x406120: CFA=RSP+8: RIP=[CFA-8]
+  0x406121: CFA=RSP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x406124: CFA=RBP+16: RBP=[CFA-16], RIP=[CFA-8]
+  0x40612a: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4061c7: CFA=RSP+8: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+  0x4061c8: CFA=RBP+16: RBX=[CFA-40], RBP=[CFA-16], R14=[CFA-32], R15=[CFA-24], RIP=[CFA-8]
+
+000010a0 ZERO terminator
+
+exit=0

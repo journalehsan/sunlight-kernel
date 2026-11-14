@@ -1,0 +1,43 @@
+{
+  "status": "FAIL",
+  "scope": "New resolver/chdir/metadata/generation delta reviewed; inherited FAT correctness violations remain open",
+  "new_paths": {
+    "lock_order": "Capture caller authority/cwd before KERNEL_VFS. No scheduler lock or service IPC under resolver VFS borrow",
+    "traversal": "Existing Execute uid/gid/root policy for each traversed directory; kernel callback before component stat; final-search flag for navigation; chdir search denial fixed",
+    "bounds": "Input/output max256 with NUL, path payload255, iterative components, fallible bounded path allocation; no recursive symlink traversal introduced",
+    "generation": "Local generations no longer wrap; exhausted Tmpfs/FAT slots retire",
+    "metadata": "No invented timestamps/inodes/devices; FAT values marked policy/unavailable",
+    "capabilities": "No grant minted. Existing protected mutation/open policies retained. Canonical strings not authorization tokens",
+    "user_copy": "Input copied before lookup; output copied after VFS release; short buffers untouched"
+  },
+  "unresolved": [
+    {
+      "status": "FAIL",
+      "issue": "FAT second fd cached metadata stale",
+      "evidence": "fat-size-negative.log"
+    },
+    {
+      "status": "FAIL",
+      "issue": "FAT unlinked fd writes replacement pathname",
+      "evidence": "fat-unlink-negative.log"
+    },
+    {
+      "status": "UNQUALIFIED",
+      "issue": "Forced rename/unlink/close/mount/permission-change interleavings not exercised"
+    },
+    {
+      "status": "PARTIAL",
+      "issue": "Resolver/chdir/query migrated; existing open/stat/readdir/exec paths still have separate authorization/normalization contracts"
+    },
+    {
+      "status": "UNQUALIFIED",
+      "issue": "Global VFS lock dwell and scheduler latency under adversarial FAT paths not measured"
+    },
+    {
+      "status": "NOT_RUN",
+      "issue": "Symlink concurrency, loops, namespace-specific root restrictions and UI interaction"
+    }
+  ],
+  "affected_portion": "Full all-backend pinned metadata and POSIX stat remain blocked pending shared FAT inode/open-object lifetime model; no scheduler/service redesign attempted",
+  "integrity": "PASS"
+}

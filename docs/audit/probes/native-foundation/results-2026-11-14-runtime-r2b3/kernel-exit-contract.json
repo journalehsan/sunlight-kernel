@@ -1,0 +1,55 @@
+{
+  "status": "BLOCKED",
+  "kernel_modified": false,
+  "native_syscalls": {
+    "20": "Current per-borrower exit / owner-wide termination; required thread-only owner behavior not repaired",
+    "157": "Explicit native VM-group exit; retained",
+    "156": "Reaped acknowledgment qualified by current VM identity for retained task records",
+    "22": "Native borrower spawn",
+    "158": "Opt-in shared descriptor native std borrower spawn"
+  },
+  "stable_identity": "AddressSpaceIdentity { pml4_phys, generation }; names do not retain lifetime",
+  "independent_native_group_object": false,
+  "retirement_authority": "original Process record; no arbitrary transfer implemented",
+  "stop_policy": "Larger scheduler/IPC/session authority separation requires migration; see ownership-model.md",
+  "initial_thread": {
+    "1": {
+      "status": "BLOCKED",
+      "required_contract": "FAIL",
+      "runner_status": "PASS",
+      "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+      "borrower_kill_trace": [
+        "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+      ],
+      "evidence": "initial-exit-cpu-1/serial.log"
+    },
+    "2": {
+      "status": "BLOCKED",
+      "required_contract": "FAIL",
+      "runner_status": "PASS",
+      "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+      "borrower_kill_trace": [
+        "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+      ],
+      "evidence": "initial-exit-cpu-2/serial.log"
+    },
+    "4": {
+      "status": "BLOCKED",
+      "required_contract": "FAIL",
+      "runner_status": "PASS",
+      "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+      "borrower_kill_trace": [
+        "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+      ],
+      "evidence": "initial-exit-cpu-4/serial.log"
+    }
+  },
+  "related_exit_sources": [
+    "kernel/src/sched/mod.rs:2781-3168",
+    "kernel/src/sched/mod.rs:3300-3430",
+    "kernel/src/sched/mod.rs:4435-4620",
+    "kernel/src/arch/x86_64/syscall.rs:2627-2655",
+    "kernel/src/arch/x86_64/interrupts.rs:265-295",
+    "kernel/src/process/foreground.rs:142-207"
+  ]
+}

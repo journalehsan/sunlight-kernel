@@ -1,0 +1,32 @@
+{
+  "clang --version": {
+    "exit": 0,
+    "output": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n"
+  },
+  "llvm-ar --version": {
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n"
+  },
+  "llvm-ranlib --version": {
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n"
+  },
+  "rustc --version": {
+    "exit": 0,
+    "output": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\n"
+  },
+  "cargo --version": {
+    "exit": 0,
+    "output": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\n"
+  },
+  "qemu-system-x86_64 --version": {
+    "exit": 0,
+    "output": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n"
+  },
+  "/tmp/sunlight-r1-cpython/build-host/python --version": {
+    "exit": 0,
+    "output": "Python 3.13.0\n"
+  },
+  "build_python_sha256": "7c7b34dadd57381bb58fe5a3abaf9001e11d9458951f712cb47fbbcc03ff1130",
+  "CPython_source_identity_evidence": "source-identity.json"
+}

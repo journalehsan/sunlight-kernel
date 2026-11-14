@@ -1,0 +1,38 @@
+[
+  {
+    "target": "Programs/python.o",
+    "exit": 2,
+    "evidence": "acceptance-compile-Programs-python-o.log",
+    "classification": "POSIX threading gap"
+  },
+  {
+    "target": "Python/pyctype.o",
+    "exit": 2,
+    "evidence": "acceptance-compile-Python-pyctype-o.log",
+    "classification": "POSIX threading gap"
+  },
+  {
+    "target": "Python/pymath.o",
+    "exit": 2,
+    "evidence": "acceptance-compile-Python-pymath-o.log",
+    "classification": "POSIX threading gap"
+  },
+  {
+    "target": "Python/thread.o",
+    "exit": 2,
+    "evidence": "acceptance-compile-Python-thread-o.log",
+    "classification": "POSIX threading gap"
+  },
+  {
+    "target": "Objects/longobject.o",
+    "exit": 2,
+    "evidence": "acceptance-compile-Objects-longobject-o.log",
+    "classification": "POSIX threading gap"
+  },
+  {
+    "target": "python",
+    "exit": 2,
+    "evidence": "acceptance-compile-python.log",
+    "classification": "POSIX threading gap"
+  }
+]

@@ -1,0 +1,47 @@
+{
+  "sunlight-libc/src/string.rs": {
+    "baseline_sha256": "2a02ec52e503365344dbe7b48f73bec869105185105c721519a0470882c304a8",
+    "reconstructed_sha256": "2a02ec52e503365344dbe7b48f73bec869105185105c721519a0470882c304a8",
+    "matches": true
+  },
+  "sunlight-libc/src/inttypes.rs": {
+    "baseline_sha256": "10c5eb2a78b663acf94fdb874ff6f9038ddcf86cd9f3c626c2d6a5accb8c3086",
+    "reconstructed_sha256": "10c5eb2a78b663acf94fdb874ff6f9038ddcf86cd9f3c626c2d6a5accb8c3086",
+    "matches": true
+  },
+  "sunlight-libc/src/termination.rs": {
+    "baseline_sha256": "9a7ddb0b9b3b0be1e625f6181d5165437af84d4aac6298e03200313f5111d553",
+    "reconstructed_sha256": "9a7ddb0b9b3b0be1e625f6181d5165437af84d4aac6298e03200313f5111d553",
+    "matches": true
+  },
+  "sunlight-libc/src/lib.rs": {
+    "baseline_sha256": "952cfeff682d63650d9acfddaf4917239caf0824a1e8d34438b7aed0d2a2a5a1",
+    "reconstructed_sha256": "952cfeff682d63650d9acfddaf4917239caf0824a1e8d34438b7aed0d2a2a5a1",
+    "matches": true
+  },
+  "sunlight-libc/include/stdlib.h": {
+    "baseline_sha256": "4cc3b2b8349caa1e306c6091d06cdef7db6cc15118d9175fe78ec1eb448091f0",
+    "reconstructed_sha256": "4cc3b2b8349caa1e306c6091d06cdef7db6cc15118d9175fe78ec1eb448091f0",
+    "matches": true
+  },
+  "sunlight-libc/include/unistd.h": {
+    "baseline_sha256": "239f355efe484447b4b52950a1c49e69df9895ffc7a82d748a9f203fa1bcd7b0",
+    "reconstructed_sha256": "239f355efe484447b4b52950a1c49e69df9895ffc7a82d748a9f203fa1bcd7b0",
+    "matches": true
+  },
+  "sunlight-libc/include/string.h": {
+    "baseline_sha256": "5ce55fcce9b116e7c575531dd67814595fddadb1ec07d7474cabb607a3928e92",
+    "reconstructed_sha256": "5ce55fcce9b116e7c575531dd67814595fddadb1ec07d7474cabb607a3928e92",
+    "matches": true
+  },
+  "sunlight-libc/include/pthread.h": {
+    "baseline_sha256": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d",
+    "reconstructed_sha256": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d",
+    "matches": true
+  },
+  "sunlight-libc/include/time.h": {
+    "baseline_sha256": "9311b14dbde3d58b7da4f25b0601e6168ee11a64feeac970c422029bc925eed0",
+    "reconstructed_sha256": "9311b14dbde3d58b7da4f25b0601e6168ee11a64feeac970c422029bc925eed0",
+    "matches": true
+  }
+}

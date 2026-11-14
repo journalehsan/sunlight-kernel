@@ -1,0 +1,143 @@
+["cargo", "test", "--locked", "--offline", "--target", "x86_64-unknown-linux-gnu", "-p", "sunlight-ipc", "--lib"]
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib test) generated 5 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/x86_64-unknown-linux-gnu/debug/deps/sunlight_ipc-39675316b9879847)
+
+running 97 tests
+test account_broker_role_tests::broker_identity_key_matches_the_kv_acl_string ... ok
+test account_broker_role_tests::caller_role_lookup_has_its_own_syscall_number ... ok
+test accounts::tests::account_service_session_lookup_is_explicit_and_narrow ... ok
+test accounts::grant_tests::capability_is_one_use_expiring_and_exactly_bound ... ok
+test account_broker_role_tests::only_the_control_panel_role_is_recognised ... ok
+test accounts::tests::deterministic_avatar_and_secret_clear ... ok
+test accounts::tests::password_confirmation_rejects_empty_and_mismatch ... ok
+test accounts::tests::identity_is_resolved_by_session_uid_and_refresh ... ok
+test accounts::tests::unavailable_account_transport_fails_closed ... ok
+test audio_protocol_tests::status_rejects_short_and_noncanonical_replies ... ok
+test audio_protocol_tests::status_round_trip_and_error_codes ... ok
+test audio_protocol_tests::stream_status_round_trip_fits_register_ipc ... ok
+test cpu_accounting::tests::actor_time_charges_migration_exactly_once ... ok
+test cpu_accounting::tests::backward_clock_is_a_discontinuity_not_a_negative_charge ... ok
+test cpu_accounting::tests::blocked_syscall_tail_and_running_snapshot_are_counted ... ok
+test cpu_accounting::tests::duplicate_open_does_not_double_charge ... ok
+test cpu_accounting::tests::exhausted_accumulator_is_reported_and_leaves_state_stable ... ok
+test cpu_accounting::tests::long_uptime_saturates_without_wrapping ... ok
+test cpu_accounting::tests::migrating_task_commits_once_per_cpu ... ok
+test cpu_accounting::tests::reconciliation_accepts_slack_and_rejects_double_charging ... ok
+test cpu_accounting::tests::scheduling_gap_refuses_inverted_wall_and_runtime ... ok
+test cpu_accounting::tests::tiny_real_work_is_not_rounded_to_zero ... ok
+test demand::scoped_tests::scoped_activation_cannot_manage_invoke_or_resolve ... ok
+test display_modes::tests::display_mode_round_trips_wire_words ... ok
+test display_modes::tests::metrics_convert_to_current_mode ... ok
+test fastlane_operation::tests::failure_is_terminal_and_responses_cannot_be_requests ... ok
+test fastlane_operation::tests::independent_wire_encodings_have_fixed_golden_layout ... ok
+test fastlane_operation::tests::operation_equivalence_includes_outcomes_and_frozen_transport ... ok
+test fastlane_operation::tests::parser_negative_controls ... ok
+test fastlane_operation_ipc::tests::exact_ipc_envelope_and_response ... ok
+test fastlane_operation_ipc::tests::malformed_envelope_never_decodes ... ok
+test framebuffer_info_tests::framebuffer_reply_requires_representable_complete_geometry ... ok
+test launch_trace::tests::phase_log_is_one_complete_bounded_record ... ok
+test measurement_clock::tests::backward_counter_is_rejected_not_saturated ... ok
+test measurement_clock::tests::calibration_ppm_is_bounded_by_measurement_quantization ... ok
+test measurement_clock::tests::conversion_is_linear_and_monotonic ... ok
+test measurement_clock::tests::elapsed_rejects_cross_cpu_and_backward ... ok
+test measurement_clock::tests::elapsed_rejects_epoch_change_and_uncalibrated ... ok
+test measurement_clock::tests::fixed_point_mul_rejects_absurd_frequencies ... ok
+test measurement_clock::tests::invalid_calibration_is_rejected ... ok
+test measurement_clock::tests::overflow_beyond_the_horizon_is_rejected ... ok
+test measurement_clock::tests::uncertainty_rounds_up_and_covers_sub_ppm_intervals ... ok
+test network_backend_tests::admin_and_carrier_states_are_independent ... ok
+test network_backend_tests::backend_metadata_produces_hardware_kind_labels ... ok
+test network_backend_tests::failed_or_incomplete_hardware_is_not_publishable ... ok
+test network_backend_tests::hardware_inventory_record_has_fixed_bounded_layout ... ok
+test network_backend_tests::semantic_network_errors_have_stable_codes ... ok
+test network_backend_tests::successful_backends_are_publishable_before_carrier_or_dhcp ... ok
+test online_accounts::tests::only_panel_metadata_and_flow_management_operations_are_granted ... ok
+test pointer_report_tests::normalized_pointer_report_round_trips_signed_axes_and_buttons ... ok
+test receive_result_tests::failed_receive_cannot_become_a_successful_empty_message ... ok
+test resource_ledger::tests::balanced_lifecycle_reports_balanced ... ok
+test resource_ledger::tests::heap_reclaimed_is_not_a_physical_claim ... ok
+test resource_ledger::tests::outstanding_resources_are_detected ... ok
+test resource_ledger::tests::over_retirement_latches_overflow_instead_of_wrapping ... ok
+test service_capability_tests::account_broker_lookup_is_a_user_session_operation ... ok
+test service_capability_tests::control_plane_capabilities_are_service_specific ... ok
+test service_capability_tests::microphone_requires_its_own_service_capability ... ok
+test service_capability_tests::ordinary_user_session_still_cannot_resolve_control_plane_services ... ok
+test service_capability_tests::thermal_control_resolves_only_thermald ... ok
+test session_completion::tests::completion_survives_register_transport_without_truncation ... ok
+test spawn_env::tests::accepts_empty_values_equals_newlines_and_unicode_values ... ok
+test session_completion::tests::invalid_or_incomplete_ids_are_rejected ... ok
+test spawn_env::tests::rejects_malformed_and_duplicate_entries ... ok
+test storage::tests::only_explicit_inventory_operations_are_public ... ok
+test storage::tests::requires_real_root_and_explicit_capability ... ok
+test supervision::tests::bootstrap_backoff_does_not_reset_or_restart_an_unreaped_manager ... ok
+test supervision::tests::bootstrap_budget_exhaustion_is_terminal ... ok
+test spawn_env::tests::enforces_entry_count_and_byte_boundaries ... ok
+test supervision::tests::bootstrap_is_generation_qualified_and_immutable ... ok
+test supervision::tests::bounded_capacity_rejects_before_spawn ... ok
+test supervision::tests::exact_reaping_survives_manager_and_process_slot_reuse ... ok
+test supervision::tests::diagnostic_successor_has_no_alternate_mutating_syscall_path ... ok
+test supervision::tests::failed_launches_consume_budget_and_never_reset ... ok
+test supervision::tests::live_or_unreaped_manager_excludes_startup ... ok
+test supervision::tests::concurrent_bootstrap_attempts_have_one_winner ... ok
+test supervision::tests::manager_death_before_service_reap_retains_untracked_record ... ok
+test supervision::tests::registration_timeout_is_terminal_and_never_kills_or_retries_live_owner ... ok
+test supervision::tests::tracked_release_requires_reap_and_original_authority ... ok
+test supervision::tests::live_original_manager_releases_untracked_reap ... ok
+test swap_policy::tests::cpu_counts_and_minimum_pool_size_are_bounded ... ok
+test swap_policy::tests::examples_have_two_equal_pools_on_four_cores ... ok
+test swap_policy::tests::fill_error_decoding_rejects_unknown_values ... ok
+test supervision::tests::same_pid_different_manager_generation_never_inherits_authority ... ok
+test swap_policy::tests::physical_budget_matches_non_eager_policy_examples ... ok
+test swap_policy::tests::pool_sums_are_exact_nonzero_and_remainder_is_first ... ok
+test supervision::tests::successor_has_metadata_but_no_lifecycle_authority ... ok
+test swap_policy::tests::ram_boundaries_follow_fixed_policy ... ok
+test swap_policy::tests::checked_error_paths_are_deterministic ... ok
+test supervision::tests::unreaped_manager_timeout_is_terminal_without_replacement ... ok
+test telemetry::memory_tests::aliases_shared_backing_and_unique_frames ... ok
+test telemetry::tests::names_use_own_command ... ok
+test telemetry::tests::physical_frames_are_not_proportionally_charged ... ok
+test terminal_winsize_tests::invalid_and_truncating_geometry_is_rejected ... ok
+test terminal_winsize_tests::native_geometry_probe_round_trips_exact_values ... ok
+test vfs_grants::tests::executable_scope_rejects_aliases_and_sibling_prefixes ... ok
+test supervision::tests::release_racing_manager_reap_is_atomic_and_successor_stays_blocked ... ok
+
+test result: ok. 97 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

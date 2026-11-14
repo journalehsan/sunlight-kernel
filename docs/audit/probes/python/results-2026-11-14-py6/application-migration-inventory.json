@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "basis": "Source audit and scoped migration inventory, not application runtime qualification",
+  "applications": [
+    {
+      "application": "SunShell",
+      "status": "Migrated",
+      "scope": "cd/native script directory navigation only",
+      "source": "sunshell/src/main.rs, sunshell/src/native_script.rs"
+    },
+    {
+      "application": "Sunlight Files",
+      "status": "Migrated",
+      "scope": "Path storage/navigation only; UI NOT_RUN",
+      "source": "sunlight-files/src/main.rs"
+    },
+    {
+      "application": "Sunlight Edit",
+      "status": "Requires later work",
+      "scope": "Already uses native libc I/O; canonical navigation not migrated; argument filtering retained",
+      "source": "sunlight-edit/src/main.rs:2407, sunlight-edit/src/args.rs"
+    },
+    {
+      "application": "Light Lens image editor",
+      "status": "Requires later work",
+      "scope": "Native libc metadata/read/write and export adapter already shared; picker/canonical semantics not migrated",
+      "source": "sunlight-light-lens/src/main.rs:664, sunlight-light-lens/src/export_io.rs"
+    },
+    {
+      "application": "Document/PDF viewer",
+      "status": "Requires later work",
+      "scope": "sunlight-docserv and native std boundary; std canonicalize/lstat/readlink still unsupported",
+      "source": "sunlight-docserv/src/ipc.rs, tools/native-std/overlay/fs/sunlightos.rs"
+    },
+    {
+      "application": "Melody Mina media",
+      "status": "Requires later work",
+      "scope": "Already native libc stat/open/read_dir; library paths unchanged",
+      "source": "melody-mina/src/library.rs:90"
+    },
+    {
+      "application": "Browser/download",
+      "status": "Requires later work",
+      "scope": "sunlight-fetch resolve_out_path is private lexical anchoring; native rename helper still copy-based; no broad workflow change",
+      "source": "sunlight-fetch/src/downloader.rs:293, rappid-rabbit/src/browser_ui.rs"
+    },
+    {
+      "application": "Common file picker/dialogd",
+      "status": "Requires later work",
+      "scope": "Private PathBuf and accept_save trim remain; file semantics demonstrably not fully unified",
+      "source": "services/sunlight-dialogd/src/main.rs:158, services/sunlight-dialogd/src/main.rs:547"
+    },
+    {
+      "application": "Terminal integration",
+      "status": "Not applicable",
+      "scope": "PTY/launch protocol not changed; shell is the relevant filesystem consumer",
+      "source": "services/sunlight-terminal/src/main.rs"
+    }
+  ]
+}

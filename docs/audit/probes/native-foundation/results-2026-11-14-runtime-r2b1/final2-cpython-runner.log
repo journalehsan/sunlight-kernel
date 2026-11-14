@@ -1,0 +1,7 @@
+configure exit 0
+Programs/python.o 0
+Python/pyctype.o 0
+Python/pymath.o 0
+Python/thread.o 2
+Objects/longobject.o 2
+python 2

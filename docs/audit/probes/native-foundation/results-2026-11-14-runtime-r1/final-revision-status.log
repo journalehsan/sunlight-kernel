@@ -1,0 +1,5 @@
+f6b5ccb24d3ef2d2077eaada148a9208e3e2c738
+branch=main
+ M tools/native-c/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/
+?? docs/runtime/

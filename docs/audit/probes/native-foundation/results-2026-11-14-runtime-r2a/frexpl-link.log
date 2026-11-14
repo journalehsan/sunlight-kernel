@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -O0 -fno-builtin /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/frexpl-link.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/frexpl-link.elf
+ld.lld: error: undefined symbol: frexpl
+>>> referenced by frexpl-link.c
+>>>               /tmp/frexpl-link-e96016.o:(main)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

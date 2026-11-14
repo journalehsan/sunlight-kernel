@@ -1,0 +1,32 @@
+{
+  "condvar-timeout": {
+    "exit": 0,
+    "stdout": "PY1 signal/timeout stress PASS wakes=36 timeouts=24; exact race UNQUALIFIED\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "string-guard": {
+    "exit": 0,
+    "stdout": "PY1 strncpy guard-page PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-0": {
+    "exit": 0,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-37": {
+    "exit": 37,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-255": {
+    "exit": 255,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

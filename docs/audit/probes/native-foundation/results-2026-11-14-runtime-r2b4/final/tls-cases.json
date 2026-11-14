@@ -1,0 +1,22 @@
+[
+  {
+    "name": "pthread-tsd-once",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-tsd-once.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "pthread-tsd-exit-race",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-tsd-exit-race.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "pthread-once-recursive",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-once-recursive.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "strerror-threads",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-strerror-threads.elf",
+    "expected_exit": 0
+  }
+]

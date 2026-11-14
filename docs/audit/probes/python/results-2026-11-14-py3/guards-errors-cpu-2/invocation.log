@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/py3-guards-errors.elf --expect-exit 0 --cpus 2 --timeout 90 --out docs/audit/probes/python/results-2026-11-14-py3/guards-errors-cpu-2

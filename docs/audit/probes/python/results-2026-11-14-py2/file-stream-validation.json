@@ -1,0 +1,53 @@
+{
+  "status": "PASS",
+  "cpu_results": {
+    "1": {
+      "exit": 0,
+      "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+      "stderr": "",
+      "pass_": true
+    },
+    "2": {
+      "exit": 0,
+      "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+      "stderr": "",
+      "pass_": true
+    },
+    "4": {
+      "exit": 0,
+      "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+      "stderr": "",
+      "pass_": true
+    }
+  },
+  "coverage": [
+    "tmpfile open-unlink lifetime",
+    "named regular file fopen/open",
+    "empty file EOF vs error",
+    "zero-sized transfer",
+    "2048-byte I/O",
+    "mixed read/write",
+    "partial element fread at EOF",
+    "seek/tell with one byte pushback",
+    "EOF clearing on ungetc/seek",
+    "ferror and clearerr",
+    "fdopen failure retains descriptor",
+    "fdopen w does not truncate",
+    "fdopen a uses native append",
+    "successful adoption close consumes descriptor",
+    "invalid descriptors",
+    "four writers, 200 complete stream-locked records",
+    "runner file/page/handle/name cleanup gates"
+  ],
+  "buffering": "All streams remain unbuffered; no pending userspace buffer to flush. fflush does not promise fsync. Buffered modes/setbuf/setvbuf are not implemented.",
+  "not_run": [
+    "injected native short I/O with mid-transfer failure",
+    "concurrent fclose against stream use (invalid caller lifetime)",
+    "buffered seek/flush interactions (no buffered mode)"
+  ],
+  "failed_attempt": {
+    "evidence": "focused-initial-cpu-1/",
+    "observation": "fixture left /tmp/py2-stream named; resource gate panicked despite API checks passing",
+    "repair": "real native unlink adapter and explicit fixture cleanup; final guest gate passes"
+  }
+}

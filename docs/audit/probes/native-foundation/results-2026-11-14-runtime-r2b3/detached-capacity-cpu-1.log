@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf --cpus 1 --timeout 120 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-1
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-1
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'ADMISSION 64 retained joinable controls; kernel reaped=64; 65th create=EAGAIN\nCAPACITY phase=after-64-detaches queued=64 control_bytes=6144 stack_bytes=134217728 tls_bytes=524288\nCAPACITY phase=quiescent-without-create queued=64 control_bytes=6144 stack_bytes=134217728 tls_bytes=524288\nCAPACITY phase=explicit-create-sweep queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nCAPACITY explicit-sweep released=64; subsequent create/join=PASS; 64 stale identities rejected\n'
+
+exit=0

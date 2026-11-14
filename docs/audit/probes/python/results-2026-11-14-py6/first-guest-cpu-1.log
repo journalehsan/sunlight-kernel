@@ -1,0 +1,7 @@
+usage: guest.py [-h] [--linux-actor] [--out OUT] [--cpus {1,2,4}]
+                [--timeout TIMEOUT] [--expect-exit EXPECT_EXIT] [--arg ARG]
+                [--stdin-file STDIN_FILE] [--locale-conf LOCALE_CONF]
+                [--env ENV] [--net] [--net-subnet A.B.C.D/PREFIX]
+                [--service SERVICE]
+                (--suite | --cases CASES | elf)
+guest.py: error: unrecognized arguments: --elf

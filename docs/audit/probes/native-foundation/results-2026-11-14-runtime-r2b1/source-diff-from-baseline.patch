@@ -1,0 +1,687 @@
+--- a/sunlight-libc/include/errno.h
++++ b/sunlight-libc/include/errno.h
+@@ -20,6 +20,7 @@
+ #define ENOTDIR 20
+ #define EILSEQ 84
+ #define EINVAL 22
++#define EDEADLK 35
+ #define EDOM 33
+ #define ERANGE 34
+ #define ENOSPC 28
+--- a/sunlight-libc/include/limits.h
++++ b/sunlight-libc/include/limits.h
+@@ -6,4 +6,6 @@
+ #define MB_LEN_MAX 4
+ /* Native ssize_t is signed long in every supported feature profile. */
+ #define SSIZE_MAX LONG_MAX
++#define PTHREAD_KEYS_MAX 128
++#define PTHREAD_DESTRUCTOR_ITERATIONS 4
+ #endif
+--- a/sunlight-libc/include/pthread.h
++++ b/sunlight-libc/include/pthread.h
+@@ -15,6 +15,21 @@
+ #endif
+ 
+ typedef struct __sunlight_pthread *pthread_t;
++/* Native LP64 key: low 7 bits index, remaining bits generation. */
++typedef unsigned long pthread_key_t;
++/* Also available from limits.h; keep pthread.h freestanding/self-contained. */
++#define PTHREAD_KEYS_MAX 128
++#define PTHREAD_DESTRUCTOR_ITERATIONS 4
++typedef struct { unsigned int __state; } pthread_once_t;
++#define PTHREAD_ONCE_INIT { 0 }
++int pthread_key_create(pthread_key_t *key, void (*destructor)(void *));
++int pthread_key_delete(pthread_key_t key);
++void *pthread_getspecific(pthread_key_t key);
++int pthread_setspecific(pthread_key_t key, const void *value);
++/* Recursive use of the same control cannot complete. Explicit pthread_exit
++ * resets active initialization. Cancellation and C++ unwinding are unsupported.
++ * Control objects must remain live and aligned while any caller uses them. */
++int pthread_once(pthread_once_t *control, void (*routine)(void));
+ 
+ typedef struct {
+     int __detachstate;
+--- a/sunlight-libc/include/string.h
++++ b/sunlight-libc/include/string.h
+@@ -13,6 +13,12 @@
+ int memcmp(const void *s1, const void *s2, size_t n);
+ void *memchr(const void *s, int c, size_t n);
+ 
++/* Immutable C-locale strings; unknown numbers return "Unknown error".
++ * strerror_r uses the POSIX int-returning ABI, including under _GNU_SOURCE.
++ * A short buffer is NUL-terminated when its length is nonzero; returns ERANGE. */
++char *strerror(int error);
++int strerror_r(int error, char *buffer, size_t length);
++
+ size_t strlen(const char *s);
+ size_t strnlen(const char *s, size_t max_len);
+ int strcmp(const char *s1, const char *s2);
+--- a/sunlight-libc/src/pthread.rs
++++ b/sunlight-libc/src/pthread.rs
+@@ -14,6 +14,7 @@
+ use core::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicUsize, Ordering};
+ 
+ use crate::sys::{self, Errno};
++use crate::tls::{OnceFrame, Specific};
+ 
+ const EAGAIN: i32 = 11;
+ const ENOMEM: i32 = 12;
+@@ -152,6 +153,7 @@
+ }
+ 
+ unsafe fn finish(control: *mut Control, retval: *mut u8) {
++    cleanup_current();
+     (*control).retval.store(retval, Ordering::Release);
+     (*control).state.store(EXITED, Ordering::Release);
+     sys::native_futex(state_word(control), 1, 1, 0);
+@@ -306,8 +308,10 @@
+         if !control.is_null() {
+             finish(control, retval);
+         }
+-        // The initial thread has no join control block; exit it alone. The
+-        // kernel keeps the process alive while borrower threads remain.
++        cleanup_current();
++        // Architectural limitation: the initial thread owns the address space.
++        // Its native exit also terminates borrowers; thread-only initial-thread
++        // pthread_exit is not supported by the existing kernel lifecycle.
+         sys::syscall1(sys::SYS_PROCESS_EXIT, 0);
+         loop {
+             core::hint::spin_loop();
+@@ -444,3 +448,170 @@
+     sys::native_futex(core::ptr::addr_of!((*mutex).lock) as *const u32, 1, 1, 0);
+     0
+ }
++
++// Registry objects never move or get freed. All registry access is serialized;
++// values belong exclusively to the current TCB. Generations never wrap: slots
++// are retired at exhaustion rather than allowing stale handles to alias.
++type Destructor = unsafe extern "C" fn(*mut u8);
++#[derive(Clone, Copy)]
++struct Key {
++    generation: usize,
++    live: bool,
++    destructor: Option<Destructor>,
++}
++static KEY_LOCK: PthreadMutex = PthreadMutex {
++    lock: AtomicU32::new(0),
++};
++static mut KEYS: [Key; 128] = [Key {
++    generation: 0,
++    live: false,
++    destructor: None,
++}; 128];
++unsafe fn lock_keys() {
++    pthread_mutex_lock(core::ptr::addr_of!(KEY_LOCK) as *mut PthreadMutex);
++}
++unsafe fn unlock_keys() {
++    pthread_mutex_unlock(core::ptr::addr_of!(KEY_LOCK) as *mut PthreadMutex);
++}
++unsafe fn key_slot(key: usize) -> *mut Key {
++    (core::ptr::addr_of_mut!(KEYS) as *mut Key).add(key & 127)
++}
++unsafe fn valid_key(key: usize) -> bool {
++    let slot = key_slot(key);
++    (*slot).live && (*slot).generation == key >> 7
++}
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn pthread_key_create(
++    out: *mut usize,
++    destructor: Option<Destructor>,
++) -> i32 {
++    if out.is_null() {
++        return EINVAL;
++    }
++    lock_keys();
++    for index in 0..128 {
++        let slot = key_slot(index);
++        if !(*slot).live && (*slot).generation < usize::MAX >> 7 {
++            (*slot).generation += 1;
++            (*slot).live = true;
++            (*slot).destructor = destructor;
++            out.write(((*slot).generation << 7) | index);
++            unlock_keys();
++            return 0;
++        }
++    }
++    unlock_keys();
++    EAGAIN
++}
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn pthread_key_delete(key: usize) -> i32 {
++    lock_keys();
++    let result = if valid_key(key) {
++        (*key_slot(key)).live = false;
++        (*key_slot(key)).destructor = None;
++        0
++    } else {
++        EINVAL
++    };
++    unlock_keys();
++    result
++}
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn pthread_getspecific(key: usize) -> *mut u8 {
++    lock_keys();
++    let value = &(*crate::tls::current_tcb()).pthread_values[key & 127];
++    let result = if valid_key(key) && value.key == key {
++        value.value
++    } else {
++        core::ptr::null_mut()
++    };
++    unlock_keys();
++    result
++}
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn pthread_setspecific(key: usize, value: *const u8) -> i32 {
++    lock_keys();
++    let result = if valid_key(key) {
++        (*crate::tls::current_tcb()).pthread_values[key & 127] = Specific {
++            key,
++            value: value as *mut u8,
++        };
++        0
++    } else {
++        EINVAL
++    };
++    unlock_keys();
++    result
++}
++
++/// Stack-linked initialization frames live until normal return or thread exit.
++/// No other thread accesses these frames. Control storage must outlive callers.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn pthread_once(
++    control: *const AtomicU32,
++    routine: Option<extern "C" fn()>,
++) -> i32 {
++    if control.is_null() || routine.is_none() {
++        return EINVAL;
++    }
++    let state = &*control;
++    if state.load(Ordering::Acquire) == 2 {
++        return 0;
++    }
++    let tcb = crate::tls::current_tcb();
++    loop {
++        match state.compare_exchange(0, 1, Ordering::Acquire, Ordering::Acquire) {
++            Ok(_) => {
++                let mut frame = OnceFrame {
++                    control,
++                    previous: (*tcb).once_active,
++                };
++                (*tcb).once_active = &mut frame;
++                routine.unwrap()();
++                (*tcb).once_active = frame.previous;
++                state.store(2, Ordering::Release);
++                sys::native_futex(control as *const u32, 1, u32::MAX, 0);
++                return 0;
++            }
++            Err(2) => return 0,
++            Err(_) => {
++                sys::native_futex(control as *const u32, 0, 1, u64::MAX);
++            }
++        }
++    }
++}
++
++unsafe fn cleanup_current() {
++    let tcb = crate::tls::current_tcb();
++    // Explicit pthread_exit abandons all nested initializers before callbacks.
++    while !(*tcb).once_active.is_null() {
++        let frame = (*tcb).once_active;
++        (*tcb).once_active = (*frame).previous;
++        (*(*frame).control).store(0, Ordering::Release);
++        sys::native_futex((*frame).control as *const u32, 1, u32::MAX, 0);
++    }
++    for _ in 0..4 {
++        let mut invoked = false;
++        for index in 0..128 {
++            lock_keys();
++            let specific = (*tcb).pthread_values[index];
++            (*tcb).pthread_values[index] = Specific::EMPTY;
++            let destructor = if !specific.value.is_null() && valid_key(specific.key) {
++                (*key_slot(specific.key)).destructor
++            } else {
++                None
++            };
++            unlock_keys();
++            // Selection is serialized against deletion. A callback already
++            // selected may finish after deletion; callback code must stay live.
++            if let Some(callback) = destructor {
++                invoked = true;
++                callback(specific.value);
++            }
++        }
++        if !invoked {
++            break;
++        }
++    }
++    (*tcb).pthread_values.fill(Specific::EMPTY);
++}
+--- a/sunlight-libc/src/string.rs
++++ b/sunlight-libc/src/string.rs
+@@ -479,3 +479,74 @@
+         }
+     }
+ }
++
++/// Stable immutable C-locale error messages; callers must not modify them.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub extern "C" fn strerror(error: i32) -> *mut u8 {
++    let message: &'static [u8] = match error {
++        0 => b"Success\0",
++        1 => b"Operation not permitted\0",
++        2 => b"No such file or directory\0",
++        5 => b"Input/output error\0",
++        7 => b"Argument list too long\0",
++        9 => b"Bad file descriptor\0",
++        11 => b"Resource temporarily unavailable\0",
++        12 => b"Cannot allocate memory\0",
++        13 => b"Permission denied\0",
++        14 => b"Bad address\0",
++        16 => b"Device or resource busy\0",
++        17 => b"File exists\0",
++        20 => b"Not a directory\0",
++        21 => b"Is a directory\0",
++        22 => b"Invalid argument\0",
++        24 => b"Too many open files\0",
++        25 => b"Inappropriate ioctl for device\0",
++        28 => b"No space left on device\0",
++        32 => b"Broken pipe\0",
++        33 => b"Numerical argument out of domain\0",
++        34 => b"Numerical result out of range\0",
++        35 => b"Resource deadlock avoided\0",
++        38 => b"Function not implemented\0",
++        84 => b"Invalid or incomplete multibyte or wide character\0",
++        93 => b"Protocol not supported\0",
++        94 => b"Socket type not supported\0",
++        95 => b"Operation not supported\0",
++        97 => b"Address family not supported\0",
++        98 => b"Address already in use\0",
++        101 => b"Network is unreachable\0",
++        103 => b"Software caused connection abort\0",
++        104 => b"Connection reset by peer\0",
++        105 => b"No buffer space available\0",
++        106 => b"Transport endpoint is already connected\0",
++        107 => b"Transport endpoint is not connected\0",
++        110 => b"Connection timed out\0",
++        111 => b"Connection refused\0",
++        113 => b"No route to host\0",
++        114 => b"Operation already in progress\0",
++        115 => b"Operation now in progress\0",
++        _ => b"Unknown error\0",
++    };
++    message.as_ptr() as *mut u8
++}
++/// POSIX int-returning ABI; errno is unchanged. Unknown errors return EINVAL.
++#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
++pub unsafe extern "C" fn strerror_r(error: i32, buffer: *mut u8, length: usize) -> i32 {
++    let message = strerror(error);
++    let size = strlen(message);
++    if length == 0 {
++        return 34;
++    }
++    if buffer.is_null() {
++        return 22;
++    }
++    let count = size.min(length - 1);
++    core::ptr::copy_nonoverlapping(message, buffer, count);
++    buffer.add(count).write(0);
++    if length <= size {
++        34
++    } else if *message == b'U' && *message.add(1) == b'n' {
++        22
++    } else {
++        0
++    }
++}
+--- a/sunlight-libc/src/tls.rs
++++ b/sunlight-libc/src/tls.rs
+@@ -14,6 +14,24 @@
+ 
+ use crate::mman::{mmap, MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+ use crate::sys::{syscall1, SYS_SET_FS_BASE};
++use core::sync::atomic::AtomicU32;
++
++#[derive(Clone, Copy)]
++pub(crate) struct Specific {
++    pub(crate) key: usize,
++    pub(crate) value: *mut u8,
++}
++impl Specific {
++    pub(crate) const EMPTY: Self = Self {
++        key: 0,
++        value: core::ptr::null_mut(),
++    };
++}
++
++pub(crate) struct OnceFrame {
++    pub(crate) control: *const AtomicU32,
++    pub(crate) previous: *mut OnceFrame,
++}
+ 
+ /// Thread Control Block layout required by the SysV AMD64 ABI.
+ /// `fs:0` must be a self-pointer; `fs:8` is our per-thread errno.
+@@ -28,6 +46,8 @@
+     // ABI shared with tools/native-std/overlay/thread_local/key/sunlightos.rs.
+     // Reserve the whole table after FS_BASE, including for static C TLS images.
+     std_keys: [*mut u8; 256],
++    pub(crate) pthread_values: [Specific; 128],
++    pub(crate) once_active: *mut OnceFrame,
+ }
+ 
+ pub const TCB_SIZE: usize = core::mem::size_of::<Tcb>();
+@@ -138,6 +158,8 @@
+         pthread: core::ptr::null_mut(),
+         _key_padding: 0,
+         std_keys: [core::ptr::null_mut(); 256],
++        pthread_values: [Specific::EMPTY; 128],
++        once_active: core::ptr::null_mut(),
+     });
+     Some(tcb)
+ }
+@@ -264,8 +286,8 @@
+         // std's key backend uses all 256 pointer slots at FS_BASE + 32.
+         // Poison the storage so initialization cannot rely on mmap zeroing.
+         #[repr(align(4096))]
+-        struct Page([u8; 4096]);
+-        let mut page = Page([0xa5; 4096]);
++        struct Page([u8; 8192]);
++        let mut page = Page([0xa5; 8192]);
+         let base = page.0.as_mut_ptr();
+         let tcb = unsafe { prepare_area(base, page.0.len()).unwrap() };
+         let table_end = tcb as usize + 32 + 256 * core::mem::size_of::<*mut u8>();
+--- /dev/null
++++ b/tools/native-c/tests/pthread-once-recursive.c
+@@ -0,0 +1,24 @@
++#include <pthread.h>
++#include <stdio.h>
++#include <time.h>
++static pthread_once_t control=PTHREAD_ONCE_INIT;
++static unsigned entered, returned;
++static void init(void) {
++    __atomic_store_n(&entered,1,__ATOMIC_RELEASE);
++    pthread_once(&control,init);
++    __atomic_store_n(&returned,1,__ATOMIC_RELEASE);
++}
++static void *worker(void *arg) { (void)arg; pthread_once(&control,init); return 0; }
++static void *progress(void *arg) { return arg; }
++int main(void) {
++    pthread_t blocked, witness; void *result;
++    if(pthread_create(&blocked,0,worker,0)) return 1;
++    while(!__atomic_load_n(&entered,__ATOMIC_ACQUIRE)) { struct timespec delay={0,1000000}; nanosleep(&delay,0); }
++    if(pthread_create(&witness,0,progress,(void *)7) || pthread_join(witness,&result) || result!=(void *)7) return 2;
++    struct timespec delay={0,50000000}; nanosleep(&delay,0);
++    if(__atomic_load_n(&returned,__ATOMIC_ACQUIRE)) return 3;
++    puts("recursive once: no completion in bounded window; independent thread progressed");
++    /* Process exit releases the deliberately blocked worker; the outer guest
++     * runner also imposes a 90-second host wall-clock bound. */
++    return 0;
++}
+--- /dev/null
++++ b/tools/native-c/tests/pthread-tsd-exit-race.c
+@@ -0,0 +1,34 @@
++#include <pthread.h>
++#include <stdio.h>
++#include <stdint.h>
++#include <time.h>
++static pthread_key_t key;
++static unsigned entered, release_callback, calls;
++static void wait_for(unsigned *word) {
++    while (!__atomic_load_n(word,__ATOMIC_ACQUIRE)) {
++        struct timespec delay={0,1000000}; nanosleep(&delay,0);
++    }
++}
++static void destructor(void *p) {
++    if(p != (void *)1 || pthread_getspecific(key)) __builtin_trap();
++    __atomic_add_fetch(&calls,1,__ATOMIC_RELAXED);
++    __atomic_store_n(&entered,1,__ATOMIC_RELEASE);
++    wait_for(&release_callback);
++    /* Already selected callback stays safe after deletion and key reuse. */
++}
++static void *worker(void *p) {
++    if(pthread_setspecific(key,p)) return (void *)1;
++    return 0;
++}
++int main(void) {
++    pthread_t thread; void *result; pthread_key_t replacement;
++    if(pthread_key_create(&key,destructor) || pthread_create(&thread,0,worker,(void *)1)) return 1;
++    wait_for(&entered);
++    if(pthread_key_delete(key) || pthread_key_create(&replacement,0) || replacement == key) return 2;
++    if(pthread_setspecific(replacement,(void *)9)) return 3;
++    __atomic_store_n(&release_callback,1,__ATOMIC_RELEASE);
++    if(pthread_join(thread,&result) || result || calls != 1 || pthread_getspecific(replacement) != (void *)9) return 4;
++    if(pthread_key_delete(replacement)) return 5;
++    puts("in-flight destructor delete/reuse witness PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tools/native-c/tests/pthread-tsd-headers.c
+@@ -0,0 +1,22 @@
++#include <time.h>
++#include <pthread.h>
++#include <string.h>
++#include <errno.h>
++#ifdef __cplusplus
++#define ASSERT static_assert
++#else
++#define ASSERT _Static_assert
++#endif
++ASSERT(sizeof(pthread_key_t) == 8, "LP64 key");
++ASSERT(sizeof(pthread_once_t) == 4, "once futex word");
++static pthread_once_t control = PTHREAD_ONCE_INIT;
++static void init(void) { }
++int main(void) {
++    int (*reentrant)(int,char *,size_t) = strerror_r;
++    pthread_key_t key;
++    char buffer[128];
++    if (pthread_key_create(&key,0) || pthread_setspecific(key,0) ||
++        pthread_getspecific(key) || pthread_key_delete(key) ||
++        pthread_once(&control,init)) return 1;
++    return reentrant(EINVAL,buffer,sizeof buffer) || strcmp(buffer,strerror(EINVAL));
++}
+--- /dev/null
++++ b/tools/native-c/tests/pthread-tsd-once.c
+@@ -0,0 +1,177 @@
++#include <pthread.h>
++#include <errno.h>
++#include <string.h>
++#include <stdio.h>
++#include <stdint.h>
++#include <time.h>
++#define CHECK(x) do { if (!(x)) { printf("FAIL line=%d\n", __LINE__); return (void *)(uintptr_t)__LINE__; } } while (0)
++static pthread_key_t key, deleted, repeat_key, reentrant;
++static unsigned destructed, repeats, detached_done, entered, release_worker;
++static unsigned racing, race_stop;
++static unsigned once_count, once_entered, once_release, ready, started;
++static int published;
++static pthread_once_t once = PTHREAD_ONCE_INIT, abandon = PTHREAD_ONCE_INIT;
++static pthread_once_t recursive = PTHREAD_ONCE_INIT, nested = PTHREAD_ONCE_INIT;
++static void usleep(unsigned microseconds) { struct timespec ts = {0, (long)microseconds * 1000}; nanosleep(&ts, 0); }
++static void wait_for(unsigned *word, unsigned target) { while (__atomic_load_n(word, __ATOMIC_ACQUIRE) < target) usleep(1000); }
++static void destructor(void *p) {
++    if (pthread_getspecific(key) != 0 || p == 0) __builtin_trap();
++    __atomic_add_fetch(&destructed, 1, __ATOMIC_RELEASE);
++}
++static void repeat(void *p) {
++    __atomic_add_fetch(&repeats, 1, __ATOMIC_RELEASE);
++    if (pthread_setspecific(repeat_key, p)) __builtin_trap();
++}
++static void reenter(void *p) {
++    pthread_key_t temporary;
++    if (pthread_key_create(&temporary, 0) || pthread_setspecific(temporary, p) ||
++        pthread_getspecific(temporary) != p || pthread_key_delete(temporary)) __builtin_trap();
++    if (pthread_key_delete(reentrant)) __builtin_trap();
++}
++static void detached_destructor(void *p) { (void)p; __atomic_store_n(&detached_done, 1, __ATOMIC_RELEASE); }
++static void *isolated(void *p) {
++    CHECK(pthread_getspecific(key) == 0);
++    CHECK(pthread_setspecific(key, p) == 0);
++    CHECK(pthread_getspecific(key) == p);
++    CHECK(pthread_setspecific(key, 0) == 0);
++    CHECK(pthread_getspecific(key) == 0);
++    CHECK(pthread_setspecific(key, p) == 0);
++    return 0;
++}
++static void *explicit_exit(void *p) { pthread_setspecific(key, p); pthread_exit(p); }
++static void *repeating(void *p) { pthread_setspecific(repeat_key, p); pthread_setspecific(reentrant, p); return 0; }
++static void *delete_race(void *p) {
++    CHECK(pthread_setspecific(deleted, p) == 0);
++    __atomic_store_n(&entered, 1, __ATOMIC_RELEASE);
++    wait_for(&release_worker, 1);
++    CHECK(pthread_getspecific(deleted) == 0);
++    CHECK(pthread_setspecific(deleted, p) == EINVAL);
++    return 0;
++}
++static void *concurrent_delete(void *p) {
++    CHECK(pthread_setspecific(deleted,p) == 0);
++    __atomic_store_n(&racing,1,__ATOMIC_RELEASE);
++    while (!__atomic_load_n(&race_stop,__ATOMIC_ACQUIRE)) {
++        void *v = pthread_getspecific(deleted);
++        CHECK(v == 0 || v == p);
++        int rc = pthread_setspecific(deleted,p);
++        CHECK(rc == 0 || rc == EINVAL);
++    }
++    CHECK(pthread_getspecific(deleted) == 0);
++    return 0;
++}
++static void init(void) {
++    __atomic_add_fetch(&once_count, 1, __ATOMIC_RELAXED);
++    __atomic_store_n(&once_entered, 1, __ATOMIC_RELEASE);
++    wait_for(&once_release, 1);
++    published = 0x12345678;
++}
++static void *once_worker(void *p) {
++    (void)p;
++    __atomic_add_fetch(&started, 1, __ATOMIC_RELEASE);
++    CHECK(pthread_once(&once, init) == 0);
++    CHECK(published == 0x12345678);
++    for (int i=0; i<10000; ++i) CHECK(pthread_once(&once, init) == 0);
++    __atomic_add_fetch(&ready, 1, __ATOMIC_RELEASE);
++    return 0;
++}
++static void abandoned_init(void) { __atomic_store_n(&entered, 1, __ATOMIC_RELEASE); wait_for(&release_worker, 1); pthread_exit((void *)77); }
++static void recovered_init(void) { published = 42; }
++static void *abandon_worker(void *p) { (void)p; pthread_once(&abandon, abandoned_init); return (void *)1; }
++static void *recover_worker(void *p) { (void)p; __atomic_store_n(&started, 1, __ATOMIC_RELEASE); CHECK(pthread_once(&abandon, recovered_init) == 0); CHECK(published == 42); return 0; }
++static void nested_init(void) { }
++static void recurse(void) { if (pthread_once(&nested, nested_init)) __builtin_trap(); }
++static void *registry_churn(void *p) {
++    for (int i=0;i<200;i++) {
++        pthread_key_t k, old;
++        CHECK(pthread_key_create(&k, 0) == 0);
++        CHECK(pthread_setspecific(k, p) == 0);
++        old=k;
++        CHECK(pthread_key_delete(k) == 0);
++        CHECK(pthread_getspecific(old) == 0);
++        CHECK(pthread_key_create(&k, 0) == 0);
++        CHECK(pthread_getspecific(k) == 0);
++        CHECK(pthread_setspecific(old, p) == EINVAL);
++        CHECK(pthread_key_delete(k) == 0);
++    }
++    return 0;
++}
++static void deleted_destructor(void *p) { (void)p; __builtin_trap(); }
++static void *run(void *unused) {
++    (void)unused;
++    pthread_t threads[12]; void *result;
++    errno = 123;
++    CHECK(pthread_key_create(&key, destructor) == 0);
++    CHECK(pthread_setspecific(key, (void *)99) == 0);
++    for (uintptr_t i=0;i<12;i++) CHECK(pthread_create(&threads[i],0,isolated,(void *)(i+1)) == 0);
++    for (int i=0;i<12;i++) { CHECK(pthread_join(threads[i], &result) == 0); CHECK(result == 0); }
++    CHECK(destructed == 12 && pthread_getspecific(key) == (void *)99);
++    CHECK(pthread_create(&threads[0],0,explicit_exit,(void *)55) == 0);
++    CHECK(pthread_join(threads[0],&result) == 0 && result == (void *)55 && destructed == 13);
++    CHECK(pthread_setspecific(key, 0) == 0);
++    CHECK(pthread_key_create(&repeat_key, repeat) == 0);
++    CHECK(pthread_key_create(&reentrant, reenter) == 0);
++    CHECK(pthread_create(&threads[0],0,repeating,(void *)1) == 0);
++    CHECK(pthread_join(threads[0],&result) == 0 && result == 0 && repeats == PTHREAD_DESTRUCTOR_ITERATIONS);
++    CHECK(pthread_key_delete(repeat_key) == 0);
++    CHECK(pthread_key_create(&deleted, deleted_destructor) == 0);
++    CHECK(pthread_create(&threads[0],0,delete_race,(void *)1) == 0);
++    wait_for(&entered,1);
++    CHECK(pthread_key_delete(deleted) == 0);
++    pthread_key_t reused; CHECK(pthread_key_create(&reused, 0) == 0 && reused != deleted);
++    CHECK(pthread_setspecific(reused, (void *)2) == 0);
++    __atomic_store_n(&release_worker,1,__ATOMIC_RELEASE);
++    CHECK(pthread_join(threads[0],&result) == 0 && result == 0);
++    CHECK(pthread_key_delete(reused) == 0);
++    puts("TLS deletion-before-exit and stale-generation witness PASS");
++    CHECK(pthread_key_create(&deleted,0) == 0);
++    CHECK(pthread_create(&threads[0],0,concurrent_delete,(void *)1) == 0);
++    wait_for(&racing,1);
++    CHECK(pthread_key_delete(deleted) == 0);
++    for(int i=0;i<100;i++) {
++        CHECK(pthread_key_create(&reused,0) == 0);
++        CHECK(pthread_setspecific(reused,(void *)9) == 0);
++        CHECK(pthread_key_delete(reused) == 0);
++    }
++    __atomic_store_n(&race_stop,1,__ATOMIC_RELEASE);
++    CHECK(pthread_join(threads[0],&result) == 0 && result == 0);
++
++    for (uintptr_t i=0;i<12;i++) CHECK(pthread_create(&threads[i],0,registry_churn,(void *)(i+1)) == 0);
++    for (int i=0;i<12;i++) { CHECK(pthread_join(threads[i], &result) == 0 && result == 0); }
++    for (int i=0;i<12;i++) CHECK(pthread_create(&threads[i],0,once_worker,0) == 0);
++    wait_for(&started,12); wait_for(&once_entered,1); usleep(20000);
++    CHECK(ready == 0 && once_count == 1);
++    __atomic_store_n(&once_release,1,__ATOMIC_RELEASE);
++    for (int i=0;i<12;i++) CHECK(pthread_join(threads[i], &result) == 0 && result == 0);
++    CHECK(ready == 12 && once_count == 1);
++    CHECK(pthread_once(&recursive,recurse) == 0);
++    entered=release_worker=started=0;
++    CHECK(pthread_create(&threads[0],0,abandon_worker,0) == 0); wait_for(&entered,1);
++    CHECK(pthread_create(&threads[1],0,recover_worker,0) == 0); wait_for(&started,1); usleep(20000);
++    __atomic_store_n(&release_worker,1,__ATOMIC_RELEASE);
++    CHECK(pthread_join(threads[0],&result) == 0 && result == (void *)77);
++    CHECK(pthread_join(threads[1],&result) == 0 && result == 0);
++    puts("once contention publication nested-init abandonment PASS");
++    CHECK(pthread_key_delete(key) == 0);
++    CHECK(pthread_key_create(&key,detached_destructor) == 0);
++    pthread_attr_t attr; CHECK(pthread_attr_init(&attr) == 0); CHECK(pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED) == 0);
++    CHECK(pthread_create(&threads[0],&attr,isolated,(void *)1) == 0); wait_for(&detached_done,1);
++    for (int i=0;i<80;i++) { CHECK(pthread_create(&threads[0],0,isolated,(void *)1) == 0); CHECK(pthread_join(threads[0],&result) == 0 && result == 0); }
++    CHECK(pthread_key_delete(key) == 0);
++    pthread_key_t keys[PTHREAD_KEYS_MAX];
++    for(int i=0;i<PTHREAD_KEYS_MAX;i++) CHECK(pthread_key_create(&keys[i],0) == 0);
++    CHECK(pthread_key_create(&key,0) == EAGAIN);
++    for(int i=0;i<PTHREAD_KEYS_MAX;i++) CHECK(pthread_key_delete(keys[i]) == 0);
++    CHECK(errno == 123);
++    char buffer[128], small[2];
++    CHECK(strcmp(strerror(EINVAL),"Invalid argument") == 0);
++    CHECK(strcmp(strerror(-1),"Unknown error") == 0);
++    CHECK(strerror(EINVAL) == strerror(EINVAL));
++    CHECK(strerror_r(EINVAL,buffer,sizeof buffer) == 0 && strcmp(buffer,strerror(EINVAL)) == 0);
++    CHECK(strerror_r(EINVAL,small,sizeof small) == ERANGE && small[1] == 0);
++    CHECK(strerror_r(-1,buffer,sizeof buffer) == EINVAL && strcmp(buffer,"Unknown error") == 0);
++    CHECK(strerror_r(0,small,0) == ERANGE && errno == 123);
++    puts("TLS lifecycle exhaustion churn and strerror PASS");
++    return 0;
++}
++int main(void) { return (int)(uintptr_t)run(0); }
+--- /dev/null
++++ b/tools/native-c/tests/strerror-threads.c
+@@ -0,0 +1,22 @@
++#include <pthread.h>
++#include <errno.h>
++#include <string.h>
++#include <stdint.h>
++#include <stdio.h>
++static const int errors[]={0,EPERM,ENOENT,EIO,E2BIG,EBADF,EAGAIN,ENOMEM,EACCES,EFAULT,EBUSY,EEXIST,ENOTDIR,EISDIR,EINVAL,EMFILE,ENOTTY,ENOSPC,EPIPE,EDOM,ERANGE,EDEADLK,ENOSYS,EILSEQ,EPROTONOSUPPORT,ESOCKTNOSUPPORT,EOPNOTSUPP,EAFNOSUPPORT,EADDRINUSE,ENETUNREACH,ECONNABORTED,ECONNRESET,ENOBUFS,EISCONN,ENOTCONN,ETIMEDOUT,ECONNREFUSED,EHOSTUNREACH,EALREADY,EINPROGRESS};
++static void *worker(void *arg) {
++    int own=(int)(uintptr_t)arg; errno=own;
++    for(int iteration=0;iteration<1000;iteration++) for(unsigned i=0;i<sizeof errors/sizeof errors[0];i++) {
++        char buffer[128]; char *stable=strerror(errors[i]);
++        if(!stable || strcmp(stable,"Unknown error")==0 || strerror_r(errors[i],buffer,sizeof buffer) || strcmp(stable,buffer)) return (void *)1;
++        if(strcmp(strerror(-999),"Unknown error") || strerror(errors[i])!=stable || errno!=own) return (void *)2;
++    }
++    return 0;
++}
++int main(void) {
++    pthread_t threads[4]; void *result;
++    for(uintptr_t i=0;i<4;i++) if(pthread_create(&threads[i],0,worker,(void *)(i+100))) return 1;
++    for(int i=0;i<4;i++) if(pthread_join(threads[i],&result) || result) return 2;
++    puts("strerror all 40 supported numbers across four threads PASS");
++    return 0;
++}

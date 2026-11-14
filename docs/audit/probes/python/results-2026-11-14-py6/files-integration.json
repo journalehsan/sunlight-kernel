@@ -1,0 +1,21 @@
+{
+  "status": "PARTIAL",
+  "migrated": [
+    "Raw PathBuf storage preserves whitespace and dot components",
+    "navigate_to uses shared resolve_directory_path and stores canonical result",
+    "Relative requested navigation joins current Files directory"
+  ],
+  "build": "final/files-build-final.log",
+  "host": "lexical-probe.json runs exact source slice; cargo test selected zero targets and is NOT_RUN",
+  "UI": "NOT_RUN",
+  "UI_reason": "No Files-specific click-driven workflow was exercised. Existing QMP-based specialized desktop gates were discovered; building/adapting a final desktop guest and actual Files behavior comparison remain required",
+  "remaining": [
+    "Link appearance/target operations",
+    "Properties extended metadata",
+    "Transfers still use file_ops lexical normalize",
+    "Common picker service retains separate PathBuf/save-name trimming",
+    "Mount/cross-application identity comparison in actual UI"
+  ],
+  "application_resolver": "sun_open remains separate program selection; unchanged",
+  "first_build_failure": "files-build.log: inherited native-std formatting referred to gated-out locale; locale module now enabled for native-std; retry and final native-svg build pass"
+}

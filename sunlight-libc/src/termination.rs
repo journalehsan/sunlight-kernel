@@ -134,3 +134,17 @@ mod tests {
         assert_eq!(crate::errno::get_errno(), crate::errno::EINVAL);
     }
 }
+
+/// Immediate native process-group termination, bypassing atexit and stdio.
+#[cfg(all(not(test), feature = "native-c", target_os = "sunlightos"))]
+#[no_mangle]
+pub unsafe extern "C" fn _Exit(status: i32) -> ! {
+    crate::std_runtime::sl_std_exit(status)
+}
+
+/// POSIX spelling of the same immediate process-group exit operation.
+#[cfg(all(not(test), feature = "native-c", target_os = "sunlightos"))]
+#[no_mangle]
+pub unsafe extern "C" fn _exit(status: i32) -> ! {
+    crate::std_runtime::sl_std_exit(status)
+}

@@ -1,0 +1,9 @@
+W alive actor=1 tid=470 owner=123 mode=1
+W alive actor=0 tid=469 owner=123 mode=1
+W initial pthread_exit owner=123 workers=2
+W tls actor=3 tid=123
+W progress actor=1 tid=470 after-owner-query
+W progress actor=0 tid=469 after-owner-query
+W tls actor=1 tid=469
+W first-borrower-reaped final-borrower-exiting
+W tls actor=2 tid=470

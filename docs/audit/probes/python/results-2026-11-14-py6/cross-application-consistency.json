@@ -1,0 +1,10 @@
+{
+  "status": "PARTIAL",
+  "libc": "Native canonical fixture passes only when final CPU matrix confirms it",
+  "shell": "Actual noninteractive native shell subprocess; final stdout must include missing-rejected and canonical pwd results",
+  "Files": "Build and exact source storage probe only; actual UI NOT_RUN",
+  "mounts": "Host mount/identity checks only; native isolated guest has one root Tmpfs and /tmp is a directory; native mount crossing NOT_RUN",
+  "identities": "No Files UI vs shell vs libc identity comparison",
+  "whitespace": "Native libc file-name preservation and exact Files PathBuf storage probe; full shared UI fixture NOT_RUN",
+  "logs": "final/ guest directories; source-index.log; lexical-probe.log"
+}

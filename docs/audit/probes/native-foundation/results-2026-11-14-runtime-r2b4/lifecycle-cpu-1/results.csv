@@ -1,0 +1,18 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+initial,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+multiple,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+forced-after-owner,False,PASS,PASS,PASS,137,137,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+exit-0,False,PASS,PASS,PASS,17,17,exit/output/reap/physical-frame checks,19f83ab1daff65849dd9513bf79ff0c6258bcaf0839c8d952d68f3ab5ac4fa43
+exit-1,False,PASS,PASS,PASS,23,23,exit/output/reap/physical-frame checks,19f83ab1daff65849dd9513bf79ff0c6258bcaf0839c8d952d68f3ab5ac4fa43
+exit-2,False,PASS,PASS,PASS,29,29,exit/output/reap/physical-frame checks,19f83ab1daff65849dd9513bf79ff0c6258bcaf0839c8d952d68f3ab5ac4fa43
+exit-3,False,PASS,PASS,PASS,137,137,exit/output/reap/physical-frame checks,19f83ab1daff65849dd9513bf79ff0c6258bcaf0839c8d952d68f3ab5ac4fa43
+churn-0,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-1,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-2,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-3,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-4,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-5,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-6,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-7,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-8,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5
+churn-9,False,PASS,PASS,PASS,0,0,exit/output/reap/physical-frame checks,aed0557fa0622d30c563b6687fa775c7720c99c405f206b4329ab60d8516cef5

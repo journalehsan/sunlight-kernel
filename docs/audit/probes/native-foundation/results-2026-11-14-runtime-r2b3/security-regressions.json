@@ -1,0 +1,50 @@
+{
+  "status": "PARTIAL",
+  "kernel_modified": false,
+  "reviewed": {
+    "IPC endpoints": {
+      "source": "kernel/src/sched/mod.rs:2748-2778,2950-2994",
+      "evidence_and_limit": "No endpoint-specific native regression executed"
+    },
+    "capability authority": {
+      "source": "kernel/src/arch/x86_64/syscall.rs:2790-2910; sched/mod.rs:3050-3063",
+      "evidence_and_limit": "No capability is transferred by the runtime repair; targeted endpoint rights witness NOT_RUN"
+    },
+    "PID/TID reuse": {
+      "source": "kernel/src/process/pid.rs; syscall.rs:2860-2875,3139-3146",
+      "evidence_and_limit": "Scheduler slot reuse measured; stale kernel generation targeting NOT_RUN"
+    },
+    "memory retirement": {
+      "source": "kernel/src/process/address_space.rs:1006-1068,1696-1723,2085-2170",
+      "evidence_and_limit": "Native runners check final owned frames/PTE/FD/kernel-stack counters; failure injection NOT_RUN"
+    },
+    "TLB shootdowns": {
+      "source": "kernel/src/memory/tlb.rs; process/address_space.rs:1045,2126",
+      "evidence_and_limit": "Existing retirement ordering untouched; explicit shootdown-timeout/quarantine test NOT_RUN"
+    },
+    "thread group termination": {
+      "source": "kernel/src/sched/mod.rs:2692-2746,2864,4580; syscall.rs:3149-3168",
+      "evidence_and_limit": "Initial exit defect persists; explicit157 and forced live-owner kill tested separately"
+    },
+    "session teardown": {
+      "source": "kernel/src/process/foreground.rs:142-207",
+      "evidence_and_limit": "Authenticated PTY/session lifecycle NOT_RUN"
+    },
+    "PTY ownership": {
+      "source": "kernel/src/process/foreground.rs:65-140; syscall.rs:2840-2895",
+      "evidence_and_limit": "TTY tab/generation copy preserved; actual terminal tab fixture NOT_RUN"
+    },
+    "kernel forward progress": {
+      "source": "kernel/src/sched/mod.rs:2781-2835,4435-4620",
+      "evidence_and_limit": "All executed guests bounded; no broad kernel progress stress/injected lock-holder death qualification"
+    },
+    "fail-stop rules": {
+      "source": "kernel/src/process/address_space.rs:1707-1723; memory/retirement.rs",
+      "evidence_and_limit": "No assertion/capacity/security bypass changed; uncertain retirement not exercised"
+    }
+  },
+  "runtime_lock_order": "TLS callbacks and finish wake occur before registry lock; lookup/detach/sweep/final unmap/free serialize; no callback runs while holding registry lock",
+  "supported_error_ownership": "Reaped acknowledgment still precedes reclaim; unmap failure retains Control; generic spawn rollback failure injection remains open",
+  "known_initial_exit_failure_preserved": true,
+  "security_checks_disabled": false
+}

@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/assert-failure-guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=134 expected=134
+guest elf stderr: b'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/headers-native.c:39: main: Assertion `0 && "R2A diagnostic"\' failed.\n'

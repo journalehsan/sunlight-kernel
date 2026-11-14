@@ -1,0 +1,44 @@
+{
+  "clang --version": {
+    "exit": 0,
+    "output": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n",
+    "executable": "/usr/bin/clang",
+    "sha256": "5cb1c0c669bf0d2655933374723967259e78704338c370101843575f524c91bb"
+  },
+  "llvm-ar --version": {
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n",
+    "executable": "/usr/bin/llvm-ar",
+    "sha256": "d3198e9dea1ee370133c078b92c449d5c00f9eb8098ba045d6ca514d62b302d0"
+  },
+  "llvm-ranlib --version": {
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n",
+    "executable": "/usr/bin/llvm-ranlib",
+    "sha256": "d3198e9dea1ee370133c078b92c449d5c00f9eb8098ba045d6ca514d62b302d0"
+  },
+  "rustc --version --verbose": {
+    "exit": 0,
+    "output": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n",
+    "executable": "/home/ehsantor/.cargo/bin/rustc",
+    "sha256": "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+  },
+  "cargo --version": {
+    "exit": 0,
+    "output": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\n",
+    "executable": "/home/ehsantor/.cargo/bin/cargo",
+    "sha256": "4acc9acc76d5079515b46346a485974457b5a79893cfb01112423c89aeb5aa10"
+  },
+  "qemu-system-x86_64 --version": {
+    "exit": 0,
+    "output": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n",
+    "executable": "/usr/bin/qemu-system-x86_64",
+    "sha256": "a2250f5e2b3b07c754473c0817df1cccf6c3c2443fc616dc474c4c311fa6ef1c"
+  },
+  "/tmp/sunlight-r1-cpython/build-host/python --version": {
+    "exit": 0,
+    "output": "Python 3.13.0\n",
+    "executable": "/tmp/sunlight-r1-cpython/build-host/python",
+    "sha256": "7c7b34dadd57381bb58fe5a3abaf9001e11d9458951f712cb47fbbcc03ff1130"
+  }
+}

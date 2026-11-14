@@ -175,3 +175,71 @@ mod tests {
         }
     }
 }
+
+/// Stateless bulk conversion with a private restartable state. A bounded
+/// destination stops before reading the next character; NULL counts all input.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn mbstowcs(out: *mut i32, mut s: *const c_char, n: usize) -> usize {
+    let mut count = 0;
+    let mut state = MbState::default();
+    while out.is_null() || count < n {
+        let mut value = 0;
+        // Feed one byte at a time, so a short NUL-terminated input never
+        // requires a readable MB_CUR_MAX-byte region beyond its terminator.
+        loop {
+            let result = decode(&mut value, s, 1, &mut state);
+            if result == usize::MAX {
+                return usize::MAX;
+            }
+            s = s.add(1);
+            if result != usize::MAX - 1 {
+                break;
+            }
+        }
+        if !out.is_null() {
+            out.add(count).write(value);
+        }
+        if value == 0 {
+            return count;
+        }
+        let Some(next) = count.checked_add(1) else {
+            crate::errno::set_errno(crate::errno::EOVERFLOW);
+            return usize::MAX;
+        };
+        count = next;
+    }
+    count
+}
+
+/// Encode whole characters only; the return count excludes a stored NUL.
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub unsafe extern "C" fn wcstombs(out: *mut c_char, mut s: *const i32, n: usize) -> usize {
+    let mut count = 0usize;
+    let utf8 = crate::locale::ctype_is_utf8();
+    while out.is_null() || count < n {
+        let raw = s.read();
+        let value = u32::try_from(raw).ok().and_then(char::from_u32);
+        let Some(value) = value.filter(|v| utf8 || v.is_ascii()) else {
+            crate::errno::set_errno(crate::errno::EILSEQ);
+            return usize::MAX;
+        };
+        let mut buffer = [0; 4];
+        let bytes = value.encode_utf8(&mut buffer).as_bytes();
+        if !out.is_null() {
+            if bytes.len() > n - count {
+                return count;
+            }
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), out.add(count).cast(), bytes.len());
+        }
+        if raw == 0 {
+            return count;
+        }
+        let Some(next) = count.checked_add(bytes.len()) else {
+            crate::errno::set_errno(crate::errno::EOVERFLOW);
+            return usize::MAX;
+        };
+        count = next;
+        s = s.add(1);
+    }
+    count
+}

@@ -324,3 +324,65 @@ mod tests {
         assert_eq!(identify(b"en_US.UTF-8"), Some(2));
     }
 }
+
+/// Native LP64 C lconv layout. Every installed locale currently shares the C
+/// numeric/monetary baseline. UTF-8 selection changes LC_CTYPE only in effect.
+#[repr(C)]
+pub struct Lconv {
+    decimal_point: *mut c_char,
+    thousands_sep: *mut c_char,
+    grouping: *mut c_char,
+    int_curr_symbol: *mut c_char,
+    currency_symbol: *mut c_char,
+    mon_decimal_point: *mut c_char,
+    mon_thousands_sep: *mut c_char,
+    mon_grouping: *mut c_char,
+    positive_sign: *mut c_char,
+    negative_sign: *mut c_char,
+    int_frac_digits: c_char,
+    frac_digits: c_char,
+    p_cs_precedes: c_char,
+    p_sep_by_space: c_char,
+    n_cs_precedes: c_char,
+    n_sep_by_space: c_char,
+    p_sign_posn: c_char,
+    n_sign_posn: c_char,
+    int_p_cs_precedes: c_char,
+    int_p_sep_by_space: c_char,
+    int_n_cs_precedes: c_char,
+    int_n_sep_by_space: c_char,
+    int_p_sign_posn: c_char,
+    int_n_sign_posn: c_char,
+}
+// Immutable process-lifetime metadata; C callers may not mutate the result.
+unsafe impl Sync for Lconv {}
+static C_CONVENTIONS: Lconv = Lconv {
+    decimal_point: c".".as_ptr().cast_mut(),
+    thousands_sep: c"".as_ptr().cast_mut(),
+    grouping: c"".as_ptr().cast_mut(),
+    int_curr_symbol: c"".as_ptr().cast_mut(),
+    currency_symbol: c"".as_ptr().cast_mut(),
+    mon_decimal_point: c"".as_ptr().cast_mut(),
+    mon_thousands_sep: c"".as_ptr().cast_mut(),
+    mon_grouping: c"".as_ptr().cast_mut(),
+    positive_sign: c"".as_ptr().cast_mut(),
+    negative_sign: c"".as_ptr().cast_mut(),
+    int_frac_digits: 127,
+    frac_digits: 127,
+    p_cs_precedes: 127,
+    p_sep_by_space: 127,
+    n_cs_precedes: 127,
+    n_sep_by_space: 127,
+    p_sign_posn: 127,
+    n_sign_posn: 127,
+    int_p_cs_precedes: 127,
+    int_p_sep_by_space: 127,
+    int_n_cs_precedes: 127,
+    int_n_sep_by_space: 127,
+    int_p_sign_posn: 127,
+    int_n_sign_posn: 127,
+};
+#[cfg_attr(all(not(test), target_os = "sunlightos"), no_mangle)]
+pub extern "C" fn localeconv() -> *mut Lconv {
+    (&C_CONVENTIONS as *const Lconv).cast_mut()
+}

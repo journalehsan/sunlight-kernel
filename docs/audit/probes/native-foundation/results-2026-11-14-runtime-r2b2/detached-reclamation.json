@@ -1,0 +1,1303 @@
+{
+  "status": "PARTIAL",
+  "method": "read-only white-box queue snapshots linked to unchanged runtime private symbol; bind address verified against final ELF; repr(C) Control size 72; no concurrent sweeper; query 156 confirms all workers Reaped before snapshot",
+  "build_binding": {
+    "attempts": [
+      {
+        "command": [
+          "python3",
+          "tools/native-c/cc.py",
+          "-O2",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c",
+          "-o",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.elf",
+          "-Wl,--defsym=__r2b2_queue=0"
+        ],
+        "exit": 0,
+        "bound_address": 0,
+        "actual_address": 4230176
+      },
+      {
+        "command": [
+          "python3",
+          "tools/native-c/cc.py",
+          "-O2",
+          "-std=c11",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c",
+          "-o",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.elf",
+          "-Wl,--defsym=__r2b2_queue=4230176"
+        ],
+        "exit": 0,
+        "bound_address": 4230176,
+        "actual_address": 4230176
+      }
+    ],
+    "binding_verified": true,
+    "elf_sha256": "2180ab66fa43855cc48778ee251c46f416a54e2f588f61e37606b4665a3d8e74",
+    "private_layout_source": "sunlight-libc/src/pthread.rs Control repr(C), size 72",
+    "production_source_changed": false
+  },
+  "observations": [
+    {
+      "run": "detached-accounting-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "5792086e122283d739d82292e6f1e16667ec9ff3914591eeead169ba1a7fb845",
+      "serial_log": "detached-accounting-cpu-1/serial.log",
+      "serial_sha256": "9a5eb9dd390a0ff590c678e3af4524266b7bf608757dca5f26f49133dd3f3a39",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "A wave=0 phase=baseline queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=2 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=2 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=3 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=3 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=4 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=4 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=5 phase=explicit-create-sweep-and-join queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 1,
+      "witness_id": "DETACH-1",
+      "snapshots": [
+        {
+          "wave": 0,
+          "phase": "baseline",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 1,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 2,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 3,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 4,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 5,
+          "phase": "explicit-create-sweep-and-join",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        }
+      ],
+      "wave_counts": [
+        {
+          "wave": 1,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 2,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 3,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 4,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        }
+      ],
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ],
+        [
+          "100",
+          "103"
+        ],
+        [
+          "100",
+          "104"
+        ],
+        [
+          "100",
+          "105"
+        ],
+        [
+          "100",
+          "106"
+        ],
+        [
+          "100",
+          "107"
+        ],
+        [
+          "100",
+          "108"
+        ],
+        [
+          "100",
+          "109"
+        ],
+        [
+          "100",
+          "110"
+        ],
+        [
+          "100",
+          "111"
+        ],
+        [
+          "100",
+          "112"
+        ],
+        [
+          "100",
+          "113"
+        ],
+        [
+          "100",
+          "114"
+        ],
+        [
+          "100",
+          "115"
+        ],
+        [
+          "100",
+          "116"
+        ],
+        [
+          "100",
+          "117"
+        ],
+        [
+          "100",
+          "118"
+        ],
+        [
+          "100",
+          "119"
+        ],
+        [
+          "100",
+          "120"
+        ],
+        [
+          "100",
+          "121"
+        ],
+        [
+          "100",
+          "122"
+        ],
+        [
+          "100",
+          "123"
+        ],
+        [
+          "100",
+          "124"
+        ],
+        [
+          "100",
+          "125"
+        ],
+        [
+          "100",
+          "126"
+        ],
+        [
+          "100",
+          "127"
+        ],
+        [
+          "100",
+          "128"
+        ],
+        [
+          "100",
+          "129"
+        ],
+        [
+          "100",
+          "130"
+        ],
+        [
+          "100",
+          "131"
+        ],
+        [
+          "100",
+          "132"
+        ],
+        [
+          "100",
+          "133"
+        ],
+        [
+          "100",
+          "134"
+        ],
+        [
+          "100",
+          "135"
+        ],
+        [
+          "100",
+          "136"
+        ],
+        [
+          "100",
+          "137"
+        ],
+        [
+          "100",
+          "138"
+        ],
+        [
+          "100",
+          "139"
+        ],
+        [
+          "100",
+          "140"
+        ],
+        [
+          "100",
+          "141"
+        ],
+        [
+          "100",
+          "142"
+        ],
+        [
+          "100",
+          "143"
+        ],
+        [
+          "100",
+          "144"
+        ],
+        [
+          "100",
+          "145"
+        ],
+        [
+          "100",
+          "146"
+        ],
+        [
+          "100",
+          "147"
+        ],
+        [
+          "100",
+          "148"
+        ],
+        [
+          "100",
+          "149"
+        ]
+      ]
+    },
+    {
+      "run": "detached-accounting-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "8316f1e42e3623b73f4304e2d983b5584a0c5a296e3a2b4777cc98d59c00beac",
+      "serial_log": "detached-accounting-cpu-2/serial.log",
+      "serial_sha256": "90586a14f0273e8fa0d10dd2449b55a87ebbbcef173ed27680319db939435eee",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "A wave=0 phase=baseline queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=2 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=2 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=3 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=3 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=4 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=4 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=5 phase=explicit-create-sweep-and-join queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 2,
+      "witness_id": "DETACH-2",
+      "snapshots": [
+        {
+          "wave": 0,
+          "phase": "baseline",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 1,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 2,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 3,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 4,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 5,
+          "phase": "explicit-create-sweep-and-join",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        }
+      ],
+      "wave_counts": [
+        {
+          "wave": 1,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 2,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 3,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 4,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        }
+      ],
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ],
+        [
+          "100",
+          "103"
+        ],
+        [
+          "100",
+          "104"
+        ],
+        [
+          "100",
+          "105"
+        ],
+        [
+          "100",
+          "106"
+        ],
+        [
+          "100",
+          "107"
+        ],
+        [
+          "100",
+          "108"
+        ],
+        [
+          "100",
+          "109"
+        ],
+        [
+          "100",
+          "110"
+        ],
+        [
+          "100",
+          "111"
+        ],
+        [
+          "100",
+          "112"
+        ],
+        [
+          "100",
+          "113"
+        ],
+        [
+          "100",
+          "114"
+        ],
+        [
+          "100",
+          "115"
+        ],
+        [
+          "100",
+          "116"
+        ],
+        [
+          "100",
+          "117"
+        ],
+        [
+          "100",
+          "118"
+        ],
+        [
+          "100",
+          "119"
+        ],
+        [
+          "100",
+          "120"
+        ],
+        [
+          "100",
+          "121"
+        ],
+        [
+          "100",
+          "122"
+        ],
+        [
+          "100",
+          "123"
+        ],
+        [
+          "100",
+          "124"
+        ],
+        [
+          "100",
+          "125"
+        ],
+        [
+          "100",
+          "126"
+        ],
+        [
+          "100",
+          "127"
+        ],
+        [
+          "100",
+          "128"
+        ],
+        [
+          "100",
+          "129"
+        ],
+        [
+          "100",
+          "130"
+        ],
+        [
+          "100",
+          "131"
+        ],
+        [
+          "100",
+          "132"
+        ],
+        [
+          "100",
+          "133"
+        ],
+        [
+          "100",
+          "134"
+        ],
+        [
+          "100",
+          "135"
+        ],
+        [
+          "100",
+          "136"
+        ],
+        [
+          "100",
+          "137"
+        ],
+        [
+          "100",
+          "138"
+        ],
+        [
+          "100",
+          "139"
+        ],
+        [
+          "100",
+          "140"
+        ],
+        [
+          "100",
+          "141"
+        ],
+        [
+          "100",
+          "142"
+        ],
+        [
+          "100",
+          "143"
+        ],
+        [
+          "100",
+          "144"
+        ],
+        [
+          "100",
+          "145"
+        ],
+        [
+          "100",
+          "146"
+        ],
+        [
+          "100",
+          "147"
+        ],
+        [
+          "100",
+          "148"
+        ],
+        [
+          "100",
+          "149"
+        ]
+      ]
+    },
+    {
+      "run": "detached-accounting-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "7d76a208ab79ed9b150f6485de528d8e7629151c9437134efb4a670427993f0f",
+      "serial_log": "detached-accounting-cpu-4/serial.log",
+      "serial_sha256": "34a29d93230b157c29001bdf6e12d3f8fccc31bd5dcf334da69354eb15d6b0dd",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "A wave=0 phase=baseline queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=1 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=1 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=2 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=2 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=2 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=3 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=3 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=3 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=4 phase=live-workers-gated queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\nA wave=4 phase=all-kernel-reaped queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 phase=bounded-quiescence queued=12 control_bytes=864 stack_bytes=25165824 tls_bytes=98304\nA wave=4 created=12 callbacks=12 kernel_reaped=12 joins=0\nA wave=5 phase=explicit-create-sweep-and-join queued=0 control_bytes=0 stack_bytes=0 tls_bytes=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 4,
+      "witness_id": "DETACH-4",
+      "snapshots": [
+        {
+          "wave": 0,
+          "phase": "baseline",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 1,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 1,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 2,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 2,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 3,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 3,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "live-workers-gated",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        },
+        {
+          "wave": 4,
+          "phase": "all-kernel-reaped",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 4,
+          "phase": "bounded-quiescence",
+          "queued": 12,
+          "control_bytes": 864,
+          "stack_bytes": 25165824,
+          "tls_bytes": 98304
+        },
+        {
+          "wave": 5,
+          "phase": "explicit-create-sweep-and-join",
+          "queued": 0,
+          "control_bytes": 0,
+          "stack_bytes": 0,
+          "tls_bytes": 0
+        }
+      ],
+      "wave_counts": [
+        {
+          "wave": 1,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 2,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 3,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        },
+        {
+          "wave": 4,
+          "created": 12,
+          "callbacks": 12,
+          "kernel_reaped": 12
+        }
+      ],
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ],
+        [
+          "100",
+          "103"
+        ],
+        [
+          "100",
+          "104"
+        ],
+        [
+          "100",
+          "105"
+        ],
+        [
+          "100",
+          "106"
+        ],
+        [
+          "100",
+          "107"
+        ],
+        [
+          "100",
+          "108"
+        ],
+        [
+          "100",
+          "109"
+        ],
+        [
+          "100",
+          "110"
+        ],
+        [
+          "100",
+          "111"
+        ],
+        [
+          "100",
+          "112"
+        ],
+        [
+          "100",
+          "113"
+        ],
+        [
+          "100",
+          "114"
+        ],
+        [
+          "100",
+          "115"
+        ],
+        [
+          "100",
+          "116"
+        ],
+        [
+          "100",
+          "117"
+        ],
+        [
+          "100",
+          "118"
+        ],
+        [
+          "100",
+          "119"
+        ],
+        [
+          "100",
+          "120"
+        ],
+        [
+          "100",
+          "121"
+        ],
+        [
+          "100",
+          "122"
+        ],
+        [
+          "100",
+          "123"
+        ],
+        [
+          "100",
+          "124"
+        ],
+        [
+          "100",
+          "125"
+        ],
+        [
+          "100",
+          "126"
+        ],
+        [
+          "100",
+          "127"
+        ],
+        [
+          "100",
+          "128"
+        ],
+        [
+          "100",
+          "129"
+        ],
+        [
+          "100",
+          "130"
+        ],
+        [
+          "100",
+          "131"
+        ],
+        [
+          "100",
+          "132"
+        ],
+        [
+          "100",
+          "133"
+        ],
+        [
+          "100",
+          "134"
+        ],
+        [
+          "100",
+          "135"
+        ],
+        [
+          "100",
+          "136"
+        ],
+        [
+          "100",
+          "137"
+        ],
+        [
+          "100",
+          "138"
+        ],
+        [
+          "100",
+          "139"
+        ],
+        [
+          "100",
+          "140"
+        ],
+        [
+          "100",
+          "141"
+        ],
+        [
+          "100",
+          "142"
+        ],
+        [
+          "100",
+          "143"
+        ],
+        [
+          "100",
+          "144"
+        ],
+        [
+          "100",
+          "145"
+        ],
+        [
+          "100",
+          "146"
+        ],
+        [
+          "100",
+          "147"
+        ],
+        [
+          "100",
+          "148"
+        ],
+        [
+          "100",
+          "149"
+        ]
+      ]
+    }
+  ],
+  "negative_attempts": [
+    {
+      "run": "detached-churn-cpu-1",
+      "runner_status": "FAIL",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "7e89bdafe57cfc662ac4427ca29bf139e7904432767748129aea03d713fd32f0",
+      "serial_log": "detached-churn-cpu-1/serial.log",
+      "serial_sha256": "95a81ab6bb72567c5830d206059f6064a020e148e37331d9c46f3ba7148573b0",
+      "guest_result": {
+        "elf": {
+          "exit": 2,
+          "stdout": "D0 baseline created=0 ready=0 callbacks=0\n",
+          "stderr": "",
+          "pass_": false
+        }
+      },
+      "cpus": 1,
+      "attempted_workers": 72,
+      "observed_spawn_count": 32,
+      "actual_spawn_tids": [
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107",
+        "108",
+        "109",
+        "110",
+        "111",
+        "112",
+        "113",
+        "114",
+        "115",
+        "116",
+        "117",
+        "118",
+        "119",
+        "120",
+        "121",
+        "122",
+        "123",
+        "124",
+        "125",
+        "126",
+        "127",
+        "128",
+        "129",
+        "130",
+        "131",
+        "132"
+      ],
+      "intended_overflow_overlap": "NOT_RUN",
+      "reason": "creation returned failure before release gate; exact admission cause not qualified; source and limits unchanged"
+    },
+    {
+      "run": "detached-churn-cpu-2",
+      "runner_status": "FAIL",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "90064977fcf51ba953a07962c90ca495eeb5844457306aa36b9f50a351f993d9",
+      "serial_log": "detached-churn-cpu-2/serial.log",
+      "serial_sha256": "76ab696e61ed3a74dd8aa708cb1019ec5bf0976a4e86e5de2528dc78488b3647",
+      "guest_result": {
+        "elf": {
+          "exit": 2,
+          "stdout": "D0 baseline created=0 ready=0 callbacks=0\n",
+          "stderr": "",
+          "pass_": false
+        }
+      },
+      "cpus": 2,
+      "attempted_workers": 72,
+      "observed_spawn_count": 32,
+      "actual_spawn_tids": [
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107",
+        "108",
+        "109",
+        "110",
+        "111",
+        "112",
+        "113",
+        "114",
+        "115",
+        "116",
+        "117",
+        "118",
+        "119",
+        "120",
+        "121",
+        "122",
+        "123",
+        "124",
+        "125",
+        "126",
+        "127",
+        "128",
+        "129",
+        "130",
+        "131",
+        "132"
+      ],
+      "intended_overflow_overlap": "NOT_RUN",
+      "reason": "creation returned failure before release gate; exact admission cause not qualified; source and limits unchanged"
+    },
+    {
+      "run": "detached-churn-cpu-4",
+      "runner_status": "FAIL",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "115d031e51dc1dd4d9d669bc038419b911f0274b8b9fc32e8eaa7b0430e2a5a3",
+      "serial_log": "detached-churn-cpu-4/serial.log",
+      "serial_sha256": "4315d1690864ecc36b34f465972dcb4e8f79ec65406fbd66a4a2e553d8bb2b1e",
+      "guest_result": {
+        "elf": {
+          "exit": 2,
+          "stdout": "D0 baseline created=0 ready=0 callbacks=0\n",
+          "stderr": "",
+          "pass_": false
+        }
+      },
+      "cpus": 4,
+      "attempted_workers": 72,
+      "observed_spawn_count": 32,
+      "actual_spawn_tids": [
+        "101",
+        "102",
+        "103",
+        "104",
+        "105",
+        "106",
+        "107",
+        "108",
+        "109",
+        "110",
+        "111",
+        "112",
+        "113",
+        "114",
+        "115",
+        "116",
+        "117",
+        "118",
+        "119",
+        "120",
+        "121",
+        "122",
+        "123",
+        "124",
+        "125",
+        "126",
+        "127",
+        "128",
+        "129",
+        "130",
+        "131",
+        "132"
+      ],
+      "intended_overflow_overlap": "NOT_RUN",
+      "reason": "creation returned failure before release gate; exact admission cause not qualified; source and limits unchanged"
+    }
+  ],
+  "proven_bound": "12 retained entries over four gated waves in each observed CPU configuration, then 0 after explicit create sweep; not an architecture-wide bound",
+  "concurrent_detach_sweep": {
+    "status": "UNQUALIFIED",
+    "source_risk": "mark_detached CAS 0->1 and later state read lack queue lock/reference; worker can enqueue and exit while detacher is paused, third creator can free before detacher resumes",
+    "native_UAF_observed": false
+  },
+  "autonomous_reclamation": "FAIL: quiescence alone retains entries",
+  "global_steady_state_bound": "UNQUALIFIED",
+  "overflow": "source-confirmed silent reference loss at 64 queued controls; native overflow execution NOT_RUN due admission failure",
+  "TLS_values": "application-owned pointees; runtime cells discarded; callbacks observed before Reaped",
+  "futex_wait_state": "kernel clears on exit; registered-state snapshots NOT_RUN",
+  "stack_mapping_status": "stack/TLS allocation extents read from retained Control; no page-table enumeration; explicit sweep munmap source path plus zero queue observed, not independent per-map unmap acknowledgment"
+}

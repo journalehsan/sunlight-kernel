@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/fat-native-first
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'PY7 FAT PASS: unlink read/write/dup rejected; replacement bytes preserved; rename source retained; destination revoked; valid closes\n'

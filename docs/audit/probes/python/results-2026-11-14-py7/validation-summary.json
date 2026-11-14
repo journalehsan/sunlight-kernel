@@ -1,0 +1,63 @@
+{
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "reason": "Incoming revision/status, locked baseline, PY5/PY6 source/evidence review and byte-preserving snapshots"
+    },
+    "G2": {
+      "status": "PARTIAL",
+      "reason": "Known unlink/replacement read-write defect blocked in host/native exercised cases; required forced schedules and native exhaustion incomplete"
+    },
+    "G3": {
+      "status": "PARTIAL",
+      "reason": "Revoked-slot close and mount accounting verified; retained backing and final deferred reclamation absent; failure cleanup fail-stop only"
+    },
+    "G4": {
+      "status": "PARTIAL",
+      "reason": "Native open/dup/rename/fstat/close directory subset; pinned lookup and enumeration incomplete"
+    },
+    "G5": {
+      "status": "BLOCKED",
+      "reason": "Full authoritative POSIX metadata ABI/time/link semantics missing"
+    },
+    "G6": {
+      "status": "BLOCKED",
+      "reason": "Directory safety dependency incomplete; native symlink/readlink not implemented"
+    },
+    "G7": {
+      "status": "PARTIAL",
+      "reason": "Existing shared navigation and consumer audit/builds; complete common-fixture and interactive UI convergence not validated"
+    },
+    "G8": {
+      "status": "PASS",
+      "reason": "All original 180 configured CPython objects retried with diagnostics; 165 compile"
+    },
+    "G9": {
+      "status": "PASS",
+      "reason": "Final-source native 1/2/4 CPU and host regressions; unsupported cells excluded"
+    },
+    "G10": {
+      "status": "PARTIAL",
+      "reason": "Integrity and scoped review complete; forced concurrency, raw FAT failure recovery and directory-relative safety remain incomplete"
+    }
+  },
+  "compilation": {
+    "configured": 180,
+    "attempted": 180,
+    "passed": 165,
+    "failed": 15,
+    "unattempted": 0,
+    "object_set_unchanged": true,
+    "newly_compiled": []
+  },
+  "regressions": "PASS",
+  "static_link": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "integrity": "PASS",
+  "evidence": "docs/audit/probes/python/results-2026-11-14-py7",
+  "report": "docs/runtime/python-py7-filesystem-lifetime-posix-links.md",
+  "no_commit": true,
+  "no_push": true
+}

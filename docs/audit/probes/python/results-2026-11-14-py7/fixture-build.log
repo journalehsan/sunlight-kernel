@@ -1,0 +1,5 @@
+   Compiling sunlight-fat v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+   Compiling sunlight-fs v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling py6-fat-lifetime v0.0.0 (/tmp/sunlight-py7-fat-lifetime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
+     Running `/tmp/sunlight-py7-fat-lifetime/target/x86_64-unknown-linux-gnu/debug/py6-fat-lifetime`

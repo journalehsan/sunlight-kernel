@@ -26,6 +26,10 @@ pub enum SunlightSyscall {
     NativeSignal = 174,
     NativeSocket = 175,
     NativeTerminal = 176,
+    /// Read-only calling native group/task identity; rdi selects pid/ppid/tid.
+    NativeProcessIdentity = 178,
+    /// Canonical path: rdi input, rsi output, rdx capacity incl NUL; r10 bit0 requires searchable directory.
+    ResolvePath = 179,
     NativeExitGroup = 157,
     NativeStdThreadSpawn = 158,
     NativePoll = 159,
@@ -416,10 +420,16 @@ fn send_signal_generation(
     if lifecycle_signal_actor != 0 {
         crate::capability::lifecycle_trace::retirement_contender(&sched.processes[idx],crate::capability::lifecycle_trace::RETIREMENT_CONTENDER_ACQUIRED);
     }
-    if matches!(
-        sched.processes[idx].state,
-        crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
-    ) {
+    let retained_group_kill = matches!(signal, Signal::SIGKILL)
+        && sched.processes[idx].native_group_owner()
+        && sched.processes[idx].native_group_exit.is_none()
+        && sched.processes[idx].state == ProcessState::Finished;
+    if !retained_group_kill
+        && matches!(
+            sched.processes[idx].state,
+            crate::process::ProcessState::Finished | crate::process::ProcessState::Reaped
+        )
+    {
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
         if lifecycle_signal_actor != 0 {
             crate::capability::lifecycle_trace::retirement_contender(&sched.processes[idx],crate::capability::lifecycle_trace::RETIREMENT_CONTENDER_REJECTED);
@@ -984,7 +994,7 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         16 => ipc_complete_deferred_reply(frame),
         17 => ipc_deferred_reply_is_live(frame.rdi),
         18 => ipc_try_recv(frame),
-        20 => process_exit(frame.rdi as i32),
+        20 => native_thread_exit(frame.rdi as i32),
         21 => process_yield(),
         #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
         0xf1a0 => unsafe { crate::sched::doorbell_fixture_on_kernel_stack(frame) },
@@ -1026,6 +1036,8 @@ pub extern "C" fn syscall_dispatch(frame: &mut SyscallFrame) -> u64 {
         175 => sys_native_socket(frame),
         176 => sys_native_terminal(frame),
         177 => sys_native_epoll_bridge(frame),
+        178 => sys_native_process_identity(frame.rdi),
+        179 => sys_resolve_path(frame),
         160 => sys_foreground(frame),
         23 => sys_tty_stdin_push(frame),
         24 => sys_tty_stdout_pull(frame),
@@ -2625,13 +2637,25 @@ fn endpoint_destroy(token: u64) -> u64 {
 /// Syscall: ProcessExit
 /// rdi = exit code
 fn process_exit(code: i32) -> ! {
+    process_exit_scoped(code, false)
+}
+
+fn native_thread_exit(code: i32) -> ! {
+    process_exit_scoped(code, true)
+}
+
+fn process_exit_scoped(code: i32, thread_only: bool) -> ! {
     #[cfg(feature = "authenticated_completion_exit_test")]
     crate::capability::completion_exit::exit_syscall(code);
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     sched::pin_release_test::exited(code);
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
     let fixture_pid = sched::SCHEDULER.lock().current_pid();
-    let kstack_top = sched::finish_current_process(code, "exit");
+    let kstack_top = if thread_only {
+        sched::finish_current_thread(code, "exit")
+    } else {
+        sched::finish_current_process(code, "exit")
+    };
     #[cfg(all(debug_assertions, feature = "pin_release_test"))]
     sched::pin_release_test::finished();
     #[cfg(all(debug_assertions, feature = "remote_wake_test"))]
@@ -2729,7 +2753,7 @@ fn sys_tty_stdout_pull(frame: &mut SyscallFrame) -> u64 {
 }
 
 /// Syscall: ProcessIsAlive (25). Non-reaping liveness probe. rdi=pid.
-/// Returns 1 if a process with that pid exists and is not Finished, else 0.
+/// Returns 1 while the process/group lifetime remains live, else 0.
 /// The trusted PTY broker may also pass rsi=publication incarnation to make
 /// the check safe across PID reuse.
 fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
@@ -2740,7 +2764,7 @@ fn sys_process_is_alive(frame: &mut SyscallFrame) -> u64 {
     }
     let alive = sched.processes.iter().any(|p| {
         p.pid == pid
-            && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
+            && p.process_lifetime_live()
             && (frame.rsi == 0 || p.foreground.incarnation == frame.rsi)
     });
     alive as u64
@@ -3139,6 +3163,8 @@ fn sys_native_futex(frame: &mut SyscallFrame) -> u64 {
 fn sys_native_thread_reaped(frame: &SyscallFrame) -> u64 {
     let sched = crate::sched::SCHEDULER.lock();
     let identity = sched.current_process().address_space.identity();
+    #[cfg(feature = "native_c_guest")]
+    sched.trace_native_owner_handoff(frame.rdi as usize);
     match sched.processes.iter().find(|p| p.pid == frame.rdi as usize) {
         Some(p) if !p.native_thread || p.address_space.identity() != identity => u64::MAX,
         Some(p) => u64::from(p.state == ProcessState::Reaped),
@@ -3147,23 +3173,6 @@ fn sys_native_thread_reaped(frame: &SyscallFrame) -> u64 {
 }
 
 fn sys_native_exit_group(code: i32) -> ! {
-    let mut sched = crate::sched::SCHEDULER.lock();
-    let identity = sched.current_process().address_space.identity();
-    let current = sched.current_process().pid;
-    let siblings: alloc::vec::Vec<usize> = sched
-        .processes
-        .iter()
-        .filter(|p| {
-            p.pid != current
-                && p.address_space.identity() == identity
-                && !matches!(p.state, ProcessState::Finished | ProcessState::Reaped)
-        })
-        .map(|p| p.pid)
-        .collect();
-    for pid in siblings {
-        sched.terminate_process_by_pid(pid, code, "native-exit-group");
-    }
-    drop(sched);
     process_exit(code)
 }
 
@@ -3795,9 +3804,7 @@ fn sys_waitpid(frame: &mut SyscallFrame) -> u64 {
     for p in sched.processes.iter() {
         if p.pid == pid && p.ppid == me {
             found = true;
-            if matches!(p.state, ProcessState::Finished | ProcessState::Reaped) {
-                finished_code = Some((p.exit_code as u8) as u64);
-            }
+            finished_code = p.wait_exit_code().map(|code| (code as u8) as u64);
             break;
         }
     }
@@ -4384,6 +4391,33 @@ fn sys_getpid() -> u64 {
 
 fn sys_get_process_generation() -> u64 {
     sched::with_scheduler(|s| s.current_process().address_space.identity().generation)
+}
+
+/// Native identity observation (178), without accepting a target or authority.
+/// Keep syscall 33's historical task identity unchanged for existing runtimes.
+/// Membership uses the full VM identity, including its generation. The owner
+/// remains retained after pthread_exit until all borrowers have been reaped.
+fn sys_native_process_identity(selector: u64) -> u64 {
+    if selector > 2 {
+        return ERR_EINVAL;
+    }
+    sched::with_scheduler(|s| {
+        let Some(member) = s.current_process_index() else {
+            return ERR_EIO;
+        };
+        if s.processes[member].is_linux_compat() {
+            return ERR_EINVAL;
+        }
+        let Some(owner) = s.native_group_owner_index(member) else {
+            return ERR_EIO;
+        };
+        match selector {
+            0 => s.processes[owner].pid as u64,
+            1 => s.processes[owner].ppid as u64,
+            2 => s.processes[member].pid as u64,
+            _ => unreachable!(),
+        }
+    })
 }
 
 /// Capture the authenticated caller of the current Console -> braind IPC
@@ -5672,6 +5706,97 @@ fn sys_secret_remove_temp(frame: &mut SyscallFrame) -> u64 {
     }
 }
 
+/// Snapshot authority before taking VFS; no scheduler/IPC lock inside lookup.
+fn resolve_native_existing(
+    path: &str,
+    search_final: bool,
+) -> Result<sunlight_fs::vfs::ResolvedPath, u64> {
+    if path.is_empty() {
+        return Err(ERR_NOENT);
+    }
+    let (uid, gid, _) = current_fs_actor();
+    let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
+    let host_key_admin = has_host_key_admin();
+    let trusted_kv = crate::sched::with_scheduler(|s| s.current_process().trusted_kv_service);
+    let mut guard = crate::KERNEL_VFS.lock();
+    let vfs = guard.as_mut().ok_or(ERR_EIO)?;
+    let resolved = vfs
+        .resolve_existing_authorized(
+            &cwd,
+            path,
+            &sunlight_fs::Credential { uid, gid },
+            &mut |name| {
+                if (private_secret_child(name) && !host_key_admin)
+                    || (name == "/var/lib/sunlight-kv/broker.store" && !trusted_kv)
+                {
+                    Err(sunlight_fs::FsError::PermissionDenied)
+                } else {
+                    Ok(())
+                }
+            },
+        )
+        .map_err(|error| {
+            // The syscall has already bounded and decoded its C string; the
+            // remaining InvalidPath is an overlong cwd-plus-component result.
+            if error == sunlight_fs::FsError::InvalidPath {
+                ERR_ERANGE
+            } else {
+                fs_error_raw(error)
+            }
+        })?;
+    if search_final {
+        if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
+            return Err(ERR_ENOTDIR);
+        }
+        if !sunlight_fs::check_permission(
+            &resolved.metadata.native,
+            &sunlight_fs::Credential { uid, gid },
+            sunlight_fs::PermCheck::Execute,
+        ) {
+            return Err(ERR_EACCES);
+        }
+    }
+    Ok(resolved)
+}
+
+/// Read-only canonical observation. Capacity includes the terminating NUL;
+/// short output buffers are untouched, and success returns payload length.
+fn sys_resolve_path(frame: &mut SyscallFrame) -> u64 {
+    if frame.rsi == 0 || frame.rdx == 0 || frame.r10 & !1 != 0 {
+        return ERR_EINVAL;
+    }
+    let bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+        Ok(bytes) => bytes,
+        Err(crate::memory::user::UserMemoryError::StringTooLong) => return ERR_ERANGE,
+        Err(error) => return user_memory_failure(error),
+    };
+    let path = match core::str::from_utf8(&bytes) {
+        Ok(path) => path,
+        Err(_) => return ERR_EINVAL,
+    };
+    if path.is_empty() {
+        return ERR_NOENT;
+    }
+    let resolved = match resolve_native_existing(path, frame.r10 & 1 != 0) {
+        Ok(value) => value,
+        Err(error) => return error,
+    };
+    let len = resolved.path.len();
+    if frame.rdx <= len as u64 {
+        return ERR_ERANGE;
+    }
+    // Allocation was reserved by VFS; append NUL after dropping the VFS lock.
+    let mut output = resolved.path.into_bytes();
+    if output.try_reserve_exact(1).is_err() {
+        return ERR_ENOMEM;
+    }
+    output.push(0);
+    match copy_to_user(frame.rsi, &output) {
+        Ok(()) => len as u64,
+        Err(error) => error,
+    }
+}
+
 fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
     let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
         Ok(bytes) => bytes,
@@ -5682,39 +5807,14 @@ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
         Err(_) => return u64::MAX,
     };
 
-    // Resolve against current CWD if relative.
-    let resolved_buf;
-    let abs_path: &str = if path.starts_with('/') {
-        path
-    } else {
-        let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
-        resolved_buf = if cwd == "/" {
-            alloc::format!("/{}", path)
-        } else {
-            alloc::format!("{}/{}", cwd, path)
-        };
-        resolved_buf.as_str()
+    let resolved = match resolve_native_existing(path, true) {
+        Ok(value) => value,
+        Err(error) => return error,
     };
-
-    // Verify the path resolves to a directory. Directories are not regular
-    // file handles, so VFS::open intentionally rejects them.
-    {
-        let mut guard = crate::KERNEL_VFS.lock();
-        let Some(vfs) = guard.as_mut() else {
-            return u64::MAX;
-        };
-        match vfs.stat(abs_path) {
-            Ok(stat) if stat.file_type == sunlight_fs::vfs::FileType::Directory => {}
-            Ok(_) => {
-                crate::serial_println!("[HELIOS] chdir({}) -> not a directory", abs_path);
-                return ERR_ENOTDIR;
-            }
-            Err(_) => {
-                crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
-                return ERR_NOENT;
-            }
-        }
+    if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
+        return ERR_ENOTDIR;
     }
+    let abs_path = resolved.path.as_str();
 
     crate::sched::with_scheduler(|s| {
         s.current_shared_process_mut().cwd = alloc::string::String::from(abs_path);
@@ -10574,7 +10674,7 @@ fn sys_fstat(frame: &mut SyscallFrame) -> u64 {
         };
         match vfs.fstat_handle(VfsHandle(vfs_handle)) {
             Ok(s) => s,
-            Err(_) => return u64::MAX,
+            Err(error) => return if is_linux { linux_from_fs(error) } else { fs_error_raw(error) },
         }
     };
 

@@ -1,0 +1,3 @@
+I1 worker independently alive
+I3 initial calling pthread_exit with live worker
+I2 initial TLS cleanup entered

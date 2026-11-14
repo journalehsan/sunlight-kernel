@@ -1,0 +1,10 @@
+[
+  {
+    "name": "ipc-continuity",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-ipc-continuity-v2.elf",
+    "args": [
+      "3"
+    ],
+    "expected_exit": 0
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "incoming_files": 83740,
+  "changed_incoming": [
+    "sunlight-libc/src/c_file.rs",
+    "ipc/src/lib.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "sunlight-files/src/main.rs",
+    "sunlight-fs/src/tmpfs.rs",
+    "sunlight-fs/src/vfs.rs",
+    "sunlight-fs/src/vfs/storage_tests.rs",
+    "sunlight-libc/include/errno.h",
+    "sunlight-libc/include/limits.h",
+    "sunlight-libc/include/stdlib.h",
+    "sunlight-libc/src/lib.rs",
+    "sunlight-libc/src/sys.rs",
+    "sunshell/src/main.rs",
+    "sunshell/src/native_script.rs"
+  ],
+  "unexpected_changes": [],
+  "missing": [],
+  "final_source_matches": true,
+  "patch_applies": true,
+  "patch_reverses": true,
+  "scope": "Tracked/unignored regular files; excludes directory/symlink metadata and ignored generated images. Incoming hashes reconstructed from preserved prior snapshots/patches or Git and verified against this run baseline; all 14 modified incoming files saved under incoming/. Earlier evidence regular files are included in preservation comparison."
+}

@@ -1,0 +1,43 @@
+{
+  "ownership": "Retained original Process; no additional ThreadGroup object",
+  "identity": "AddressSpaceIdentity root+generation and original PID/incarnation; task identity remains separate",
+  "terminal": "native_group_exit: None -> Some(first code), serialized by SCHEDULER; Reaped remains physical retirement",
+  "membership": "Existing bounded task table; reserve through publish under one scheduler guard, exact VM identity. Finished owner allowed only with no terminal receipt. No new refcount",
+  "contracts": {
+    "T1": {
+      "status": "PASS",
+      "evidence": "W1/W2 and retained-admission on 1/2/4"
+    },
+    "T2": {
+      "status": "PASS",
+      "evidence": "C pthread and TLS/once suites on 1/2/4"
+    },
+    "T3": {
+      "status": "PASS",
+      "evidence": "W3 final surviving borrower and all group owner resources physically retired on 1/2/4"
+    },
+    "T4": {
+      "status": "PARTIAL",
+      "evidence": "exit23/raw15729 and main17 with live borrowers pass; new group-parent wait schedule NOT_RUN"
+    },
+    "T5": {
+      "status": "PARTIAL",
+      "evidence": "original live and retained-owner SIGKILL137 pass; group capability/mapping revocation under fault remains unqualified"
+    },
+    "T6": {
+      "status": "PASS",
+      "evidence": "main return17 + one atexit callback kills live borrower on 1/2/4; Rust/IPC wrappers now157"
+    },
+    "T7": {
+      "status": "PARTIAL",
+      "evidence": "group liveness and host exact-session scan; real retained-owner PTY witness NOT_RUN"
+    },
+    "T8": {
+      "status": "PARTIAL",
+      "evidence": "exact VM group/descriptor lookup, existing generation-qualified privileged paths; native W8 NOT_RUN"
+    }
+  },
+  "task_scoped_authority": "Task-owned IPC endpoints close at that task death; dead-task grants remain unavailable. No borrower owner impersonation or trusted-service transfer",
+  "process_helpers": "IPC ProcessExit::exit and Rust libc exit use existing157. Worker/pthread trampolines retain20. C exit/main and std sl_std_exit retain157",
+  "no_new_c_exports": true
+}

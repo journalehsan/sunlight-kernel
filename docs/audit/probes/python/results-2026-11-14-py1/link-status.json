@@ -1,0 +1,12 @@
+{
+  "status": "NOT_RUN",
+  "reason": "Core compilation exits 2; mandatory objects absent",
+  "interpreter": null,
+  "link_command": null,
+  "archive_order": null,
+  "unresolved_symbols": null,
+  "duplicate_symbols": null,
+  "relocation_failures": null,
+  "crt": "native archive _start -> sl_std_start -> C main; exercised by native fixtures only",
+  "tls": "native toolchain static x86-64 TLS; CPython link not reached"
+}

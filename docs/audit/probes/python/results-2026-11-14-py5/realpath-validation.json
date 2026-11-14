@@ -1,0 +1,25 @@
+{
+  "status": "BLOCKED",
+  "implemented": false,
+  "reason": "No shared permission-preserving component resolver, native links or canonical existing-path result. handle_path mount repair does not establish any of these.",
+  "scenarios": {
+    "relative": "NOT_RUN",
+    "absolute": "NOT_RUN",
+    "cwd": "NOT_RUN",
+    "dot": "NOT_RUN",
+    "dotdot": "NOT_RUN",
+    "repeated_separators": "NOT_RUN",
+    "intermediate_symlink": "NOT_RUN",
+    "final_symlink": "NOT_RUN",
+    "chains": "NOT_RUN",
+    "loops": "NOT_RUN",
+    "mount_crossing": "NOT_RUN",
+    "existence": "NOT_RUN",
+    "permission_failure": "NOT_RUN",
+    "allocation_NULL": "NOT_RUN",
+    "caller_buffer": "NOT_RUN",
+    "errno": "NOT_RUN"
+  },
+  "buffer_contract": "No realpath symbol added. Success with unknown-sized caller buffer is not claimed; future interface must document PATH_MAX requirements or explicit capacity extension.",
+  "security": "Result would remain a raced observation, never an atomic authorization boundary."
+}

@@ -1,0 +1,138 @@
+{
+  "status": "BLOCKED",
+  "root_cause": "native owner syscall 20 terminates address-space borrowers",
+  "kernel_patch_applied": false,
+  "witnesses": [
+    {
+      "run": "initial-exit-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "f1f565bb6a1c92c0d77e3bcea24fe60f36b3f6cd304b14210cb2f7b09ea06a6c",
+      "serial_log": "initial-exit-cpu-1/serial.log",
+      "serial_sha256": "b20c38da4925516ff88593f078e1a02b462c19bcb2c4e3893725f11f582b089f",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 1,
+      "witness_id": "IEXIT-1",
+      "worker_alive": true,
+      "initial_pthread_exit_entered": true,
+      "worker_survived": false,
+      "worker_cleanup": false,
+      "killed_borrower_tids": [
+        "101"
+      ],
+      "contract_status": "FAIL",
+      "exit_zero_is_only_observation_success": true,
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ]
+      ]
+    },
+    {
+      "run": "initial-exit-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "cdb8773eb2755c7bad98af75c13c1e705c9e6dd15618efb352d8d450a82eb31d",
+      "serial_log": "initial-exit-cpu-2/serial.log",
+      "serial_sha256": "862d5b40e54f15d1c752bd15d02f5965df3c9f89b9963f889cecfacc4ecbb797",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 2,
+      "witness_id": "IEXIT-2",
+      "worker_alive": true,
+      "initial_pthread_exit_entered": true,
+      "worker_survived": false,
+      "worker_cleanup": false,
+      "killed_borrower_tids": [
+        "101"
+      ],
+      "contract_status": "FAIL",
+      "exit_zero_is_only_observation_success": true,
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ]
+      ]
+    },
+    {
+      "run": "initial-exit-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "24145d92ea381c5f67285adee9d5d80ce22fd589a80caa21acb2a1095aff2069",
+      "serial_log": "initial-exit-cpu-4/serial.log",
+      "serial_sha256": "a52f4342fc676436ea6e46fd5d18d8e9f85d6d93c1f20f27512eb7987d62adae",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 4,
+      "witness_id": "IEXIT-4",
+      "worker_alive": true,
+      "initial_pthread_exit_entered": true,
+      "worker_survived": false,
+      "worker_cleanup": false,
+      "killed_borrower_tids": [
+        "101"
+      ],
+      "contract_status": "FAIL",
+      "exit_zero_is_only_observation_success": true,
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ]
+      ]
+    }
+  ],
+  "coordination": "worker prints alive then releases initial-thread gate; initial TLS destructor proves pthread_exit was entered; kernel termination trace establishes borrower death. Worker observation delay is not claimed as post-exit overlap barrier.",
+  "proposed_patch_plan": "lifecycle-ownership.md",
+  "_Exit_api": {
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c",
+      "-o",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.elf"
+    ],
+    "exit": 1,
+    "api": "_Exit",
+    "status": "FAIL"
+  },
+  "_Exit_link": {
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c",
+      "-o",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.elf"
+    ],
+    "exit": 1,
+    "status": "FAIL"
+  }
+}

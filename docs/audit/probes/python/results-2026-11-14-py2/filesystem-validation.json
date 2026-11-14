@@ -1,0 +1,15 @@
+{
+  "status": "PARTIAL",
+  "descriptor_operations": "PASS for tested open/fcntl/unlink/lseek/stream paths on 1/2/4 CPUs",
+  "stat": "BLOCKED",
+  "fstat": "BLOCKED for POSIX struct stat; existing native 24-byte fstat export preserved",
+  "lstat": "BLOCKED",
+  "directory_metadata": "NOT_RUN for new POSIX API; no complete public stat representation implemented",
+  "reason": "Native Stat exposes size, uid, gid, mode, file_type and nlinks. No inode/device identity, timestamps, block accounting or symlink-specific metadata in this wire ABI. Do not fill unavailable attributes with fabricated values.",
+  "source": [
+    "sunlight-libc/src/lib.rs: Stat",
+    "sunlight-libc/src/fd.rs: fstat",
+    "kernel/src/arch/x86_64/syscall.rs: existing native stat/fstat (read only)"
+  ],
+  "errno": "Existing native error mapping is preserved; reserved errno names do not promise that all errors can arise."
+}

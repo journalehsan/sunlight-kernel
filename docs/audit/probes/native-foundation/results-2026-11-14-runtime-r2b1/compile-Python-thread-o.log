@@ -1,0 +1,143 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2  -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/thread.o /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:9:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval.h:13:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_interp.h:15:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:11:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:8:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pythread.h:66:9: error: unknown type name 'pthread_condattr_t'; did you mean 'pthread_attr_t'?
+   66 |         pthread_condattr_t *ptr;
+      |         ^~~~~~~~~~~~~~~~~~
+      |         pthread_attr_t
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:34:3: note: 'pthread_attr_t' declared here
+   34 | } pthread_attr_t;
+      |   ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:9:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval.h:13:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_interp.h:15:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:53:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+   53 |     PyCOND_T cond;
+      |     ^~~~~~~~
+      |     pthread_once_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:22:42: note: 'pthread_once_t' declared here
+   22 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:9:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval.h:13:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_interp.h:15:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:58:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+   58 |     PyCOND_T switch_cond;
+      |     ^~~~~~~~
+      |     pthread_once_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:22:42: note: 'pthread_once_t' declared here
+   22 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:9:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval.h:13:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_interp.h:23:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:3:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:226:60: warning: declaration of 'struct timespec' will not be visible outside of this function [-Wvisibility]
+  226 | extern int _PyTime_FromTimespec(PyTime_t *tp, const struct timespec *ts);
+      |                                                            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:232:55: warning: declaration of 'struct timespec' will not be visible outside of this function [-Wvisibility]
+  232 | PyAPI_FUNC(int) _PyTime_AsTimespec(PyTime_t t, struct timespec *ts);
+      |                                                       ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:237:62: warning: declaration of 'struct timespec' will not be visible outside of this function [-Wvisibility]
+  237 | PyAPI_FUNC(void) _PyTime_AsTimespec_clamp(PyTime_t t, struct timespec *ts);
+      |                                                              ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:148:21: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+  148 | _PyThread_cond_init(PyCOND_T *cond)
+      |                     ^~~~~~~~
+      |                     pthread_once_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:22:42: note: 'pthread_once_t' declared here
+   22 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:150:12: error: call to undeclared function 'pthread_cond_init'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  150 |     return pthread_cond_init(cond, condattr_monotonic);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:155:43: warning: declaration of 'struct timespec' will not be visible outside of this function [-Wvisibility]
+  155 | _PyThread_cond_after(long long us, struct timespec *abs)
+      |                                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:171:33: error: incompatible pointer types passing 'struct timespec *' to parameter of type 'struct timespec *' [-Wincompatible-pointer-types]
+  171 |     _PyTime_AsTimespec_clamp(t, abs);
+      |                                 ^~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_time.h:237:72: note: passing argument to parameter 'ts' here
+  237 | PyAPI_FUNC(void) _PyTime_AsTimespec_clamp(PyTime_t t, struct timespec *ts);
+      |                                                                        ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:193:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+  193 |     pthread_cond_t   lock_released;
+      |     ^~~~~~~~~~~~~~
+      |     pthread_once_t
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:22:42: note: 'pthread_once_t' declared here
+   22 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:661:14: error: call to undeclared function 'pthread_cond_destroy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  661 |     status = pthread_cond_destroy( &thelock->lock_released );
+      |              ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:661:14: note: did you mean 'pthread_attr_destroy'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:54:5: note: 'pthread_attr_destroy' declared here
+   54 | int pthread_attr_destroy(pthread_attr_t *attr);
+      |     ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread.c:64:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:700:21: error: variable has incomplete type 'struct timespec'
+  700 |     struct timespec abs_timeout;
+      |                     ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:700:12: note: forward declaration of 'struct timespec'
+  700 |     struct timespec abs_timeout;
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:709:22: error: call to undeclared function 'pthread_cond_timedwait'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  709 |             status = pthread_cond_timedwait(&thelock->lock_released,
+      |                      ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:720:22: error: call to undeclared function 'pthread_cond_wait'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  720 |             status = pthread_cond_wait(
+      |                      ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Python/thread_pthread.h:770:14: error: call to undeclared function 'pthread_cond_signal'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  770 |     status = pthread_cond_signal( &thelock->lock_released );
+      |              ^
+11 warnings and 12 errors generated.
+make: *** [Makefile:3005: Python/thread.o] Error 1

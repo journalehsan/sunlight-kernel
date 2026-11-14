@@ -1,0 +1,5 @@
+{
+  "fixture_sha256": "87732fc96eb362b3793f5a71119937d5a1a6e27e28fde6d1ef7b4dc0468fa3f2",
+  "elf_sha256": "d2574c80ae73a70b0d12ff37d19937586ea7c151b6a5b4af966ddc9a7ece1db3",
+  "policy": "ordinary headless unauthenticated uid=1000; no system allocation authority"
+}

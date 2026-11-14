@@ -1,0 +1,12 @@
+{
+  "command": [
+    "make",
+    "-k",
+    "-j4",
+    "-W",
+    "/tmp/sunlight-py1-cpython/Python-3.13.0/Include/Python.h",
+    "python"
+  ],
+  "cwd": "/tmp/sunlight-py2-cpython/cross-static",
+  "exit": 2
+}

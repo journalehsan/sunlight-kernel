@@ -1,0 +1,23 @@
+    Updating crates.io index
+    Blocking waiting for file lock on package cache
+     Locking 7 packages to latest compatible versions
+ Downloading crates ...
+  Downloaded spin v0.9.9
+    Blocking waiting for file lock on package cache
+   Compiling scopeguard v1.2.0
+   Compiling sunlight-block v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling lock_api v0.4.14
+   Compiling spin v0.9.9
+   Compiling sunlight-fat v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+   Compiling sunlight-mm v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-mm)
+   Compiling sunlight-fs v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling py6-fat-lifetime v0.0.0 (/tmp/sunlight-py6-fat-lifetime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.87s
+     Running `/tmp/sunlight-py6-fat-lifetime/target/x86_64-unknown-linux-gnu/debug/py6-fat-lifetime size`
+other descriptor size=0, actual path size=7
+
+thread 'main' (1569813) panicked at src/main.rs:74:4:
+assertion `left == right` failed: FAT descriptor metadata must refer to the current object
+  left: 0
+ right: 7
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

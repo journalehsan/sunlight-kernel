@@ -1,0 +1,286 @@
+{
+  "status": "PARTIAL",
+  "controlled_native_witnesses": [
+    {
+      "run": "tls-controlled-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "327c49f0a9e9a1c564179430e2a098f7ca9e251391f7fd8e784281816977627a",
+      "serial_log": "tls-controlled-cpu-1/serial.log",
+      "serial_sha256": "c4273ac36a29736257c749710a050852b8cc725222404eef206b66df88b0ce08",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated\nT2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked\nT3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0\nT4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete\nT5 delete/reuse while callback held old=384 reused=512\nT6 selected callback completed after delete/reuse\nT7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 1,
+      "witness_id": "TLS-CONTROLLED-1",
+      "coordination_states": [
+        "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated",
+        "T2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked",
+        "T3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0",
+        "T4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete",
+        "T5 delete/reuse while callback held old=384 reused=512",
+        "T6 selected callback completed after delete/reuse",
+        "T7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0"
+      ],
+      "overlap": "callback held between T4 and T6 while initial thread deletes/reuses at T5; stale worker cell held between T1 and T3 across T2 deletion/reuse",
+      "terminal_outcome": "two joins and one callback",
+      "resource_counts": {
+        "joined_threads": 2,
+        "remaining_live_keys": 0
+      },
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ]
+      ],
+      "public_pthread_handle_reuse_observed": true
+    },
+    {
+      "run": "tls-controlled-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "fb608c96d8a26a7a389ff6e6495db7009eb034742d0b068360b120f84b7aabac",
+      "serial_log": "tls-controlled-cpu-2/serial.log",
+      "serial_sha256": "54d2e740adad0e5e30ddf87e647d485d721bb78901f0964ca6b44606df751f8f",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated\nT2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked\nT3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0\nT4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete\nT5 delete/reuse while callback held old=384 reused=512\nT6 selected callback completed after delete/reuse\nT7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 2,
+      "witness_id": "TLS-CONTROLLED-2",
+      "coordination_states": [
+        "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated",
+        "T2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked",
+        "T3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0",
+        "T4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete",
+        "T5 delete/reuse while callback held old=384 reused=512",
+        "T6 selected callback completed after delete/reuse",
+        "T7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0"
+      ],
+      "overlap": "callback held between T4 and T6 while initial thread deletes/reuses at T5; stale worker cell held between T1 and T3 across T2 deletion/reuse",
+      "terminal_outcome": "two joins and one callback",
+      "resource_counts": {
+        "joined_threads": 2,
+        "remaining_live_keys": 0
+      },
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ]
+      ],
+      "public_pthread_handle_reuse_observed": true
+    },
+    {
+      "run": "tls-controlled-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "d4ae813f2c5b69cfaf850bc192f7806e2324b56297ef61723d2697db2794d87f",
+      "serial_log": "tls-controlled-cpu-4/serial.log",
+      "serial_sha256": "a6015378d9a14bdc031d7eb651a31c413b0f06ce3bab518c2fbe00a5212d429e",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated\nT2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked\nT3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0\nT4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete\nT5 delete/reuse while callback held old=384 reused=512\nT6 selected callback completed after delete/reuse\nT7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "cpus": 4,
+      "witness_id": "TLS-CONTROLLED-4",
+      "coordination_states": [
+        "T1 holder=0x1000002040 old=128 index=0 generation=1 cell=populated",
+        "T2 deleting=0x4053f0 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked",
+        "T3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0",
+        "T4 callback=0x1000002040 key=384 generation=3 cell=cleared reentrancy=complete",
+        "T5 delete/reuse while callback held old=384 reused=512",
+        "T6 selected callback completed after delete/reuse",
+        "T7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0"
+      ],
+      "overlap": "callback held between T4 and T6 while initial thread deletes/reuses at T5; stale worker cell held between T1 and T3 across T2 deletion/reuse",
+      "terminal_outcome": "two joins and one callback",
+      "resource_counts": {
+        "joined_threads": 2,
+        "remaining_live_keys": 0
+      },
+      "kernel_spawn_identities": [
+        [
+          "100",
+          "101"
+        ],
+        [
+          "100",
+          "102"
+        ]
+      ],
+      "public_pthread_handle_reuse_observed": true
+    }
+  ],
+  "additional_inflight_destructor_runs": [
+    {
+      "run": "tls-exit-race-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "a1ec50e5deb80c969c090246a8ddefb402088eb2bc467e42eb0ea61aec3ababc",
+      "serial_log": "tls-exit-race-cpu-1/serial.log",
+      "serial_sha256": "7d91986486f50ddd801556616a9846eaafef85bceb351786364a8fce9a7c5942",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "tls-exit-race-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "3a026946031d635547e98263bf698b10c0714bb6a4879c855c387b5445a4f74e",
+      "serial_log": "tls-exit-race-cpu-2/serial.log",
+      "serial_sha256": "a33909c9650d33bb942774297d19a9a6547ccf6dcd95cb182f6d4f10d9ff1c0e",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "tls-exit-race-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "f48fa1734279a91e9f8bc3d90e44d1c81470d7d1e1531a3e6d29ba6ed0c15851",
+      "serial_log": "tls-exit-race-cpu-4/serial.log",
+      "serial_sha256": "0434fb62cdd59c1e9b1bf512f3dbf1d649a8f82d5ce4f5a6465bcac33390b5d7",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    }
+  ],
+  "qualified_schedules": [
+    "key reuse while stale TCB value retained",
+    "destructor callback versus delete/reuse",
+    "destructor reentrancy through create/set/get/delete",
+    "explicit worker pthread_exit runs callback before Reaped/join"
+  ],
+  "unqualified_schedules": [
+    {
+      "schedule": "key create versus delete",
+      "status": "UNQUALIFIED",
+      "reason": "no controlled API-internal registry-lock overlap witness"
+    },
+    {
+      "schedule": "key delete versus getspecific",
+      "status": "UNQUALIFIED",
+      "reason": "no controlled API-internal registry-lock overlap witness"
+    },
+    {
+      "schedule": "key delete versus setspecific",
+      "status": "UNQUALIFIED",
+      "reason": "no controlled API-internal registry-lock overlap witness"
+    },
+    {
+      "schedule": "detached exit versus registry cleanup",
+      "status": "UNQUALIFIED",
+      "reason": "detached accounting proves callback and reap order, not concurrent registry-lock overlap"
+    },
+    {
+      "schedule": "initial-thread exit versus live worker",
+      "status": "BLOCKED",
+      "reason": "native owner teardown kills borrower"
+    },
+    {
+      "schedule": "final-thread exit versus process termination",
+      "status": "BLOCKED",
+      "reason": "initial thread cannot exit independently, so surviving final worker scenario is unavailable"
+    }
+  ],
+  "opaque_pthread_identity": "Control pointers are untagged and allocation reuse can alias stale handles; valid-handle tests do not qualify a stronger stale pthread_t guarantee",
+  "generation_design": "128 static slots, index low 7 bits, nonwrapping generation high bits; reentrant callbacks run after unlock; four destructor passes",
+  "functional_fixture_runs": [
+    {
+      "run": "focused-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "029028010473a34e6fede7bc41fcb3ab4e596d1f98f67341ca767ef94d401783",
+      "serial_log": "focused-cpu-1/serial.log",
+      "serial_sha256": "23f9dbfe09617d9b059d2d223addeb98ee56774c390107db81827bceaaadd871",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "focused-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "758542c5f948d81f85cc765d8ccc9b3cd1cbaa777850a13c5abdafaf9a9fd175",
+      "serial_log": "focused-cpu-2/serial.log",
+      "serial_sha256": "d0c797154a8479b206160d2bec1189a6dd6ef57521adc10b6b2dff32ffc4669c",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "focused-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "3ec90e3194cffbd9330f0cd5563bff366db358bbc33c194be60a7a655abf8d26",
+      "serial_log": "focused-cpu-4/serial.log",
+      "serial_sha256": "60ad5761df4aa730dff9298826e202ff0d85f38dca2d6081f2ffcdaa69e5ecc5",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    }
+  ]
+}

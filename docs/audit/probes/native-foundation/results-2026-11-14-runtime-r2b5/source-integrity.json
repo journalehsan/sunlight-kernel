@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "branch": "main",
+  "files_checked": 63705,
+  "symlinks_checked": 5638,
+  "changed_baseline_files": [],
+  "changed_symlinks": [],
+  "production_changes": [],
+  "prior_evidence_preserved": true,
+  "source_manifest": "source-baseline.json",
+  "command_boundary_checks": "executions.json and extra-executions.json; full baseline comparison at final assessment",
+  "binding_limit": "Installed-toolchain locked rebuild; no clean-room or bit-identical reproducibility claim. Per-guest ELF/kernel/log hashes and build commands retained."
+}

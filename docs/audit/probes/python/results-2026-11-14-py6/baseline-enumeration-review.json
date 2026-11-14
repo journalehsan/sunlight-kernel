@@ -1,0 +1,5 @@
+{
+  "status": "PASS",
+  "current_nonbaseline_regular_files": [],
+  "method": "NUL-delimited Git listing comparison; excludes authorized new report, production file and this evidence directory"
+}

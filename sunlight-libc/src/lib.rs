@@ -40,6 +40,8 @@ pub mod env;
 pub mod errno;
 /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
 pub mod fd;
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+mod c_file;
 pub mod termios;
 /// Shared file-manager copy/move operations (requires an application allocator).
 #[cfg(any(test, feature = "file-ops"))]
@@ -50,7 +52,7 @@ pub mod langinfo;
 /// Launch-trace argv parsing for GUI apps.
 pub mod launch_trace;
 /// Process locale selection and environment/configuration bridge.
-#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+#[cfg(any(test, all(feature = "native-std", target_os = "sunlightos")))]
 pub mod locale;
 /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
 pub mod mem;
@@ -211,6 +213,37 @@ pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
         return Err(Errno::Failed);
     }
     bounded_cwd_len(buf)
+}
+
+/// Authoritative existing-object canonical path in the current namespace.
+/// The result is an observation, not authority or a pin for a later operation.
+/// Output capacity includes NUL; no partial output on a short buffer.
+pub fn resolve_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
+    resolve_path_with_flags(path, output, 0)
+}
+
+/// Canonical path plus final directory type/search validation for navigation.
+pub fn resolve_directory_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
+    resolve_path_with_flags(path, output, 1)
+}
+
+fn resolve_path_with_flags(path: &[u8], output: &mut [u8], flags: u64) -> Result<usize, Errno> {
+    let mut input = [0u8; MAX_PATH];
+    let ptr = cstr(&mut input, path)?;
+    let ret = unsafe {
+        sys::syscall4(
+            sys::SYS_RESOLVE_PATH,
+            ptr as u64,
+            output.as_mut_ptr() as u64,
+            output.len() as u64,
+            flags,
+        )
+    };
+    let len = sys::check(ret)? as usize;
+    if len >= output.len() || output[len] != 0 {
+        return Err(Errno::Failed);
+    }
+    Ok(len)
 }
 
 /// Change the current process CWD using the kernel's path-resolution contract.
@@ -947,7 +980,7 @@ pub fn mkdir_recursive(path: &[u8]) -> Result<(), Errno> {
 
 pub fn exit(code: u64) -> ! {
     unsafe {
-        sys::syscall1(sys::SYS_PROCESS_EXIT, code);
+        sys::syscall1(sys::SYS_PROCESS_EXIT_GROUP, code);
     }
     // The kernel never returns from ProcessExit; satisfy the type system.
     loop {
@@ -957,3 +990,20 @@ pub fn exit(code: u64) -> ! {
 
 #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
 pub mod wchar;
+
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+pub mod math;
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+pub mod inttypes;
+
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+pub mod ctype;
+
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+pub mod condvar;
+
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+mod wide_string;
+
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+mod sort;

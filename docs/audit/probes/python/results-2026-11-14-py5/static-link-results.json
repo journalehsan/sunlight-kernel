@@ -1,0 +1,8 @@
+{
+  "status": "NOT_RUN",
+  "reason": "15 mandatory configured objects fail; do not omit objects or fabricate symbols",
+  "native_execution": "NOT_RUN",
+  "interpreter_stdout": null,
+  "interpreter_exit": null,
+  "serial_build": "core-serial.log: realpath undeclared in mimalloc is first serial make blocker; full diagnostics include other independent requirements"
+}

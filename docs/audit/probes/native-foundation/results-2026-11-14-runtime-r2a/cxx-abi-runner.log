@@ -1,0 +1,1 @@
+Target ABI/unwind ownership, upstream integrity, final ELF/frame inspection PASS. Original command LINK_FAIL; configured historical native ELF linked. Local static guard ABI linked with target-built implementation. Runtime requires both guest configurations.

@@ -148,7 +148,7 @@ impl crate::sched::Scheduler {
             if !self.processes[index]
                 .foreground
                 .matches_session(broker, session, generation)
-                || self.processes[index].is_exiting()
+                || !self.processes[index].process_lifetime_live()
                 || !self.processes[index].foreground.session_owner
                 || self.processes[index].foreground.owned == 0
             {
@@ -163,6 +163,15 @@ impl crate::sched::Scheduler {
             128 + i32::from(signal)
         };
         for index in 0..self.processes.len() {
+            let retained_owner = self.processes[index].retained_native_group_live()
+                && self.processes[index]
+                    .foreground
+                    .matches_session(broker, session, generation);
+            if retained_owner {
+                let pid = self.processes[index].pid;
+                self.terminate_process_by_pid(pid, exit_code, "session-termination");
+                continue;
+            }
             if !self.processes[index]
                 .foreground
                 .matches_session(broker, session, generation)

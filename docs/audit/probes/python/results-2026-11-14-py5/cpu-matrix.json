@@ -1,0 +1,289 @@
+{
+  "extra_checks": {
+    "VFS_host": "PASS",
+    "FAT_host": "PASS",
+    "libm_vendor": "PASS"
+  },
+  "status": "PASS",
+  "cpus": {
+    "1": {
+      "C": {
+        "status": "PASS",
+        "passed": 73,
+        "total": 73,
+        "observed": 73
+      },
+      "CXX": {
+        "status": "PASS",
+        "passed": 21,
+        "total": 21,
+        "observed": 21
+      },
+      "lifecycle": {
+        "status": "PASS",
+        "passed": 17,
+        "total": 17,
+        "observed": 17
+      },
+      "PY3_functional": {
+        "status": "PASS",
+        "passed": 40,
+        "total": 40,
+        "observed": 40
+      },
+      "PY4": {
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "observed": 5
+      },
+      "PY5": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "all_functional": {
+        "status": "PASS",
+        "passed": 46,
+        "total": 46,
+        "observed": 46
+      },
+      "formatted_IO": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "heap_ABI": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "TLS_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "SunShell": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "TCP": {
+        "status": "NOT_RUN",
+        "reason": "Unsupported by retained runner at1 CPU"
+      }
+    },
+    "2": {
+      "C": {
+        "status": "PASS",
+        "passed": 73,
+        "total": 73,
+        "observed": 73
+      },
+      "CXX": {
+        "status": "PASS",
+        "passed": 21,
+        "total": 21,
+        "observed": 21
+      },
+      "lifecycle": {
+        "status": "PASS",
+        "passed": 17,
+        "total": 17,
+        "observed": 17
+      },
+      "PY3_functional": {
+        "status": "PASS",
+        "passed": 40,
+        "total": 40,
+        "observed": 40
+      },
+      "PY4": {
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "observed": 5
+      },
+      "PY5": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "all_functional": {
+        "status": "PASS",
+        "passed": 46,
+        "total": 46,
+        "observed": 46
+      },
+      "formatted_IO": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "heap_ABI": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "TLS_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "SunShell": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "TCP": {
+        "status": "PASS",
+        "reason": "Native loopback"
+      }
+    },
+    "4": {
+      "C": {
+        "status": "PASS",
+        "passed": 73,
+        "total": 73,
+        "observed": 73
+      },
+      "CXX": {
+        "status": "PASS",
+        "passed": 21,
+        "total": 21,
+        "observed": 21
+      },
+      "lifecycle": {
+        "status": "PASS",
+        "passed": 17,
+        "total": 17,
+        "observed": 17
+      },
+      "PY3_functional": {
+        "status": "PASS",
+        "passed": 40,
+        "total": 40,
+        "observed": 40
+      },
+      "PY4": {
+        "status": "PASS",
+        "passed": 5,
+        "total": 5,
+        "observed": 5
+      },
+      "PY5": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "all_functional": {
+        "status": "PASS",
+        "passed": 46,
+        "total": 46,
+        "observed": 46
+      },
+      "formatted_IO": {
+        "exit": 0,
+        "stdout": "PY2 FORMAT PASS oracle=1780\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "heap_ABI": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "TLS_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "SunShell": {
+        "status": "PASS",
+        "passed": 1,
+        "total": 1,
+        "observed": 1
+      },
+      "TCP": {
+        "status": "PASS",
+        "reason": "Native loopback"
+      }
+    }
+  },
+  "source_manifest": "validated-source.json",
+  "executions": "validated-executions.json",
+  "overlap": "Lifecycle17 is included in PY3 functional40; total46 includes PY4 five and PY5 one. Shell separate. Formatted I/O1780 per supported CPU."
+}

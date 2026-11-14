@@ -1,0 +1,9 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-cpu-2
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 442, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/guest.py", line 288, in main
+    add(case['name'], Path(case['elf']), case['expected_exit'], case.get('args', ()))
+                                         ~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'expected_exit'

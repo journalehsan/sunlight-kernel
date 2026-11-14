@@ -1,0 +1,7 @@
+{
+  "status": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "reason": "15 mandatory configured objects fail compilation; full interpreter link and initialization are gated. make-k logs may attempt helper targets; these are not an interpreter link.",
+  "unresolved_symbols": "NOT_RUN",
+  "startup_ABI": "NOT_RUN"
+}

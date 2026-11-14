@@ -1,0 +1,4 @@
+docs/audit/probes/python/results-2026-11-14-py7/filesystem-test.c:15:17: error: call to undeclared function 'dup'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   15 |  int duplicated=dup(old);CHECK(duplicated>=0);
+      |                 ^
+1 error generated.

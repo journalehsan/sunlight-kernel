@@ -116,6 +116,7 @@ pub(crate) mod t3r_fixture;
 #[cfg_attr(feature = "futex_lifecycle_test", path = "t4b_fixture.rs")]
 pub(crate) mod t4a_fixture;
 mod thread_admission;
+mod native_group;
 const _: () = assert!(quantum::NS_PER_TICK == crate::timekeeping::NS_PER_TICK);
 #[cfg(all(debug_assertions, feature = "pin_release_test"))]
 pub mod pin_release_test;
@@ -2087,7 +2088,15 @@ impl Scheduler {
         else {
             return idx;
         };
-        self.process_index_by_pid(tgid).unwrap_or(idx)
+        self.process_index_by_pid(tgid)
+            .filter(|owner| {
+                self.processes[idx].native_shared_owner.is_none()
+                    || (self.processes[*owner].native_group_owner()
+                        && self.processes[*owner].state != ProcessState::Reaped
+                        && self.processes[*owner].address_space.identity()
+                            == self.processes[idx].address_space.identity())
+            })
+            .unwrap_or(idx)
     }
 
     pub fn current_shared_process(&self) -> &Process {
@@ -2708,43 +2717,6 @@ impl Scheduler {
             .is_some_and(|idx| self.live_address_space_borrowers(idx) != 0)
     }
 
-    fn terminate_address_space_borrowers(&mut self, owner_idx: usize, reason: &str) {
-        let identity = self.processes[owner_idx].address_space.identity();
-        for idx in 0..self.processes.len() {
-            if idx == owner_idx
-                || self.processes[idx].owns_address_space
-                || self.processes[idx].address_space.identity() != identity
-                || matches!(
-                    self.processes[idx].state,
-                    ProcessState::Finished | ProcessState::Reaped
-                )
-            {
-                continue;
-            }
-            self.processes[idx].exit_code = 128 + 9;
-            #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
-            self.doorbell_peer_exit(idx);
-            #[cfg(all(debug_assertions, feature = "fastlane_mediated_accounting_test"))]
-            self.processes[idx].measurement.abort();
-            self.processes[idx].clear_futex_wait();
-            self.processes[idx].state = ProcessState::Finished;
-            self.processes[idx].slice_credit = None;
-            self.processes[idx].exit_cleanup_pending = true;
-            if self.processes[idx].native_thread {
-                note_native_borrower_finished();
-            }
-            self.remove_from_ready_queues(idx);
-            if self.processes[idx].owning_core != u8::MAX {
-                request_reschedule_on(self.processes[idx].owning_core as usize);
-            }
-            serial_println!(
-                "[SCHED] shared-address-space borrower pid={} terminated reason={}",
-                self.processes[idx].pid,
-                reason
-            );
-        }
-    }
-
     fn close_owned_ipc_endpoints(&mut self, pid: usize) {
         #[cfg(all(debug_assertions, feature = "fastlane_lifecycle_trace"))]
         let lifecycle_who = self.processes.iter().find(|p|p.pid==pid).map(crate::capability::delivery::RecipientIdentity::of);
@@ -2860,9 +2832,6 @@ impl Scheduler {
         if self.processes[idx].owns_address_space {
             let borrowers = self.live_address_space_borrowers(idx);
             if borrowers != 0 {
-                if self.processes[idx].linux_tgid.is_none() {
-                    self.terminate_address_space_borrowers(idx, "address-space-owner-exit");
-                }
                 #[cfg(feature = "verbose_diag")]
                 serial_println!(
                         "[SCHED] process_reap_blocked_reason idx={} reason=live_address_space_borrowers count={}",
@@ -3306,11 +3275,24 @@ impl Scheduler {
         let Some(idx) = self.process_index_by_pid(pid) else {
             return false;
         };
-        if matches!(
-            self.processes[idx].state,
-            ProcessState::Finished | ProcessState::Reaped
-        ) {
+        let retained_live_group = self.processes[idx].native_group_owner()
+            && self.processes[idx].native_group_exit.is_none()
+            && self.processes[idx].state == ProcessState::Finished;
+        if !retained_live_group
+            && matches!(
+                self.processes[idx].state,
+                ProcessState::Finished | ProcessState::Reaped
+            )
+        {
             return false;
+        }
+
+        if self.processes[idx].native_group_owner() {
+            self.begin_native_group_exit(idx, code, reason, Some(idx));
+            if retained_live_group {
+                self.reap_process_resources(idx);
+                return true;
+            }
         }
 
         serial_println!(
@@ -3339,7 +3321,14 @@ impl Scheduler {
             note_native_borrower_finished();
         }
         self.remove_from_ready_queues(idx);
-        note_process_finished(pid, self.processes[idx].name_str());
+        if let Some(owner) = self.native_group_owner_index(idx) {
+            if !self.native_group_has_live_tasks(owner) {
+                self.begin_native_group_exit(owner, code, "last-native-thread", None);
+            }
+        }
+        if !self.processes[idx].native_group_owner() {
+            note_process_finished(pid, self.processes[idx].name_str());
+        }
         serial_println!(
             "[SCHED] terminating pid={} name='{}' reason={}",
             pid,
@@ -3351,7 +3340,7 @@ impl Scheduler {
         let parent_waiting = self
             .process_mut_by_pid(parent_pid)
             .is_some_and(|parent| parent.wait_child == Some(pid));
-        if parent_waiting {
+        if parent_waiting && !self.processes[idx].native_group_owner() {
             self.wake_pid(parent_pid);
         }
 
@@ -3392,6 +3381,9 @@ impl Scheduler {
         else {
             return false;
         };
+        if self.processes[idx].native_group_owner() {
+            self.begin_native_group_exit(idx, code, "pending-fatal-signal", Some(idx));
+        }
         let pid = self.processes[idx].pid;
         serial_println!(
             "[SCHED] process_mark_finished pid={} name='{}' reason=pending-fatal-signal code={}",
@@ -3417,13 +3409,20 @@ impl Scheduler {
             note_native_borrower_finished();
         }
         self.remove_from_ready_queues(idx);
-        note_process_finished(pid, self.processes[idx].name_str());
+        if let Some(owner) = self.native_group_owner_index(idx) {
+            if !self.native_group_has_live_tasks(owner) {
+                self.begin_native_group_exit(owner, code, "last-native-thread", None);
+            }
+        }
+        if !self.processes[idx].native_group_owner() {
+            note_process_finished(pid, self.processes[idx].name_str());
+        }
 
         let parent_pid = self.processes[idx].ppid;
         let parent_waiting = self
             .process_mut_by_pid(parent_pid)
             .is_some_and(|parent| parent.wait_child == Some(pid));
-        if parent_waiting {
+        if parent_waiting && !self.processes[idx].native_group_owner() {
             self.wake_pid(parent_pid);
         }
 
@@ -4090,11 +4089,14 @@ pub fn run_mm0_address_space_lifecycle_test(hhdm_offset: x86_64::VirtAddr) {
     }
     assert_eq!(crate::PMM.lock().free_page_count(), free_with_owner_mapping);
 
-    // Owner exit still contains a live borrower and delays address-space
-    // reclamation until that borrower is terminal and Reaped.
+    // Stage terminal ownership with an unreaped borrower. Even after every
+    // task is Finished, the owner must retain the VM until borrower Reaped.
     let live_idx = sched.add_process(borrower(0xC100, owner_pid, shared_address_space));
     sched.processes[0].state = ProcessState::Finished;
     sched.processes[0].exit_cleanup_pending = true;
+    sched.processes[0].native_group_exit = Some(0);
+    sched.processes[live_idx].state = ProcessState::Finished;
+    sched.processes[live_idx].exit_cleanup_pending = true;
     sched.reap_process_resources(0);
     assert_eq!(sched.processes[0].state, ProcessState::Finished);
     assert_eq!(sched.processes[live_idx].state, ProcessState::Finished);
@@ -4433,6 +4435,15 @@ pub fn native_borrower_lifecycle_counts() -> (usize, usize, usize, usize, usize,
 /// and raise `#GP` (err=0) — the desktop "freeze after several app launches
 /// from the file manager" symptom.
 pub fn finish_current_process(code: i32, reason: &str) -> u64 {
+    finish_current_process_scoped(code, reason, true)
+}
+
+/// Native syscall 20 retires only its caller. Fatal exits remain group-wide.
+pub fn finish_current_thread(code: i32, reason: &str) -> u64 {
+    finish_current_process_scoped(code, reason, false)
+}
+
+fn finish_current_process_scoped(code: i32, reason: &str, group_exit: bool) -> u64 {
     serial_println!("[SCHED] process_exit_begin reason={}", reason);
     #[cfg(all(
         feature = "native_session_h4_test",
@@ -4528,7 +4539,15 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
 
     #[cfg(all(debug_assertions, feature = "quota_lifecycle_test"))]
     crate::memory::quota_lifecycle::process(&sched.processes[cur], "before-termination");
-    sched.cancel_foreground(cur, 1);
+    let native_owner = sched.native_group_owner_index(cur);
+    if group_exit {
+        if let Some(owner) = native_owner {
+            sched.begin_native_group_exit(owner, code, reason, Some(cur));
+        }
+    }
+    if native_owner.is_none() || !sched.processes[cur].native_group_owner() {
+        sched.cancel_foreground(cur, 1);
+    }
     #[cfg(all(debug_assertions, feature = "native_doorbell_test"))]
     sched.doorbell_peer_exit(cur);
     let my_pid = sched.processes[cur].pid;
@@ -4556,7 +4575,11 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     let is_borrower = sched.processes[cur].native_thread;
     {
         let process = &mut sched.processes[cur];
-        process.exit_code = code;
+        process.exit_code = if process.native_group_owner() {
+            process.native_group_exit.unwrap_or(code)
+        } else {
+            code
+        };
         process.clear_futex_wait();
         process.state = crate::process::ProcessState::Finished;
         process.exit_cleanup_pending = true;
@@ -4576,8 +4599,10 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
     }
     sched.set_core_current_task(cpu_id, None);
     sched.remove_from_ready_queues(cur);
-    if sched.processes[cur].owns_address_space && sched.processes[cur].linux_tgid.is_none() {
-        sched.terminate_address_space_borrowers(cur, "address-space-owner-exit");
+    if let Some(owner) = native_owner {
+        if !sched.native_group_has_live_tasks(owner) {
+            sched.begin_native_group_exit(owner, code, "last-native-thread", None);
+        }
     }
     if !is_linux_worker && sched.processes[cur].linux_tgid.is_none() {
         sched.close_owned_ipc_endpoints(my_pid);
@@ -4589,13 +4614,15 @@ pub fn finish_current_process(code: i32, reason: &str) -> u64 {
         my_name,
         reason
     );
-    note_process_finished(my_pid, my_name);
+    if !sched.processes[cur].native_group_owner() {
+        note_process_finished(my_pid, my_name);
+    }
 
     let parent_pid = sched.processes[cur].ppid;
     let parent_waiting = sched
         .process_mut_by_pid(parent_pid)
         .is_some_and(|parent| !is_linux_worker && parent.wait_child == Some(my_pid));
-    if parent_waiting {
+    if parent_waiting && !sched.processes[cur].native_group_owner() {
         sched.wake_pid(parent_pid);
     }
 

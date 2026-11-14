@@ -1,0 +1,68 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c -o Modules/_stat.o
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:322:15: error: use of undeclared identifier 'S_IFDIR'
+  322 | stat_S_ISFUNC(S_ISDIR,
+      | ~~~~~~~~~~~~~~^~~~~~~~
+  323 |     "S_ISDIR(mode) -> bool\n\n"
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  324 |     "Return True if mode is from a directory.");
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:318:31: note: expanded from macro 'stat_S_ISFUNC'
+  318 |        return PyBool_FromLong(isfunc(mode));                   \
+      |                               ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:326:15: error: use of undeclared identifier 'S_IFCHR'
+  326 | stat_S_ISFUNC(S_ISCHR,
+      | ~~~~~~~~~~~~~~^~~~~~~~
+  327 |     "S_ISCHR(mode) -> bool\n\n"
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  328 |     "Return True if mode is from a character special device file.");
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:318:31: note: expanded from macro 'stat_S_ISFUNC'
+  318 |        return PyBool_FromLong(isfunc(mode));                   \
+      |                               ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:30:41: note: expanded from macro 'S_ISCHR'
+   30 | #  define S_ISCHR(x) (((x) & S_IFMT) == S_IFCHR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:334:15: error: use of undeclared identifier 'S_IFREG'
+  334 | stat_S_ISFUNC(S_ISREG,
+      | ~~~~~~~~~~~~~~^~~~~~~~
+  335 |     "S_ISREG(mode) -> bool\n\n"
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  336 |     "Return True if mode is from a regular file.");
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:318:31: note: expanded from macro 'stat_S_ISFUNC'
+  318 |        return PyBool_FromLong(isfunc(mode));                   \
+      |                               ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:395:9: error: use of undeclared identifier 'S_IFREG'
+  395 |     if (S_ISREG(mode))  return '-';
+      |         ^~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:396:9: error: use of undeclared identifier 'S_IFDIR'
+  396 |     if (S_ISDIR(mode))  return 'd';
+      |         ^~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:400:9: error: use of undeclared identifier 'S_IFCHR'
+  400 |     if (S_ISCHR(mode))  return 'c';
+      |         ^~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:30:41: note: expanded from macro 'S_ISCHR'
+   30 | #  define S_ISCHR(x) (((x) & S_IFMT) == S_IFCHR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:561:27: error: use of undeclared identifier 'S_IFDIR'
+  561 |     ADD_INT_MACRO(module, S_IFDIR);
+      |                           ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:562:27: error: use of undeclared identifier 'S_IFCHR'
+  562 |     ADD_INT_MACRO(module, S_IFCHR);
+      |                           ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:564:27: error: use of undeclared identifier 'S_IFREG'
+  564 |     ADD_INT_MACRO(module, S_IFREG);
+      |                           ^~~~~~~
+9 errors generated.

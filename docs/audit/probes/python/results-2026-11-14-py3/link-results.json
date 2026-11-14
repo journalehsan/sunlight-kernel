@@ -1,0 +1,22 @@
+{
+  "status": "NOT_RUN",
+  "kind": "Genuine complete static interpreter link",
+  "reason": "Mandatory CPython core translation units fail compilation; prerequisite required objects absent. No dummy symbols, dropped objects, Linux host libraries or permissive undefined-symbol flags used.",
+  "diagnostic_link": "NOT_RUN",
+  "command": null,
+  "object_archive_inventory": "object-inventory.json and compile-commands.json record configured objects; no complete interpreter archive exists.",
+  "linker_map": null,
+  "undefined_symbols": null,
+  "duplicate_symbols": null,
+  "relocation_failures": null,
+  "TLS_model_failures": null,
+  "ABI_mismatches": null,
+  "symbol_categories": {
+    "required CPython core": "NOT_RUN",
+    "libc": "NOT_RUN",
+    "libm": "NOT_RUN",
+    "pthread": "NOT_RUN",
+    "kernel/platform integration": "NOT_RUN",
+    "optional extensions": "NOT_RUN"
+  }
+}

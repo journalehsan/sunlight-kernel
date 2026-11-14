@@ -1,0 +1,26 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE -o Python/codecs.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/codecs.c
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/codecs.c:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+4 warnings generated.

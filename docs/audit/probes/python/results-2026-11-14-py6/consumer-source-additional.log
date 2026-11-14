@@ -1,0 +1,66 @@
+sunlight-fetch/src/downloader.rs:235:    std::fs::write(path, data).map_err(|e| FetchError::IoError(e.to_string()))
+sunlight-fetch/src/downloader.rs:240:    std::fs::rename(from, to).map_err(|e| FetchError::IoError(e.to_string()))
+sunlight-fetch/src/downloader.rs:251:fn resolve_out_path(path: &str) -> String {
+sunlight-fetch/src/downloader.rs:261:    use sunlight_libc::{self as libc, Errno};
+sunlight-fetch/src/downloader.rs:265:    let abs = resolve_out_path(path);
+sunlight-fetch/src/downloader.rs:293:    use sunlight_libc::{self as libc, Errno};
+sunlight-fetch/src/downloader.rs:297:    let abs = resolve_out_path(path);
+sunlight-fetch/src/downloader.rs:298:    let fd = libc::open(abs.as_bytes()).map_err(|e| FetchError::IoError(errno_str(e)))?;
+sunlight-fetch/src/downloader.rs:317:fn errno_str(e: sunlight_libc::Errno) -> String {
+sunlight-fetch/src/downloader.rs:336:        use sunlight_libc::{self as libc, Errno, STDOUT};
+sunlight-docserv/src/backends/mupdf_backend.rs:40:            std::fs::metadata(path).context("stat document")?.len() <= 32 * 1024 * 1024,
+sunlight-docserv/src/backends/mupdf_backend.rs:50:        let bytes = std::fs::read(path).context("snapshot document")?;
+sunlight-docserv/src/backends/hayro_backend.rs:28:        let file = std::fs::File::open(path).context("open PDF snapshot")?;
+sunlight-light-lens/src/main.rs:26:use sunlight_libc::crt0;
+sunlight-light-lens/src/main.rs:27:use sunlight_libc::{self as libc, DirEntry, FT_FILE};
+sunlight-light-lens/src/main.rs:72:struct PathBuf {
+sunlight-light-lens/src/main.rs:77:impl PathBuf {
+sunlight-light-lens/src/main.rs:275:    current_path: PathBuf,
+sunlight-light-lens/src/main.rs:276:    sibling_paths: [PathBuf; MAX_SIBLINGS],
+sunlight-light-lens/src/main.rs:336:    fn new(initial_path: Option<PathBuf>) -> Self {
+sunlight-light-lens/src/main.rs:338:            current_path: PathBuf::empty(),
+sunlight-light-lens/src/main.rs:339:            sibling_paths: [PathBuf::empty(); MAX_SIBLINGS],
+sunlight-light-lens/src/main.rs:612:    fn open_path(&mut self, path: PathBuf) {
+sunlight-light-lens/src/main.rs:664:        let stat = match libc::stat(self.current_path.as_bytes()) {
+sunlight-light-lens/src/main.rs:687:        let fd = match libc::open(self.current_path.as_bytes()) {
+sunlight-light-lens/src/main.rs:755:        let Ok(count) = libc::read_dir(parent.as_bytes(), &mut entries) else {
+sunlight-light-lens/src/main.rs:1347:    sunlight_libc::launch_trace::init_from_argv(argc, argv);
+sunlight-light-lens/src/main.rs:1382:fn parse_user_path_arg(argc: u64, argv: *const *const u8) -> Option<PathBuf> {
+sunlight-light-lens/src/main.rs:1394:        return PathBuf::from_bytes(bytes);
+sunlight-docserv/src/backends/ghostscript_backend.rs:9:    path::{Path, PathBuf},
+sunlight-docserv/src/backends/ghostscript_backend.rs:17:struct TemporaryPdf(PathBuf);
+sunlight-docserv/src/backends/ghostscript_backend.rs:20:        let _ = std::fs::remove_file(&self.0);
+sunlight-docserv/src/backends/ghostscript_backend.rs:27:        let source = std::fs::canonicalize(path).context("locate PostScript source")?;
+sunlight-docserv/src/ipc.rs:8:pub type DocumentPath = std::path::PathBuf;
+sunlight-docserv/src/ipc.rs:12:use DocumentPath as PathBuf;
+sunlight-docserv/src/ipc.rs:18:    Open { path: PathBuf },
+services/sunlight-terminal/src/main.rs:2422:                std::fs::write(alloc::format!("{}-{}.ppm", prefix, mode), image).unwrap();
+services/sunlight-terminal/src/main.rs:2804:    sunlight_libc::launch_trace::init_from_argv(argc, argv);
+services/sunlight-terminal/src/main.rs:2902:    let count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+services/sunlight-dialogd/src/main.rs:25:use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE, MAX_PATH};
+services/sunlight-dialogd/src/main.rs:158:struct PathBuf {
+services/sunlight-dialogd/src/main.rs:163:impl PathBuf {
+services/sunlight-dialogd/src/main.rs:301:    current_dir: PathBuf,
+services/sunlight-dialogd/src/main.rs:343:                if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
+services/sunlight-dialogd/src/main.rs:364:                if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
+services/sunlight-dialogd/src/main.rs:381:                if let Some(dir) = req.initial_dir.as_ref().and_then(|d| PathBuf::from_str(d)) {
+services/sunlight-dialogd/src/main.rs:427:    fn load_directory(&mut self, path: PathBuf) {
+services/sunlight-dialogd/src/main.rs:429:        match libc::read_dir(path.as_str().as_bytes(), &mut entries) {
+services/sunlight-dialogd/src/main.rs:547:        let mut name = String::from(self.input.value().trim());
+services/sunlight-dialogd/src/main.rs:576:        if libc::stat(full.as_str().as_bytes()).is_ok_and(|stat| stat.file_type == FT_DIR) {
+services/sunlight-dialogd/src/main.rs:580:        if self.overwrite_confirm && libc::stat(full.as_str().as_bytes()).is_ok() {
+services/sunlight-dialogd/src/main.rs:1283:    if matches!(state.kind, FileDialogKind::SaveFile) && state.input.value().trim().is_empty() {
+services/sunlight-dialogd/src/main.rs:1581:fn detect_home_path() -> PathBuf {
+services/sunlight-dialogd/src/main.rs:1583:        if let Some(path) = PathBuf::from_str(home) {
+services/sunlight-dialogd/src/main.rs:1587:    PathBuf::from_str("/root").unwrap_or_else(PathBuf::root)
+services/sunlight-dialogd/src/main.rs:1590:fn directory_is_readable(path: PathBuf) -> bool {
+services/sunlight-dialogd/src/main.rs:1591:    libc::stat(path.as_str().as_bytes())
+services/sunlight-dialogd/src/main.rs:1776:    let (argc, argv, envp) = sunlight_libc::std_runtime::startup_args();
+sunlight-light-lens/src/export_io.rs:4:pub(super) use sunlight_libc::{
+sunlight-light-lens/src/export_io.rs:23:    use sunlight_libc::{Errno, Fd};
+sunlight-docview/src/ui.rs:13:    path::PathBuf,
+sunlight-docview/src/ui.rs:88:        sunlight_libc::alloc::heap_stats().requested_user_bytes as u64
+sunlight-docview/src/ui.rs:160:    pub fn new(path: PathBuf) -> Result<Self> {
+sunlight-docview/src/ui.rs:166:        path: PathBuf,
+sunlight-docview/src/ui.rs:173:        path: PathBuf,
+sunlight-docview/src/main.rs:156:        std::fs::write(

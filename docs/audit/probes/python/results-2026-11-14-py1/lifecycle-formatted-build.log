@@ -1,0 +1,1 @@
+["python3", "tools/native-c/cc.py", "-O2", "-std=c11", "-Wall", "-Wextra", "-Werror", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c", "-o", "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf"]

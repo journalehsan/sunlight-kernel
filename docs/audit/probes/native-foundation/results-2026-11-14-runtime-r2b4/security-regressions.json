@@ -1,0 +1,81 @@
+{
+  "status": "PARTIAL",
+  "executions": [
+    {
+      "name": "kernel-host",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-p",
+        "sunlight-kernel",
+        "--lib"
+      ],
+      "exit": 0,
+      "seconds": 4.126133731973823,
+      "source_matches": true
+    },
+    {
+      "name": "ipc-host",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-p",
+        "sunlight-ipc",
+        "--lib"
+      ],
+      "exit": 0,
+      "seconds": 0.2142903820204083,
+      "source_matches": true
+    },
+    {
+      "name": "scheduler-host",
+      "command": [
+        "python3",
+        "tools/test_scheduler_host.py"
+      ],
+      "exit": 0,
+      "seconds": 4.222435575007694,
+      "source_matches": true
+    },
+    {
+      "name": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--offline",
+        "-p",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel"
+      ],
+      "exit": 0,
+      "seconds": 1.418808362010168,
+      "source_matches": true
+    }
+  ],
+  "source_review": {
+    "authority": "No trust flags, endpoint ownership or capability vector transfer added. is_exiting remains task authority guard; process_lifetime_live is only group liveness",
+    "forced_exit": "Retained original owner accepts authorized SIGKILL; existing foreground/manager/PTY/generation authorization precedes it",
+    "identity": "VM generation-qualified lookup and descriptor owner check. Numeric APIs remain numeric; W8 not inferred",
+    "session": "ProcessIsAlive keeps privileged incarnation check. Exact session teardown handles retained owner. Host adapter cannot qualify real PTY",
+    "forward_progress": "No new spin/wait/IPI acknowledgment loop; existing bounded table scans under scheduler guard; terminal receipt before nested callbacks; physical reap on existing scheduler path",
+    "failure": "Prepublication RAII remains; receipt owns terminal state through callback failure, existing persistent-retirement and SHM fail-stop assertions preserved"
+  },
+  "uncovered": [
+    "native authenticated IPC/capability operation after initial owner task exit",
+    "native stale-incarnation/group-generation rejection across reuse",
+    "native final-exit versus forced-kill overlap",
+    "live PTY/session/tab teardown after owner thread-only exit",
+    "group-specific TLB/quarantine/refund failure injection",
+    "borrower-created SHM view lifetime across that borrower exit remains a per-task authority boundary requiring native qualification"
+  ]
+}

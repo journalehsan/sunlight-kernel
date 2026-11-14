@@ -1,0 +1,6 @@
+*.elf
+*.o
+*.a
+*.iso
+*.pcap
+__pycache__/

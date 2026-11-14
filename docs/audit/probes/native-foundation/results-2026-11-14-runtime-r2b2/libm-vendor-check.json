@@ -1,0 +1,8 @@
+{
+  "status": "FAIL",
+  "reference": "results-2026-11-14-runtime-r2a/libm-vendor-integrity.json",
+  "checked_files": 165,
+  "differences": [
+    "Cargo.toml"
+  ]
+}

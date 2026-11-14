@@ -1,0 +1,121 @@
+[
+  {
+    "name": "pthread-tsd-once-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-once.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-tsd-once.elf"
+    ],
+    "exit": 0,
+    "seconds": 1.135621526016621
+  },
+  {
+    "name": "pthread-tsd-exit-race-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-exit-race.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-tsd-exit-race.elf"
+    ],
+    "exit": 0,
+    "seconds": 1.036004932015203
+  },
+  {
+    "name": "pthread-once-recursive-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-once-recursive.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-pthread-once-recursive.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.7926649930013809
+  },
+  {
+    "name": "strerror-threads-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/strerror-threads.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-strerror-threads.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.419562152994331
+  },
+  {
+    "name": "tls-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 53.572103099984815
+  },
+  {
+    "name": "tls-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 36.101339688000735
+  },
+  {
+    "name": "tls-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 35.40946090201032
+  }
+]

@@ -1,0 +1,150 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c -o Modules/_localemodule.o
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:13:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:488:14: error: use of undeclared identifier 'DAY_1'
+  488 |     LANGINFO(DAY_1),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:489:14: error: use of undeclared identifier 'DAY_2'
+  489 |     LANGINFO(DAY_2),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:490:14: error: use of undeclared identifier 'DAY_3'
+  490 |     LANGINFO(DAY_3),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:491:14: error: use of undeclared identifier 'DAY_4'
+  491 |     LANGINFO(DAY_4),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:492:14: error: use of undeclared identifier 'DAY_5'
+  492 |     LANGINFO(DAY_5),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:493:14: error: use of undeclared identifier 'DAY_6'
+  493 |     LANGINFO(DAY_6),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:494:14: error: use of undeclared identifier 'DAY_7'
+  494 |     LANGINFO(DAY_7),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:496:14: error: use of undeclared identifier 'ABDAY_1'
+  496 |     LANGINFO(ABDAY_1),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:497:14: error: use of undeclared identifier 'ABDAY_2'
+  497 |     LANGINFO(ABDAY_2),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:498:14: error: use of undeclared identifier 'ABDAY_3'
+  498 |     LANGINFO(ABDAY_3),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:499:14: error: use of undeclared identifier 'ABDAY_4'
+  499 |     LANGINFO(ABDAY_4),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:500:14: error: use of undeclared identifier 'ABDAY_5'
+  500 |     LANGINFO(ABDAY_5),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:501:14: error: use of undeclared identifier 'ABDAY_6'
+  501 |     LANGINFO(ABDAY_6),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:502:14: error: use of undeclared identifier 'ABDAY_7'
+  502 |     LANGINFO(ABDAY_7),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:504:14: error: use of undeclared identifier 'MON_1'
+  504 |     LANGINFO(MON_1),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:505:14: error: use of undeclared identifier 'MON_2'
+  505 |     LANGINFO(MON_2),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:506:14: error: use of undeclared identifier 'MON_3'
+  506 |     LANGINFO(MON_3),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:507:14: error: use of undeclared identifier 'MON_4'
+  507 |     LANGINFO(MON_4),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:508:14: error: use of undeclared identifier 'MON_5'
+  508 |     LANGINFO(MON_5),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:509:14: error: use of undeclared identifier 'MON_6'
+  509 |     LANGINFO(MON_6),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:510:14: error: use of undeclared identifier 'MON_7'
+  510 |     LANGINFO(MON_7),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:511:14: error: use of undeclared identifier 'MON_8'
+  511 |     LANGINFO(MON_8),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:512:14: error: use of undeclared identifier 'MON_9'
+  512 |     LANGINFO(MON_9),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:513:14: error: use of undeclared identifier 'MON_10'
+  513 |     LANGINFO(MON_10),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:514:14: error: use of undeclared identifier 'MON_11'
+  514 |     LANGINFO(MON_11),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:515:14: error: use of undeclared identifier 'MON_12'
+  515 |     LANGINFO(MON_12),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:517:14: error: use of undeclared identifier 'ABMON_1'
+  517 |     LANGINFO(ABMON_1),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:518:14: error: use of undeclared identifier 'ABMON_2'
+  518 |     LANGINFO(ABMON_2),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:519:14: error: use of undeclared identifier 'ABMON_3'
+  519 |     LANGINFO(ABMON_3),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:520:14: error: use of undeclared identifier 'ABMON_4'
+  520 |     LANGINFO(ABMON_4),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:521:14: error: use of undeclared identifier 'ABMON_5'
+  521 |     LANGINFO(ABMON_5),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:522:14: error: use of undeclared identifier 'ABMON_6'
+  522 |     LANGINFO(ABMON_6),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:523:14: error: use of undeclared identifier 'ABMON_7'
+  523 |     LANGINFO(ABMON_7),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:524:14: error: use of undeclared identifier 'ABMON_8'
+  524 |     LANGINFO(ABMON_8),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:525:14: error: use of undeclared identifier 'ABMON_9'
+  525 |     LANGINFO(ABMON_9),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:526:14: error: use of undeclared identifier 'ABMON_10'
+  526 |     LANGINFO(ABMON_10),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:527:14: error: use of undeclared identifier 'ABMON_11'
+  527 |     LANGINFO(ABMON_11),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:528:14: error: use of undeclared identifier 'ABMON_12'
+  528 |     LANGINFO(ABMON_12),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:544:14: error: use of undeclared identifier 'D_T_FMT'
+  544 |     LANGINFO(D_T_FMT),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:545:14: error: use of undeclared identifier 'D_FMT'
+  545 |     LANGINFO(D_FMT),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:546:14: error: use of undeclared identifier 'T_FMT'
+  546 |     LANGINFO(T_FMT),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:547:14: error: use of undeclared identifier 'AM_STR'
+  547 |     LANGINFO(AM_STR),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:548:14: error: use of undeclared identifier 'PM_STR'
+  548 |     LANGINFO(PM_STR),
+      |              ^~~~~~
+4 warnings and 43 errors generated.

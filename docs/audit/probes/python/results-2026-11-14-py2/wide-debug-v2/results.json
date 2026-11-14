@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "locale=C.UTF-8 mb=4\nn=13 errno=0 out=202020202061ceb120202020\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

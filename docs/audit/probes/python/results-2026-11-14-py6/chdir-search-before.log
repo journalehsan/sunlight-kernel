@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/chdir-search-before
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: FAIL exit=1 expected=0
+guest elf stdout: b'chdir denied directory returned 0, expected -4\n'

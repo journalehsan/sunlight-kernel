@@ -1,0 +1,49 @@
+{
+  "scope": "existing 2-CPU retirement controls; NOT a native thread-group W9 witness",
+  "guests": [
+    {
+      "mode": 0,
+      "cpus": 2,
+      "scope": "normal MM-2D; local replacement receipts; remote munmap ACK injection; zero-view final backing",
+      "status": "FAIL",
+      "checks": {
+        "complete_normal_gate": false,
+        "zero_capacity_atomic": true,
+        "last_slot": true,
+        "durable_shared_handoff": true
+      },
+      "command": [
+        "qemu-system-x86_64",
+        "-accel",
+        "tcg,thread=multi",
+        "-cpu",
+        "max",
+        "-smp",
+        "2",
+        "-m",
+        "1024",
+        "-cdrom",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/final/retirement-controls/fi0.iso",
+        "-serial",
+        "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/final/retirement-controls/pilot-fi0-2.serial.log",
+        "-display",
+        "none",
+        "-nic",
+        "none",
+        "-device",
+        "virtio-rng-pci,disable-modern=on",
+        "-no-reboot",
+        "-no-shutdown"
+      ],
+      "elf_sha256": "a83d6161f01508c4ddaab422807d7774e9acade24e82566e476a75eb141da48a",
+      "iso_sha256": "1d1a0ee9136f18435112c8bf6bf624194a3bbb45ca9640a1c29da15f4c38f75c",
+      "source_manifest_sha256": "57660aaa9f6676c2d79da82cde2d7099dbe9c5c2e456a4759d1d42b230ecd938",
+      "serial_sha256": "efc3ca3a1403040813131b6cb2abefc91473704079b7af43519af226c58031b4",
+      "reason": "panic",
+      "host_terminated": true,
+      "elapsed_seconds": 39.58268770997529,
+      "frames": [],
+      "acknowledgments": []
+    }
+  ]
+}

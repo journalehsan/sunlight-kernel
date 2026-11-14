@@ -1,0 +1,62 @@
+handle-reuse-build
+handle-reuse-build 0
+handle-reuse-cpu-1
+handle-reuse-cpu-1 0
+handle-reuse-cpu-2
+handle-reuse-cpu-2 0
+handle-reuse-cpu-4
+handle-reuse-cpu-4 0
+handle-admission-build
+handle-admission-build 0
+handle-admission-cpu-1
+handle-admission-cpu-1 0
+handle-admission-cpu-2
+handle-admission-cpu-2 0
+handle-admission-cpu-4
+handle-admission-cpu-4 0
+initial-exit-build
+initial-exit-build 0
+initial-exit-cpu-1
+initial-exit-cpu-1 0
+initial-exit-cpu-2
+initial-exit-cpu-2 0
+initial-exit-cpu-4
+initial-exit-cpu-4 0
+focused-build
+focused-build 0
+focused-cpu-1
+focused-cpu-1 0
+focused-cpu-2
+focused-cpu-2 0
+focused-cpu-4
+focused-cpu-4 0
+tls-controlled-build
+tls-controlled-build 0
+tls-controlled-cpu-1
+tls-controlled-cpu-1 0
+tls-controlled-cpu-2
+tls-controlled-cpu-2 0
+tls-controlled-cpu-4
+tls-controlled-cpu-4 0
+detached-accounting-build
+detached-accounting-build 0
+detached-accounting-cpu-1
+detached-accounting-cpu-1 0
+detached-accounting-cpu-2
+detached-accounting-cpu-2 0
+detached-accounting-cpu-4
+detached-accounting-cpu-4 0
+regression-suite
+regression-suite 0
+cxx-abi
+cxx-abi 0
+heap-abi-build
+heap-abi-build 0
+heap-abi
+heap-abi 0
+tcp-loopback
+tcp-loopback 0
+pthread-abi
+pthread-abi 0
+locked-final
+locked-final 0

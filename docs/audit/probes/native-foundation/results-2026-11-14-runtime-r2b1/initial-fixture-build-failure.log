@@ -1,0 +1,1 @@
+Initial fixture compilation exit 1: usleep undeclared (native header does not provide it); deleted_destructor incorrectly returned void*. Corrected fixture uses native nanosleep and void callback. No guest ELF executed. See initial focused-2-runner.log.

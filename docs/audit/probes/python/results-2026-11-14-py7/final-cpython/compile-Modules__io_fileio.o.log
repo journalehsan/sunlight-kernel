@@ -1,0 +1,45 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c -o Modules/_io/fileio.o
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:4:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:254:28: error: variable has incomplete type 'struct stat'
+  254 |     struct _Py_stat_struct fdfstat;
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:254:12: note: forward declaration of 'struct stat'
+  254 |     struct _Py_stat_struct fdfstat;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:475:13: error: use of undeclared identifier 'S_IFDIR'
+  475 |         if (S_ISDIR(fdfstat.st_mode)) {
+      |             ^~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:710:28: error: variable has incomplete type 'struct stat'
+  710 |     struct _Py_stat_struct status;
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:710:12: note: forward declaration of 'struct stat'
+  710 |     struct _Py_stat_struct status;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+4 warnings and 3 errors generated.

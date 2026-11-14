@@ -1,0 +1,1161 @@
+{
+  "milestone": "R2B.3",
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": "PASS",
+    "G2": "BLOCKED",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "PARTIAL",
+    "G6": "UNQUALIFIED",
+    "G7": "PARTIAL",
+    "G8": "PASS",
+    "G9": "PASS"
+  },
+  "runtime_source_sha256": {
+    "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+    "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+  },
+  "baseline_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "build": "PASS",
+  "runs": [
+    {
+      "name": "handle-reuse-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-reuse.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-reuse.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.07790136337280273,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-reuse-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-reuse.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-reuse-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 10.35393762588501,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-reuse-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-reuse.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-reuse-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 19.915695905685425,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-reuse-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-reuse.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-reuse-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 20.80897355079651,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-admission-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-admission.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-admission.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.18830060958862305,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-admission-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-admission.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-admission-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 27.498154878616333,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-admission-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-admission.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-admission-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 51.106247901916504,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "handle-admission-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-admission.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-admission-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 57.030837535858154,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "initial-exit-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/initial-exit.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-initial-exit.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.08331418037414551,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "initial-exit-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-initial-exit.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/initial-exit-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 17.47144341468811,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "initial-exit-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-initial-exit.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/initial-exit-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 15.850752830505371,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "initial-exit-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-initial-exit.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/initial-exit-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 15.44782018661499,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "focused-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "tools/native-c/tests/pthread-tsd-once.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-focused.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.25478315353393555,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "focused-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-focused.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/focused-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 20.010276794433594,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "focused-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-focused.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/focused-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 16.395587921142578,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "focused-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-focused.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/focused-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 19.757838249206543,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "tls-controlled-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/tls-controlled.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-tls-controlled.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.18294286727905273,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "tls-controlled-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-tls-controlled.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tls-controlled-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 17.154645919799805,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "tls-controlled-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-tls-controlled.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tls-controlled-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 15.195319652557373,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "tls-controlled-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-tls-controlled.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tls-controlled-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 15.770498991012573,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "detached-accounting-build",
+      "command": [
+        "python3",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/build-accounting.py"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.617037296295166,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "detached-accounting-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-accounting.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-accounting-cpu-1"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 23.129940271377563,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "detached-accounting-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-accounting.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-accounting-cpu-2"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 20.991586923599243,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "detached-accounting-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-accounting.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-accounting-cpu-4"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 23.515918970108032,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "regression-suite",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "2",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/regression-suite"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 85.57959246635437,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "cxx-abi",
+      "command": [
+        "python3",
+        "tools/native-c/tests/run_cxx_runtime.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/cxx-abi"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 2.285433530807495,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "heap-abi-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O0",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.07245540618896484,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "heap-abi",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "90",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/heap-abi"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 16.33490538597107,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "tcp-loopback",
+      "command": [
+        "python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "2",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tcp-loopback"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 19.209632873535156,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "pthread-abi",
+      "command": [
+        "python3",
+        "tools/native-c/tests/run_pthread.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/pthread-abi"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 1.9779188632965088,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "locked-final",
+      "command": [
+        "bash",
+        "tools/build_native_c.sh"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.23396515846252441,
+      "runtime_source": {
+        "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+        "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+      }
+    },
+    {
+      "name": "exit-matrix-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-0-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "0",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "17",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-0-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "0",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "17",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-0-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "0",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "17",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-1-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "1",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "23",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-1-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "1",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "23",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-1-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "1",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "23",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-2-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "2",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "29",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-2-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "2",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "29",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-2-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "2",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "29",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-3-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "3",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "137",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-3-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "3",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "137",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-mode-3-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+        "--arg",
+        "3",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "137",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "exit-api-negative",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-c",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-api.o"
+      ],
+      "exit": 1
+    },
+    {
+      "name": "exit-link-negative",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-link.elf"
+      ],
+      "exit": 1
+    },
+    {
+      "name": "detached-capacity-build",
+      "command": [
+        "python3",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/build-detached-capacity.py"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "detached-capacity-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "detached-capacity-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "detached-capacity-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "regression-suite-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "1",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/regression-suite-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "heap-abi-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "90",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/heap-abi-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "regression-suite-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "4",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/regression-suite-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "heap-abi-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "90",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/heap-abi-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "tcp-loopback-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "4",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tcp-loopback-cpu-4"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "handle-claim-build",
+      "command": [
+        "python3",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/build-handle-claim.py"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "handle-claim-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+        "--cpus",
+        "1",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-1"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "handle-claim-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+        "--cpus",
+        "2",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-2"
+      ],
+      "exit": 0
+    },
+    {
+      "name": "handle-claim-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+        "--cpus",
+        "4",
+        "--timeout",
+        "120",
+        "--expect-exit",
+        "0",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-4"
+      ],
+      "exit": 0
+    }
+  ],
+  "failed_baseline_attempts": [
+    "handle-baseline: runner1/guest3; stale detach wrongly succeeds",
+    "initial-baseline: observation runner0 but required worker survival FAIL"
+  ],
+  "known_final_contract_failures": [
+    "initial-thread pthread_exit kills live borrowers",
+    "no autonomous detached reclamation"
+  ],
+  "remaining_blockers": [
+    "Native group authority/lifetime migration across scheduler, IPC, descriptors, parent wait, forced exit and session paths",
+    "Event-driven typed retirement owner with bounded admission and helper/last-thread teardown",
+    "Exact concurrent handle ownership and TLS registry request schedules",
+    "Once-integrated native futex registration schedules",
+    "Full security/session/generation regressions",
+    "CPython condition variables, strncpy, _Exit and platform/header gaps"
+  ],
+  "next_milestone": "Review and implement ownership-model.md migration, then race-closure-plan.md; no condvars or full CPython port in this milestone",
+  "required_artifacts": [
+    "source-baseline.json",
+    "ownership-model.md",
+    "kernel-exit-contract.json",
+    "exit-scenario-matrix.json",
+    "detached-reclamation.json",
+    "handle-identity.json",
+    "tls-race-witnesses.json",
+    "once-futex-race-witnesses.json",
+    "cpu-matrix.json",
+    "security-regressions.json",
+    "cpython-compatibility.json",
+    "validation-summary.json"
+  ]
+}

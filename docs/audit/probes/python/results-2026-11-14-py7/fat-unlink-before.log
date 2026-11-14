@@ -1,0 +1,17 @@
+   Compiling scopeguard v1.2.0
+   Compiling sunlight-block v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-block)
+   Compiling lock_api v0.4.14
+   Compiling spin v0.9.9
+   Compiling sunlight-fat v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fat)
+   Compiling sunlight-mm v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-mm)
+   Compiling sunlight-fs v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling py6-fat-lifetime v0.0.0 (/tmp/sunlight-py7-fat-lifetime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.23s
+     Running `/tmp/sunlight-py7-fat-lifetime/target/x86_64-unknown-linux-gnu/debug/py6-fat-lifetime unlink`
+replacement after write through unlinked fd=[66, 65, 68]
+
+thread 'main' (1769330) panicked at src/main.rs:83:4:
+assertion `left == right` failed: unlinked FAT descriptor must not modify replacement pathname
+  left: [66, 65, 68]
+ right: [110, 101, 119]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

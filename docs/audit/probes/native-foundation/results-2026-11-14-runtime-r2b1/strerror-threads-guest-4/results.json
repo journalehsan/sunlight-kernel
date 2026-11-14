@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

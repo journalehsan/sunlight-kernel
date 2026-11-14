@@ -1,0 +1,12 @@
+exit-race-final-build 0
+exit-race-guest-2 0
+exit-race-guest-4 0
+recursion-final-build 0
+recursion-guest-2 0
+strerror-threads-final-build 0
+strerror-threads-guest-2 0
+strerror-threads-guest-4 0
+process-exit-final-build 0
+process-exit-guest-2 0
+host-tcb-final 0
+locked-final-repeat 0

@@ -1,0 +1,6 @@
+ld.lld: error: undefined symbol: main
+>>> referenced by sunlight_libc.1798c3ee614691d7-cgu.06
+>>>               sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o:(sl_std_start) in archive /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a
+>>> did you mean to declare main() as extern "C"?
+>>> defined in: target/py1-header-abi.o
+clang: error: linker command failed with exit code 1 (use -v to see invocation)

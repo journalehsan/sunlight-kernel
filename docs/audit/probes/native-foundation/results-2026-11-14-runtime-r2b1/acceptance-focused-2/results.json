@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication recursion abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

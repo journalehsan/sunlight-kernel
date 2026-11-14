@@ -1,0 +1,855 @@
+{
+  "status": "PASS",
+  "matrix": {
+    "1": {
+      "legacy_total": 94,
+      "legacy_passed": 94,
+      "C": {
+        "passed": 73,
+        "total": 73
+      },
+      "C++": {
+        "passed": 21,
+        "total": 21
+      },
+      "lifecycle": {
+        "passed": 17,
+        "total": 17
+      },
+      "functional_total": 37,
+      "functional_passed": 37,
+      "focused": {
+        "py2-format": {
+          "exit": 0,
+          "stdout": "PY2 FORMAT PASS oracle=1780\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-stream": {
+          "exit": 0,
+          "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-wide": {
+          "exit": 0,
+          "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-header": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-math-declarations": {
+          "exit": 0,
+          "stdout": "PY2 MATH DECL PASS native archive ABI/value checks\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "tls_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "condvar": {
+        "condvar": {
+          "exit": 0,
+          "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "condvar-timeout": {
+          "exit": 0,
+          "stdout": "PY1 signal/timeout stress PASS wakes=38 timeouts=22; exact race UNQUALIFIED\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "heap_abi": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "libm": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "TCP": {
+        "status": "NOT_RUN",
+        "reason": "1 CPU unsupported by retained TCP runner"
+      }
+    },
+    "2": {
+      "legacy_total": 94,
+      "legacy_passed": 94,
+      "C": {
+        "passed": 73,
+        "total": 73
+      },
+      "C++": {
+        "passed": 21,
+        "total": 21
+      },
+      "lifecycle": {
+        "passed": 17,
+        "total": 17
+      },
+      "functional_total": 37,
+      "functional_passed": 37,
+      "focused": {
+        "py2-format": {
+          "exit": 0,
+          "stdout": "PY2 FORMAT PASS oracle=1780\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-stream": {
+          "exit": 0,
+          "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-wide": {
+          "exit": 0,
+          "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-header": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-math-declarations": {
+          "exit": 0,
+          "stdout": "PY2 MATH DECL PASS native archive ABI/value checks\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "tls_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "condvar": {
+        "condvar": {
+          "exit": 0,
+          "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "condvar-timeout": {
+          "exit": 0,
+          "stdout": "PY1 signal/timeout stress PASS wakes=37 timeouts=23; exact race UNQUALIFIED\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "heap_abi": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "libm": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "TCP": {
+        "status": "PASS",
+        "evidence": "validated-tcp-cpu-2/"
+      }
+    },
+    "4": {
+      "legacy_total": 94,
+      "legacy_passed": 94,
+      "C": {
+        "passed": 73,
+        "total": 73
+      },
+      "C++": {
+        "passed": 21,
+        "total": 21
+      },
+      "lifecycle": {
+        "passed": 17,
+        "total": 17
+      },
+      "functional_total": 37,
+      "functional_passed": 37,
+      "focused": {
+        "py2-format": {
+          "exit": 0,
+          "stdout": "PY2 FORMAT PASS oracle=1780\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-stream": {
+          "exit": 0,
+          "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-wide": {
+          "exit": 0,
+          "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-header": {
+          "exit": 0,
+          "stdout": "",
+          "stderr": "",
+          "pass_": true
+        },
+        "py2-math-declarations": {
+          "exit": 0,
+          "stdout": "PY2 MATH DECL PASS native archive ABI/value checks\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "tls_once": {
+        "pthread-tsd-once": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-tsd-exit-race": {
+          "exit": 0,
+          "stdout": "in-flight destructor delete/reuse witness PASS\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "pthread-once-recursive": {
+          "exit": 0,
+          "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "strerror-threads": {
+          "exit": 0,
+          "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "condvar": {
+        "condvar": {
+          "exit": 0,
+          "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+          "stderr": "",
+          "pass_": true
+        },
+        "condvar-timeout": {
+          "exit": 0,
+          "stdout": "PY1 signal/timeout stress PASS wakes=38 timeouts=22; exact race UNQUALIFIED\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "heap_abi": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "libm": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "TCP": {
+        "status": "PASS",
+        "evidence": "validated-tcp-cpu-4/"
+      }
+    }
+  },
+  "commands": [
+    {
+      "name": "validated-locked",
+      "command": [
+        "bash",
+        "tools/build_native_c.sh"
+      ],
+      "exit": 0,
+      "seconds": 1.5168527220084798,
+      "source_matches": true
+    },
+    {
+      "name": "validated-format-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/format-test.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-format.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.5479949239816051,
+      "source_matches": true
+    },
+    {
+      "name": "validated-stream-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/stream-test.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-stream.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.3616132529859897,
+      "source_matches": true
+    },
+    {
+      "name": "validated-wide-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/wide-test.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-wide.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.2925925200106576,
+      "source_matches": true
+    },
+    {
+      "name": "validated-header-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/header-test.cpp",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-header.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.2184830860060174,
+      "source_matches": true
+    },
+    {
+      "name": "validated-math-declarations-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/math-declarations-test.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-math-declarations.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.19993835900095291,
+      "source_matches": true
+    },
+    {
+      "name": "validated-condvar-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/condvar.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-condvar.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.30389560101320967,
+      "source_matches": true
+    },
+    {
+      "name": "validated-libc-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/libc.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-libc.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.37248790098237805,
+      "source_matches": true
+    },
+    {
+      "name": "validated-exit-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/immediate-exit.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-exit.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.45123842600150965,
+      "source_matches": true
+    },
+    {
+      "name": "validated-heap-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-heap.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.5475359959818888,
+      "source_matches": true
+    },
+    {
+      "name": "validated-admission-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/retained-admission.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-admission.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.4867954180226661,
+      "source_matches": true
+    },
+    {
+      "name": "validated-pthread-tsd-once-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-once.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-pthread-tsd-once.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.35658769600559026,
+      "source_matches": true
+    },
+    {
+      "name": "validated-pthread-tsd-exit-race-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-exit-race.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-pthread-tsd-exit-race.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.18402395900920965,
+      "source_matches": true
+    },
+    {
+      "name": "validated-pthread-once-recursive-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-once-recursive.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-pthread-once-recursive.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.1521447389968671,
+      "source_matches": true
+    },
+    {
+      "name": "validated-strerror-threads-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/strerror-threads.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-strerror-threads.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.18410376700921915,
+      "source_matches": true
+    },
+    {
+      "name": "validated-condvar-timeout-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/condvar-timeout.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-condvar-timeout.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.17687131301499903,
+      "source_matches": true
+    },
+    {
+      "name": "validated-string-guard-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/string-guard.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-string-guard.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.16429293199325912,
+      "source_matches": true
+    },
+    {
+      "name": "validated-header-abi-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/header-abi-v3.cpp",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-header-abi.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.17062704201089218,
+      "source_matches": true
+    },
+    {
+      "name": "validated-exit-controls-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/exit-controls.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-exit-controls.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.16946413298137486,
+      "source_matches": true
+    },
+    {
+      "name": "validated-lifecycle-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-lifecycle.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.25968832601211034,
+      "source_matches": true
+    },
+    {
+      "name": "validated-exit-matrix-build",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-fno-builtin",
+        "-Wall",
+        "-Wextra",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/py2-validated-exit-matrix.elf"
+      ],
+      "exit": 0,
+      "seconds": 0.41775780700845644,
+      "source_matches": true
+    },
+    {
+      "name": "validated-functional-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--cases",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/all-functional-cases.json",
+        "--cpus",
+        "1",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-functional-cpu-1"
+      ],
+      "exit": 0,
+      "seconds": 67.28920223101159,
+      "source_matches": true
+    },
+    {
+      "name": "validated-legacy-cpu-1",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "1",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-legacy-cpu-1"
+      ],
+      "exit": 0,
+      "seconds": 105.832626650983,
+      "source_matches": true
+    },
+    {
+      "name": "validated-functional-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--cases",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/all-functional-cases.json",
+        "--cpus",
+        "2",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-functional-cpu-2"
+      ],
+      "exit": 0,
+      "seconds": 69.86733185799676,
+      "source_matches": true
+    },
+    {
+      "name": "validated-legacy-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "2",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-legacy-cpu-2"
+      ],
+      "exit": 0,
+      "seconds": 89.90394174001995,
+      "source_matches": true
+    },
+    {
+      "name": "validated-functional-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--cases",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/all-functional-cases.json",
+        "--cpus",
+        "4",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-functional-cpu-4"
+      ],
+      "exit": 0,
+      "seconds": 65.50529123298475,
+      "source_matches": true
+    },
+    {
+      "name": "validated-legacy-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/guest.py",
+        "--suite",
+        "--cpus",
+        "4",
+        "--timeout",
+        "240",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-legacy-cpu-4"
+      ],
+      "exit": 0,
+      "seconds": 88.03908782699727,
+      "source_matches": true
+    },
+    {
+      "name": "validated-tcp-cpu-2",
+      "command": [
+        "python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "2",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-tcp-cpu-2"
+      ],
+      "exit": 0,
+      "seconds": 21.205729839013657,
+      "source_matches": true
+    },
+    {
+      "name": "validated-tcp-cpu-4",
+      "command": [
+        "python3",
+        "tools/native-c/run_poll_tcp.py",
+        "--mode",
+        "loopback",
+        "--cpus",
+        "4",
+        "--timeout",
+        "180",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-tcp-cpu-4"
+      ],
+      "exit": 0,
+      "seconds": 21.367788336996455,
+      "source_matches": true
+    },
+    {
+      "name": "validated-pthread-abi",
+      "command": [
+        "python3",
+        "tools/native-c/tests/run_pthread.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-pthread-abi"
+      ],
+      "exit": 0,
+      "seconds": 1.9567701200139709,
+      "source_matches": true
+    },
+    {
+      "name": "validated-cxx-abi",
+      "command": [
+        "python3",
+        "tools/native-c/tests/run_cxx_runtime.py",
+        "--out",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/validated-cxx-abi"
+      ],
+      "exit": 0,
+      "seconds": 4.117761040979531,
+      "source_matches": true
+    },
+    {
+      "name": "validated-locked-repeat",
+      "command": [
+        "bash",
+        "tools/build_native_c.sh"
+      ],
+      "exit": 0,
+      "seconds": 0.1825431149918586,
+      "source_matches": true
+    }
+  ],
+  "source_binding": "validated-source.json",
+  "authoritative_series": "validated-* only",
+  "inherited_exact_condvar_schedules": "UNQUALIFIED",
+  "detached_autonomous_reclamation": "BLOCKED, unchanged inherited limitation",
+  "other_series": "Intermediate and failed attempts preserved, excluded from final acceptance. See intermediate-cancellations.json."
+}

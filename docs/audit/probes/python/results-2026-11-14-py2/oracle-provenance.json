@@ -1,0 +1,32 @@
+{
+  "oracle": "host libc snprintf through ctypes.CDLL(None)",
+  "host_libc": [
+    "glibc",
+    "2.44"
+  ],
+  "seed": 31300,
+  "binary64_patterns": 89,
+  "formats": [
+    "%f",
+    "%e",
+    "%g",
+    "%.0f",
+    "%.0e",
+    "%.0g",
+    "%.17g",
+    "%#.0f",
+    "%#.6g",
+    "%+024.9e",
+    "%-24.7G",
+    "% 018.3f",
+    "%.1101f",
+    "%.1101e",
+    "%.1101g",
+    "%#.1101g",
+    "%F",
+    "%E",
+    "%G",
+    "%lf"
+  ],
+  "cases": 1780
+}

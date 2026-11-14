@@ -1,0 +1,7 @@
+['python3', 'tools/native-c/guest.py', '--cases', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/shell-cases.json', '--cpus', '4', '--timeout', '90', '--out', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/shell-cpu-4']
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/shell-cpu-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+py5-shell-paths: PASS exit=0 expected=0
+guest py5-shell-paths stdout: b'/tmp\n/tmp\nmissing-rejected\n/\n'
+guest py5-shell-paths stderr: b'sshl: cd: no such directory\n'

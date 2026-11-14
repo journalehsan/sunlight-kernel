@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-baseline
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: FAIL exit=3 expected=0
+guest elf stdout: b'ABA public handle reused old=0x1000002040 current=0x1000002040 iteration=0\nABA stale detach result=0 (EINVAL required)\n'

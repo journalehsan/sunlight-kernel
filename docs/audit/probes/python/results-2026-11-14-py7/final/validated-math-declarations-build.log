@@ -1,0 +1,1 @@
+['python3', 'tools/native-c/cc.py', '-O2', '-fno-builtin', '-Wall', '-Wextra', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/math-declarations-test.c', '-o', '/home/ehsantor/Projects/sunlightos-kernel/target/py3-math-declarations.elf']

@@ -1,0 +1,24 @@
+--- tools/native-c/Cargo.lock	2026-11-12 20:04:13.050611144 +0330
++++ /tmp/sunlight-r1-lock-1qqs0g3l/tools/native-c/Cargo.lock	2026-11-14 13:04:13.360028212 +0330
+@@ -4,18 +4,18 @@
+ 
+ [[package]]
+ name = "sunlight-ipc"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ 
+ [[package]]
+ name = "sunlight-libc"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ dependencies = [
+  "sunlight-ipc",
+ ]
+ 
+ [[package]]
+ name = "sunlight-native-c"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ dependencies = [
+  "sunlight-libc",
+ ]

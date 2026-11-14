@@ -1,0 +1,11 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/mbstowcs.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/mbstowcs.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/mbstowcs.c:2:44: error: use of undeclared identifier 'mbstowcs'; did you mean 'mbrtowc'?
+    2 | void * volatile required_symbol = (void *)&mbstowcs;
+      |                                            ^~~~~~~~
+      |                                            mbrtowc
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/wchar.h:18:8: note: 'mbrtowc' declared here
+   18 | size_t mbrtowc(wchar_t *out, const char *s, size_t n, mbstate_t *ps);
+      |        ^
+1 error generated.
+
+exit=1

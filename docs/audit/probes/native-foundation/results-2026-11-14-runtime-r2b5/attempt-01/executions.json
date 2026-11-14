@@ -1,0 +1,48 @@
+[
+  {
+    "name": "locked-final",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 0.16411740297917277,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-lifecycle.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1148311190190725,
+    "source_matches": true
+  },
+  {
+    "name": "exit-matrix-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/exit-matrix.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-exit-matrix.elf"
+    ],
+    "exit": 1,
+    "seconds": 0.0638999039947521,
+    "source_matches": true
+  }
+]

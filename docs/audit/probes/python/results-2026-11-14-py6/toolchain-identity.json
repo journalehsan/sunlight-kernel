@@ -1,0 +1,56 @@
+{
+  "rustc": {
+    "command": [
+      "rustc",
+      "-Vv"
+    ],
+    "exit": 0,
+    "output": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\nbinary: rustc\ncommit-hash: 8954863c81df429ebf96ea38a16c76f209995833\ncommit-date: 2026-06-05\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.0-nightly\nLLVM version: 22.1.6\n"
+  },
+  "cargo": {
+    "command": [
+      "cargo",
+      "--version"
+    ],
+    "exit": 0,
+    "output": "cargo 1.98.0-nightly (0b1123a48 2026-06-01)\n"
+  },
+  "clang": {
+    "command": [
+      "clang",
+      "--version"
+    ],
+    "exit": 0,
+    "output": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n"
+  },
+  "llvm-ar": {
+    "command": [
+      "llvm-ar",
+      "--version"
+    ],
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n"
+  },
+  "llvm-ranlib": {
+    "command": [
+      "llvm-ranlib",
+      "--version"
+    ],
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n"
+  },
+  "qemu": {
+    "command": [
+      "qemu-system-x86_64",
+      "--version"
+    ],
+    "exit": 0,
+    "output": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n"
+  },
+  "configuration_hashes": {
+    "rust-toolchain.toml": "973e644b5e87baf1e58d608c00ab077d5519c93e8c793244189e87529131b8b0",
+    ".cargo/config.toml": "185727c35b0d99ffb5332b5ef9f5cf5b7cea2b5e4376467f791f7b9d8571e854",
+    "tools/native-c/cc.py": "872a0ec7c7e756e0952b4c92c6f34e602c547e0aacf03726c5831f58190cbd91",
+    "tools/targets/x86_64-sunlightos.json": "cd69f17597fbc17ef20141acdf3e703a6ae06ad5511e445290bb65a5c3de65c2"
+  }
+}

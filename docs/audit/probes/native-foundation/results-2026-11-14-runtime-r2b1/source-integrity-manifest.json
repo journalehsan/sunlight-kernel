@@ -1,0 +1,57 @@
+{
+  "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "branch": "main",
+  "initial_status": " M Cargo.lock\n M sunlight-libc/Cargo.toml\n M sunlight-libc/include/errno.h\n M sunlight-libc/include/limits.h\n M sunlight-libc/include/math.h\n M sunlight-libc/include/sys/mman.h\n M sunlight-libc/include/time.h\n M sunlight-libc/include/unistd.h\n M sunlight-libc/src/lib.rs\n M tools/native-c/Cargo.lock\n?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/\n?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/\n?? docs/runtime/\n?? sunlight-libc/include/assert.h\n?? sunlight-libc/include/ctype.h\n?? sunlight-libc/include/inttypes.h\n?? sunlight-libc/include/sys/types.h\n?? sunlight-libc/src/ctype.rs\n?? sunlight-libc/src/inttypes.rs\n?? sunlight-libc/src/math.rs\n?? sunlight-libc/vendor/\n",
+  "final_status": " M Cargo.lock\n M sunlight-libc/Cargo.toml\n M sunlight-libc/include/errno.h\n M sunlight-libc/include/limits.h\n M sunlight-libc/include/math.h\n M sunlight-libc/include/pthread.h\n M sunlight-libc/include/string.h\n M sunlight-libc/include/sys/mman.h\n M sunlight-libc/include/time.h\n M sunlight-libc/include/unistd.h\n M sunlight-libc/src/lib.rs\n M sunlight-libc/src/pthread.rs\n M sunlight-libc/src/string.rs\n M sunlight-libc/src/tls.rs\n M tools/native-c/Cargo.lock\n?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/\n?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/\n?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/\n?? docs/runtime/\n?? sunlight-libc/include/assert.h\n?? sunlight-libc/include/ctype.h\n?? sunlight-libc/include/inttypes.h\n?? sunlight-libc/include/sys/types.h\n?? sunlight-libc/src/ctype.rs\n?? sunlight-libc/src/inttypes.rs\n?? sunlight-libc/src/math.rs\n?? sunlight-libc/vendor/\n?? tools/native-c/tests/pthread-once-recursive.c\n?? tools/native-c/tests/pthread-tsd-exit-race.c\n?? tools/native-c/tests/pthread-tsd-headers.c\n?? tools/native-c/tests/pthread-tsd-once.c\n?? tools/native-c/tests/strerror-threads.c\n",
+  "original_file_changes": {
+    "sunlight-libc/include/errno.h": {
+      "before": "8df54fa8cc70cc822ac2e6babb71100c19d03a96cc2f12d650d91a77d2fdbfe1",
+      "after": "e32dcfa9f6cb225c58b62986d96cad72fa00b02b6cd1e6050e7fb039d9941e2f"
+    },
+    "sunlight-libc/include/limits.h": {
+      "before": "cebbaaf9c4b26388a27dba0fec58ab66f091a4d214eeecc06a181aabb3d6e865",
+      "after": "cf57654ff468fc13be4ce3f0c4aac04c3204f355ab7d0a9fe093973cd9d3ff89"
+    },
+    "sunlight-libc/include/pthread.h": {
+      "before": "07ef5a219f0d6287c50fb78e90d37c5ac03e1eb524fa72a83f9dcd571b43d901",
+      "after": "cbd38a4636e81585ca235aa5f2e0e8457fcdff12e8d67e0c624f806b1bafc52f"
+    },
+    "sunlight-libc/include/string.h": {
+      "before": "2a3233f8a24e4e058f278562c4a1199fee309787928143c635d2c09610297934",
+      "after": "5ce55fcce9b116e7c575531dd67814595fddadb1ec07d7474cabb607a3928e92"
+    },
+    "sunlight-libc/src/pthread.rs": {
+      "before": "ed4566463ecc8d37912bbb7f04f15d1f21b41579c0782c992ca7d438063e6a8f",
+      "after": "a4243bf9b878a0b3aca5d98cf08dca4d9a969fff9be722ccdfc4c74f5111f695"
+    },
+    "sunlight-libc/src/string.rs": {
+      "before": "a7a7cfc802b4a27e5e08d6f259b61a4e176aa668c219775d6768a24f6ad7cd66",
+      "after": "2a02ec52e503365344dbe7b48f73bec869105185105c721519a0470882c304a8"
+    },
+    "sunlight-libc/src/tls.rs": {
+      "before": "58c3b6b96b0cfa21584434b36e705baa68e7c87e6d3454cfcb8865e2c50f82c0",
+      "after": "5a6652e7be1790eed17f4f09d2c3a6f705f45208b55d03afa8a9290f4ff1e6f2"
+    }
+  },
+  "missing_original_files": [],
+  "unexpected_original_changes": [],
+  "unexpected_additions": [],
+  "new_test_files": [
+    "tools/native-c/tests/pthread-once-recursive.c",
+    "tools/native-c/tests/pthread-tsd-exit-race.c",
+    "tools/native-c/tests/pthread-tsd-headers.c",
+    "tools/native-c/tests/pthread-tsd-once.c",
+    "tools/native-c/tests/strerror-threads.c"
+  ],
+  "source_input_fingerprint_sha256": "56083eddca57569779ae90c7cf758afa9cfcea5d94e5b0a9a9130b06796543bc",
+  "runtime_input_snapshot_unchanged_since_final_validation": true,
+  "kernel_and_scheduler_unchanged": true,
+  "all_preexisting_R1_R2A_files_preserved": true,
+  "dependency_locks_and_vendors_unchanged": true,
+  "source_diff": "source-diff-from-baseline.patch",
+  "baseline_production_snapshots": "baseline-production/",
+  "commit": "NOT_RUN per instruction",
+  "push": "NOT_RUN per instruction",
+  "report": "docs/runtime/native-runtime-r2b1-pthread-tls-once.md",
+  "report_sha256": "8deaee3bd1a7c4fac014c2b1cd1f84d30ff575b116beaf41470b3a608a6f0800"
+}

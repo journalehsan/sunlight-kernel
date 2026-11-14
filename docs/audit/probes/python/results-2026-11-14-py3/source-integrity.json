@@ -1,0 +1,80 @@
+{
+  "status": "PASS",
+  "baseline_policy": "Git-tracked and unignored regular nonsymlink files; symlinks and directory entries are outside hash coverage. An initial integrity parser mistakenly counted those excluded existing entries as new; preserved separately and corrected to use matching coverage.",
+  "baseline_file_count": 77830,
+  "changed_originals": [
+    "sunlight-libc/include/locale.h",
+    "sunlight-libc/include/stdio.h",
+    "sunlight-libc/include/stdlib.h",
+    "sunlight-libc/include/time.h",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/locale.rs",
+    "sunlight-libc/src/stdio.rs",
+    "sunlight-libc/src/termination.rs",
+    "sunlight-libc/src/time.rs",
+    "sunlight-libc/src/wchar.rs"
+  ],
+  "missing_incoming_files": [],
+  "unexpected_changes": [],
+  "unauthorized_new_regular_files": [],
+  "authorized_new_report": "docs/runtime/python-py3-libc-core-static-link.md",
+  "kernel_changes": [],
+  "CPython_changes": [],
+  "CPython_inherited_upstream_differences": [
+    "config.sub",
+    "configure"
+  ],
+  "previous_evidence_changed": [],
+  "patch": "docs/audit/probes/python/results-2026-11-14-py3/py3-production.patch",
+  "patch_sha256": "f6b9e8ff719e1a710537992f8afa068c7721bd9dc9139e05e3facdb8e2c6251d",
+  "patch_reversal": "PASS; temporary copied files restored exactly to incoming byte hashes; patch-reversal.log",
+  "source_hashes": {
+    "sunlight-libc/include/locale.h": {
+      "before": "45cefa3ea5c9273e1579b097efd282dd8e8960bfe1be67969611d86b118fc8c0",
+      "after": "22cc2be5c954dec7a9853ded633c91cd5bbd60dbb2fd688dee82b780552e4d28"
+    },
+    "sunlight-libc/include/stdio.h": {
+      "before": "e5159e2e36fb703350e7d84fcece0f209c9d1f46f1893a7d22a651164ab99a37",
+      "after": "86f7f4a85f22f9010e0747fcba464f16fcf51f38148c1c696d2c95e7b9d12f6b"
+    },
+    "sunlight-libc/include/stdlib.h": {
+      "before": "05cd6dd5959f554477a01f623ef040b1c66eaf772bfa9de73bd3c49678316b7e",
+      "after": "1adb0dd6b1d75eff0593cb5eaeb1911e189806d3a07b8d07cf0e95a455c088b7"
+    },
+    "sunlight-libc/include/time.h": {
+      "before": "f773eb87cc257e62618e78a3d49d9258fef266b426acfc5c424a197c7fa389f4",
+      "after": "b556b4b872b8d838875dc233e594539bbf7dae1e72e29c4837094e3e333cd827"
+    },
+    "sunlight-libc/include/unistd.h": {
+      "before": "dc39a5c128aa2580324da47801ecd9b49f5fadfb6de48127e38682fe531f91e6",
+      "after": "c904f030aa330b962f733246817ce7f9f852be2ce44e0faaa97dda077f071a92"
+    },
+    "sunlight-libc/src/locale.rs": {
+      "before": "f697b1acf59c343cfd6ecdd663a59f536bbdd242a18068bd659ffc8a5bdae668",
+      "after": "3e94aef13ebb526e87fb720ab51284ba2a8af4c0b1376cf24a665a66cbc46b48"
+    },
+    "sunlight-libc/src/stdio.rs": {
+      "before": "33ade616949c2d3bc1d8847b6127280054aab65be0a23d5fd7726164027ea585",
+      "after": "17cf7e05f92e903cc5508e83eb5f8ca388ff700a60ca344df3a89ed95ae7f492"
+    },
+    "sunlight-libc/src/termination.rs": {
+      "before": "e62cf43b8b9a056a94bda4206ed2f701573de1ed0de6f5407cfe4302abbd3e5b",
+      "after": "70061ea8465ac3ca281481ade6b95cd3e4d71c4bb650e29eaf0de079f55141f4"
+    },
+    "sunlight-libc/src/time.rs": {
+      "before": "8bc55f0d132dd790f91ecd7a29c2223e70d1c72b4a7900bbf1413746a5e8986e",
+      "after": "fb0611ae0efce4e812fa6e11871243dfeb41cbd92a02858707fd1d8f593b137d"
+    },
+    "sunlight-libc/src/wchar.rs": {
+      "before": "7fe3d35181316660250c8d0e88d7f63e8a25f8667101befe67ddc87b69955dcf",
+      "after": "cb4bf57c932301cc5db8a66076111a0942adc7b0a2dde3d1de0429a2e145bbbd"
+    }
+  },
+  "no_commit_push_reset_stash_clean": true,
+  "tracked_symlinks": {
+    "status": "PASS",
+    "count": 5638,
+    "evidence": "symlink-integrity.json",
+    "coverage": "Current tracked symlink targets compared to Git index. Initial Git status showed no symlink modifications; untracked symlink targets were not hashed at baseline."
+  }
+}

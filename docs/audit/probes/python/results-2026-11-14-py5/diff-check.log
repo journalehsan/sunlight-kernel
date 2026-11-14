@@ -1,0 +1,3 @@
+['git', 'diff', '--check', '--', 'sunlight-fs/src/vfs.rs']
+
+exit=0

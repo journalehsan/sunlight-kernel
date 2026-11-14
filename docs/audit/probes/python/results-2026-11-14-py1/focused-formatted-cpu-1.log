@@ -1,0 +1,22 @@
+["python3", "tools/native-c/guest.py", "--cases", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/final-focused-cases.json", "--cpus", "1", "--timeout", "180", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-formatted-cpu-1"]
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-formatted-cpu-1
+Building isolated native C guest (9 ELFs, 1 CPUs)
+Booting disposable TCG guest
+condvar: PASS exit=0 expected=0
+guest condvar stdout: b'PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n'
+libc: PASS exit=0 expected=0
+guest libc stdout: b'PY1 strings and strtol PASS\nPY1 strncpy PASS: 81 boundary cases and canaries\n'
+exit: PASS exit=37 expected=37
+guest exit stdout: b'PY1 worker _Exit(37)\n'
+heap: PASS exit=0 expected=0
+guest heap stdout: b'R1 heap and SysV ABI PASS\n'
+admission: PASS exit=0 expected=0
+guest admission stdout: b'A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n'
+pthread-tsd-once: PASS exit=0 expected=0
+guest pthread-tsd-once stdout: b'TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n'
+pthread-tsd-exit-race: PASS exit=0 expected=0
+guest pthread-tsd-exit-race stdout: b'in-flight destructor delete/reuse witness PASS\n'
+pthread-once-recursive: PASS exit=0 expected=0
+guest pthread-once-recursive stdout: b'recursive once: no completion in bounded window; independent thread progressed\n'
+strerror-threads: PASS exit=0 expected=0
+guest strerror-threads stdout: b'strerror all 40 supported numbers across four threads PASS\n'

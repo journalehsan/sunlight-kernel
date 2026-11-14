@@ -1,0 +1,120 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:418:12: error: call to undeclared function 'getenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  418 |     return getenv(name);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:418:12: error: incompatible integer to pointer conversion returning 'int' from a function with result type 'char *' [-Wint-conversion]
+  418 |     return getenv(name);
+      |            ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:612:13: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  612 |         if (wcscmp(list->items[i], item) == 0) {
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1370:23: error: call to undeclared function 'getenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1370 |     const char *var = getenv(name);
+      |                       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1370:17: error: incompatible integer to pointer conversion initializing 'const char *' with an expression of type 'int' [-Wint-conversion]
+ 1370 |     const char *var = getenv(name);
+      |                 ^     ~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1486:26: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1486 |     const wchar_t *sep = wcschr(xoption, L'=');
+      |                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1486:20: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 1486 |     const wchar_t *sep = wcschr(xoption, L'=');
+      |                    ^     ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1504:16: error: call to undeclared function 'strtoul'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1504 |         seed = strtoul(seed_text, (char **)&endptr, 10);
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1504:16: note: did you mean 'strtol'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdlib.h:12:6: note: 'strtol' declared here
+   12 | long strtol(const char *s, char **end, int base);
+      |      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1530:18: error: call to undeclared function 'wcstol'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1530 |     long value = wcstol(wstr, (wchar_t **)&endptr, 10);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1672:30: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1672 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1672:24: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 1672 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                        ^     ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1674:17: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1674 |             if (wcscmp(sep + 1, L"default") == 0) {
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1750:30: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1750 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1750:24: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 1750 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                        ^     ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1796:30: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1796 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1796:24: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 1796 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                        ^     ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1826:30: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1826 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1826:24: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 1826 |         const wchar_t *sep = wcschr(xoption, L'=');
+      |                        ^     ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:1827:20: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1827 |         if (sep && wcslen(sep) > 1) {
+      |                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2176:14: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2176 |     else if (wcscmp(value, L"on") == 0) {
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2182:14: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2182 |     else if (wcslen(value) == 0) {
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2222:22: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2222 |         size_t len = wcslen(x_gil);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2330:9: error: call to undeclared function 'setbuf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2330 |         setbuf(stdin,  (char *)NULL);
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2450:30: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2450 |                 size_t len = wcslen(_PyOS_optarg) + 1 + 1;
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2480:17: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2480 |             if (wcscmp(_PyOS_optarg, L"always") == 0
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2610:12: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2610 |         && wcscmp(argv->items[_PyOS_optind], L"-") != 0
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2656:20: error: call to undeclared function 'wcstok'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2656 |     for (warning = WCSTOK(env, L",", &context);
+      |                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2633:18: note: expanded from macro 'WCSTOK'
+ 2633 | #  define WCSTOK wcstok
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2656:18: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+ 2656 |     for (warning = WCSTOK(env, L",", &context);
+      |                  ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:2658:18: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+ 2658 |          warning = WCSTOK(NULL, L",", &context))
+      |                  ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c:3048:17: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3048 |              && wcscmp(config->argv.items[0], L"") == 0))
+      |                 ^
+5 warnings and 30 errors generated.

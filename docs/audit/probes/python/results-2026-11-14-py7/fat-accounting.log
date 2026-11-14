@@ -1,0 +1,5 @@
+   Compiling sunlight-fs v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-fs)
+   Compiling py6-fat-lifetime v0.0.0 (/tmp/sunlight-py7-fat-lifetime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running `/tmp/sunlight-py7-fat-lifetime/target/x86_64-unknown-linux-gnu/debug/py6-fat-lifetime`
+PY7 RAW ACCOUNTING PASS initial=2 after_open=3 after_unlink=2 before_close=2 after_close=2 slot_byte_offset=1056 reused_cluster=4 old_handle=4194369 new_handle=4194370 replacement=new backing_release=immediate_not_deferred

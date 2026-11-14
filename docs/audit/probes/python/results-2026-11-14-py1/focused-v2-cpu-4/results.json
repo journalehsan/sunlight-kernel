@@ -1,0 +1,20 @@
+{
+  "py1-condvar": {
+    "exit": 0,
+    "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py1-strncpy": {
+    "exit": 0,
+    "stdout": "PY1 strncpy PASS: 81 boundary cases and canaries\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py1-immediate-exit": {
+    "exit": 37,
+    "stdout": "PY1 worker _Exit(37)\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

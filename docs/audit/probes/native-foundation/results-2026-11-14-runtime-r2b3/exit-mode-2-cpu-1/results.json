@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 29,
+    "stdout": "EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

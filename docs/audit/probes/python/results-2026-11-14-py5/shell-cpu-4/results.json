@@ -1,0 +1,8 @@
+{
+  "py5-shell-paths": {
+    "exit": 0,
+    "stdout": "/tmp\n/tmp\nmissing-rejected\n/\n",
+    "stderr": "sshl: cd: no such directory\n",
+    "pass_": true
+  }
+}

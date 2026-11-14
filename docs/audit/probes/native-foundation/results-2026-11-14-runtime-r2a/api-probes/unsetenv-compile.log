@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/unsetenv.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/unsetenv.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/unsetenv.c:2:44: error: use of undeclared identifier 'unsetenv'
+    2 | void * volatile required_symbol = (void *)&unsetenv;
+      |                                            ^~~~~~~~
+1 error generated.
+
+exit=1

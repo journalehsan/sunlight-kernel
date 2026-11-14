@@ -1,0 +1,15 @@
+{
+  "ipc/src/lib.rs": "07e59265d8be6abbfd3e4a5a1a33a5dc5d454dd361ca24b4a25409ceb319b866",
+  "kernel/src/process/foreground.rs": "a0f0cdeb2b47cc9f9a9d0e30dde538c94a62c525099901a74b07cf85757f1b3e",
+  "sunlight-libc/src/lib.rs": "952cfeff682d63650d9acfddaf4917239caf0824a1e8d34438b7aed0d2a2a5a1",
+  "sunlight-libc/src/sys.rs": "a597091da615d83490090ae1d199ea6fa6fd911e61b62dbb5e89378627477b1e",
+  "tools/foreground-scope-proof.rs": "1acf9d9b4e6c6a52e125be148d760112e729678940c9da1f49fe9422ba9e210c",
+  "kernel/src/process/mod.rs": "d81ec23f4f13abdd3adc24bac729df8f0b17982410dc83d8884cd4e26387465c",
+  "kernel/src/sched/mod.rs": "c68d4148171387554504f902375ecde0ac471fba2b6ec1b370412f654c2fcca9",
+  "kernel/src/sched/native_group.rs": "52cd659ad2025832bb2910cef04d786b0ef68b61892baf5d3d4d60b625fd1d88",
+  "kernel/src/sched/thread_admission.rs": "5a97dcba070bb2579990f75b29c21b299b16c0d040497abc2e8a00ae19cb9aed",
+  "kernel/src/arch/x86_64/syscall.rs": "5a0440552154b283572611e07bde04ba59ef7f294aeb0da7118176bda288fdf3",
+  "tools/native-c/guest.py": "a94bcb425cf455cbb9eab0c1ee8213aeecb6dd61e4eec4ee58f271e6602c2ef1",
+  "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+  "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+}

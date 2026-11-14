@@ -1,0 +1,38 @@
+["python3", "tools/native-c/guest.py", "--cases", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-cases.json", "--cpus", "2", "--timeout", "180", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-formatted-cpu-2"]
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-formatted-cpu-2
+Building isolated native C guest (17 ELFs, 2 CPUs)
+Booting disposable TCG guest
+initial: PASS exit=0 expected=0
+guest initial stdout: b'W alive actor=0 tid=101 owner=100 mode=0\nW initial pthread_exit owner=100 workers=1\nW tls actor=3 tid=100\nW progress actor=0 tid=101 after-owner-query\nW tls actor=1 tid=101\n'
+multiple: PASS exit=0 expected=0
+guest multiple stdout: b'W alive actor=0 tid=102 owner=101 mode=1\nW alive actor=1 tid=103 owner=101 mode=1\nW initial pthread_exit owner=101 workers=2\nW tls actor=3 tid=101\nW progress actor=1 tid=103 after-owner-query\nW progress actor=0 tid=102 after-owner-query\nW tls actor=1 tid=102\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=103\n'
+forced-after-owner: PASS exit=137 expected=137
+guest forced-after-owner stdout: b'W alive actor=0 tid=104 owner=102 mode=2\nW alive actor=1 tid=105 owner=102 mode=2\nW initial pthread_exit owner=102 workers=2\nW tls actor=3 tid=102\nW progress actor=1 tid=105 after-owner-query\nW progress actor=0 tid=104 after-owner-query\nW forced retained-owner SIGKILL\n'
+exit-0: PASS exit=17 expected=17
+guest exit-0 stdout: b'EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n'
+exit-1: PASS exit=23 expected=23
+guest exit-1 stdout: b'EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n'
+exit-2: PASS exit=29 expected=29
+guest exit-2 stdout: b'EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n'
+exit-3: PASS exit=137 expected=137
+guest exit-3 stdout: b'EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n'
+churn-0: PASS exit=0 expected=0
+guest churn-0 stdout: b'W alive actor=1 tid=111 owner=107 mode=1\nW alive actor=0 tid=110 owner=107 mode=1\nW initial pthread_exit owner=107 workers=2\nW tls actor=3 tid=107\nW progress actor=1 tid=111 after-owner-query\nW progress actor=0 tid=110 after-owner-query\nW tls actor=1 tid=110\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=111\n'
+churn-1: PASS exit=0 expected=0
+guest churn-1 stdout: b'W alive actor=0 tid=112 owner=108 mode=1\nW alive actor=1 tid=113 owner=108 mode=1\nW initial pthread_exit owner=108 workers=2\nW tls actor=3 tid=108\nW progress actor=1 tid=113 after-owner-query\nW progress actor=0 tid=112 after-owner-query\nW tls actor=1 tid=112\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=113\n'
+churn-2: PASS exit=0 expected=0
+guest churn-2 stdout: b'W alive actor=0 tid=114 owner=109 mode=1\nW alive actor=1 tid=115 owner=109 mode=1\nW initial pthread_exit owner=109 workers=2\nW tls actor=3 tid=109\nW progress actor=1 tid=115 after-owner-query\nW progress actor=0 tid=114 after-owner-query\nW tls actor=1 tid=114\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=115\n'
+churn-3: PASS exit=0 expected=0
+guest churn-3 stdout: b'W alive actor=0 tid=116 owner=110 mode=1\nW alive actor=1 tid=117 owner=110 mode=1\nW initial pthread_exit owner=110 workers=2\nW tls actor=3 tid=110\nW progress actor=1 tid=117 after-owner-query\nW progress actor=0 tid=116 after-owner-query\nW tls actor=1 tid=116\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=117\n'
+churn-4: PASS exit=0 expected=0
+guest churn-4 stdout: b'W alive actor=0 tid=118 owner=111 mode=1\nW alive actor=1 tid=119 owner=111 mode=1\nW initial pthread_exit owner=111 workers=2\nW tls actor=3 tid=111\nW progress actor=1 tid=119 after-owner-query\nW progress actor=0 tid=118 after-owner-query\nW tls actor=1 tid=118\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=119\n'
+churn-5: PASS exit=0 expected=0
+guest churn-5 stdout: b'W alive actor=0 tid=120 owner=112 mode=1\nW alive actor=1 tid=121 owner=112 mode=1\nW initial pthread_exit owner=112 workers=2\nW tls actor=3 tid=112\nW progress actor=1 tid=121 after-owner-query\nW progress actor=0 tid=120 after-owner-query\nW tls actor=1 tid=120\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=121\n'
+churn-6: PASS exit=0 expected=0
+guest churn-6 stdout: b'W alive actor=0 tid=122 owner=113 mode=1\nW alive actor=1 tid=123 owner=113 mode=1\nW initial pthread_exit owner=113 workers=2\nW tls actor=3 tid=113\nW progress actor=1 tid=123 after-owner-query\nW progress actor=0 tid=122 after-owner-query\nW tls actor=1 tid=122\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=123\n'
+churn-7: PASS exit=0 expected=0
+guest churn-7 stdout: b'W alive actor=0 tid=124 owner=114 mode=1\nW alive actor=1 tid=125 owner=114 mode=1\nW initial pthread_exit owner=114 workers=2\nW tls actor=3 tid=114\nW progress actor=1 tid=125 after-owner-query\nW progress actor=0 tid=124 after-owner-query\nW tls actor=1 tid=124\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=125\n'
+churn-8: PASS exit=0 expected=0
+guest churn-8 stdout: b'W alive actor=0 tid=126 owner=115 mode=1\nW alive actor=1 tid=127 owner=115 mode=1\nW initial pthread_exit owner=115 workers=2\nW tls actor=3 tid=115\nW progress actor=1 tid=127 after-owner-query\nW progress actor=0 tid=126 after-owner-query\nW tls actor=1 tid=126\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=127\n'
+churn-9: PASS exit=0 expected=0
+guest churn-9 stdout: b'W alive actor=1 tid=129 owner=116 mode=1\nW alive actor=0 tid=128 owner=116 mode=1\nW initial pthread_exit owner=116 workers=2\nW tls actor=3 tid=116\nW progress actor=0 tid=128 after-owner-query\nW tls actor=1 tid=128\nW progress actor=1 tid=129 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=129\n'

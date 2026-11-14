@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\nI4 worker survival observed\nI5 worker TLS cleanup completed\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

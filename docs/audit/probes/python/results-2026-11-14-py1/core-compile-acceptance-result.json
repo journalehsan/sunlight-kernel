@@ -1,0 +1,1 @@
+{"command": ["make", "-k", "-j4", "-W", "/tmp/sunlight-py1-cpython/Python-3.13.0/Include/Python.h", "python"], "exit": 2}

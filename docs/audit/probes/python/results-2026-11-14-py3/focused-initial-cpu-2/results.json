@@ -1,0 +1,20 @@
+{
+  "py3-contracts": {
+    "exit": 0,
+    "stdout": "PY3 CONTRACTS PASS bulk-conversion locale stream-policy resolution strncpy concurrency\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py3-exit": {
+    "exit": 38,
+    "stdout": "PY3 worker _exit(38)\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py3-filesystem": {
+    "exit": 0,
+    "stdout": "PY3 NATIVE METADATA SUBSET PASS; POSIX stat/realpath BLOCKED\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

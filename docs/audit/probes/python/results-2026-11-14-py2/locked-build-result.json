@@ -1,0 +1,15 @@
+{
+  "command": [
+    "bash",
+    "tools/build_native_std.sh",
+    "build",
+    "--manifest-path",
+    "tools/native-c/Cargo.toml",
+    "--target-dir",
+    "/home/ehsantor/Projects/sunlightos-kernel/target/native-c",
+    "--release",
+    "--locked"
+  ],
+  "cwd": "/home/ehsantor/Projects/sunlightos-kernel",
+  "exit": 0
+}

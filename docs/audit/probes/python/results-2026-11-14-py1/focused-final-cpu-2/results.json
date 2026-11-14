@@ -1,0 +1,56 @@
+{
+  "condvar": {
+    "exit": 0,
+    "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "libc": {
+    "exit": 0,
+    "stdout": "PY1 strings and strtol PASS\nPY1 strncpy PASS: 81 boundary cases and canaries\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "exit": {
+    "exit": 37,
+    "stdout": "PY1 worker _Exit(37)\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "heap": {
+    "exit": 0,
+    "stdout": "R1 heap and SysV ABI PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "admission": {
+    "exit": 0,
+    "stdout": "A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-tsd-once": {
+    "exit": 0,
+    "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-tsd-exit-race": {
+    "exit": 0,
+    "stdout": "in-flight destructor delete/reuse witness PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-once-recursive": {
+    "exit": 0,
+    "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "strerror-threads": {
+    "exit": 0,
+    "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

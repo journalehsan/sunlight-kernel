@@ -1,0 +1,131 @@
+sunlight-files/src/main.rs:604:    fn set(&mut self, text: &str) -> bool {
+sunlight-files/src/main.rs:1262:    fn navigate_to(&mut self, target: PathBuf) -> bool {
+sunlight-files/src/main.rs:5349:    fn directory_fixture(count: usize) -> FilesApp {
+sunlight-libc/src/lib.rs:108:pub struct Fd(pub u32);
+sunlight-libc/src/lib.rs:147:pub fn open(path: &[u8]) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:154:pub fn open_with_flags_mode(path: &[u8], flags: u64, mode: u16) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:161:pub fn open_with_flags(path: &[u8], flags: u64) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:165:pub fn create(path: &[u8]) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:169:pub fn close(fd: Fd) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:174:pub fn dup(fd: Fd) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:178:pub fn dup2(old: Fd, new: Fd) -> Result<Fd, Errno> {
+sunlight-libc/src/lib.rs:209:pub fn getcwd(buf: &mut [u8; MAX_PATH]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:221:pub fn resolve_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:226:pub fn resolve_directory_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:251:pub fn chdir(path: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:268:pub fn read(fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:283:pub fn write(fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:297:pub fn lseek(fd: Fd, offset: i64, whence: i32) -> Result<u64, Errno> {
+sunlight-libc/src/lib.rs:306:pub fn fstat(fd: Fd) -> Result<Stat, Errno> {
+sunlight-libc/src/lib.rs:314:pub fn exec(path: &[u8], argv: &[&[u8]]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:341:pub fn getpid() -> u64 {
+sunlight-libc/src/lib.rs:345:pub fn getuid() -> u64 {
+sunlight-libc/src/lib.rs:349:pub fn getgid() -> u64 {
+sunlight-libc/src/lib.rs:353:pub fn getnice(pid: u64) -> Result<i8, Errno> {
+sunlight-libc/src/lib.rs:363:pub fn setnice(pid: u64, nice: i8) -> Result<i8, Errno> {
+sunlight-libc/src/lib.rs:374:pub fn yield_now() {
+sunlight-libc/src/lib.rs:384:pub struct DirEntry {
+sunlight-libc/src/lib.rs:406:    pub fn name_bytes(&self) -> &[u8] {
+sunlight-libc/src/lib.rs:415:pub struct Stat {
+sunlight-libc/src/lib.rs:440:pub struct SysInfo {
+sunlight-libc/src/lib.rs:451:pub fn read_dir(path: &[u8], entries: &mut [DirEntry]) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:467:pub fn read_dir_from(path: &[u8], entries: &mut [DirEntry], offset: usize) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:483:pub fn rename_no_replace(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:494:pub fn file_reserve(fd: Fd, size: usize) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:500:pub fn file_sync(fd: Fd) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:506:pub fn dir_sync(path: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:513:pub fn stat(path: &[u8]) -> Result<Stat, Errno> {
+sunlight-libc/src/lib.rs:536:pub fn mkdir(path: &[u8], mode: u16) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:543:pub fn unlink(path: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:550:pub fn rename(old: &[u8], new: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:559:pub fn chmod(path: &[u8], mode: u16) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:566:pub fn chown(path: &[u8], uid: u32, gid: u32) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:609:pub fn sysinfo() -> Result<SysInfo, Errno> {
+sunlight-libc/src/lib.rs:624:pub fn freezram_fill(
+sunlight-libc/src/lib.rs:644:pub fn pipe() -> Result<(Fd, Fd), Errno> {
+sunlight-libc/src/lib.rs:659:pub struct PollFd {
+sunlight-libc/src/lib.rs:664:pub fn poll(fds: &mut [PollFd], timeout_ms: i32) -> Result<usize, Errno> {
+sunlight-libc/src/lib.rs:696:pub fn openpty() -> Result<(sunlight_ipc::CapabilityToken, sunlight_ipc::CapabilityToken), Errno> {
+sunlight-libc/src/lib.rs:730:pub fn terminal_winsize() -> Option<sunlight_ipc::TerminalWinsize> {
+sunlight-libc/src/lib.rs:736:pub fn spawn(path: &[u8], argv: &[&[u8]], stdout: Option<Fd>) -> Result<u64, Errno> {
+sunlight-libc/src/lib.rs:743:pub fn spawn_with_stdio(
+sunlight-libc/src/lib.rs:757:pub fn spawn_with_stdio_env(
+sunlight-libc/src/lib.rs:834:pub fn try_waitpid(pid: u64) -> Result<Option<u64>, Errno> {
+sunlight-libc/src/lib.rs:851:pub fn waitpid(pid: u64) -> Result<u64, Errno> {
+sunlight-libc/src/lib.rs:862:pub fn kill(pid: u64, sig: u32) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:867:pub fn map_telemetry() -> Result<*const u8, Errno> {
+sunlight-libc/src/lib.rs:874:pub fn write_all(fd: Fd, buf: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:967:pub fn mkdir_recursive(path: &[u8]) -> Result<(), Errno> {
+sunlight-libc/src/lib.rs:981:pub fn exit(code: u64) -> ! {
+sunshell/src/native_script.rs:188:    fn directory(&mut self, name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
+kernel/src/arch/x86_64/syscall.rs:10:pub enum SunlightSyscall {
+kernel/src/arch/x86_64/syscall.rs:308:pub struct SyscallRegs {
+kernel/src/arch/x86_64/syscall.rs:1476:pub fn validate_ipc_msg(msg: &IpcMsg) -> Result<(), IpcError> {
+kernel/src/arch/x86_64/syscall.rs:5710:fn resolve_native_existing(
+kernel/src/arch/x86_64/syscall.rs:5764:fn sys_resolve_path(frame: &mut SyscallFrame) -> u64 {
+kernel/src/arch/x86_64/syscall.rs:5800:fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
+kernel/src/arch/x86_64/syscall.rs:8877:pub struct LinuxTermios {
+sunlight-fs/src/vfs.rs:28:pub struct FileHandle(pub u32);
+sunlight-fs/src/vfs.rs:53:pub enum FileType {
+sunlight-fs/src/vfs.rs:83:pub struct FileStat {
+sunlight-fs/src/vfs.rs:95:pub struct VfsDirEntry {
+sunlight-fs/src/vfs.rs:103:    pub fn from_bytes(name: &[u8], file_type: FileType, size: usize) -> Self {
+sunlight-fs/src/vfs.rs:115:    pub fn name_bytes(&self) -> &[u8] {
+sunlight-fs/src/vfs.rs:119:    pub fn name(&self) -> &str {
+sunlight-fs/src/vfs.rs:216:pub struct FatFs<D: BlockDevice> {
+sunlight-fs/src/vfs.rs:224:    pub fn new(fat: Fat32<D>) -> Self {
+sunlight-fs/src/vfs.rs:583:pub enum FsNode<D: BlockDevice = NullDevice> {
+sunlight-fs/src/vfs.rs:775:pub struct Mount<D: BlockDevice = NullDevice> {
+sunlight-fs/src/vfs.rs:784:pub struct MountInfo<'a> {
+sunlight-fs/src/vfs.rs:791:pub struct Vfs<D: BlockDevice = NullDevice> {
+sunlight-fs/src/vfs.rs:810:    pub fn mount(&mut self, path: &str, fs: FsNode<D>) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:844:    pub fn mount_tmpfs(&mut self, path: &str, fs: crate::Tmpfs) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:849:    pub fn mount_ramfs(&mut self, path: &str, fs: RamFs) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:853:    pub fn mount_fat(&mut self, path: &str, fat: Fat32<D>) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:860:    pub fn set_mount_source(&mut self, path: &str, source: u64) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:871:    pub fn mount_info(&self, index: usize) -> Option<MountInfo<'_>> {
+sunlight-fs/src/vfs.rs:882:    pub fn open_handle_count(&self) -> usize {
+sunlight-fs/src/vfs.rs:892:    pub fn validate_runtime_target(&mut self, path: &str, source: u64) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:939:    pub fn mount_runtime_fat(
+sunlight-fs/src/vfs.rs:958:    pub fn is_runtime_path(&self, path: &str) -> bool {
+sunlight-fs/src/vfs.rs:965:    pub fn unmount(&mut self, id: u64) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:985:    pub fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+sunlight-fs/src/vfs.rs:997:    pub fn create_file(
+sunlight-fs/src/vfs.rs:1016:    pub fn create_file_exclusive(
+sunlight-fs/src/vfs.rs:1036:    pub fn create_private_file_exclusive(
+sunlight-fs/src/vfs.rs:1047:    pub fn read(
+sunlight-fs/src/vfs.rs:1062:    pub fn write(
+sunlight-fs/src/vfs.rs:1077:    pub fn reserve(&mut self, handle: FileHandle, size: usize) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1087:    pub fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1097:    pub fn close(&mut self, handle: FileHandle) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1105:    pub fn sync_file(&mut self, handle: FileHandle) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1115:    pub fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1126:    pub fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+sunlight-fs/src/vfs.rs:1136:    pub fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
+sunlight-fs/src/vfs.rs:1145:    pub fn mkdir(&mut self, path: &str, uid: u32, gid: u32, mode: u16) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1154:    pub fn chmod(&mut self, path: &str, mode: u16) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1163:    pub fn chown(&mut self, path: &str, uid: u32, gid: u32) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1172:    pub fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1182:    pub fn rename_no_replace(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1191:    pub fn rename(&mut self, old_path: &str, new_path: &str) -> Result<(), FsError> {
+sunlight-fs/src/vfs.rs:1210:    pub fn publish_private(
+sunlight-fs/src/vfs.rs:1244:    pub fn read_dir(
+sunlight-fs/src/vfs.rs:1261:    pub fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
+sunlight-fs/src/tmpfs.rs:45:pub struct TmpfsDir {
+sunlight-fs/src/tmpfs.rs:49:    pub fn lookup(&self, path: &str) -> Option<u64> {
+sunlight-fs/src/tmpfs.rs:56:pub struct Tmpfs {
+sunlight-fs/src/tmpfs.rs:77:    pub fn new(entries: &'static [RamEntry]) -> Self {
+sunlight-fs/src/tmpfs.rs:174:    pub fn with_limits(entries: &'static [RamEntry], limits: TmpfsLimits) -> Result<Self, FsError> {
+sunlight-fs/src/tmpfs.rs:208:    pub fn usage(&self) -> (usize, usize) {
+sunlight-fs/src/tmpfs.rs:219:    pub fn lookup(&self, path: &str) -> Result<u64, FsError> {
+sunshell/src/main.rs:1305:        fn cmd_cd(&mut self, args: &[&str]) -> &[u8] {
+sunshell/src/main.rs:2794:    fn resolve_directory(cwd: &str, target: &str) -> Option<alloc::string::String> {
+sunlight-fs/src/vfs/lookup.rs:10:pub enum MetadataSource {
+sunlight-fs/src/vfs/lookup.rs:22:pub struct BackendCapabilities {
+sunlight-fs/src/vfs/lookup.rs:51:pub struct Metadata {
+sunlight-fs/src/vfs/lookup.rs:64:pub struct ResolvedPath {
+sunlight-fs/src/vfs/lookup.rs:70:    pub fn metadata(&mut self, path: &str) -> Result<Metadata, FsError> {
+sunlight-fs/src/vfs/lookup.rs:83:    pub fn metadata_handle(&mut self, handle: FileHandle) -> Result<Metadata, FsError> {
+sunlight-fs/src/vfs/lookup.rs:98:    pub fn resolve_existing(
+sunlight-fs/src/vfs/lookup.rs:109:    pub fn resolve_existing_authorized(
+sunlight-libc/src/c_file.rs:126:pub unsafe extern "C" fn realpath(path: *const u8, output: *mut u8) -> *mut u8 {

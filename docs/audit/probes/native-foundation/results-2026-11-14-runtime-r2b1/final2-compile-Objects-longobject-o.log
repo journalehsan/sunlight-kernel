@@ -1,0 +1,74 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2  -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/longobject.o /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:11:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:8:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pythread.h:66:9: error: unknown type name 'pthread_condattr_t'; did you mean 'pthread_attr_t'?
+   66 |         pthread_condattr_t *ptr;
+      |         ^~~~~~~~~~~~~~~~~~
+      |         pthread_attr_t
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:36:3: note: 'pthread_attr_t' declared here
+   36 | } pthread_attr_t;
+      |   ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:53:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+   53 |     PyCOND_T cond;
+      |     ^~~~~~~~
+      |     pthread_once_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:23:42: note: 'pthread_once_t' declared here
+   23 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:58:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_once_t'?
+   58 |     PyCOND_T switch_cond;
+      |     ^~~~~~~~
+      |     pthread_once_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:23:42: note: 'pthread_once_t' declared here
+   23 | typedef struct { unsigned int __state; } pthread_once_t;
+      |                                          ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+5 warnings and 3 errors generated.
+make: *** [Makefile:3005: Objects/longobject.o] Error 1

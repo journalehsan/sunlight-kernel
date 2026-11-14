@@ -1,0 +1,11 @@
+[
+  {
+    "name": "py5-shell-paths",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py5-shell/x86_64-unknown-none/release/sshl",
+    "expected_exit": 0,
+    "args": [
+      "-c",
+      "cd /tmp; pwd; cd /tmp//./../tmp; pwd; cd /py5-missing || echo missing-rejected; cd /; pwd"
+    ]
+  }
+]

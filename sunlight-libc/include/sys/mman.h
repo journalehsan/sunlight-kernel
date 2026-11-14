@@ -1,10 +1,7 @@
 #ifndef SUNLIGHT_SYS_MMAN_H
 #define SUNLIGHT_SYS_MMAN_H
 #include <stddef.h>
-#ifndef SUNLIGHT_OFF_T_DEFINED
-#define SUNLIGHT_OFF_T_DEFINED
-typedef long off_t;
-#endif
+#include <sys/types.h>
 #define PROT_NONE 0
 #define PROT_READ 1
 #define PROT_WRITE 2

@@ -1,0 +1,353 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:13:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:152:41: error: incomplete definition of type 'struct lconv'
+  152 |     change_locale = (!locale_is_ascii(lc->int_curr_symbol)
+      |                                       ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:153:44: error: incomplete definition of type 'struct lconv'
+  153 |                      || !locale_is_ascii(lc->currency_symbol)
+      |                                          ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:154:44: error: incomplete definition of type 'struct lconv'
+  154 |                      || !locale_is_ascii(lc->mon_decimal_point)
+      |                                          ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:155:44: error: incomplete definition of type 'struct lconv'
+  155 |                      || !locale_is_ascii(lc->mon_thousands_sep));
+      |                                          ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:208:5: error: incomplete definition of type 'struct lconv'
+  208 |     RESULT_STRING(int_curr_symbol);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:197:15: note: expanded from macro 'RESULT_STRING'
+  197 |         obj = GET_LOCALE_STRING(ATTR); \
+      |               ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:186:58: note: expanded from macro 'GET_LOCALE_STRING'
+  186 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:209:5: error: incomplete definition of type 'struct lconv'
+  209 |     RESULT_STRING(currency_symbol);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:197:15: note: expanded from macro 'RESULT_STRING'
+  197 |         obj = GET_LOCALE_STRING(ATTR); \
+      |               ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:186:58: note: expanded from macro 'GET_LOCALE_STRING'
+  186 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:210:5: error: incomplete definition of type 'struct lconv'
+  210 |     RESULT_STRING(mon_decimal_point);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:197:15: note: expanded from macro 'RESULT_STRING'
+  197 |         obj = GET_LOCALE_STRING(ATTR); \
+      |               ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:186:58: note: expanded from macro 'GET_LOCALE_STRING'
+  186 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:211:5: error: incomplete definition of type 'struct lconv'
+  211 |     RESULT_STRING(mon_thousands_sep);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:197:15: note: expanded from macro 'RESULT_STRING'
+  197 |         obj = GET_LOCALE_STRING(ATTR); \
+      |               ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:186:58: note: expanded from macro 'GET_LOCALE_STRING'
+  186 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:47: note: forward declaration of 'struct lconv'
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:247:10: error: call to undeclared function 'localeconv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  247 |     lc = localeconv();
+      |          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:247:8: error: incompatible integer to pointer conversion assigning to 'struct lconv *' from 'int' [-Wint-conversion]
+  247 |     lc = localeconv();
+      |        ^ ~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:282:40: error: incompatible pointer types passing 'struct lconv *' to parameter of type 'struct lconv *' [-Wincompatible-pointer-types]
+  282 |     if (locale_decode_monetary(result, lc) < 0) {
+      |                                        ^~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:148:54: note: passing argument to parameter 'lc' here
+  148 | locale_decode_monetary(PyObject *dict, struct lconv *lc)
+      |                                                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:285:25: error: incomplete definition of type 'struct lconv'
+  285 |     x = copy_grouping(lc->mon_grouping);
+      |                       ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:288:5: error: incomplete definition of type 'struct lconv'
+  288 |     RESULT_STRING(positive_sign);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:271:13: note: expanded from macro 'RESULT_STRING'
+  271 |         x = GET_LOCALE_STRING(s); \
+      |             ^~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:267:58: note: expanded from macro 'GET_LOCALE_STRING'
+  267 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:289:5: error: incomplete definition of type 'struct lconv'
+  289 |     RESULT_STRING(negative_sign);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:271:13: note: expanded from macro 'RESULT_STRING'
+  271 |         x = GET_LOCALE_STRING(s); \
+      |             ^~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:267:58: note: expanded from macro 'GET_LOCALE_STRING'
+  267 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:290:5: error: incomplete definition of type 'struct lconv'
+  290 |     RESULT_INT(int_frac_digits);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:291:5: error: incomplete definition of type 'struct lconv'
+  291 |     RESULT_INT(frac_digits);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:292:5: error: incomplete definition of type 'struct lconv'
+  292 |     RESULT_INT(p_cs_precedes);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:293:5: error: incomplete definition of type 'struct lconv'
+  293 |     RESULT_INT(p_sep_by_space);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:294:5: error: incomplete definition of type 'struct lconv'
+  294 |     RESULT_INT(n_cs_precedes);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:295:5: error: incomplete definition of type 'struct lconv'
+  295 |     RESULT_INT(n_sep_by_space);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:296:5: error: incomplete definition of type 'struct lconv'
+  296 |     RESULT_INT(p_sign_posn);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:297:5: error: incomplete definition of type 'struct lconv'
+  297 |     RESULT_INT(n_sign_posn);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:277:31: note: expanded from macro 'RESULT_INT'
+  277 |         x = PyLong_FromLong(lc->i); \
+      |                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:301:34: error: incompatible pointer types passing 'struct lconv *' to parameter of type 'struct lconv *' [-Wincompatible-pointer-types]
+  301 |     if (_Py_GetLocaleconvNumeric(lc, &decimal_point, &thousands_sep) < 0) {
+      |                                  ^~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:19: note: passing argument to parameter 'lc' here
+  245 |     struct lconv *lc,
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:320:25: error: incomplete definition of type 'struct lconv'
+  320 |     x = copy_grouping(lc->grouping);
+      |                       ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:238:12: note: forward declaration of 'struct lconv'
+  238 |     struct lconv *lc;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:488:14: error: use of undeclared identifier 'DAY_1'
+  488 |     LANGINFO(DAY_1),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:489:14: error: use of undeclared identifier 'DAY_2'
+  489 |     LANGINFO(DAY_2),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:490:14: error: use of undeclared identifier 'DAY_3'
+  490 |     LANGINFO(DAY_3),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:491:14: error: use of undeclared identifier 'DAY_4'
+  491 |     LANGINFO(DAY_4),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:492:14: error: use of undeclared identifier 'DAY_5'
+  492 |     LANGINFO(DAY_5),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:493:14: error: use of undeclared identifier 'DAY_6'
+  493 |     LANGINFO(DAY_6),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:494:14: error: use of undeclared identifier 'DAY_7'
+  494 |     LANGINFO(DAY_7),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:496:14: error: use of undeclared identifier 'ABDAY_1'
+  496 |     LANGINFO(ABDAY_1),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:497:14: error: use of undeclared identifier 'ABDAY_2'
+  497 |     LANGINFO(ABDAY_2),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:498:14: error: use of undeclared identifier 'ABDAY_3'
+  498 |     LANGINFO(ABDAY_3),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:499:14: error: use of undeclared identifier 'ABDAY_4'
+  499 |     LANGINFO(ABDAY_4),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:500:14: error: use of undeclared identifier 'ABDAY_5'
+  500 |     LANGINFO(ABDAY_5),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:501:14: error: use of undeclared identifier 'ABDAY_6'
+  501 |     LANGINFO(ABDAY_6),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:502:14: error: use of undeclared identifier 'ABDAY_7'
+  502 |     LANGINFO(ABDAY_7),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:504:14: error: use of undeclared identifier 'MON_1'
+  504 |     LANGINFO(MON_1),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:505:14: error: use of undeclared identifier 'MON_2'
+  505 |     LANGINFO(MON_2),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:506:14: error: use of undeclared identifier 'MON_3'
+  506 |     LANGINFO(MON_3),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:507:14: error: use of undeclared identifier 'MON_4'
+  507 |     LANGINFO(MON_4),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:508:14: error: use of undeclared identifier 'MON_5'
+  508 |     LANGINFO(MON_5),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:509:14: error: use of undeclared identifier 'MON_6'
+  509 |     LANGINFO(MON_6),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:510:14: error: use of undeclared identifier 'MON_7'
+  510 |     LANGINFO(MON_7),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:511:14: error: use of undeclared identifier 'MON_8'
+  511 |     LANGINFO(MON_8),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:512:14: error: use of undeclared identifier 'MON_9'
+  512 |     LANGINFO(MON_9),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:513:14: error: use of undeclared identifier 'MON_10'
+  513 |     LANGINFO(MON_10),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:514:14: error: use of undeclared identifier 'MON_11'
+  514 |     LANGINFO(MON_11),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:515:14: error: use of undeclared identifier 'MON_12'
+  515 |     LANGINFO(MON_12),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:517:14: error: use of undeclared identifier 'ABMON_1'
+  517 |     LANGINFO(ABMON_1),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:518:14: error: use of undeclared identifier 'ABMON_2'
+  518 |     LANGINFO(ABMON_2),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:519:14: error: use of undeclared identifier 'ABMON_3'
+  519 |     LANGINFO(ABMON_3),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:520:14: error: use of undeclared identifier 'ABMON_4'
+  520 |     LANGINFO(ABMON_4),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:521:14: error: use of undeclared identifier 'ABMON_5'
+  521 |     LANGINFO(ABMON_5),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:522:14: error: use of undeclared identifier 'ABMON_6'
+  522 |     LANGINFO(ABMON_6),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:523:14: error: use of undeclared identifier 'ABMON_7'
+  523 |     LANGINFO(ABMON_7),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:524:14: error: use of undeclared identifier 'ABMON_8'
+  524 |     LANGINFO(ABMON_8),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:525:14: error: use of undeclared identifier 'ABMON_9'
+  525 |     LANGINFO(ABMON_9),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:526:14: error: use of undeclared identifier 'ABMON_10'
+  526 |     LANGINFO(ABMON_10),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:527:14: error: use of undeclared identifier 'ABMON_11'
+  527 |     LANGINFO(ABMON_11),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:528:14: error: use of undeclared identifier 'ABMON_12'
+  528 |     LANGINFO(ABMON_12),
+      |              ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:544:14: error: use of undeclared identifier 'D_T_FMT'
+  544 |     LANGINFO(D_T_FMT),
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:545:14: error: use of undeclared identifier 'D_FMT'
+  545 |     LANGINFO(D_FMT),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:546:14: error: use of undeclared identifier 'T_FMT'
+  546 |     LANGINFO(T_FMT),
+      |              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:547:14: error: use of undeclared identifier 'AM_STR'
+  547 |     LANGINFO(AM_STR),
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c:548:14: error: use of undeclared identifier 'PM_STR'
+  548 |     LANGINFO(PM_STR),
+      |              ^~~~~~
+6 warnings and 67 errors generated.

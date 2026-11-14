@@ -1,0 +1,38 @@
+{
+  "status": "PARTIAL",
+  "langinfo": {
+    "status": "PASS",
+    "changes": "47 real C-locale metadata items (calendar names/formats, AM/PM, decimal point, empty thousands/currency), native nl_item 256..302; CODESET=1 retained",
+    "lifetime": "Immutable static strings with process lifetime; caller must not modify/free; no shared allocation",
+    "locale": "All accepted names retain C LC_TIME/numeric/monetary baseline. CODESET tracks LC_CTYPE; character conversion/classification implementations unchanged.",
+    "error": "Unknown items including integer extremes and original reserved 2 return empty without changing errno",
+    "tests": "All names, formats, abbreviations, invalid items, errno, UTF8 selection, stable pointers and four concurrent readers; 1/2/4 CPUs"
+  },
+  "calendar": {
+    "status": "BLOCKED",
+    "reason": "tm/timeval definitions, calendar conversion/strftime/timezone APIs remain absent. Returning format metadata does not implement calendar execution."
+  },
+  "environment": {
+    "status": "BLOCKED",
+    "existing": "getenv exposes immutable process-lifetime startup envp bytes; Rust borrows are static; native std owns its own mutex-protected mutable snapshot (tools/native-std/overlay/env/sunlightos.rs); its Rust setenv/unsetenv do not update libc envp",
+    "missing": [
+      "C setenv",
+      "C unsetenv",
+      "C putenv"
+    ],
+    "reason": "An owned shared registry, synchronization, inherited child snapshot integration and borrow/mutable-storage rules are required. Freeing or mutating current static Rust borrows would be unsound. Naive permanent-copy leakage is not a cleanup contract.",
+    "native_tests": "Existing startup environment/locale-selection probes reexecuted; mutable environment ownership/concurrency tests NOT_RUN without implementation"
+  },
+  "buffering": {
+    "status": "BLOCKED",
+    "existing": "Native stdio performs actual unbuffered I/O. setvbuf(_IONBF) works; full/line modes fail ENOSYS; invalid mode EINVAL; setbuf never retains user buffer.",
+    "missing": "Real pending-output/input buffers and flush/seek/close/exit integration with stream locking and ownership rules",
+    "tests": "Existing PY3 stream-policy and PY2 real stdio/format probes reexecuted; buffered mode behavior NOT_RUN without implementation"
+  },
+  "evidence": [
+    "langinfo-test.c",
+    "validated-functional-cpu-1/results.json",
+    "validated-functional-cpu-2/results.json",
+    "validated-functional-cpu-4/results.json"
+  ]
+}

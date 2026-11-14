@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "PY7 FAT PASS: unlink read/write/dup rejected; replacement bytes preserved; rename source retained; destination revoked; valid closes\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

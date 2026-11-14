@@ -1,0 +1,666 @@
+{
+  "status": "PASS",
+  "scope": "Fresh comparison with PY5 retained pinned vendor bytes; no network provenance refresh; Cargo.toml remains the documented upstream difference",
+  "files": [
+    {
+      "file": "sunlight-libc/vendor/libm/CHANGELOG.md",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/Cargo.toml",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/LICENSE.txt",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/README.md",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/build.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/configure.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/lib.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/libm_helper.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/acos.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/acosf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/acosh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/acoshf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/asin.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/asinf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/asinh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/asinhf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atan.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atan2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atan2f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atanf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atanh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/atanhf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/cbrt.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/cbrtf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/ceil.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/copysign.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/cos.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/cosf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/cosh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/coshf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/erf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/erff.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/exp.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/exp10.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/exp10f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/exp2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/exp2f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/expf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/expm1.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/expm1f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/expo2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fabs.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fdim.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/floor.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fmaf16.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fmin_fmax.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fminimum_fmaximum.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fminimum_fmaximum_num.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/fmod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/frexp.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/hypot.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/hypotf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/ilogb.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/j0.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/j0f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/j1.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/j1f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/jn.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/jnf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_cos.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_cosf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_expo2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_expo2f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_sin.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_sinf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_tan.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/k_tanf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/ldexp.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/lgamma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/lgamma_r.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/lgammaf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/lgammaf_r.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log10.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log10f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log1p.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log1pf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/log2f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/logf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/modf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/modff.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/nextafter.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/nextafterf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/pow.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/powf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/rem_pio2.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/rem_pio2_large.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/rem_pio2f.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/remainder.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/remainderf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/remquo.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/remquof.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/rint.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/round.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/roundeven.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/scalbn.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sin.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sincos.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sincosf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sinf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sinh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sinhf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/sqrt.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tan.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tanf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tanh.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tanhf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tgamma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/tgammaf.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/trunc.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/approx/cbrtf64.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/approx/hypot.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/approx/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/ceil.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/copysign.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fabs.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fdim.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/floor.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fma_wide.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fmax.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fmaximum.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fmaximum_num.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fmin.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fminimum.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fminimum_num.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/fmod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/frexp.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/ilogb.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/rint.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/round.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/scalbn.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/sqrt.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/generic/trunc.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/big.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/env.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/feature_detect.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/float_traits.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/hex_float.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/int_traits.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/macros.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/modular.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/big/tests.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/support/int_traits/narrowing_div.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/aarch64/fma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/aarch64/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/aarch64/rounding.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/aarch64/sqrt.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/i586/exp_all.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/i586/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/i586/rounding.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/wasm32/fabs.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/wasm32/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/wasm32/rounding.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/wasm32/sqrt.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/x86/detect.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/x86/fma.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/x86/mod.rs",
+      "matches_pinned_py5": true
+    },
+    {
+      "file": "sunlight-libc/vendor/libm/src/math/arch/x86/sqrt.rs",
+      "matches_pinned_py5": true
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "version": "3.13.0",
+  "status": "BLOCKED",
+  "fresh_configure": "NOT_RUN",
+  "fresh_compile": "NOT_RUN",
+  "interpreter_link": "NOT_RUN",
+  "interpreter_execution": "NOT_RUN",
+  "prior_evidence_only": {
+    "source": "../results-2026-11-14-runtime-r2b1/validation-summary.json",
+    "configure": "PASS",
+    "core_compile": "FAIL: pthread_condattr_t/pthread_cond_t and strncpy; platform/time header diagnostics"
+  },
+  "current_readiness": {
+    "initial_thread_exit": "BLOCKED",
+    "thread_group_lifetime": "BLOCKED",
+    "thread_TLS_cleanup": "PARTIAL: worker lifecycle passes; final owner-survivor case blocked",
+    "detached_reclamation": "PARTIAL: bounded Controls and safe ownership; no autonomous cleanup",
+    "public_handle_identity": "Stale public handle ABA fixed in native256-cycle churn; exact concurrent ownership witnesses pending",
+    "pthread_once": "Functional pass; exact registration races UNQUALIFIED",
+    "futex": "Existing compare/register/wake protocol preserved; precise once integration UNQUALIFIED"
+  },
+  "remaining_gaps": [
+    "condition-variable APIs",
+    "strncpy",
+    "_Exit declaration/export",
+    "demonstrated platform/time header gaps"
+  ],
+  "_Exit_fresh_negative_probes": {
+    "exit-api-negative": {
+      "name": "exit-api-negative",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-c",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-api.o"
+      ],
+      "exit": 1
+    },
+    "exit-link-negative": {
+      "name": "exit-link-negative",
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-link.elf"
+      ],
+      "exit": 1
+    }
+  },
+  "condition_variables_implemented": false,
+  "fake_POSIX_symbols_added": false,
+  "full_port_attempted": false,
+  "reason_no_CPython_build": "Lifecycle remains blocked; no relevant header/API gap changed, so another compile would not add lifecycle evidence"
+}

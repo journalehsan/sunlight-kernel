@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 134,
+    "stdout": "",
+    "stderr": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/headers-native.c:43: main: Assertion `0 && \"R2A diagnostic\"' failed.\n",
+    "pass_": true
+  }
+}

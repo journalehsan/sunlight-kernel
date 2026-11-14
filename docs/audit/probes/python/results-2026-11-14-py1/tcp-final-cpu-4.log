@@ -1,0 +1,1 @@
+["python3", "tools/native-c/run_poll_tcp.py", "--mode", "loopback", "--cpus", "4", "--timeout", "180", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/tcp-final-cpu-4"]

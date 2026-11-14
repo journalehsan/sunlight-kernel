@@ -1,0 +1,187 @@
+{
+  "status": "PARTIAL",
+  "new_apis": {
+    "Formatted output": [
+      "snprintf",
+      "vsnprintf",
+      "sprintf",
+      "vsprintf"
+    ],
+    "Stream adoption/pushback": [
+      "fdopen",
+      "ungetc"
+    ],
+    "Native fd/path adapters": [
+      "open",
+      "fcntl",
+      "unlink"
+    ],
+    "Wide strings": [
+      "wcslen",
+      "wcscpy",
+      "wcsncpy",
+      "wcscmp",
+      "wcsncmp",
+      "wcschr",
+      "wcsrchr",
+      "wmemchr",
+      "wcstok"
+    ],
+    "LP64 conversions": [
+      "strtoul",
+      "wcstol"
+    ],
+    "Startup environment": [
+      "getenv"
+    ],
+    "Sorting": [
+      "qsort"
+    ]
+  },
+  "extended_existing": [
+    "printf",
+    "fprintf",
+    "vprintf",
+    "vfprintf",
+    "fread/fgetc/fgets through shared pushback read",
+    "fseek",
+    "ftell"
+  ],
+  "declared_existing_math_exports": [
+    "atan2",
+    "ceil",
+    "copysign",
+    "cos",
+    "exp",
+    "floor",
+    "fmod",
+    "hypot",
+    "pow",
+    "round",
+    "sin"
+  ],
+  "math_qualification": "Existing compiler-builtins exports, bounded ABI/value probes only, no added errno or long-double guarantee. Existing libm numerical suite retained.",
+  "constants": [
+    "BUFSIZ=8192 (recommended application block size, not buffering)",
+    "EOVERFLOW=75",
+    "EWOULDBLOCK=EAGAIN",
+    "reserved ESRCH/EINTR/ENXIO/ECHILD/ENODEV/ESPIPE names"
+  ],
+  "ownership": [
+    "fdopen transfers fd ownership only on success",
+    "fdopen allocates before append flag mutation",
+    "failed fdopen leaves fd open",
+    "ungetc slot protected by existing stream lock",
+    "getenv returns immutable startup storage; no new allocation/lifetime",
+    "qsort allocates nothing; comparator receives original element addresses",
+    "memory formatting writes directly to caller destination; no whole-output temporary"
+  ],
+  "standards_limits": [
+    "unsupported formatting conversions fail explicitly",
+    "all existing native signal/lifetime/retirement qualifications unchanged",
+    "no dynamic loader or Linux runtime libraries introduced"
+  ],
+  "evidence": "source-integrity.json and py2-production.patch",
+  "prioritization": [
+    {
+      "group": "Formatted output",
+      "mandatory_units_with_missing_declarations_before": 10,
+      "units": [
+        "Parser/string_parser.o",
+        "Objects/bytesobject.o",
+        "Objects/obmalloc.o",
+        "Objects/typeobject.o",
+        "Objects/unicodeobject.o",
+        "Python/ast_opt.o",
+        "Python/mysnprintf.o",
+        "Python/pystrtod.o",
+        "Modules/faulthandler.o",
+        "Python/sysmodule.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "Stream adoption/pushback",
+      "mandatory_units_with_missing_declarations_before": 4,
+      "units": [
+        "Parser/tokenizer/file_tokenizer.o",
+        "Objects/fileobject.o",
+        "Modules/main.o",
+        "Python/sysmodule.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "Native fd/path adapters",
+      "mandatory_units_with_missing_declarations_before": 4,
+      "units": [
+        "Python/fileutils.o",
+        "Modules/posixmodule.o",
+        "Modules/_io/fileio.o",
+        "Python/sysmodule.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "Wide strings",
+      "mandatory_units_with_missing_declarations_before": 12,
+      "units": [
+        "Objects/moduleobject.o",
+        "Objects/unicodeobject.o",
+        "Python/initconfig.o",
+        "Python/modsupport.o",
+        "Python/pathconfig.o",
+        "Python/preconfig.o",
+        "Python/getopt.o",
+        "Python/fileutils.o",
+        "Modules/main.o",
+        "Modules/posixmodule.o",
+        "Modules/getpath.o",
+        "Python/sysmodule.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "LP64 conversions",
+      "mandatory_units_with_missing_declarations_before": 1,
+      "units": [
+        "Python/initconfig.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "Startup environment",
+      "mandatory_units_with_missing_declarations_before": 5,
+      "units": [
+        "Objects/obmalloc.o",
+        "Python/initconfig.o",
+        "Python/preconfig.o",
+        "Python/pylifecycle.o",
+        "Modules/getpath.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    },
+    {
+      "group": "Sorting",
+      "mandatory_units_with_missing_declarations_before": 1,
+      "units": [
+        "Modules/posixmodule.o"
+      ],
+      "selection": "Demonstrated missing declarations; verified owning-layer support before implementation",
+      "ABI_risk": "Public prototypes match native SysV LP64; existing syscall/wire ABIs preserved",
+      "testability": "Native guest cases and independent host oracle for decimal formatting"
+    }
+  ]
+}

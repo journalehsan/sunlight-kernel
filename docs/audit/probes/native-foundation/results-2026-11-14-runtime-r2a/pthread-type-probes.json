@@ -1,0 +1,17 @@
+[
+  {
+    "type": "pthread_key_t",
+    "exit": 1,
+    "evidence": "pthread_key_t.log"
+  },
+  {
+    "type": "pthread_cond_t",
+    "exit": 1,
+    "evidence": "pthread_cond_t.log"
+  },
+  {
+    "type": "pthread_once_t",
+    "exit": 1,
+    "evidence": "pthread_once_t.log"
+  }
+]

@@ -1,0 +1,33 @@
+START locked-final
+END locked-final 0
+START lifecycle-build
+END lifecycle-build 0
+START exit-matrix-build
+END exit-matrix-build 0
+START lifecycle-cpu-1
+END lifecycle-cpu-1 0
+START lifecycle-cpu-2
+END lifecycle-cpu-2 0
+START lifecycle-cpu-4
+END lifecycle-cpu-4 0
+START regression-cpu-1
+END regression-cpu-1 0
+START regression-cpu-2
+END regression-cpu-2 0
+START regression-cpu-4
+END regression-cpu-4 0
+START tcp-cpu-2
+END tcp-cpu-2 0
+START tcp-cpu-4
+END tcp-cpu-4 0
+START pthread-abi
+END pthread-abi 0
+START kernel-host
+END kernel-host 0
+START ipc-host
+END ipc-host 0
+START scheduler-host
+END scheduler-host 0
+START production-check
+END production-check 0
+FINISHED

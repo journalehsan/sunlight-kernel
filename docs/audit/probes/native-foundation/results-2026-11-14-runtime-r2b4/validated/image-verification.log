@@ -1,0 +1,196 @@
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-1/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27505 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50986k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-p0rwstio/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-2/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27505 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50986k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-8fcagfyo/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-4/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27505 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50986k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-8wkh5wv_/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-1/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 28813 data blocks, 56.3m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 53603k) in 1 seconds = 39.6xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-awc4hjx4/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-2/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 28813 data blocks, 56.3m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 53603k) in 1 seconds = 39.6xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-n748d8g6/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-4/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 28813 data blocks, 56.3m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 53603k) in 1 seconds = 39.6xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-mspyyxpw/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-1/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27493 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50962k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-hftartfc/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-2/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27493 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50962k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-sw7vs7nb/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-4/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27493 data blocks, 53.7m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 50962k) in 1 seconds = 37.7xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-cgerlajv/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tcp-cpu-2/guest/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27667 data blocks, 54.0m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 51312k) in 1 seconds = 37.9xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-elvbtyk9/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tcp-cpu-4/guest/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27667 data blocks, 54.0m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 51312k) in 1 seconds = 37.9xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-s1_sozd3/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-1/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27549 data blocks, 53.8m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 51074k) in 1 seconds = 37.8xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-4d8vbjf2/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-2/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27549 data blocks, 53.8m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 51074k) in 1 seconds = 37.8xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-op7gf2he/kernel.elf'
+xorriso 1.5.8.pl02 : RockRidge filesystem manipulator, libburnia project.
+
+Copying of file objects from ISO image to disk filesystem is: Enabled
+xorriso : NOTE : Loading ISO image tree from LBA 0
+xorriso : UPDATE :      12 nodes read in 1 seconds
+xorriso : NOTE : Detected El-Torito boot information which currently is set to be discarded
+Drive current: -indev 'docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-4/guest.iso'
+Media current: stdio file, overwriteable
+Media status : is written , is appendable
+Boot record  : El Torito , MBR protective-msdos-label cyl-align-off GPT
+Media summary: 1 session, 27549 data blocks, 53.8m data, 35.4g free
+Volume id    : 'ISOIMAGE'
+xorriso : UPDATE :       1 files restored ( 51074k) in 1 seconds = 37.8xD
+Extracted from ISO image: file '/boot/sunlight-kernel.elf'='/tmp/r2b4-iso-sndviocb/kernel.elf'

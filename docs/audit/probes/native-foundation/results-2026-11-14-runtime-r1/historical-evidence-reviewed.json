@@ -1,0 +1,5 @@
+{
+  "/tmp/sunlight-runtime-audit-20261114/build-runtime.log": "$ bash tools/build_native_c.sh\n/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc\nerror: cannot update the lock file /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/Cargo.lock because --locked was passed to prevent this\nhelp: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.\n\nexit=101\n",
+  "/tmp/sunlight-runtime-audit-20261114/revision.log": "$ git rev-parse HEAD\nf6b5ccb24d3ef2d2077eaada148a9208e3e2c738\n\nexit=0\n",
+  "/tmp/sunlight-runtime-audit-20261114/worktree.log": "$ git status --short\n\nexit=0\n"
+}

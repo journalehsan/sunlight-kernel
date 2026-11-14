@@ -1,0 +1,4 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/dup2.c:15:10: fatal error: 'fcntl.h' file not found
+   15 | #include <fcntl.h>                // fcntl()
+      |          ^~~~~~~~~
+1 error generated.

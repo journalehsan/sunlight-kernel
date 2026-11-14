@@ -1,0 +1,16 @@
+{
+  "command": [
+    "/tmp/sunlight-py1-cpython/Python-3.13.0/configure",
+    "--build=x86_64-pc-linux-gnu",
+    "--host=x86_64-unknown-sunlightos",
+    "--with-build-python=/tmp/sunlight-r1-cpython/build-host/python",
+    "--disable-shared",
+    "--without-ensurepip",
+    "--with-pkg-config=no",
+    "--with-libm=",
+    "--disable-test-modules"
+  ],
+  "cwd": "/tmp/sunlight-py4-cpython/cross-static",
+  "exit": 0,
+  "status": "PASS"
+}

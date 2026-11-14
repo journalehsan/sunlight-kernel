@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --cases /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cases.json --cpus 4 --timeout 180 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tls-cpu-4

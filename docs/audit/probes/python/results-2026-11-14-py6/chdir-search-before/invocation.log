@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/py6-chdir-before.elf --expect-exit 0 --cpus 1 --timeout 90 --out docs/audit/probes/python/results-2026-11-14-py6/chdir-search-before

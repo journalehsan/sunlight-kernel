@@ -1,0 +1,2 @@
+EXIT live worker established
+EXIT worker issuing external owner SIGKILL

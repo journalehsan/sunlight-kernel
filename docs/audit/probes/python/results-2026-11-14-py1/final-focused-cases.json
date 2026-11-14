@@ -1,0 +1,47 @@
+[
+  {
+    "name": "condvar",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-condvar.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "libc",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-libc.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "exit",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit.elf",
+    "expected_exit": 37
+  },
+  {
+    "name": "heap",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-heap.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "admission",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-admission.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "pthread-tsd-once",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-tsd-once.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "pthread-tsd-exit-race",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-tsd-exit-race.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "pthread-once-recursive",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-once-recursive.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "strerror-threads",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-strerror-threads.elf",
+    "expected_exit": 0
+  }
+]

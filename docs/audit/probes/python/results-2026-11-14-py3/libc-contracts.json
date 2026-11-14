@@ -1,0 +1,76 @@
+{
+  "status": "PARTIAL",
+  "implemented": {
+    "mbstowcs/wcstombs": {
+      "status": "PASS",
+      "contract": "Private call-local conversion state; C ASCII or strict UTF-8 selected by existing LC_CTYPE. NULL destination counts entire input, n ignored. Bounds count wide elements/bytes respectively, NUL excluded from count. No partial UTF-8 character output. Invalid/overlong/surrogate/truncated sequences fail EILSEQ. Size overflow fails EOVERFLOW. No allocation, no cross-call state.",
+      "thread_safety": "Independent calls supported; locale changes require external serialization, as for existing restartable interfaces.",
+      "native_negative_tests": [
+        "invalid UTF-8",
+        "truncated UTF-8",
+        "surrogate and negative wchar",
+        "short output/canaries",
+        "zero bound",
+        "guard page at source terminator and exact bound"
+      ],
+      "guard_log": "guards-errors-cpu-2.log"
+    },
+    "localeconv/lconv": {
+      "status": "PASS",
+      "contract": "Process-lifetime read-only metadata: decimal dot, empty grouping/thousands/monetary strings, CHAR_MAX for unspecified monetary numeric fields. All installed locale names retain the C numeric/monetary baseline; en_US.UTF-8 is not a full US locale. Native LP64 pointer/char layout is declared in locale.h.",
+      "thread_safety": "Immutable storage; callers must not mutate returned data."
+    },
+    "setvbuf/setbuf": {
+      "status": "PARTIAL",
+      "contract": "_IONBF succeeds on a live stream, which is already unbuffered. _IOFBF/_IOLBF fail ENOSYS; unknown modes fail EINVAL. Caller storage never retained or dereferenced. NULL stream fails EINVAL. setbuf delegates and reports failure only through errno. Existing unbuffered I/O remains authoritative.",
+      "buffered_IO": "BLOCKED within this implementation; requires real buffer ownership/read-write/seek/flush design, not a successful no-op."
+    },
+    "clock_getres": {
+      "status": "PASS",
+      "contract": "CLOCK_REALTIME reports 1 second; CLOCK_MONOTONIC reports 10 ms, matching native RTC/syscall and 100 Hz timekeeper. NULL output allowed. Invalid clock leaves storage untouched and fails EINVAL; success preserves errno.",
+      "sources": [
+        "kernel/src/timekeeping.rs:10",
+        "kernel/src/arch/x86_64/syscall.rs:12018"
+      ]
+    },
+    "_exit": {
+      "status": "PASS",
+      "contract": "Callback-free process-group termination via sl_std_exit/syscall 157, identical immediate termination primitive used by inherited _Exit. Never pthread_exit.",
+      "native_test": "Worker invokes _exit(38); guest observes group status 38 and no owner-survival/atexit output."
+    }
+  },
+  "inherited_validated": {
+    "strncpy": {
+      "status": "PASS",
+      "changed": false,
+      "contract": "Copies at most n bytes and pads remainder after first NUL, returns destination, byte-alignment independent. Overlapping source/destination is undefined by C; no memmove promise.",
+      "tests": [
+        "Existing string-guard case at unmapped next page",
+        "contracts-test unaligned destination, exact nonterminated bound, zero bound, zero padding/canaries"
+      ]
+    },
+    "_Exit": {
+      "status": "PASS",
+      "changed": false,
+      "test": "Existing immediate-exit worker _Exit(37) fixture, lifecycle exit matrix; normal exit/main return and pthread_exit retain their separate paths."
+    }
+  },
+  "remaining": {
+    "mutable_environment": {
+      "status": "BLOCKED",
+      "reason": "Existing Rust getters return process-lifetime immutable references into envp; setenv/unsetenv need coherent ownership/lifetime and synchronization design, not mutation/free of borrowed storage."
+    },
+    "calendar_time": {
+      "status": "PARTIAL",
+      "reason": "Native wall clock exists and is not fabricated, but tm/timeval/calendar conversions, strftime, timezone and CPU accounting interfaces remain missing. This is remaining libc implementation work, not a claim that all require kernel changes."
+    },
+    "langinfo_calendar": {
+      "status": "PARTIAL",
+      "reason": "Only CODESET exists. CPython _locale requires DAY/ABDAY/MON/ABMON and format/AM/PM constants/data. No placeholders added."
+    },
+    "abort": {
+      "status": "BLOCKED",
+      "reason": "SIGABRT delivery/disposition is unsupported; do not pretend _Exit is a full abort contract."
+    }
+  }
+}

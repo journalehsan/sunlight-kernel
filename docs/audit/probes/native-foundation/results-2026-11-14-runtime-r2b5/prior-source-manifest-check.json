@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "manifest": "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/validated-source.json",
+  "matches": {
+    "ipc/src/lib.rs": true,
+    "kernel/src/process/foreground.rs": true,
+    "sunlight-libc/src/lib.rs": true,
+    "sunlight-libc/src/sys.rs": true,
+    "tools/foreground-scope-proof.rs": true,
+    "kernel/src/process/mod.rs": true,
+    "kernel/src/sched/mod.rs": true,
+    "kernel/src/sched/native_group.rs": true,
+    "kernel/src/sched/thread_admission.rs": true,
+    "kernel/src/arch/x86_64/syscall.rs": true,
+    "tools/native-c/guest.py": true,
+    "sunlight-libc/src/pthread.rs": true,
+    "sunlight-libc/include/pthread.h": true
+  },
+  "baseline_scope": "Prior R2B.4 13-file manifest verified; full preservation independently assessed in source-integrity.json"
+}

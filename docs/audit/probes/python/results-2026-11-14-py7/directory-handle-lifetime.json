@@ -1,0 +1,54 @@
+{
+  "status": "PARTIAL",
+  "native_subset": {
+    "1": {
+      "status": "PASS",
+      "passed": 1,
+      "expected": 1,
+      "observed": 1
+    },
+    "2": {
+      "status": "PASS",
+      "passed": 1,
+      "expected": 1,
+      "observed": 1
+    },
+    "4": {
+      "status": "PASS",
+      "passed": 1,
+      "expected": 1,
+      "observed": 1
+    }
+  },
+  "fixture": "directory-test.c",
+  "supports": [
+    "Directory open and descriptor duplication",
+    "FAT directory source rename updates its handle locator",
+    "fstat after rename and closed-fd rejection"
+  ],
+  "missing": [
+    "Pinned descriptor-relative component resolver",
+    "Handle-owned enumeration snapshot",
+    "Removal of open directory and namespace-independent relative lookup",
+    "Forced directory/mount/close interleavings"
+  ],
+  "source_findings": [
+    {
+      "source": "sunlight-fs/src/tmpfs.rs:45",
+      "finding": "TmpfsDir is a pathname index, not a retained directory descriptor API"
+    },
+    {
+      "source": "kernel/src/arch/x86_64/syscall.rs:6574",
+      "finding": "linux_resolve_at separately checks fstat, obtains handle_path, joins text and returns it; lookup later can race namespace change"
+    },
+    {
+      "source": "kernel/src/arch/x86_64/syscall.rs:6945",
+      "finding": "getdents64 enumerates a derived directory pathname"
+    },
+    {
+      "source": "sunlight-fs/src/vfs/lookup.rs:98",
+      "finding": "Permission-aware component walker exists, but does not return a retained directory object"
+    }
+  ],
+  "decision": "Do not add links or broader consumer migration while G4 remains incomplete"
+}

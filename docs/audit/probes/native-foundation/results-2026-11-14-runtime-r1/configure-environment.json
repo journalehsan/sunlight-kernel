@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/tmp/sunlight-r1-cpython/Python-3.13.0/configure",
+    "--build=x86_64-pc-linux-gnu",
+    "--host=x86_64-unknown-sunlightos",
+    "--with-build-python=/tmp/sunlight-r1-cpython/build-host/python",
+    "--disable-shared",
+    "--without-ensurepip",
+    "--with-pkg-config=no"
+  ],
+  "build": "x86_64-pc-linux-gnu",
+  "host": "x86_64-unknown-sunlightos",
+  "target": "host (Autoconf program build); LLVM x86_64-unknown-none-elf via native driver",
+  "environment_overrides": {
+    "CC": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+    "CFLAGS": "-O2",
+    "LDFLAGS": "-static",
+    "AR": "llvm-ar",
+    "RANLIB": "llvm-ranlib",
+    "CONFIG_SITE": "/dev/null",
+    "PKG_CONFIG": "/bin/false"
+  },
+  "cache_assumptions": {},
+  "cross_cache_overrides": {}
+}

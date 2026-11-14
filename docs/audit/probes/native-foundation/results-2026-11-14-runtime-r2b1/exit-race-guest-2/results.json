@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "in-flight destructor delete/reuse witness PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

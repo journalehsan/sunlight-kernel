@@ -1,0 +1,53 @@
+{
+  "status": "PARTIAL",
+  "production_changes": "No application or native std source changed in PY7",
+  "reason": "Authoritative directory/link contracts incomplete; broad migration deferred in dependency order",
+  "applications": [
+    {
+      "application": "SunShell",
+      "source": "sunshell/src/main.rs:2804; sunshell/src/native_script.rs",
+      "contract": "Shared directory resolution for cd; other lexical argument helpers remain",
+      "build": "PASS",
+      "guest": "See cpu-matrix.json; actual noninteractive shell",
+      "interactive_UI": "NOT_RUN"
+    },
+    {
+      "application": "Sunlight Files",
+      "source": "sunlight-files/src/main.rs:1262",
+      "contract": "Shared directory navigation; libc file_ops listing and transfer helpers",
+      "build": "PASS",
+      "interactive_UI": "NOT_RUN"
+    },
+    {
+      "application": "File picker",
+      "source": "services/sunlight-dialogd/src/main.rs:546",
+      "contract": "Private PathBuf and save-name helpers remain",
+      "guest": "NOT_RUN"
+    },
+    {
+      "application": "Native Rust std",
+      "source": "tools/native-std/overlay/fs/sunlightos.rs:334",
+      "contract": "Native File operations; readlink/symlink/lstat/canonicalize unsupported; ReadDir uninhabited",
+      "guest": "NOT_RUN"
+    },
+    {
+      "application": "Editor and media",
+      "source": "sunlight-edit/src/main.rs; melody-mina/src/library.rs; sunlight-light-lens/src/main.rs",
+      "contract": "Existing libc/native consumers; no new common-fixture convergence",
+      "guest": "NOT_RUN"
+    },
+    {
+      "application": "Download manager",
+      "source": "sunlight-fetch/src/downloader.rs:251",
+      "contract": "Private output-path helper remains",
+      "guest": "NOT_RUN"
+    },
+    {
+      "application": "Document and archive utilities",
+      "source": "sunlight-docserv/src/ipc.rs; tools/native-std/overlay/fs/sunlightos.rs",
+      "contract": "Native std/backend boundary remains; no migration performed",
+      "guest": "NOT_RUN"
+    }
+  ],
+  "common_UI_fixtures": "NOT_RUN"
+}

@@ -1,0 +1,1040 @@
+{
+  "scope": "actual CPython cross-configure diagnostics; feature tests include optional and platform-specific candidates, not a minimal-interpreter requirement list",
+  "headers": {
+    "ac_nonexistent.h": [
+      165,
+      185
+    ],
+    "inttypes.h": [
+      224
+    ],
+    "strings.h": [
+      278
+    ],
+    "sys/stat.h": [
+      329
+    ],
+    "sys/types.h": [
+      380,
+      6008,
+      6076,
+      6144,
+      6212,
+      7094,
+      7585,
+      18880,
+      45678,
+      46703,
+      49789,
+      49922,
+      50055,
+      50190,
+      50324,
+      50458,
+      50592,
+      50726,
+      50860,
+      50994,
+      51128,
+      51262,
+      55005,
+      55147,
+      55439,
+      55575,
+      55711,
+      58108,
+      58246,
+      58386,
+      58524,
+      59204,
+      59340,
+      59489,
+      59627
+    ],
+    "minix/config.h": [
+      439
+    ],
+    "alloca.h": [
+      664
+    ],
+    "asm/types.h": [
+      736
+    ],
+    "bluetooth.h": [
+      808
+    ],
+    "conio.h": [
+      880
+    ],
+    "direct.h": [
+      952
+    ],
+    "fcntl.h": [
+      1036
+    ],
+    "grp.h": [
+      1111
+    ],
+    "io.h": [
+      1186
+    ],
+    "libintl.h": [
+      1265
+    ],
+    "libutil.h": [
+      1341
+    ],
+    "linux/auxvec.h": [
+      1417
+    ],
+    "sys/auxv.h": [
+      1493
+    ],
+    "linux/fs.h": [
+      1569
+    ],
+    "linux/limits.h": [
+      1645
+    ],
+    "linux/memfd.h": [
+      1721
+    ],
+    "linux/random.h": [
+      1797
+    ],
+    "linux/soundcard.h": [
+      1873
+    ],
+    "linux/tipc.h": [
+      1949
+    ],
+    "linux/wait.h": [
+      2025
+    ],
+    "netdb.h": [
+      2101,
+      49021,
+      49149,
+      49277,
+      49405,
+      49533,
+      49661,
+      59070
+    ],
+    "net/ethernet.h": [
+      2177
+    ],
+    "netpacket/packet.h": [
+      2257
+    ],
+    "process.h": [
+      2338
+    ],
+    "pty.h": [
+      2420
+    ],
+    "sched.h": [
+      2499
+    ],
+    "setjmp.h": [
+      2578
+    ],
+    "shadow.h": [
+      2657
+    ],
+    "spawn.h": [
+      2740
+    ],
+    "stropts.h": [
+      2820
+    ],
+    "sys/audioio.h": [
+      2900
+    ],
+    "sys/bsdtty.h": [
+      2980
+    ],
+    "sys/devpoll.h": [
+      3060
+    ],
+    "sys/endian.h": [
+      3140
+    ],
+    "sys/event.h": [
+      3224
+    ],
+    "sys/eventfd.h": [
+      3305
+    ],
+    "sys/file.h": [
+      3386,
+      47617
+    ],
+    "sys/ioctl.h": [
+      3467
+    ],
+    "sys/kern_control.h": [
+      3548
+    ],
+    "sys/loadavg.h": [
+      3629
+    ],
+    "sys/lock.h": [
+      3710
+    ],
+    "sys/memfd.h": [
+      3791
+    ],
+    "sys/mkdev.h": [
+      3872
+    ],
+    "sys/modem.h": [
+      3957
+    ],
+    "sys/param.h": [
+      4039
+    ],
+    "sys/poll.h": [
+      4121
+    ],
+    "sys/resource.h": [
+      4207
+    ],
+    "sys/sendfile.h": [
+      4294
+    ],
+    "sys/soundcard.h": [
+      4382
+    ],
+    "sys/statvfs.h": [
+      4469
+    ],
+    "sys/sys_domain.h": [
+      4554
+    ],
+    "sys/syscall.h": [
+      4639
+    ],
+    "sys/sysmacros.h": [
+      4724
+    ],
+    "sys/termio.h": [
+      4809
+    ],
+    "sys/time.h": [
+      4894,
+      46833
+    ],
+    "sys/times.h": [
+      4979
+    ],
+    "sys/timerfd.h": [
+      5064
+    ],
+    "sys/uio.h": [
+      5151
+    ],
+    "sys/un.h": [
+      5236
+    ],
+    "sys/utsname.h": [
+      5321
+    ],
+    "sys/wait.h": [
+      5406
+    ],
+    "sys/xattr.h": [
+      5491
+    ],
+    "sysexits.h": [
+      5576
+    ],
+    "syslog.h": [
+      5661
+    ],
+    "util.h": [
+      5750
+    ],
+    "utime.h": [
+      5836
+    ],
+    "utmp.h": [
+      5922
+    ],
+    "bluetooth/bluetooth.h": [
+      6288
+    ],
+    "net/if.h": [
+      6374
+    ],
+    "linux/netlink.h": [
+      6440
+    ],
+    "netlink/netlink.h": [
+      6507
+    ],
+    "linux/qrtr.h": [
+      6574
+    ],
+    "linux/vm_sockets.h": [
+      6641
+    ],
+    "linux/can.h": [
+      6705
+    ],
+    "linux/can/bcm.h": [
+      6769
+    ],
+    "linux/can/j1939.h": [
+      6833
+    ],
+    "linux/can/raw.h": [
+      6897,
+      18988,
+      19095
+    ],
+    "netcan/can.h": [
+      6961
+    ],
+    "uuid.h": [
+      16179
+    ],
+    "uuid/uuid.h": [
+      16304
+    ],
+    "ffi.h": [
+      17167
+    ],
+    "mpdecimal.h": [
+      17294
+    ],
+    "sqlite3.h": [
+      17409
+    ],
+    "tcl.h": [
+      17535
+    ],
+    "gdbm.h": [
+      17657
+    ],
+    "ndbm.h": [
+      17782
+    ],
+    "gdbm/ndbm.h": [
+      17909
+    ],
+    "gdbm-ndbm.h": [
+      18034
+    ],
+    "db.h": [
+      18159
+    ],
+    "mach-o/dyld.h": [
+      46963
+    ],
+    "zlib.h": [
+      48570
+    ],
+    "bzlib.h": [
+      48721
+    ],
+    "lzma.h": [
+      48872
+    ]
+  },
+  "undefined_symbols": {
+    "main": [
+      115
+    ],
+    "sem_init": [
+      16429
+    ],
+    "pthread_sigmask": [
+      18622
+    ],
+    "pthread_getcpuclockid": [
+      18751
+    ],
+    "accept4": [
+      19232
+    ],
+    "alarm": [
+      19370
+    ],
+    "bind_textdomain_codeset": [
+      19508
+    ],
+    "chmod": [
+      19646
+    ],
+    "chown": [
+      19784
+    ],
+    "clock": [
+      19922
+    ],
+    "closefrom": [
+      20060
+    ],
+    "close_range": [
+      20198
+    ],
+    "confstr": [
+      20336
+    ],
+    "copy_file_range": [
+      20474
+    ],
+    "ctermid": [
+      20612
+    ],
+    "dup": [
+      20750
+    ],
+    "dup3": [
+      20888
+    ],
+    "execv": [
+      21026
+    ],
+    "explicit_bzero": [
+      21164
+    ],
+    "explicit_memset": [
+      21302
+    ],
+    "faccessat": [
+      21440
+    ],
+    "fchmod": [
+      21578
+    ],
+    "fchmodat": [
+      21716
+    ],
+    "fchown": [
+      21854
+    ],
+    "fchownat": [
+      21992
+    ],
+    "fdopendir": [
+      22130
+    ],
+    "fdwalk": [
+      22268
+    ],
+    "fexecve": [
+      22406
+    ],
+    "fork": [
+      22544
+    ],
+    "fork1": [
+      22682
+    ],
+    "fpathconf": [
+      22820
+    ],
+    "fstatat": [
+      22958
+    ],
+    "ftime": [
+      23096
+    ],
+    "ftruncate": [
+      23234
+    ],
+    "futimens": [
+      23372
+    ],
+    "futimes": [
+      23510
+    ],
+    "futimesat": [
+      23648
+    ],
+    "gai_strerror": [
+      23786
+    ],
+    "getegid": [
+      23924
+    ],
+    "geteuid": [
+      24062
+    ],
+    "getgid": [
+      24200
+    ],
+    "getgrent": [
+      24338
+    ],
+    "getgrgid": [
+      24476
+    ],
+    "getgrgid_r": [
+      24614
+    ],
+    "getgrnam_r": [
+      24752
+    ],
+    "getgrouplist": [
+      24890
+    ],
+    "gethostname": [
+      25028
+    ],
+    "getitimer": [
+      25166
+    ],
+    "getloadavg": [
+      25304
+    ],
+    "getlogin": [
+      25442
+    ],
+    "getpgid": [
+      25584
+    ],
+    "getpid": [
+      25723
+    ],
+    "getppid": [
+      25862
+    ],
+    "getpriority": [
+      26001
+    ],
+    "_getpty": [
+      26140
+    ],
+    "getpwent": [
+      26279
+    ],
+    "getpwnam_r": [
+      26418
+    ],
+    "getpwuid": [
+      26557
+    ],
+    "getpwuid_r": [
+      26696
+    ],
+    "getresgid": [
+      26835
+    ],
+    "getresuid": [
+      26974
+    ],
+    "getrusage": [
+      27113
+    ],
+    "getsid": [
+      27252
+    ],
+    "getspent": [
+      27391
+    ],
+    "getspnam": [
+      27530
+    ],
+    "getuid": [
+      27669
+    ],
+    "getwd": [
+      27808
+    ],
+    "grantpt": [
+      27947
+    ],
+    "if_nameindex": [
+      28086
+    ],
+    "initgroups": [
+      28225
+    ],
+    "killpg": [
+      28368
+    ],
+    "lchown": [
+      28508
+    ],
+    "linkat": [
+      28648
+    ],
+    "lockf": [
+      28788
+    ],
+    "lstat": [
+      28928
+    ],
+    "lutimes": [
+      29068
+    ],
+    "madvise": [
+      29208
+    ],
+    "memrchr": [
+      29352
+    ],
+    "mkdirat": [
+      29493
+    ],
+    "mkfifo": [
+      29634
+    ],
+    "mkfifoat": [
+      29775
+    ],
+    "mknod": [
+      29916
+    ],
+    "mknodat": [
+      30057
+    ],
+    "mktime": [
+      30198
+    ],
+    "mremap": [
+      30343
+    ],
+    "nice": [
+      30485
+    ],
+    "openat": [
+      30627
+    ],
+    "pathconf": [
+      30773
+    ],
+    "pause": [
+      30916
+    ],
+    "pipe": [
+      31059
+    ],
+    "pipe2": [
+      31202
+    ],
+    "plock": [
+      31345
+    ],
+    "posix_fadvise": [
+      31492
+    ],
+    "posix_fallocate": [
+      31636
+    ],
+    "posix_openpt": [
+      31780
+    ],
+    "posix_spawn": [
+      31924
+    ],
+    "posix_spawnp": [
+      32068
+    ],
+    "posix_spawn_file_actions_addclosefrom_np": [
+      32212
+    ],
+    "pread": [
+      32356
+    ],
+    "preadv": [
+      32500
+    ],
+    "preadv2": [
+      32644
+    ],
+    "process_vm_readv": [
+      32788
+    ],
+    "pthread_cond_timedwait_relative_np": [
+      32932
+    ],
+    "pthread_condattr_setclock": [
+      33076
+    ],
+    "pthread_init": [
+      33220
+    ],
+    "pthread_kill": [
+      33364
+    ],
+    "ptsname": [
+      33508
+    ],
+    "ptsname_r": [
+      33652
+    ],
+    "pwrite": [
+      33796
+    ],
+    "pwritev": [
+      33940
+    ],
+    "pwritev2": [
+      34084
+    ],
+    "readlink": [
+      34228
+    ],
+    "readlinkat": [
+      34372
+    ],
+    "readv": [
+      34516
+    ],
+    "realpath": [
+      34660
+    ],
+    "renameat": [
+      34804
+    ],
+    "rtpSpawn": [
+      34948
+    ],
+    "sched_get_priority_max": [
+      35092
+    ],
+    "sched_rr_get_interval": [
+      35236
+    ],
+    "sched_setaffinity": [
+      35380
+    ],
+    "sched_setparam": [
+      35524
+    ],
+    "sched_setscheduler": [
+      35668
+    ],
+    "sem_clockwait": [
+      35812
+    ],
+    "sem_getvalue": [
+      35956
+    ],
+    "sem_open": [
+      36100
+    ],
+    "sem_timedwait": [
+      36244
+    ],
+    "sem_unlink": [
+      36388
+    ],
+    "sendfile": [
+      36532
+    ],
+    "setegid": [
+      36676
+    ],
+    "seteuid": [
+      36820
+    ],
+    "setgid": [
+      36964
+    ],
+    "sethostname": [
+      37108
+    ],
+    "setitimer": [
+      37252
+    ],
+    "setpgid": [
+      37400
+    ],
+    "setpgrp": [
+      37545
+    ],
+    "setpriority": [
+      37690
+    ],
+    "setregid": [
+      37835
+    ],
+    "setresgid": [
+      37980
+    ],
+    "setresuid": [
+      38125
+    ],
+    "setreuid": [
+      38270
+    ],
+    "setsid": [
+      38415
+    ],
+    "setuid": [
+      38560
+    ],
+    "setvbuf": [
+      38705
+    ],
+    "sigaltstack": [
+      38858
+    ],
+    "siginterrupt": [
+      39009
+    ],
+    "sigpending": [
+      39157
+    ],
+    "sigrelse": [
+      39305
+    ],
+    "sigtimedwait": [
+      39453
+    ],
+    "sigwait": [
+      39601
+    ],
+    "sigwaitinfo": [
+      39749
+    ],
+    "snprintf": [
+      39897
+    ],
+    "splice": [
+      40045
+    ],
+    "strftime": [
+      40193
+    ],
+    "strlcpy": [
+      40341
+    ],
+    "strsignal": [
+      40489
+    ],
+    "symlinkat": [
+      40637
+    ],
+    "sync": [
+      40785
+    ],
+    "sysconf": [
+      40933
+    ],
+    "tcgetpgrp": [
+      41081
+    ],
+    "tcsetpgrp": [
+      41229
+    ],
+    "tempnam": [
+      41377
+    ],
+    "timegm": [
+      41525
+    ],
+    "times": [
+      41673
+    ],
+    "tmpnam": [
+      41825
+    ],
+    "tmpnam_r": [
+      41974
+    ],
+    "truncate": [
+      42123
+    ],
+    "ttyname": [
+      42272
+    ],
+    "umask": [
+      42421
+    ],
+    "uname": [
+      42570
+    ],
+    "unlinkat": [
+      42719
+    ],
+    "unlockpt": [
+      42868
+    ],
+    "utimensat": [
+      43017
+    ],
+    "utimes": [
+      43166
+    ],
+    "vfork": [
+      43315
+    ],
+    "wait": [
+      43464
+    ],
+    "wait3": [
+      43613
+    ],
+    "wait4": [
+      43762
+    ],
+    "waitid": [
+      43911
+    ],
+    "waitpid": [
+      44060
+    ],
+    "wcscoll": [
+      44209
+    ],
+    "wcsftime": [
+      44358
+    ],
+    "wcsxfrm": [
+      44507
+    ],
+    "wmemcmp": [
+      44656
+    ],
+    "writev": [
+      44805
+    ],
+    "lchmod": [
+      44954
+    ],
+    "getentropy": [
+      45103
+    ],
+    "getgroups": [
+      45252
+    ],
+    "system": [
+      45401
+    ],
+    "chflags": [
+      48264
+    ],
+    "lchflags": [
+      48417
+    ],
+    "openpty": [
+      51530
+    ],
+    "login_tty": [
+      51944
+    ],
+    "forkpty": [
+      52206
+    ],
+    "fseek64": [
+      52620
+    ],
+    "fseeko": [
+      52772
+    ],
+    "fstatvfs": [
+      52924
+    ],
+    "ftell64": [
+      53076
+    ],
+    "ftello": [
+      53228
+    ],
+    "statvfs": [
+      53380
+    ],
+    "dup2": [
+      53532
+    ],
+    "getpgrp": [
+      53684
+    ],
+    "setns": [
+      53838
+    ],
+    "unshare": [
+      53990
+    ],
+    "clock_getres": [
+      54146
+    ],
+    "clock_settime": [
+      54431
+    ],
+    "clock_nanosleep": [
+      54716
+    ],
+    "getnameinfo": [
+      55284
+    ],
+    "tzname": [
+      55990
+    ],
+    "gethostbyname_r": [
+      59764
+    ],
+    "__fpu_control": [
+      59924
+    ]
+  },
+  "libraries": {
+    "-lsendfile": [
+      15867
+    ],
+    "-ldl": [
+      15971
+    ],
+    "-ldld": [
+      16075
+    ],
+    "-lpthread": [
+      16533,
+      18401
+    ],
+    "-lrt": [
+      16635,
+      54299,
+      54584,
+      54869
+    ],
+    "-lposix4": [
+      16737
+    ],
+    "-lintl": [
+      16841
+    ],
+    "-lnsl": [
+      16951
+    ],
+    "-lsocket": [
+      17056
+    ],
+    "-lmpc": [
+      18513
+    ],
+    "-lc": [
+      48002
+    ],
+    "-lresolv": [
+      48132
+    ],
+    "-lutil": [
+      51682,
+      52075,
+      52358
+    ],
+    "-lbsd": [
+      51813,
+      52489
+    ],
+    "-lieee": [
+      60082
+    ],
+    "-lm": [
+      60388
+    ]
+  },
+  "intentional_negative_controls": [
+    "ac_nonexistent.h"
+  ],
+  "non_requirements": [
+    "main (configure compiler identification check)"
+  ]
+}

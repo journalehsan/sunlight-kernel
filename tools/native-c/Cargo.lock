@@ -3,19 +3,24 @@
 version = 4
 
 [[package]]
+name = "libm"
+version = "0.2.16"
+
+[[package]]
 name = "sunlight-ipc"
-version = "0.2.7254-alpha.2"
+version = "0.2.7279-alpha.2"
 
 [[package]]
 name = "sunlight-libc"
-version = "0.2.7254-alpha.2"
+version = "0.2.7279-alpha.2"
 dependencies = [
+ "libm",
  "sunlight-ipc",
 ]
 
 [[package]]
 name = "sunlight-native-c"
-version = "0.2.7254-alpha.2"
+version = "0.2.7279-alpha.2"
 dependencies = [
  "sunlight-libc",
 ]

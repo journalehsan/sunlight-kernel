@@ -1,0 +1,11 @@
+{
+  "runner": "tools/native-c/guest.py",
+  "runner_sha256": "fb398af92f49d151440fb95ea82282435757b5f7e446af35e8c36622526d8791",
+  "accepted_cpus": [
+    1,
+    2,
+    4
+  ],
+  "cpu12": "NOT_RUN: existing runner does not accept 12; no safety-qualified expansion",
+  "caller_threads_in_main_fixture": 12
+}

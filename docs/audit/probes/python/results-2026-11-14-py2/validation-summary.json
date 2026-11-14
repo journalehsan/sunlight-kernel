@@ -1,0 +1,37 @@
+{
+  "verdict": "PARTIAL",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "PASS",
+    "G6": "NOT_RUN",
+    "G7": "NOT_RUN",
+    "G8": "PASS",
+    "G9": "PASS"
+  },
+  "before": {
+    "configured": 180,
+    "attempted": 179,
+    "passed": 138,
+    "failed": 41
+  },
+  "after": {
+    "configured": 180,
+    "attempted": 179,
+    "passed": 160,
+    "failed": 19,
+    "unattempted": [
+      "Modules/getbuildinfo.o"
+    ],
+    "first_serial_error": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+  },
+  "native_regressions": "PASS",
+  "static_link": "NOT_RUN",
+  "native_execution": "NOT_RUN",
+  "actual_python_output": null,
+  "source_integrity": "PASS",
+  "commit": "NOT_RUN per user instruction",
+  "push": "NOT_RUN per user instruction"
+}

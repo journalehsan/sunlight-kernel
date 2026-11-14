@@ -59,3 +59,26 @@ pub fn getenv_bytes(key: &[u8]) -> Option<&'static [u8]> {
 pub fn getenv(key: &[u8]) -> Option<&'static str> {
     getenv_bytes(key).and_then(|b| core::str::from_utf8(b).ok())
 }
+
+/// C view of the immutable startup environment. Returned storage remains owned
+/// by the process startup image; no mutation or allocated snapshot is implied.
+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+#[export_name = "getenv"]
+pub unsafe extern "C" fn c_getenv(name: *const core::ffi::c_char) -> *mut core::ffi::c_char {
+    if name.is_null() {
+        crate::errno::set_errno(crate::errno::EINVAL);
+        return core::ptr::null_mut();
+    }
+    let name = name.cast::<u8>();
+    let mut len = 0;
+    while *name.add(len) != 0 {
+        len += 1;
+    }
+    let key = core::slice::from_raw_parts(name, len);
+    if key.is_empty() || key.contains(&b'=') {
+        return core::ptr::null_mut();
+    }
+    getenv_bytes(key).map_or(core::ptr::null_mut(), |v| {
+        v.as_ptr() as *mut core::ffi::c_char
+    })
+}

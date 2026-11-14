@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "FAIL vector=3660 kind=1 input=bff0000000000000 actual=7ff0000000000000 expected=7ff0000000000000 exponent=1 expected_exp=-1\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

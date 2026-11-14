@@ -1,0 +1,304 @@
+[
+  {
+    "object": "Modules/_io/fileio.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:254:28: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:475:13: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c:710:28: error: variable has incomplete type 'struct stat'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules__io_fileio.o.log",
+    "sha256": "37b19b35b3061cf8296a196d0e96c750b4ad1d5340478e1f0237d7d818a0fecb"
+  },
+  {
+    "object": "Modules/_stat.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:322:15: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:326:15: error: use of undeclared identifier 'S_IFCHR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:334:15: error: use of undeclared identifier 'S_IFREG'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:395:9: error: use of undeclared identifier 'S_IFREG'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:396:9: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:400:9: error: use of undeclared identifier 'S_IFCHR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:561:27: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:562:27: error: use of undeclared identifier 'S_IFCHR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c:564:27: error: use of undeclared identifier 'S_IFREG'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules__stat.o.log",
+    "sha256": "ae27b4e15e6ed527837b392637b291dad0bf317f8cf396992251dbfd154e9956"
+  },
+  {
+    "object": "Modules/_threadmodule.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_threadmodule.c:2052:18: error: use of undeclared identifier 'SIGINT'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules__threadmodule.o.log",
+    "sha256": "85c208b793302083fb943c4cbc2b762f722ff9b2c727e05b8732d438d848874e"
+  },
+  {
+    "object": "Modules/faulthandler.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:78:6: error: use of undeclared identifier 'SIGFPE'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:79:6: error: use of undeclared identifier 'SIGABRT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:82:6: error: use of undeclared identifier 'SIGSEGV'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:85:5: error: invalid application of 'sizeof' to an incomplete type 'fault_handler_t[]'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:464:27: error: use of undeclared identifier 'SA_NODEFER'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:774:23: error: use of undeclared identifier 'SA_RESTART'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:778:27: error: use of undeclared identifier 'SA_NODEFER'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1020:11: error: use of undeclared identifier 'SIGSEGV'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1089:11: error: use of undeclared identifier 'SIGFPE'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1100:5: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_faulthandler.o.log",
+    "sha256": "ad3cbd5ed6f96f20bd814b68d793d0441ed2b64daa8ff81d400c1815b1a3eef1"
+  },
+  {
+    "object": "Modules/getpath.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:186:21: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:187:44: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:211:21: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:212:44: error: use of undeclared identifier 'S_IFREG'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:240:21: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:242:13: error: use of undeclared identifier 'S_IFREG'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:725:9: error: call to undeclared function 'unsetenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_getpath.o.log",
+    "sha256": "a41a74f8b79422edf66187638eb5fa51fc195471bab4f0c2dcb89793c933709a"
+  },
+  {
+    "object": "Modules/main.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:393:28: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:394:52: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:739:21: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:740:9: error: call to undeclared function 'perror'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:742:24: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c:752:12: error: use of undeclared identifier 'SIGINT'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_main.o.log",
+    "sha256": "204a4cb79b9e70b9bc95383665e2773b768e726e1408643158ececcb7b1c522a"
+  },
+  {
+    "object": "Modules/posixmodule.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2608:41: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2613:58: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2615:47: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2616:35: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2618:41: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2623:35: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2624:35: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2626:49: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2628:39: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2647:43: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2650:43: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2653:43: error: incomplete definition of type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2717:17: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2736:18: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2760:18: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:3256:18: error: call to undeclared function 'access'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:3391:18: error: call to undeclared function 'chdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:4159:15: error: call to undeclared function 'getcwd'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:4159:13: error: incompatible integer to pointer conversion assigning to 'char *' from 'int' [-Wint-conversion]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5679:18: error: call to undeclared function 'mkdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5850:14: error: call to undeclared function 'rename'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5960:18: error: call to undeclared function 'rmdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:6451:12: error: call to undeclared function 'utime'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:10639:16: error: variable has incomplete type 'struct tms'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:10642:15: error: call to undeclared function 'times'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11234:15: error: call to undeclared function 'dup2'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11953:17: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11959:15: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:12954:9: error: call to undeclared function 'setenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:12997:5: error: call to undeclared function 'unsetenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:14540:5: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15595:17: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15628:22: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15631:22: error: call to undeclared function 'lstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15797:70: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15815:70: error: use of undeclared identifier 'S_IFREG'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:16251:65: error: no member named 'd_ino' in 'struct dirent'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_posixmodule.o.log",
+    "sha256": "41162fddc3c874d342423217239c9e5de5157c8995377d9700aacacc2162d7f4"
+  },
+  {
+    "object": "Modules/signalmodule.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:614:14: error: use of undeclared identifier 'SIGHUP'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:617:14: error: use of undeclared identifier 'SIGALRM'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:620:14: error: use of undeclared identifier 'SIGPIPE'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:623:14: error: use of undeclared identifier 'SIGQUIT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:626:14: error: use of undeclared identifier 'SIGCHLD'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:631:14: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:634:14: error: use of undeclared identifier 'SIGILL'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:637:14: error: use of undeclared identifier 'SIGABRT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:640:14: error: use of undeclared identifier 'SIGFPE'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:643:14: error: use of undeclared identifier 'SIGSEGV'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:646:14: error: use of undeclared identifier 'SIGTERM'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:730:28: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1594:41: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1602:21: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1604:21: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1906:33: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:2003:48: error: use of undeclared identifier 'SIGINT'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:2007:44: error: use of undeclared identifier 'SIGINT'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_signalmodule.o.log",
+    "sha256": "50ae66e508025e6bda2276bae10c3ac129a4bed6a0306eab0d2bd4e812120a12"
+  },
+  {
+    "object": "Modules/timemodule.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:478:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:479:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:480:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:481:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:482:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:483:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:484:14: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:485:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:486:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:514:17: error: call to undeclared function 'time'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:528:15: error: variable has incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:13: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:25: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:40: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:58: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:553:11: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:553:39: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:554:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:554:41: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:572:15: error: variable has incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:584:19: error: variable has incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:587:9: error: call to undeclared function 'strftime'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:614:30: error: invalid application of 'sizeof' to an incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:623:33: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:623:45: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:29: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:42: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:54: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:29: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:42: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:55: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:633:6: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:634:6: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:635:6: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:635:20: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:636:6: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:703:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:704:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:705:17: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:705:36: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:709:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:710:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:711:17: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:711:37: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:715:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:715:32: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:719:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:719:31: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:723:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:723:31: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:729:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:733:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:734:12: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:735:17: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:735:37: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:983:26: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:984:25: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:985:16: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:985:34: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:986:16: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:986:33: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:987:23: error: incomplete definition of type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:994:15: error: variable has incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1001:21: error: call to undeclared function 'time'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1025:15: error: variable has incomplete type 'struct tm'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1373:12: error: call to undeclared function 'py_clock'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1764:5: error: call to undeclared function 'tzset'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1766:25: error: use of undeclared identifier 'timezone'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1770:24: error: use of undeclared identifier 'timezone'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1772:25: error: use of undeclared identifier 'daylight'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1786:35: error: use of undeclared identifier 'tzname'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1790:35: error: use of undeclared identifier 'tzname'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Modules_timemodule.o.log",
+    "sha256": "3036927807f8f9be8c10ea62b2836e4c47e832e84d7fa5340271250349bbfc56"
+  },
+  {
+    "object": "Objects/obmalloc.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: incompatible integer to pointer conversion returning 'int' from a function with result type 'char *' [-Wint-conversion]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:883:19: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:883:11: error: incompatible integer to pointer conversion initializing 'char *' with an expression of type 'int' [-Wint-conversion]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:962:7: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/prim/unix/prim.c:56:12: fatal error: 'sys/syscall.h' file not found"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Objects_obmalloc.o.log",
+    "sha256": "b8aea5786dde3728af101dee461879fbe9006f5651bdb5c6b166ccf9a5a63b20"
+  },
+  {
+    "object": "Python/bootstrap_hash.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/bootstrap_hash.c:105:28: error: use of undeclared identifier 'GRND_NONBLOCK'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/bootstrap_hash.c:307:32: error: variable has incomplete type 'struct stat'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Python_bootstrap_hash.o.log",
+    "sha256": "4394b5f6a29c8f807229f20ed256526e3fea4279ac944e0b0c752be6c9e0cf01"
+  },
+  {
+    "object": "Python/fileutils.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1236:1: error: conflicting types for '_Py_fstat_noraise'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1290:12: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1310:1: error: conflicting types for '_Py_fstat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1317:33: error: incompatible pointer types passing 'struct stat *' to parameter of type 'struct stat *' [-Wincompatible-pointer-types]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1333:1: error: conflicting types for '_Py_wstat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1349:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1363:1: error: conflicting types for '_Py_stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1390:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:9: error: call to undeclared function 'getcwd'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3100:17: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3101:13: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Python_fileutils.o.log",
+    "sha256": "515c0f9f508b3825409c1328a21edeff7796cb76021ad5d96875e5a57556aeff"
+  },
+  {
+    "object": "Python/marshal.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/marshal.c:1606:28: error: variable has incomplete type 'struct stat'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Python_marshal.o.log",
+    "sha256": "3aacc158fc1bd6248d58e6cd13c7009bad1a1f904b893a41ae1c6c6290947d2a"
+  },
+  {
+    "object": "Python/pylifecycle.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:266:9: error: call to undeclared function 'setenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:2760:28: error: variable has incomplete type 'struct stat'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:2762:9: error: use of undeclared identifier 'S_IFDIR'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:3032:9: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:3491:24: error: use of undeclared identifier 'SA_ONSTACK'"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Python_pylifecycle.o.log",
+    "sha256": "84499ca7d1973767fc02d1576f15ef3c1e1f53c3afec8cfbed8016b335d2be41"
+  },
+  {
+    "object": "Python/pytime.o",
+    "diagnostics": [
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:534:28: error: incomplete definition of type 'struct timeval'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:536:30: error: incomplete definition of type 'struct timeval'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:540:33: error: incomplete definition of type 'struct timeval'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:815:40: error: incomplete definition of type 'struct timeval'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:820:7: error: incomplete definition of type 'struct timeval'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1286:1: error: conflicting types for '_PyTime_localtime'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1312:9: error: call to undeclared function 'localtime_r'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1325:1: error: conflicting types for '_PyTime_gmtime'",
+      "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1338:9: error: call to undeclared function 'gmtime_r'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+    ],
+    "log": "docs/audit/probes/python/results-2026-11-14-py4/compile-Python_pytime.o.log",
+    "sha256": "170153b0dadada549a47ca1256481185ab2f344b855f6815216ce01f382a6615"
+  }
+]

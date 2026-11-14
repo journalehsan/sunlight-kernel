@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-initial-exit.elf --cpus 1 --timeout 120 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/initial-exit-cpu-1
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/initial-exit-cpu-1
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n'
+
+exit=0

@@ -1,0 +1,22 @@
+{
+  "status": "NOT_RUN",
+  "implementation": "No symlink representation, create/readlink/traversal or final follow/no-follow contract implemented in PY6",
+  "tmpfs": "Requires a distinct quota-owned link object and integration with all existing FileType/operation consumers; deferred implementation remains unfinished",
+  "FAT": "Unsupported; no disguised files",
+  "tests": {
+    "absolute": "NOT_RUN",
+    "relative": "NOT_RUN",
+    "file": "NOT_RUN",
+    "directory": "NOT_RUN",
+    "intermediate": "NOT_RUN",
+    "dangling": "NOT_RUN",
+    "loop": "NOT_RUN",
+    "chain": "NOT_RUN",
+    "cross_mount": "NOT_RUN",
+    "dot_dotdot": "NOT_RUN",
+    "nofollow_final": "NOT_RUN",
+    "unauthorized": "NOT_RUN",
+    "concurrent_removal": "NOT_RUN"
+  },
+  "claim": "No full filesystem symlink support"
+}

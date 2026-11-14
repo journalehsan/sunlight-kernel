@@ -1,0 +1,279 @@
+--- a/ipc/src/lib.rs
++++ b/ipc/src/lib.rs
+@@ -192,6 +192,9 @@
+     ConsumeAccountGrant = 152,
+     /// Current process generation (address-space identity generation).
+     GetProcessGeneration = 141,
++    /// Read-only caller identity: rdi 0=retained native pid, 1=ppid, 2=task tid.
++    /// No target PID input; native error sentinels, including EINVAL selector.
++    NativeProcessIdentity = 178,
+     /// Braind-only: capture the authenticated caller of its current IPC request.
+     WiseOwlDelegateCaller = 142,
+     /// Sessiond-only: consume a fixed Wise Owl session-attestation delegation.
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -26,6 +26,8 @@
+     NativeSignal = 174,
+     NativeSocket = 175,
+     NativeTerminal = 176,
++    /// Read-only calling native group/task identity; rdi selects pid/ppid/tid.
++    NativeProcessIdentity = 178,
+     NativeExitGroup = 157,
+     NativeStdThreadSpawn = 158,
+     NativePoll = 159,
+@@ -1032,6 +1034,7 @@
+         175 => sys_native_socket(frame),
+         176 => sys_native_terminal(frame),
+         177 => sys_native_epoll_bridge(frame),
++        178 => sys_native_process_identity(frame.rdi),
+         160 => sys_foreground(frame),
+         23 => sys_tty_stdin_push(frame),
+         24 => sys_tty_stdout_pull(frame),
+@@ -4385,6 +4388,33 @@
+ 
+ fn sys_get_process_generation() -> u64 {
+     sched::with_scheduler(|s| s.current_process().address_space.identity().generation)
++}
++
++/// Native identity observation (178), without accepting a target or authority.
++/// Keep syscall 33's historical task identity unchanged for existing runtimes.
++/// Membership uses the full VM identity, including its generation. The owner
++/// remains retained after pthread_exit until all borrowers have been reaped.
++fn sys_native_process_identity(selector: u64) -> u64 {
++    if selector > 2 {
++        return ERR_EINVAL;
++    }
++    sched::with_scheduler(|s| {
++        let Some(member) = s.current_process_index() else {
++            return ERR_EIO;
++        };
++        if s.processes[member].is_linux_compat() {
++            return ERR_EINVAL;
++        }
++        let Some(owner) = s.native_group_owner_index(member) else {
++            return ERR_EIO;
++        };
++        match selector {
++            0 => s.processes[owner].pid as u64,
++            1 => s.processes[owner].ppid as u64,
++            2 => s.processes[member].pid as u64,
++            _ => unreachable!(),
++        }
++    })
+ }
+ 
+ /// Capture the authenticated caller of the current Console -> braind IPC
+--- a/sunlight-libc/include/langinfo.h
++++ b/sunlight-libc/include/langinfo.h
+@@ -1,13 +1,62 @@
+ #ifndef SUNLIGHT_LANGINFO_H
+ #define SUNLIGHT_LANGINFO_H
+ 
+-/* Native subset: the initial, fixed C locale uses US-ASCII. LANG/LC_*
+- * environment variables do not select a locale. Only CODESET is exposed;
+- * other item values return an empty string. Returned storage has process
+- * lifetime and must not be modified or freed. No locale objects are exposed.
++/* Native locale metadata: CODESET follows LC_CTYPE; calendar, numeric and
++ * monetary metadata retain the installed C baseline for all accepted names.
++ * Format strings describe C conventions; they do not advertise strftime or
++ * timezone support. Storage has process lifetime and must not be modified or
++ * freed. Unsupported items return an empty string without changing errno.
+  * nl_item values are native ABI constants, not a foreign libc's encoding. */
+ typedef int nl_item;
+ #define CODESET 1
++/* Keep the original reserved values (including 2) unsupported. */
++#define DAY_1 256
++#define DAY_2 257
++#define DAY_3 258
++#define DAY_4 259
++#define DAY_5 260
++#define DAY_6 261
++#define DAY_7 262
++#define ABDAY_1 263
++#define ABDAY_2 264
++#define ABDAY_3 265
++#define ABDAY_4 266
++#define ABDAY_5 267
++#define ABDAY_6 268
++#define ABDAY_7 269
++#define MON_1 270
++#define MON_2 271
++#define MON_3 272
++#define MON_4 273
++#define MON_5 274
++#define MON_6 275
++#define MON_7 276
++#define MON_8 277
++#define MON_9 278
++#define MON_10 279
++#define MON_11 280
++#define MON_12 281
++#define ABMON_1 282
++#define ABMON_2 283
++#define ABMON_3 284
++#define ABMON_4 285
++#define ABMON_5 286
++#define ABMON_6 287
++#define ABMON_7 288
++#define ABMON_8 289
++#define ABMON_9 290
++#define ABMON_10 291
++#define ABMON_11 292
++#define ABMON_12 293
++#define D_T_FMT 294
++#define D_FMT 295
++#define T_FMT 296
++#define AM_STR 297
++#define PM_STR 298
++#define T_FMT_AMPM 299
++#define RADIXCHAR 300
++#define THOUSEP 301
++#define CRNCYSTR 302
+ 
+ #ifdef __cplusplus
+ extern "C" {
+--- a/sunlight-libc/include/unistd.h
++++ b/sunlight-libc/include/unistd.h
+@@ -23,6 +23,13 @@
+ _Noreturn void _exit(int status);
+ #endif
+ int isatty(int fd);
++/* Read-only native group identity survives initial-thread pthread_exit.
++ * gettid is a native extension and reports the caller thread. PID values are
++ * observations, not capabilities or generation-qualified target authority.
++ * Failure returns -1/errno; values outside pid_t fail EOVERFLOW. */
++pid_t getpid(void);
++pid_t getppid(void);
++pid_t gettid(void);
+ int close(int fd);
+ int unlink(const char *path);
+ off_t lseek(int fd, off_t offset, int whence);
+--- a/sunlight-libc/src/c_file.rs
++++ b/sunlight-libc/src/c_file.rs
+@@ -1,6 +1,35 @@
+ //! C entry points for existing native descriptor operations. No Linux backend.
+ use crate::{errno, sys};
+ use core::ffi::c_int;
++
++fn identity(selector: u64) -> c_int {
++    match sys::check(unsafe { sys::syscall1(sys::SYS_NATIVE_PROCESS_IDENTITY, selector) }) {
++        Ok(value) if value <= c_int::MAX as u64 => value as c_int,
++        Ok(_) => {
++            errno::set_errno(errno::EOVERFLOW);
++            -1
++        }
++        Err(error) => {
++            errno::set_from_errno(error);
++            -1
++        }
++    }
++}
++
++#[no_mangle]
++pub extern "C" fn getpid() -> c_int {
++    identity(0)
++}
++
++#[no_mangle]
++pub extern "C" fn getppid() -> c_int {
++    identity(1)
++}
++
++#[no_mangle]
++pub extern "C" fn gettid() -> c_int {
++    identity(2)
++}
+ 
+ pub(crate) fn control(fd: c_int, command: c_int, argument: c_int) -> c_int {
+     if fd < 0 {
+--- a/sunlight-libc/src/langinfo.rs
++++ b/sunlight-libc/src/langinfo.rs
+@@ -1,4 +1,4 @@
+-//! Codeset metadata follows the active LC_CTYPE selection.
++//! Codeset follows LC_CTYPE; other metadata uses the installed C baseline.
+ use core::ffi::{c_char, c_int};
+ 
+ /// Native nl_item value, shared with include/langinfo.h.
+@@ -6,6 +6,59 @@
+ static C_CODESET: &[u8] = b"US-ASCII\0";
+ static UTF8_CODESET: &[u8] = b"UTF-8\0";
+ static EMPTY: &[u8] = b"\0";
++
++// Native ABI range shared with langinfo.h. Immutable process-lifetime data;
++// returning it acquires no lock and never adopts caller storage.
++const C_FIRST: c_int = 256;
++static C_ITEMS: [&[u8]; 47] = [
++    b"Sunday\0",               // DAY_1
++    b"Monday\0",               // DAY_2
++    b"Tuesday\0",              // DAY_3
++    b"Wednesday\0",            // DAY_4
++    b"Thursday\0",             // DAY_5
++    b"Friday\0",               // DAY_6
++    b"Saturday\0",             // DAY_7
++    b"Sun\0",                  // ABDAY_1
++    b"Mon\0",                  // ABDAY_2
++    b"Tue\0",                  // ABDAY_3
++    b"Wed\0",                  // ABDAY_4
++    b"Thu\0",                  // ABDAY_5
++    b"Fri\0",                  // ABDAY_6
++    b"Sat\0",                  // ABDAY_7
++    b"January\0",              // MON_1
++    b"February\0",             // MON_2
++    b"March\0",                // MON_3
++    b"April\0",                // MON_4
++    b"May\0",                  // MON_5
++    b"June\0",                 // MON_6
++    b"July\0",                 // MON_7
++    b"August\0",               // MON_8
++    b"September\0",            // MON_9
++    b"October\0",              // MON_10
++    b"November\0",             // MON_11
++    b"December\0",             // MON_12
++    b"Jan\0",                  // ABMON_1
++    b"Feb\0",                  // ABMON_2
++    b"Mar\0",                  // ABMON_3
++    b"Apr\0",                  // ABMON_4
++    b"May\0",                  // ABMON_5
++    b"Jun\0",                  // ABMON_6
++    b"Jul\0",                  // ABMON_7
++    b"Aug\0",                  // ABMON_8
++    b"Sep\0",                  // ABMON_9
++    b"Oct\0",                  // ABMON_10
++    b"Nov\0",                  // ABMON_11
++    b"Dec\0",                  // ABMON_12
++    b"%a %b %e %H:%M:%S %Y\0", // D_T_FMT
++    b"%m/%d/%y\0",             // D_FMT
++    b"%H:%M:%S\0",             // T_FMT
++    b"AM\0",                   // AM_STR
++    b"PM\0",                   // PM_STR
++    b"%I:%M:%S %p\0",          // T_FMT_AMPM
++    b".\0",                    // RADIXCHAR
++    b"\0",                     // THOUSEP
++    b"\0",                     // CRNCYSTR
++];
+ 
+ /// Return process-lifetime, read-only C locale metadata. As with the C API,
+ /// callers must not modify the returned string despite its mutable ABI type.
+@@ -18,6 +71,11 @@
+         } else {
+             C_CODESET
+         }
++    } else if let Some(index) = item
++        .checked_sub(C_FIRST)
++        .and_then(|n| usize::try_from(n).ok())
++    {
++        C_ITEMS.get(index).copied().unwrap_or(EMPTY)
+     } else {
+         EMPTY
+     };
+--- a/sunlight-libc/src/sys.rs
++++ b/sunlight-libc/src/sys.rs
+@@ -9,6 +9,8 @@
+ pub const SYS_EXEC: u64 = 31;
+ pub const SYS_WAITPID: u64 = 32;
+ pub const SYS_GETPID: u64 = 33;
++/// Read-only retained native group pid/ppid or calling task tid (selector 0/1/2).
++pub const SYS_NATIVE_PROCESS_IDENTITY: u64 = 178;
+ pub const SYS_GETUID: u64 = 35;
+ pub const SYS_GETGID: u64 = 36;
+ pub const SYS_SPAWN: u64 = 39;

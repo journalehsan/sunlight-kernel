@@ -1,0 +1,26 @@
+START resources-cpu-1
+END resources-cpu-1 1
+START resources-cpu-4
+END resources-cpu-4 1
+START tls-runner
+END tls-runner 0
+START heap-build
+END heap-build 0
+START admission-build
+END admission-build 0
+START supplemental-cpu-1
+END supplemental-cpu-1 0
+START supplemental-cpu-2
+END supplemental-cpu-2 0
+START supplemental-cpu-4
+END supplemental-cpu-4 0
+START cxx-abi-vendor
+END cxx-abi-vendor 0
+START pty-host
+END pty-host 101
+START foreground-build
+END foreground-build 0
+START foreground-host
+END foreground-host 0
+START retirement-runner
+END retirement-runner 0

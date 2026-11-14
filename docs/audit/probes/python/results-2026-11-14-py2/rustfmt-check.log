@@ -1,0 +1,68 @@
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:26:
+ /// Reclaiming userspace allocator plus C ABI malloc/free/realloc/calloc.
+ /// Enable `#[global_allocator]` for the `alloc` crate via the `global-alloc` feature.
+ pub mod alloc;
+[32m+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+(B[m[32m+mod c_file;
+(B[m /// Program startup ABI documentation and raw argv helpers.
+ pub mod crt0;
+ /// Narrow native C directory streams over the existing VFS enumeration ABI.
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:40:
+ pub mod errno;
+ /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
+ pub mod fd;
+[31m-#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+(B[m[31m-mod c_file;
+(B[m[31m-pub mod termios;
+(B[m /// Shared file-manager copy/move operations (requires an application allocator).
+ #[cfg(any(test, feature = "file-ops"))]
+ pub mod file_ops;
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:58:
+ pub mod mem;
+ /// POSIX memory mapping wrappers (`mmap`, `munmap`).
+ pub mod mman;
+[31m-/// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
+(B[m[31m-pub mod power;
+(B[m /// Native C poll/select ABI over syscall 159.
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod multiplex;
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:66:
+ pub mod net_bridge;
+[32m+/// Power management: shutdown/reboot via the kernel `PowerCtl` syscall.
+(B[m[32m+pub mod power;
+(B[m /// Minimal POSIX threads over the native thread/futex ABI.
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod pthread;
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:70:
+[32m+pub mod secret_store;
+(B[m /// Bounded synchronous native C signals.
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod signal;
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:73:
+ /// Native AF_UNIX stream sockets and epoll readiness.
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod socket;
+[31m-pub mod secret_store;
+(B[m /// Strict, fail-closed configuration loader for the future SSH daemon.
+ pub mod ssh_config;
+ #[cfg(all(feature = "native-std", target_os = "sunlightos"))]
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:90:
+ /// Bounded C termination callbacks, separate from Rust's raw exit ABI.
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod termination;
+[32m+pub mod termios;
+(B[m /// Native thread spawning.
+ pub mod thread;
+ /// Native clocks and relative sleep using the shared kernel timekeeper/futex.
+Diff in /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/lib.rs:961:
+ pub mod wchar;
+ 
+ #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+[31m-pub mod math;
+(B[m[31m-#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+(B[m pub mod inttypes;
+[32m+#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+(B[m[32m+pub mod math;
+(B[m 
+ #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+ pub mod ctype;

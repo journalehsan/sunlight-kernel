@@ -1,0 +1,75 @@
+/home/ehsantor/Projects/sunlightos-kernel/target/native-std/rustc
+warning: module `NetOp` should have a snake case name
+ --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> /home/ehsantor/Projects/sunlightos-kernel/ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling sunlight-libc v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc)
+error: expected identifier, found keyword `pub`
+  --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/tls.rs:25:9
+   |
+24 |     pub(crate) const EMPTY: Self = Self {
+   |                                    ---- while parsing this struct
+25 |         pub(crate) key: 0,
+   |         ^^^ expected identifier, found keyword
+   |
+help: escape `pub` to use it as an identifier
+   |
+25 |         r#pub(crate) key: 0,
+   |         ++
+
+error: expected identifier, found keyword `pub`
+  --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/tls.rs:26:9
+   |
+24 |     pub(crate) const EMPTY: Self = Self {
+   |                                    ---- while parsing this struct
+25 |         pub(crate) key: 0,
+26 |         pub(crate) value: core::ptr::null_mut(),
+   |         ^^^ expected identifier, found keyword
+   |
+help: escape `pub` to use it as an identifier
+   |
+26 |         r#pub(crate) value: core::ptr::null_mut(),
+   |         ++
+
+error[E0425]: cannot find type `AtomicU32` in this scope
+  --> /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/src/tls.rs:31:32
+   |
+31 |     pub(crate) control: *const AtomicU32,
+   |                                ^^^^^^^^^ not found in this scope
+   |
+help: consider importing this type alias
+   |
+15 + use core::sync::atomic::AtomicU32;
+   |
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `sunlight-libc` (lib) due to 3 previous errors

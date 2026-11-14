@@ -1,0 +1,96 @@
+{
+  "status": "PARTIAL",
+  "executions": [
+    {
+      "name": "kernel-host",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-p",
+        "sunlight-kernel",
+        "--lib"
+      ],
+      "exit": 0,
+      "seconds": 15.048686149006244,
+      "source_matches": true
+    },
+    {
+      "name": "ipc-host",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--target",
+        "x86_64-unknown-linux-gnu",
+        "-p",
+        "sunlight-ipc",
+        "--lib"
+      ],
+      "exit": 0,
+      "seconds": 0.2646473270142451,
+      "source_matches": true
+    },
+    {
+      "name": "scheduler-host",
+      "command": [
+        "python3",
+        "tools/test_scheduler_host.py"
+      ],
+      "exit": 0,
+      "seconds": 11.072831121011404,
+      "source_matches": true
+    },
+    {
+      "name": "production-check",
+      "command": [
+        "cargo",
+        "check",
+        "--locked",
+        "--offline",
+        "-p",
+        "sunlight-kernel",
+        "--bin",
+        "sunlight-kernel"
+      ],
+      "exit": 0,
+      "seconds": 16.858007684000768,
+      "source_matches": true
+    },
+    {
+      "name": "foreground-host",
+      "command": [
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-foreground"
+      ],
+      "exit": 0,
+      "seconds": 0.008139240002492443,
+      "source_matches": true
+    }
+  ],
+  "pty_host": {
+    "status": "PASS",
+    "tests": 11,
+    "evidence": "pty-host-corrected.log"
+  },
+  "native_IPC": "ipc-capability-continuity.json",
+  "retirement": "retirement-faults.json",
+  "findings": [
+    "No confirmed production defect established by these executions",
+    "Terminal receipt is published before nested termination and endpoint callbacks under SCHEDULER",
+    "Physical owner reclaim waits for borrower Reaped, stack pins/current/queue/core references and VM activity to clear",
+    "Numeric kill/reaped/endpoint-owner IDs are not universally generation-qualified; manager kill validates VM generation and manager authority",
+    "Same-VM membership does not authorize owner-only endpoint operations or exclusive restricted channels",
+    "SHM backing/quota final release follows actual view unmap and synchronous invalidation in source; integrated fault witness absent"
+  ],
+  "open": [
+    "W6 independently observed contention and one cleanup winner",
+    "Group-integrated SHM failure/revocation/refunds",
+    "Real PTY/tab teardown",
+    "Process/session/channel stale-generation reuse"
+  ],
+  "production_changes": []
+}

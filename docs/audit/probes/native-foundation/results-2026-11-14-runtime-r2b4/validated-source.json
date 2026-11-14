@@ -1,0 +1,10 @@
+{
+  "kernel/src/process/mod.rs": "66baa49a6b2671260548a17c084f589ec34acd6869b26987c58714080f0e8735",
+  "kernel/src/sched/mod.rs": "8bfd65ed15a542f12d42922ff28b8b15dc6993eeadb0605f5601027717a3312c",
+  "kernel/src/sched/native_group.rs": "52cd659ad2025832bb2910cef04d786b0ef68b61892baf5d3d4d60b625fd1d88",
+  "kernel/src/sched/thread_admission.rs": "5a97dcba070bb2579990f75b29c21b299b16c0d040497abc2e8a00ae19cb9aed",
+  "kernel/src/arch/x86_64/syscall.rs": "76ea2739677f51ebd0eef900a8661a9cb6dbfbc5eeabf00bdafd5d4940e80241",
+  "tools/native-c/guest.py": "a94bcb425cf455cbb9eab0c1ee8213aeecb6dd61e4eec4ee58f271e6602c2ef1",
+  "sunlight-libc/src/pthread.rs": "dae3a185bd5b4df7a30167b7ea0eec03a60679d4150bbffacf05e64a801b0043",
+  "sunlight-libc/include/pthread.h": "587c3df62493e54557c458ce1ab6f82c80d441351ba92875a8b97851cdf64f7d"
+}

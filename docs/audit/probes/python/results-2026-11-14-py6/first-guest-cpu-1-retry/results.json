@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "PY6 canonical PASS: component existence, cwd, mount, whitespace, allocation, bounds, errno; symlinks NOT_RUN\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "ipc-continuity": {
+    "exit": 0,
+    "stdout": "R2B5 IPC round=0 actor=0 PASS\nR2B5 IPC round=0 actor=1 PASS\nR2B5 original owner pthread_exit\nR2B5 progress actor=0 tid=101 owner=100 vm=7\nR2B5 progress actor=1 tid=102 owner=100 vm=7\nR2B5 IPC round=1 actor=0 PASS\nR2B5 IPC round=1 actor=1 PASS\nR2B5 peer endpoint authority denied\nR2B5 endpoint owner exiting\nR2B5 PASS IPC continuity authority closure stale-token successor preserved\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

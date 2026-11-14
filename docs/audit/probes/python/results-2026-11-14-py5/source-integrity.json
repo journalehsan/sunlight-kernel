@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "changed": [
+    "sunlight-fs/src/vfs.rs"
+  ],
+  "unexpected_changes": [],
+  "missing": [],
+  "CPython_changes": [],
+  "validated_source_drift": [],
+  "prior_evidence": "All incoming regular files covered with zero prior-evidence exceptions",
+  "coverage": "Git tracked/unignored regular files; excludes new PY5 evidence, symlink/directory metadata and ignored artifacts",
+  "baseline": "source-baseline.json",
+  "final_production_hashes": "modified-production-files.json"
+}

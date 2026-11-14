@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_condattr_setclock.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_condattr_setclock.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_condattr_setclock.c:2:44: error: use of undeclared identifier 'pthread_condattr_setclock'
+    2 | void * volatile required_symbol = (void *)&pthread_condattr_setclock;
+      |                                            ^~~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.
+
+exit=1

@@ -1,0 +1,16 @@
+{
+  "status": "PARTIAL",
+  "native_churn": "Ten existing two-borrower lifecycle groups per CPU in lifecycle-cpu-*/; real scheduler borrower slot reuse and distinct VM generations recorded in serial logs",
+  "legacy_endpoint_stale_token": "PASS 1/2/4: old closed token rejected while fresh endpoint remains usable; no numeric endpoint ID reuse asserted",
+  "group_generation_stale_kill": "NOT_RUN: generation-qualified kill extension requires active manager; ordinary numeric kill is not a stale-generation witness",
+  "resource_limits": "Runner independently measures RamFsFileData, UserPrivate, PageTable frame classes, VFS handles and temporary names; owner PMM frames=0, fds=0, stack=0 at reap. No integrated SHM, group-record/heap, endpoint/capability/session census or exact refund counts.",
+  "missing": [
+    "Generation-qualified operation against a reused process/group identity",
+    "Integrated borrower-created SHM/session churn",
+    "Bounded full resource inventory and cleanup-owner transition counters"
+  ],
+  "evidence": [
+    "lifecycle-witnesses.json",
+    "ipc-capability-continuity.json"
+  ]
+}

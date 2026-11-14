@@ -1,0 +1,998 @@
+[CPU-ID] logical=0 apic=0 bsp=true
+[CPU-ID] logical=1 apic=1 bsp=false
+[CPU] x87/SSE enabled; NXE active cpu_count=1
+[BOOT] Limine protocol boundary
+[BOOT] firmware mode: Legacy BIOS
+[BOOT] memory map entries: 14
+[BOOT] HHDM offset: 0xffff800000000000
+[BOOT] ACPI RSDP phys: 0xffff8000000f64f0
+[BOOT] framebuffer: 1280x800 pitch=5120 bpp=32 model=1
+[BOOT-DISPLAY] limine response base=0xfd000000 width=1280 height=800 pitch=5120 bpp=32 mapped_len=4096000
+[BOOT-DISPLAY-GEOMETRY] reported=1280x800 physical_fb=1280x800 pixels_per_scan_line=1280 pitch_bytes=5120 bytes_per_pixel=4 framebuffer_size=4096000 calculated_stride=5120 calculated_framebuffer_bytes=4096000
+[BOOT] SMP: 2 CPU(s) reported (BSP lapic=0)
+[BOOT] modules/initrd: none (embedded userspace)
+[BOOT] entering common kernel initialization
+══════════════════════════════════════
+  SunlightOS — Kernel Stable Boot    
+══════════════════════════════════════
+[SUNLIGHT BUILD]
+  git=devel
+  profile=debug
+  timestamp=unknown
+  net_backends=virtio-net,vmxnet3
+  marker=VMXNET3-AUDIT-current-build
+[PMM] Initializing...
+[PMM] kernel image reserves phys 0x0..0x1c81518 (7298 frames, 28 MiB)
+[PMM] 1938/1966 MiB free
+[MEMORY-ACCOUNTING] RAMFS static file data=0 KiB (embedded in kernel image)
+[MEMORY-ACCOUNTING] boot image residency: retained=0 (no second copy)
+[PMM] OK
+[VMM] Initializing...
+[VMM] OK
+[ACPI] RSDP structure located at physical address: 0xffff8000000f64f0
+[ACPI] Checksum verified completely. ACPI Revision: 0.0 (RSDT active)
+[ACPI] Found table: RSDT (Root System Description Table) at 0x7ffe2384
+[ACPI] Found table: FACP at 0x7ffe2230
+[ACPI] Found table: APIC at 0x7ffe22a4
+[ACPI] Found table: HPET at 0x7ffe2324
+[ACPI] Found table: WAET at 0x7ffe235c
+[ACPI] PM1a_CNT_BLK port assigned: 0x604
+[ACPI] PM1b_CNT_BLK port assigned: 0x0
+[ACPI] Enabling ACPI mode via SMI_CMD port 0xb2... Done.
+[ACPI] _S5 Sleep Types: a=0x0, b=0x0
+[ACPI] Initialization complete. System is ACPI revision 0
+[ACPI] OK
+[SMBIOS] using 2.x entry point v2.8 table_phys=0xf6530 len=390
+[SMBIOS] system: QEMU Standard PC (i440FX + PIIX, 1996)
+[SMBIOS] bios: SeaBIOS Arch Linux 1.17.0-2-2
+[SMBIOS] identity_confidence=full
+[IDT] Loading interrupt descriptor table...
+[KBD] IRQ1 handler installed at vector 0x21
+[TIME] PIT calibration mode=2 input_hz=1193182 reload=11932 start_count=11568 end_count=7567 elapsed_counts=4001 tsc_delta=8098049 tsc_hz=2415007823
+[TIME] TSC calibrated ~2415007823 Hz for internal accounting
+[CPU-ID] bsp logical=0 apic=0 tss=0xffffffff81188e28 ist_df=0xffffffff8144a5c8 ist_nmi=0xffffffff8124cae0
+time: clocksource=lapic-periodic tick_hz=100 lapic_frequency_hz=119030900 lapic_initial_count=1190309 calibration_reference=pit-calibrated-tsc tsc_frequency_hz=2415007823
+[IDT] LAPIC timer armed at ~100Hz (PIC IRQ0 masked); keyboard on PIC
+[IDT] OK
+[IDT] OK
+rtc: raw year=0x26 month=0x11 day=0x14 hour=0x13 minute=0x41 second=0x54 status_b=0x02 century_register=Some(50) century_raw=Some(32)
+rtc: mode=bcd hour_mode=24h stable_read=yes century_policy=acpi-register
+rtc: decoded_utc=2026-11-14T13:41:54Z assumed_basis=UTC
+wall: utc=2026-11-14T13:41:54Z unix=1794663714 boot_monotonic_ns=0 realtime_owner=boot-rtc
+[HEAP] Initializing 16 MiB kernel heap at 0xffffffff90000000...
+[HEAP] Test alloc OK: Vec of 16 items
+[HEAP] OK
+[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
+[ACPI] MADT: Local APIC base = 0xfee00000, flags = 0x1
+[ACPI] MADT:  Local APIC  proc_uid=  0  apic_id=  0  flags=0x1  [enabled]
+[ACPI] MADT:  Local APIC  proc_uid=  1  apic_id=  1  flags=0x1  [enabled]
+[ACPI] MADT:  I/O APIC    id=  0  addr=0xfec00000  gsi_base=0
+[ACPI] MADT:  IRQ override bus=0  src=  0  gsi=  2  flags=0x0
+[ACPI] MADT:  IRQ override bus=0  src=  5  gsi=  5  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src=  9  gsi=  9  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 10  gsi= 10  flags=0xd
+[ACPI] MADT:  IRQ override bus=0  src= 11  gsi= 11  flags=0xd
+[ACPI] MADT:  LAPIC NMI   proc_uid=255  lint=1  flags=0x0
+[ACPI] MADT: 2 logical processor(s) found, 2 usable
+[ACPI] MADT: 2 logical processor(s) detected (2 usable)
+[KBD] Initializing i8042 keyboard hardware
+[KBD-INIT] controller tx=0xad
+[KBD-INIT] controller tx=0xa7
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config initial=0x71
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x70
+[KBD-INIT] controller tx=0xab
+[KBD-INIT] controller tx=0xae
+[KBD-INIT] controller tx=0x60
+[KBD-INIT] controller data=0x61
+[KBD-INIT] controller tx=0x20
+[KBD-INIT] controller config readback=0x61
+[KBD-INIT] translation=enabled (set 2 -> set 1)
+[KBD-INIT] keyboard tx=0xff attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] BAT=0xaa passed
+[KBD-INIT] keyboard tx=0xf5 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf2 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] identify[0]=0xab
+[KBD-INIT] identify[1]=0x41
+[KBD-INIT] keyboard tx=0xf0 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x02 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xed attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0x00 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD-INIT] keyboard tx=0xf4 attempt=1
+[KBD-INIT] keyboard ACK
+[KBD] i8042 keyboard ready (translated set 2, IRQ1 enabled)
+[IOAPIC] keyboard IRQ1 -> GSI1 vector=0x21 apic=0
+[IOAPIC] mouse IRQ12 -> GSI12 vector=0x2c apic=0
+[IOAPIC] input routing active; legacy PIC masked
+[PCI]  1 GPU device(s) detected
+[BLK]  Scanning PCI...
+[BLK]  No virtio-blk found — /boot will be unavailable
+[VFS] kernel mount OK
+[SYSCALL] Setting up MSRs...
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[SYSCALL] OK
+[SMP] Limine MP response: 2 CPU(s), BSP LAPIC ID=0
+[SMP] Starting AP0  proc_id=1  lapic_id=1  stack=0xffffffff8144b5b0..0xffffffff8145b5b0
+[CPU] x87/SSE enabled; NXE active cpu_count=2
+[SYSCALL] LSTAR = 0xffffffff8006ad58
+[CPU-ID] online logical=1 apic=1 tss=0xffffffff81188ee8 ist_df=0xffffffff8145b5b0 ist_nmi=0xffffffff81250ae0
+[SMP] AP1 (LAPIC 1) online — TSS loaded, LAPIC timer armed
+[SMP] Phase-1 bring-up complete: 1 AP(s) online (2 total logical CPUs)
+[SCHED] Per-core work-stealing scheduler: 2 online core(s)
+[THERMAL-HW] Intel DTS unsupported (intel=false family=6 model=0x6 dts=0)
+[MM-0] NXE active on 2 CPU(s)
+[CAP]  Capability broker initialized
+[NATIVE-C-RUNNER] cases=5 cpus=2 entropy=true
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=526d memsz=526d prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=10 memsz=10 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400e20, stack=0x7fffffffefa0
+[SCHED] CREATED process #1 'init' idx=0 burst_score=256 tier=High
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=1bdf memsz=1bdf prot=ReadExec
+[ELF] PT_LOAD off=3000 vaddr=402000 filesz=1000 memsz=1000 prot=Read
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=8 memsz=8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=0 auxv=2 rsp=0x7fffffffefa0
+[EXEC] Loaded ELF entry=0x400410, stack=0x7fffffffefa0
+[SCHED] CREATED process #2 'rand_service' idx=1 burst_score=256 tier=High
+[SCHED] process 0 'init' state=Ready
+[SCHED] Entering process 0 'init' at rsp=0xffffffff900087b0
+[RAND] Starting rand_service
+[CAP] Created endpoint 0 for pid=2
+[ init] SunlightOS init process started
+[ init] Waiting for system services to register...
+[CAP] Created endpoint 1 for pid=1
+[init] Name server: listening
+[init] nameserver long-name keys OK
+[init] nameserver registry integrity tests: OK
+[init] Registered kernel spawn endpoint
+[SYSCALL] spawn: load failed: UnsupportedPersonality
+[FSTAB] REQUIRED FAILURE: boot degraded; inspect storagectl diagnostics
+[init] FAILED to launch base service
+[RAND] Registered as 'rand'
+[NATIVE-C-SUPPORT] nameserver=production rand=production receive_wait=ready
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=54d8 memsz=54d8 prot=ReadExec
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=9000 vaddr=408000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=a000 vaddr=409000 filesz=0 memsz=fe8 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x4034b0, stack=0x7fffffffef80
+[SCHED] CREATED process #3 'condvar-timeout' idx=2 burst_score=256 tier=High
+[NATIVE-C-START] case=0 name=condvar-timeout pid=100 bytes=50816 owned_frames=522 uid=1000
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[init] FAILED to launch base service
+[SYSCALL] thread_spawn: parent=100 tid=101 trampoline=0x4034cc
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=101 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=101 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=101 name='condvar-timeout'
+[NATIVE-C-REAP-BEGIN] case=1 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=1 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=101 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[THREAD-LIFECYCLE] created=1 finished=1 reaped=1 borrower_reclaim_skipped=1 stale_wake_rejected=0 borrower_slots_reused=0 max_live=1
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000304000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000504000
+[SYSCALL] thread_spawn: parent=100 tid=102 trampoline=0x4034cc
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=102 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=102 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=102 name='condvar-timeout'
+[init] FAILED to launch base service
+[NATIVE-C-REAP-BEGIN] case=2 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=2 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=102 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[THREAD-LIFECYCLE] created=2 finished=2 reaped=2 borrower_reclaim_skipped=2 stale_wake_rejected=0 borrower_slots_reused=1 max_live=1
+[init] FAILED to launch base service
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000506000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000706000
+[SYSCALL] thread_spawn: parent=100 tid=103 trampoline=0x4034cc
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=103 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=103 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=103 name='condvar-timeout'
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[NATIVE-C-REAP-BEGIN] case=3 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=3 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=103 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[THREAD-LIFECYCLE] created=3 finished=3 reaped=3 borrower_reclaim_skipped=3 stale_wake_rejected=0 borrower_slots_reused=2 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000708000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000908000
+[SYSCALL] thread_spawn: parent=100 tid=104 trampoline=0x4034cc
+[init] FAILED to launch base service
+[init] FAILED to launch base service
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=104 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=104 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=104 name='condvar-timeout'
+[NATIVE-C-REAP-BEGIN] case=4 fds=3 file_frames=0
+[NATIVE-C-REAP-END] case=4 exit=0 user_frames=0 page_tables=0 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=104 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=104 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=104 cleared_msgs=0
+[THREAD-LIFECYCLE] created=4 finished=4 reaped=4 borrower_reclaim_skipped=4 stale_wake_rejected=0 borrower_slots_reused=3 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100090a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000b0a000
+[SYSCALL] thread_spawn: parent=100 tid=105 trampoline=0x4034cc
+[init] base service spawn pass complete
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=105 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=105 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=105 name='condvar-timeout'
+[SCHED] process_reaped pid=105 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=105 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=105 cleared_msgs=0
+[THREAD-LIFECYCLE] created=5 finished=5 reaped=5 borrower_reclaim_skipped=5 stale_wake_rejected=0 borrower_slots_reused=4 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000b0c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000d0c000
+[SYSCALL] thread_spawn: parent=100 tid=106 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=106 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=106 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=106 name='condvar-timeout'
+[SCHED] process_reaped pid=106 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=106 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=106 cleared_msgs=0
+[THREAD-LIFECYCLE] created=6 finished=6 reaped=6 borrower_reclaim_skipped=6 stale_wake_rejected=0 borrower_slots_reused=5 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000d0e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000f0e000
+[SYSCALL] thread_spawn: parent=100 tid=107 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=107 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=107 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=107 name='condvar-timeout'
+[SCHED] process_reaped pid=107 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=107 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=107 cleared_msgs=0
+[THREAD-LIFECYCLE] created=7 finished=7 reaped=7 borrower_reclaim_skipped=7 stale_wake_rejected=0 borrower_slots_reused=6 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000f10000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001110000
+[SYSCALL] thread_spawn: parent=100 tid=108 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=108 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=108 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=108 name='condvar-timeout'
+[SCHED] process_reaped pid=108 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=108 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=108 cleared_msgs=0
+[THREAD-LIFECYCLE] created=8 finished=8 reaped=8 borrower_reclaim_skipped=8 stale_wake_rejected=0 borrower_slots_reused=7 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001112000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001312000
+[SYSCALL] thread_spawn: parent=100 tid=109 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=109 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=109 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=109 name='condvar-timeout'
+[SCHED] process_reaped pid=109 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=109 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=109 cleared_msgs=0
+[THREAD-LIFECYCLE] created=9 finished=9 reaped=9 borrower_reclaim_skipped=9 stale_wake_rejected=0 borrower_slots_reused=8 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001314000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001514000
+[SYSCALL] thread_spawn: parent=100 tid=110 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=110 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=110 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=110 name='condvar-timeout'
+[SCHED] process_reaped pid=110 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=110 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=110 cleared_msgs=0
+[THREAD-LIFECYCLE] created=10 finished=10 reaped=10 borrower_reclaim_skipped=10 stale_wake_rejected=0 borrower_slots_reused=9 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001516000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001716000
+[SYSCALL] thread_spawn: parent=100 tid=111 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=111 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=111 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=111 name='condvar-timeout'
+[SCHED] process_reaped pid=111 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=111 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=111 cleared_msgs=0
+[THREAD-LIFECYCLE] created=11 finished=11 reaped=11 borrower_reclaim_skipped=11 stale_wake_rejected=0 borrower_slots_reused=10 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001718000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001918000
+[SYSCALL] thread_spawn: parent=100 tid=112 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=112 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=112 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=112 name='condvar-timeout'
+[SCHED] process_reaped pid=112 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=112 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=112 cleared_msgs=0
+[THREAD-LIFECYCLE] created=12 finished=12 reaped=12 borrower_reclaim_skipped=12 stale_wake_rejected=0 borrower_slots_reused=11 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100191a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001b1a000
+[SYSCALL] thread_spawn: parent=100 tid=113 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=113 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=113 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=113 name='condvar-timeout'
+[SCHED] process_reaped pid=113 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=113 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=113 cleared_msgs=0
+[THREAD-LIFECYCLE] created=13 finished=13 reaped=13 borrower_reclaim_skipped=13 stale_wake_rejected=0 borrower_slots_reused=12 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001b1c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001d1c000
+[SYSCALL] thread_spawn: parent=100 tid=114 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=114 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=114 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=114 name='condvar-timeout'
+[SCHED] process_reaped pid=114 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=114 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=114 cleared_msgs=0
+[THREAD-LIFECYCLE] created=14 finished=14 reaped=14 borrower_reclaim_skipped=14 stale_wake_rejected=0 borrower_slots_reused=13 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001d1e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1001f1e000
+[SYSCALL] thread_spawn: parent=100 tid=115 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=115 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=115 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=115 name='condvar-timeout'
+[SCHED] process_reaped pid=115 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=115 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=115 cleared_msgs=0
+[THREAD-LIFECYCLE] created=15 finished=15 reaped=15 borrower_reclaim_skipped=15 stale_wake_rejected=0 borrower_slots_reused=14 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1001f20000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002120000
+[SYSCALL] thread_spawn: parent=100 tid=116 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=116 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=116 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=116 name='condvar-timeout'
+[SCHED] process_reaped pid=116 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=116 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=116 cleared_msgs=0
+[THREAD-LIFECYCLE] created=16 finished=16 reaped=16 borrower_reclaim_skipped=16 stale_wake_rejected=0 borrower_slots_reused=15 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002122000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002322000
+[SYSCALL] thread_spawn: parent=100 tid=117 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=117 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=117 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=117 name='condvar-timeout'
+[SCHED] process_reaped pid=117 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=117 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=117 cleared_msgs=0
+[THREAD-LIFECYCLE] created=17 finished=17 reaped=17 borrower_reclaim_skipped=17 stale_wake_rejected=0 borrower_slots_reused=16 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002324000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002524000
+[SYSCALL] thread_spawn: parent=100 tid=118 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=118 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=118 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=118 name='condvar-timeout'
+[SCHED] process_reaped pid=118 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=118 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=118 cleared_msgs=0
+[THREAD-LIFECYCLE] created=18 finished=18 reaped=18 borrower_reclaim_skipped=18 stale_wake_rejected=0 borrower_slots_reused=17 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002526000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002726000
+[SYSCALL] thread_spawn: parent=100 tid=119 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=119 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=119 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=119 name='condvar-timeout'
+[SCHED] process_reaped pid=119 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=119 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=119 cleared_msgs=0
+[THREAD-LIFECYCLE] created=19 finished=19 reaped=19 borrower_reclaim_skipped=19 stale_wake_rejected=0 borrower_slots_reused=18 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002728000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002928000
+[SYSCALL] thread_spawn: parent=100 tid=120 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=120 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=120 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=120 name='condvar-timeout'
+[SCHED] process_reaped pid=120 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=120 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=120 cleared_msgs=0
+[THREAD-LIFECYCLE] created=20 finished=20 reaped=20 borrower_reclaim_skipped=20 stale_wake_rejected=0 borrower_slots_reused=19 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100292a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002b2a000
+[SYSCALL] thread_spawn: parent=100 tid=121 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=121 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=121 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=121 name='condvar-timeout'
+[SCHED] process_reaped pid=121 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=121 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=121 cleared_msgs=0
+[THREAD-LIFECYCLE] created=21 finished=21 reaped=21 borrower_reclaim_skipped=21 stale_wake_rejected=0 borrower_slots_reused=20 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002b2c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002d2c000
+[SYSCALL] thread_spawn: parent=100 tid=122 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=122 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=122 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=122 name='condvar-timeout'
+[SCHED] process_reaped pid=122 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=122 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=122 cleared_msgs=0
+[THREAD-LIFECYCLE] created=22 finished=22 reaped=22 borrower_reclaim_skipped=22 stale_wake_rejected=0 borrower_slots_reused=21 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002d2e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1002f2e000
+[SYSCALL] thread_spawn: parent=100 tid=123 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=123 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=123 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=123 name='condvar-timeout'
+[SCHED] process_reaped pid=123 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=123 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=123 cleared_msgs=0
+[THREAD-LIFECYCLE] created=23 finished=23 reaped=23 borrower_reclaim_skipped=23 stale_wake_rejected=0 borrower_slots_reused=22 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1002f30000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003130000
+[SYSCALL] thread_spawn: parent=100 tid=124 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=124 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=124 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=124 name='condvar-timeout'
+[SCHED] process_reaped pid=124 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=124 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=124 cleared_msgs=0
+[THREAD-LIFECYCLE] created=24 finished=24 reaped=24 borrower_reclaim_skipped=24 stale_wake_rejected=0 borrower_slots_reused=23 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003132000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003332000
+[SYSCALL] thread_spawn: parent=100 tid=125 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=125 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=125 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=125 name='condvar-timeout'
+[SCHED] process_reaped pid=125 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=125 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=125 cleared_msgs=0
+[THREAD-LIFECYCLE] created=25 finished=25 reaped=25 borrower_reclaim_skipped=25 stale_wake_rejected=0 borrower_slots_reused=24 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003334000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003534000
+[SYSCALL] thread_spawn: parent=100 tid=126 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=126 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=126 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=126 name='condvar-timeout'
+[SCHED] process_reaped pid=126 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=126 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=126 cleared_msgs=0
+[THREAD-LIFECYCLE] created=26 finished=26 reaped=26 borrower_reclaim_skipped=26 stale_wake_rejected=0 borrower_slots_reused=25 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003536000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003736000
+[SYSCALL] thread_spawn: parent=100 tid=127 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=127 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=127 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=127 name='condvar-timeout'
+[SCHED] process_reaped pid=127 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=127 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=127 cleared_msgs=0
+[THREAD-LIFECYCLE] created=27 finished=27 reaped=27 borrower_reclaim_skipped=27 stale_wake_rejected=0 borrower_slots_reused=26 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003738000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003938000
+[SYSCALL] thread_spawn: parent=100 tid=128 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=128 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=128 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=128 name='condvar-timeout'
+[SCHED] process_reaped pid=128 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=128 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=128 cleared_msgs=0
+[THREAD-LIFECYCLE] created=28 finished=28 reaped=28 borrower_reclaim_skipped=28 stale_wake_rejected=0 borrower_slots_reused=27 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100393a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003b3a000
+[SYSCALL] thread_spawn: parent=100 tid=129 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=129 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=129 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=129 name='condvar-timeout'
+[SCHED] process_reaped pid=129 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=129 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=129 cleared_msgs=0
+[THREAD-LIFECYCLE] created=29 finished=29 reaped=29 borrower_reclaim_skipped=29 stale_wake_rejected=0 borrower_slots_reused=28 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003b3c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003d3c000
+[SYSCALL] thread_spawn: parent=100 tid=130 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=130 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=130 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=130 name='condvar-timeout'
+[SCHED] process_reaped pid=130 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=130 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=130 cleared_msgs=0
+[THREAD-LIFECYCLE] created=30 finished=30 reaped=30 borrower_reclaim_skipped=30 stale_wake_rejected=0 borrower_slots_reused=29 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003d3e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1003f3e000
+[SYSCALL] thread_spawn: parent=100 tid=131 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=131 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=131 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=131 name='condvar-timeout'
+[SCHED] process_reaped pid=131 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=131 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=131 cleared_msgs=0
+[THREAD-LIFECYCLE] created=31 finished=31 reaped=31 borrower_reclaim_skipped=31 stale_wake_rejected=0 borrower_slots_reused=30 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1003f40000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004140000
+[SYSCALL] thread_spawn: parent=100 tid=132 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=132 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=132 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=132 name='condvar-timeout'
+[SCHED] process_reaped pid=132 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=132 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=132 cleared_msgs=0
+[THREAD-LIFECYCLE] created=32 finished=32 reaped=32 borrower_reclaim_skipped=32 stale_wake_rejected=0 borrower_slots_reused=31 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004142000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004342000
+[SYSCALL] thread_spawn: parent=100 tid=133 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=133 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=133 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=133 name='condvar-timeout'
+[SCHED] process_reaped pid=133 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=133 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=133 cleared_msgs=0
+[THREAD-LIFECYCLE] created=33 finished=33 reaped=33 borrower_reclaim_skipped=33 stale_wake_rejected=0 borrower_slots_reused=32 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004344000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004544000
+[SYSCALL] thread_spawn: parent=100 tid=134 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=134 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=134 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=134 name='condvar-timeout'
+[SCHED] process_reaped pid=134 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=134 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=134 cleared_msgs=0
+[THREAD-LIFECYCLE] created=34 finished=34 reaped=34 borrower_reclaim_skipped=34 stale_wake_rejected=0 borrower_slots_reused=33 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004546000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004746000
+[SYSCALL] thread_spawn: parent=100 tid=135 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=135 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=135 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=135 name='condvar-timeout'
+[SCHED] process_reaped pid=135 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=135 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=135 cleared_msgs=0
+[THREAD-LIFECYCLE] created=35 finished=35 reaped=35 borrower_reclaim_skipped=35 stale_wake_rejected=0 borrower_slots_reused=34 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004748000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004948000
+[SYSCALL] thread_spawn: parent=100 tid=136 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=136 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=136 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=136 name='condvar-timeout'
+[SCHED] process_reaped pid=136 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=136 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=136 cleared_msgs=0
+[THREAD-LIFECYCLE] created=36 finished=36 reaped=36 borrower_reclaim_skipped=36 stale_wake_rejected=0 borrower_slots_reused=35 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100494a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004b4a000
+[SYSCALL] thread_spawn: parent=100 tid=137 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=137 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=137 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=137 name='condvar-timeout'
+[SCHED] process_reaped pid=137 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=137 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=137 cleared_msgs=0
+[THREAD-LIFECYCLE] created=37 finished=37 reaped=37 borrower_reclaim_skipped=37 stale_wake_rejected=0 borrower_slots_reused=36 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004b4c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004d4c000
+[SYSCALL] thread_spawn: parent=100 tid=138 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=138 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=138 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=138 name='condvar-timeout'
+[SCHED] process_reaped pid=138 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=138 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=138 cleared_msgs=0
+[THREAD-LIFECYCLE] created=38 finished=38 reaped=38 borrower_reclaim_skipped=38 stale_wake_rejected=0 borrower_slots_reused=37 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004d4e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1004f4e000
+[SYSCALL] thread_spawn: parent=100 tid=139 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=139 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=139 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=139 name='condvar-timeout'
+[SCHED] process_reaped pid=139 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=139 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=139 cleared_msgs=0
+[THREAD-LIFECYCLE] created=39 finished=39 reaped=39 borrower_reclaim_skipped=39 stale_wake_rejected=0 borrower_slots_reused=38 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1004f50000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005150000
+[SYSCALL] thread_spawn: parent=100 tid=140 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=140 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=140 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=140 name='condvar-timeout'
+[SCHED] process_reaped pid=140 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=140 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=140 cleared_msgs=0
+[THREAD-LIFECYCLE] created=40 finished=40 reaped=40 borrower_reclaim_skipped=40 stale_wake_rejected=0 borrower_slots_reused=39 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005152000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005352000
+[SYSCALL] thread_spawn: parent=100 tid=141 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=141 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=141 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=141 name='condvar-timeout'
+[SCHED] process_reaped pid=141 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=141 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=141 cleared_msgs=0
+[THREAD-LIFECYCLE] created=41 finished=41 reaped=41 borrower_reclaim_skipped=41 stale_wake_rejected=0 borrower_slots_reused=40 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005354000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005554000
+[SYSCALL] thread_spawn: parent=100 tid=142 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=142 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=142 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=142 name='condvar-timeout'
+[SCHED] process_reaped pid=142 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=142 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=142 cleared_msgs=0
+[THREAD-LIFECYCLE] created=42 finished=42 reaped=42 borrower_reclaim_skipped=42 stale_wake_rejected=0 borrower_slots_reused=41 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005556000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005756000
+[SYSCALL] thread_spawn: parent=100 tid=143 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=143 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=143 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=143 name='condvar-timeout'
+[SCHED] process_reaped pid=143 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=143 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=143 cleared_msgs=0
+[THREAD-LIFECYCLE] created=43 finished=43 reaped=43 borrower_reclaim_skipped=43 stale_wake_rejected=0 borrower_slots_reused=42 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005758000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005958000
+[SYSCALL] thread_spawn: parent=100 tid=144 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=144 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=144 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=144 name='condvar-timeout'
+[SCHED] process_reaped pid=144 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=144 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=144 cleared_msgs=0
+[THREAD-LIFECYCLE] created=44 finished=44 reaped=44 borrower_reclaim_skipped=44 stale_wake_rejected=0 borrower_slots_reused=43 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100595a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005b5a000
+[SYSCALL] thread_spawn: parent=100 tid=145 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=145 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=145 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=145 name='condvar-timeout'
+[SCHED] process_reaped pid=145 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=145 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=145 cleared_msgs=0
+[THREAD-LIFECYCLE] created=45 finished=45 reaped=45 borrower_reclaim_skipped=45 stale_wake_rejected=0 borrower_slots_reused=44 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005b5c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005d5c000
+[SYSCALL] thread_spawn: parent=100 tid=146 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=146 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=146 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=146 name='condvar-timeout'
+[SCHED] process_reaped pid=146 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=146 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=146 cleared_msgs=0
+[THREAD-LIFECYCLE] created=46 finished=46 reaped=46 borrower_reclaim_skipped=46 stale_wake_rejected=0 borrower_slots_reused=45 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005d5e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1005f5e000
+[SYSCALL] thread_spawn: parent=100 tid=147 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=147 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=147 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=147 name='condvar-timeout'
+[SCHED] process_reaped pid=147 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=147 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=147 cleared_msgs=0
+[THREAD-LIFECYCLE] created=47 finished=47 reaped=47 borrower_reclaim_skipped=47 stale_wake_rejected=0 borrower_slots_reused=46 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1005f60000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006160000
+[SYSCALL] thread_spawn: parent=100 tid=148 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=148 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=148 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=148 name='condvar-timeout'
+[SCHED] process_reaped pid=148 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=148 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=148 cleared_msgs=0
+[THREAD-LIFECYCLE] created=48 finished=48 reaped=48 borrower_reclaim_skipped=48 stale_wake_rejected=0 borrower_slots_reused=47 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006162000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006362000
+[SYSCALL] thread_spawn: parent=100 tid=149 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=149 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=149 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=149 name='condvar-timeout'
+[SCHED] process_reaped pid=149 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=149 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=149 cleared_msgs=0
+[THREAD-LIFECYCLE] created=49 finished=49 reaped=49 borrower_reclaim_skipped=49 stale_wake_rejected=0 borrower_slots_reused=48 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006364000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006564000
+[SYSCALL] thread_spawn: parent=100 tid=150 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=150 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=150 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=150 name='condvar-timeout'
+[SCHED] process_reaped pid=150 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=150 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=150 cleared_msgs=0
+[THREAD-LIFECYCLE] created=50 finished=50 reaped=50 borrower_reclaim_skipped=50 stale_wake_rejected=0 borrower_slots_reused=49 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006566000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006766000
+[SYSCALL] thread_spawn: parent=100 tid=151 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=151 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=151 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=151 name='condvar-timeout'
+[SCHED] process_reaped pid=151 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=151 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=151 cleared_msgs=0
+[THREAD-LIFECYCLE] created=51 finished=51 reaped=51 borrower_reclaim_skipped=51 stale_wake_rejected=0 borrower_slots_reused=50 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006768000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006968000
+[SYSCALL] thread_spawn: parent=100 tid=152 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=152 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=152 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=152 name='condvar-timeout'
+[SCHED] process_reaped pid=152 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=152 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=152 cleared_msgs=0
+[THREAD-LIFECYCLE] created=52 finished=52 reaped=52 borrower_reclaim_skipped=52 stale_wake_rejected=0 borrower_slots_reused=51 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x100696a000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006b6a000
+[SYSCALL] thread_spawn: parent=100 tid=153 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=153 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=153 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=153 name='condvar-timeout'
+[SCHED] process_reaped pid=153 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=153 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=153 cleared_msgs=0
+[THREAD-LIFECYCLE] created=53 finished=53 reaped=53 borrower_reclaim_skipped=53 stale_wake_rejected=0 borrower_slots_reused=52 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006b6c000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006d6c000
+[SYSCALL] thread_spawn: parent=100 tid=154 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=154 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=154 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=154 name='condvar-timeout'
+[SCHED] process_reaped pid=154 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=154 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=154 cleared_msgs=0
+[THREAD-LIFECYCLE] created=54 finished=54 reaped=54 borrower_reclaim_skipped=54 stale_wake_rejected=0 borrower_slots_reused=53 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006d6e000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1006f6e000
+[SYSCALL] thread_spawn: parent=100 tid=155 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=155 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=155 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=155 name='condvar-timeout'
+[SCHED] process_reaped pid=155 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=155 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=155 cleared_msgs=0
+[THREAD-LIFECYCLE] created=55 finished=55 reaped=55 borrower_reclaim_skipped=55 stale_wake_rejected=0 borrower_slots_reused=54 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1006f70000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007170000
+[SYSCALL] thread_spawn: parent=100 tid=156 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=156 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=156 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=156 name='condvar-timeout'
+[SCHED] process_reaped pid=156 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=156 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=156 cleared_msgs=0
+[THREAD-LIFECYCLE] created=56 finished=56 reaped=56 borrower_reclaim_skipped=56 stale_wake_rejected=0 borrower_slots_reused=55 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007172000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007372000
+[SYSCALL] thread_spawn: parent=100 tid=157 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=157 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=157 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=157 name='condvar-timeout'
+[SCHED] process_reaped pid=157 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=157 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=157 cleared_msgs=0
+[THREAD-LIFECYCLE] created=57 finished=57 reaped=57 borrower_reclaim_skipped=57 stale_wake_rejected=0 borrower_slots_reused=56 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007374000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007574000
+[SYSCALL] thread_spawn: parent=100 tid=158 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=158 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=158 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=158 name='condvar-timeout'
+[SCHED] process_reaped pid=158 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=158 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=158 cleared_msgs=0
+[THREAD-LIFECYCLE] created=58 finished=58 reaped=58 borrower_reclaim_skipped=58 stale_wake_rejected=0 borrower_slots_reused=57 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007576000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007776000
+[SYSCALL] thread_spawn: parent=100 tid=159 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=159 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=159 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=159 name='condvar-timeout'
+[SCHED] process_reaped pid=159 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=159 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=159 cleared_msgs=0
+[THREAD-LIFECYCLE] created=59 finished=59 reaped=59 borrower_reclaim_skipped=59 stale_wake_rejected=0 borrower_slots_reused=58 max_live=1
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1007778000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1007978000
+[SYSCALL] thread_spawn: parent=100 tid=160 trampoline=0x4034cc
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_mark_finished pid=160 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=160 name='condvar-timeout' reason=exit
+[SCHED] FINISHED process pid=160 name='condvar-timeout'
+[SCHED] process_reaped pid=160 name='condvar-timeout' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=160 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=160 cleared_msgs=0
+[THREAD-LIFECYCLE] created=60 finished=60 reaped=60 borrower_reclaim_skipped=60 stale_wake_rejected=0 borrower_slots_reused=59 max_live=1
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=100 name='condvar-timeout'
+[NATIVE-GROUP] terminal pid=100 incarnation=4 vm=7 code=0 reason=exit
+[SCHED] process_mark_finished pid=100 name='condvar-timeout' reason=exit code=0
+[SCHED] terminating pid=100 name='condvar-timeout' reason=exit
+[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=0 exit=0 user_frames=780 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=100 name='condvar-timeout' user_frames=780 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=100 frames=780 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=100 cleared_msgs=0
+[NATIVE-C-STREAM] case=0 fd=1 hex=505931207369676e616c2f74696d656f75742073747265737320504153532077616b65733d32332074696d656f7574733d33373b206578616374207261636520554e5155414c49464945440a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=0 exit=0 stdout=76 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=20f8 memsz=20f8 prot=ReadExec
+[ELF] PT_LOAD off=4000 vaddr=403000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=6000 vaddr=405000 filesz=18 memsz=18 prot=ReadWrite
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=0 memsz=1a0 prot=ReadWrite
+[EXEC] Stack: argc=1 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x400f5c, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=101 (reused reaped slot)
+[SCHED] CREATED process #64 'string-guard' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=1 name=string-guard pid=101 bytes=36296 owned_frames=519 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000002000
+[SCHED] process_exit_begin reason=exit
+[SCHED] FINISHED process pid=101 name='string-guard'
+[NATIVE-GROUP] terminal pid=101 incarnation=125 vm=9 code=0 reason=exit
+[SCHED] process_mark_finished pid=101 name='string-guard' reason=exit code=0
+[SCHED] terminating pid=101 name='string-guard' reason=exit
+[NATIVE-C-REAP-BEGIN] case=1 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=1 exit=0 user_frames=521 page_tables=10 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=101 name='string-guard' user_frames=521 page_tables=10 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=101 frames=521 pts=10 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=101 cleared_msgs=0
+[NATIVE-C-STREAM] case=1 fd=1 hex=505931207374726e6370792067756172642d7061676520504153530a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=1 exit=0 stdout=28 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=38f8 memsz=38f8 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fc0 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=1 auxv=2 rsp=0x7fffffffef80
+[EXEC] Loaded ELF entry=0x401fbc, stack=0x7fffffffef80
+[SCHED] process_slot_reused idx=2 pid=102 (reused reaped slot)
+[SCHED] CREATED process #65 'owner-exit-0' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=2 name=owner-exit-0 pid=102 bytes=41872 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=102 tid=161 trampoline=0x401fd8
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin external pid=161 reason=exit
+[SCHED] process_mark_finished pid=161 name='owner-exit-0' reason=exit code=0 (external)
+[SCHED] FINISHED process pid=161 name='owner-exit-0'
+[SCHED] terminating pid=161 name='owner-exit-0' reason=exit
+[SCHED] process_reaped pid=161 name='owner-exit-0' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=161 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=161 cleared_msgs=0
+[THREAD-LIFECYCLE] created=61 finished=61 reaped=61 borrower_reclaim_skipped=61 stale_wake_rejected=0 borrower_slots_reused=60 max_live=1
+[SCHED] FINISHED process pid=102 name='owner-exit-0'
+[NATIVE-GROUP] terminal pid=102 incarnation=126 vm=11 code=0 reason=exit
+[SCHED] process_mark_finished pid=102 name='owner-exit-0' reason=exit code=0
+[SCHED] terminating pid=102 name='owner-exit-0' reason=exit
+[NATIVE-C-REAP-BEGIN] case=2 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=2 exit=0 user_frames=1292 page_tables=11 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=102 name='owner-exit-0' user_frames=1292 page_tables=11 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=102 frames=1292 pts=11 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=102 cleared_msgs=0
+[NATIVE-C-STREAM] case=2 fd=1 hex=50593120696e697469616c206f776e657220696d6d6564696174652067726f757020657869740a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=2 exit=0 stdout=39 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=38f8 memsz=38f8 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fc0 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=1 auxv=2 rsp=0x7fffffffef70
+[EXEC] Loaded ELF entry=0x401fbc, stack=0x7fffffffef70
+[SCHED] process_slot_reused idx=2 pid=103 (reused reaped slot)
+[SCHED] CREATED process #67 'owner-exit-37' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=3 name=owner-exit-37 pid=103 bytes=41872 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=103 tid=162 trampoline=0x401fd8
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin external pid=162 reason=exit
+[SCHED] process_mark_finished pid=162 name='owner-exit-37' reason=exit code=37 (external)
+[SCHED] FINISHED process pid=162 name='owner-exit-37'
+[SCHED] terminating pid=162 name='owner-exit-37' reason=exit
+[SCHED] process_reaped pid=162 name='owner-exit-37' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=162 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=162 cleared_msgs=0
+[THREAD-LIFECYCLE] created=62 finished=62 reaped=62 borrower_reclaim_skipped=62 stale_wake_rejected=0 borrower_slots_reused=61 max_live=1
+[SCHED] FINISHED process pid=103 name='owner-exit-37'
+[NATIVE-GROUP] terminal pid=103 incarnation=129 vm=13 code=37 reason=exit
+[SCHED] process_mark_finished pid=103 name='owner-exit-37' reason=exit code=37
+[SCHED] terminating pid=103 name='owner-exit-37' reason=exit
+[NATIVE-C-REAP-BEGIN] case=3 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=3 exit=37 user_frames=1292 page_tables=11 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=103 name='owner-exit-37' user_frames=1292 page_tables=11 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=103 frames=1292 pts=11 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=103 cleared_msgs=0
+[NATIVE-C-STREAM] case=3 fd=1 hex=50593120696e697469616c206f776e657220696d6d6564696174652067726f757020657869740a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=3 exit=37 stdout=39 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[ELF] PT_LOAD off=1000 vaddr=400000 filesz=38f8 memsz=38f8 prot=ReadExec
+[ELF] PT_LOAD off=5000 vaddr=404000 filesz=2000 memsz=2000 prot=Read
+[ELF] PT_LOAD off=7000 vaddr=406000 filesz=20 memsz=20 prot=ReadWrite
+[ELF] PT_LOAD off=8000 vaddr=407000 filesz=0 memsz=fc0 prot=ReadWrite
+[EXEC] Stack: argc=2 envc=1 auxv=2 rsp=0x7fffffffef70
+[EXEC] Loaded ELF entry=0x401fbc, stack=0x7fffffffef70
+[SCHED] process_slot_reused idx=2 pid=104 (reused reaped slot)
+[SCHED] CREATED process #69 'owner-exit-255' idx=2 burst_score=256 tier=High (reused reaped slot)
+[NATIVE-C-START] case=4 name=owner-exit-255 pid=104 bytes=41872 owned_frames=520 uid=1000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000000000
+[SYSCALL] mmap(0x0, 0x100000) -> 0x1000002000
+[SYSCALL] mmap(0x0, 0x200000) -> 0x1000102000
+[SYSCALL] mmap(0x0, 0x2000) -> 0x1000302000
+[SYSCALL] thread_spawn: parent=104 tid=163 trampoline=0x401fd8
+[SCHED] process_exit_begin reason=exit
+[SCHED] process_exit_begin external pid=163 reason=exit
+[SCHED] process_mark_finished pid=163 name='owner-exit-255' reason=exit code=255 (external)
+[SCHED] FINISHED process pid=163 name='owner-exit-255'
+[SCHED] terminating pid=163 name='owner-exit-255' reason=exit
+[SCHED] process_reaped pid=163 name='owner-exit-255' user_frames=0 page_tables=0 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=163 frames=0 pts=0 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=163 cleared_msgs=0
+[THREAD-LIFECYCLE] created=63 finished=63 reaped=63 borrower_reclaim_skipped=63 stale_wake_rejected=0 borrower_slots_reused=62 max_live=1
+[SCHED] FINISHED process pid=104 name='owner-exit-255'
+[NATIVE-GROUP] terminal pid=104 incarnation=132 vm=15 code=255 reason=exit
+[SCHED] process_mark_finished pid=104 name='owner-exit-255' reason=exit code=255
+[SCHED] terminating pid=104 name='owner-exit-255' reason=exit
+[NATIVE-C-REAP-BEGIN] case=4 fds=3 file_frames=1
+[NATIVE-C-REAP-END] case=4 exit=255 user_frames=1292 page_tables=11 owned_frames=0 fds=0 stack=0
+[SCHED] process_reaped pid=104 name='owner-exit-255' user_frames=1292 page_tables=11 swap_blocks=0 ipc_cleared=0
+[SCHED] process_resource_cleanup_summary pid=104 frames=1292 pts=11 swap=0 ipc_entries_cleared=0
+[SCHED] ipc_entries_reaped_for_process pid=104 cleared_msgs=0
+[NATIVE-C-STREAM] case=4 fd=1 hex=50593120696e697469616c206f776e657220696d6d6564696174652067726f757020657869740a
+[NATIVE-C-INET] before=0 after=0
+[NATIVE-C-RESULT] case=4 exit=255 stdout=39 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2
+[NATIVE-C-DONE] cases=5

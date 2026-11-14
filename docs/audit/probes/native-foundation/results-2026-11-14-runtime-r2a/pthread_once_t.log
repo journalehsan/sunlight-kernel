@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Werror -fsyntax-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/pthread_once_t.c
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/pthread_once_t.c:2:1: error: unknown type name 'pthread_once_t'
+    2 | pthread_once_t value;
+      | ^
+1 error generated.
+
+exit=1

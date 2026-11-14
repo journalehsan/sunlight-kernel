@@ -1,0 +1,3 @@
+/* Diagnostic synthetic declaration ONLY, not a supported public API. */
+long double lgammal(long double);
+int main(void){ int ex=0; long double ip=0; (void)ex;(void)ip; return lgammal(0.25L) != 0;}

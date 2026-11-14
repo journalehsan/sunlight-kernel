@@ -1,0 +1,12 @@
+[
+  {
+    "name": "heap-abi",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-heap.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "retained-admission",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-admission.elf",
+    "expected_exit": 0
+  }
+]

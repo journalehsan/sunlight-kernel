@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "cpus": 2,
+  "cases": {
+    "initial": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "multiple": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "forced-after-owner": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "exit-0": {
+      "runner_pass": true,
+      "one_terminal": true
+    },
+    "exit-1": {
+      "runner_pass": true,
+      "one_terminal": true
+    },
+    "exit-2": {
+      "runner_pass": true,
+      "one_terminal": true
+    },
+    "exit-3": {
+      "runner_pass": true,
+      "one_terminal": true
+    },
+    "churn-0": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-1": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-2": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-3": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-4": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-5": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-6": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-7": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-8": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    },
+    "churn-9": {
+      "runner_pass": true,
+      "one_terminal": true,
+      "observed_quiescent_owner_before_progress": true
+    }
+  },
+  "source_manifest_matches_after_run": true,
+  "scope": "Fresh repeat of existing lifecycle cases; does not close W6-W9 or promote milestone gates",
+  "prior_matrix": "validated/; reviewed, not rerun in this continuation"
+}

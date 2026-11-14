@@ -1,0 +1,9 @@
+{
+  "loader_startup": "NOT_RUN",
+  "first_python_statement": "NOT_RUN",
+  "first_python_output": null,
+  "imports_and_runtime": "NOT_RUN",
+  "threaded_python": "NOT_READY",
+  "production": "NOT_READY",
+  "reason": "No linked interpreter"
+}

@@ -1,0 +1,15 @@
+patching file sunlight-libc/src/c_file.rs
+patching file ipc/src/lib.rs
+patching file kernel/src/arch/x86_64/syscall.rs
+patching file sunlight-files/src/main.rs
+patching file sunlight-fs/src/tmpfs.rs
+patching file sunlight-fs/src/vfs.rs
+patching file sunlight-fs/src/vfs/storage_tests.rs
+patching file sunlight-libc/include/errno.h
+patching file sunlight-libc/include/limits.h
+patching file sunlight-libc/include/stdlib.h
+patching file sunlight-libc/src/lib.rs
+patching file sunlight-libc/src/sys.rs
+patching file sunshell/src/main.rs
+patching file sunshell/src/native_script.rs
+patching file sunlight-fs/src/vfs/lookup.rs

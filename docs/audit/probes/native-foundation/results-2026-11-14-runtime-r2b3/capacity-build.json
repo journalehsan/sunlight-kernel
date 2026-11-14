@@ -1,0 +1,44 @@
+{
+  "attempts": [
+    {
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+        "-Wl,--defsym=__r3_queue=0"
+      ],
+      "exit": 0,
+      "bound_address": 0,
+      "actual_address": 4234400
+    },
+    {
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+        "-Wl,--defsym=__r3_queue=4234400"
+      ],
+      "exit": 0,
+      "bound_address": 4234400,
+      "actual_address": 4234400
+    }
+  ],
+  "binding_verified": true,
+  "elf_sha256": "624f121cc5e083f0e5e41ead4f46ae8d226d6c4e8eb5885d7a1e94bc9b856eeb",
+  "private_layout_source": "sunlight-libc/src/pthread.rs Control repr(C), size 96",
+  "production_source_changed": true
+}

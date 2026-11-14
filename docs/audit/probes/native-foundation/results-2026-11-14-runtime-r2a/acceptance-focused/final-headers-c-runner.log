@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c.elf --cpus 2 --timeout 180 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c-guest
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c-guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'formats -8 16 -32 64 -99 abc\nR2A headers PASS\n'
+
+exit=0

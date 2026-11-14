@@ -1,0 +1,11 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_getattr_np.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_getattr_np.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_getattr_np.c:2:44: error: use of undeclared identifier 'pthread_getattr_np'; did you mean 'pthread_attr_init'?
+    2 | void * volatile required_symbol = (void *)&pthread_getattr_np;
+      |                                            ^~~~~~~~~~~~~~~~~~
+      |                                            pthread_attr_init
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:40:5: note: 'pthread_attr_init' declared here
+   40 | int pthread_attr_init(pthread_attr_t *attr);
+      |     ^
+1 error generated.
+
+exit=1

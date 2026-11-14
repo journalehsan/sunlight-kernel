@@ -1,0 +1,8 @@
+['python3', 'tools/native-c/cc.py', '-O2', '-fno-builtin', '-Wall', '-Wextra', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/filesystem-test.c', '-o', '/home/ehsantor/Projects/sunlightos-kernel/target/py5-filesystem.elf']
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/filesystem-test.c:19:5: error: call to undeclared function 'rename'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   19 |  if(rename(path,"/tmp/py5-renamed")||meta(path,&s)>=0||fstat(fd,&s)||s.size!=4)return 3;
+      |     ^
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/filesystem-test.c:23:5: error: call to undeclared function 'chdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   23 |  if(chdir("/tmp"))return 7;
+      |     ^
+2 errors generated.

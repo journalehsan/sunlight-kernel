@@ -1,0 +1,48 @@
+[
+  {
+    "name": "locked-final",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 0.16375286001130007,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 31.000775786000304,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 33.59571080701426,
+    "source_matches": true
+  }
+]

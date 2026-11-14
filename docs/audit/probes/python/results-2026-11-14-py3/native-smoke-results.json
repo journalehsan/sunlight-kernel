@@ -1,0 +1,12 @@
+{
+  "status": "NOT_RUN",
+  "reason": "No linked CPython executable. Guest libc fixture output is not Python output.",
+  "startup": "NOT_RUN",
+  "-V": "NOT_RUN",
+  "-c": "NOT_RUN",
+  "Hello SunlightOS": "NOT_RUN",
+  "stdout": null,
+  "stderr": null,
+  "exit_status": null,
+  "actual_python_output": false
+}

@@ -1,0 +1,25 @@
+{
+  "verdict": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": "PASS",
+    "G2": "UNQUALIFIED",
+    "G3": "PARTIAL",
+    "G4": "BLOCKED",
+    "G5": "UNQUALIFIED",
+    "G6": "NOT_RUN",
+    "G7": "PARTIAL",
+    "G8": "PARTIAL",
+    "G9": "PASS",
+    "G10": "PASS"
+  },
+  "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "branch": "main",
+  "production_changes": [],
+  "source_integrity": "PASS",
+  "report": "docs/runtime/native-runtime-r2b5-security-retirement-closure.md",
+  "evidence": "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5",
+  "remaining": "W6 and authenticated IPC/SHM/session/fault/reuse gates are not closed; passing functional controls do not qualify them",
+  "no_commit": true,
+  "no_push": true
+}

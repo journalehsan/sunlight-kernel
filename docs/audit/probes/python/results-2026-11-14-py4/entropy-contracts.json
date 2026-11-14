@@ -1,0 +1,47 @@
+{
+  "status": "BLOCKED",
+  "secure_nonblocking": "BLOCKED",
+  "native_readiness_markers": {
+    "1": [
+      "[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready",
+      "[RAND] Registered as 'rand'"
+    ],
+    "2": [
+      "[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready",
+      "[RAND] Registered as 'rand'"
+    ],
+    "4": [
+      "[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready",
+      "[RAND] Registered as 'rand'"
+    ]
+  },
+  "implementation": "Unchanged fail-closed secure flags-zero capability IPC",
+  "sources": [
+    "kernel/src/entropy.rs",
+    "kernel/src/entropy/conditioner.rs",
+    "services/rand_service/src/engine.rs",
+    "services/rand_service/src/main.rs",
+    "sunlight-libc/src/rand.rs",
+    "sunlight-libc/src/random.rs",
+    "sunlight-libc/include/sys/random.h"
+  ],
+  "source_trust": [
+    "QEMU virtio-rng trusts host entropy/device; otherwise RDSEED then RDRAND trust CPU/hypervisor implementation",
+    "No timestamps/PIDs are credited; incomplete approved-source collection leaves readiness false"
+  ],
+  "initialization": "40-byte boot seed; kernel conditioner published before release-store ready; service refuses registration without readiness and complete nonzero-key seed",
+  "construction": "Kernel ChaCha20 original counter/nonce layout, serialized global state, fails before counter reuse; service ChaCha20 serialized event loop with 32-byte IPC replies",
+  "reseed": "Service reseeds after 8192 x 64-byte blocks (~512 KiB) from kernel conditioned stream. Kernel source has boot-only seeding, no periodic fresh physical-source reseed. Do not call service reseed fresh external entropy.",
+  "isolation": "State stays in kernel/service; clients receive bytes through capabilities, never keys or direct shared state. A shared sequential CSPRNG is not a per-process independent generator.",
+  "failure": "Flags-zero IPC lookup 2s, each chunk 5s; failures wipe destination and return generic EIO. Readiness and service availability are distinct.",
+  "nonblocking": "No ready-or-EAGAIN service request. Timed IPC can wait and is not nonblocking. Rust private bit1 is NONCRYPTO; C rejects it and must not alias it to GRND_NONBLOCK.",
+  "dev_urandom": "No implemented native device contract established",
+  "native_validation": "Existing random fixture checks real service requests, boundaries, repeated calls and exact accounting; new fixture verifies bit1 rejected without destination writes. These do not establish cryptographic security.",
+  "not_run": [
+    "Native nonblocking secure reads",
+    "Forced cold/unready source boot",
+    "Concurrent independent-process source/capability isolation attack",
+    "Service-failure/reseed fault injection in this run"
+  ],
+  "security": "No fallback, no readiness relaxation, no /dev/urandom claim. A new byte API must preserve the reviewed secure-service construction, failure and source assumptions."
+}

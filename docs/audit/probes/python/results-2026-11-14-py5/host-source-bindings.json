@@ -1,0 +1,23 @@
+{
+  "before": {
+    "file": "docs/audit/probes/python/results-2026-11-14-py5/reproduced-source/vfs-before.rs",
+    "sha256": "992e1f450fcbcb25177577940ae5beb7e4dde22d08cc4db4409a296036035ad2",
+    "log": "handle-path-before.log",
+    "command": "cargo test -p sunlight-fs --lib --target x86_64-unknown-linux-gnu handle_paths_preserve_mount_prefix_and_validate_lifetime -- --test-threads=1",
+    "exit": 101,
+    "scope": "incoming production implementation plus new failing regression"
+  },
+  "after": {
+    "file": "sunlight-fs/src/vfs.rs",
+    "sha256": "8806f673fca3ee76bba86d3221fa9787276582eeac52d40f80a883e8387d210e",
+    "log": "host-vfs-after.log",
+    "exit": 0,
+    "tests": 91
+  },
+  "locked_baseline": {
+    "command": "bash tools/build_native_c.sh",
+    "exit": 0,
+    "source": "source-baseline.json",
+    "log": "locked-baseline.log"
+  }
+}

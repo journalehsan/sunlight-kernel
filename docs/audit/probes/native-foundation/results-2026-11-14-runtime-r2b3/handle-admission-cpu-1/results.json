@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "ADMISSION 64 retained joinable controls; kernel reaped=64; 65th create=EAGAIN\nADMISSION released=64; subsequent create/join=PASS; 64 stale identities rejected\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

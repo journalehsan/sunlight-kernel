@@ -1,0 +1,114 @@
+{
+  "verdict": "PY-1 PARTIAL",
+  "gates": {
+    "G1": "PARTIAL sequencing: worktree/build baseline pre-edit; independent upstream archive verification and pristine manifest captured subsequently",
+    "G2": "PARTIAL: native functional API passes; exact race schedules UNQUALIFIED",
+    "G3": "PARTIAL: implemented bootstrap additions pass; mandatory libc gaps remain",
+    "G4": "PASS attempt; core compilation FAIL",
+    "G5": "NOT_RUN: compilation prerequisite fails",
+    "G6": "NOT_RUN: no interpreter executable",
+    "G7": "PASS",
+    "G8": "PASS"
+  },
+  "readiness": {
+    "cross_configure": "PASS",
+    "core_compilation": "FAIL",
+    "static_interpreter_link": "NOT_RUN",
+    "loader_startup": "NOT_RUN",
+    "first_python_statement": "NOT_RUN",
+    "first_python_output": null,
+    "imports_basic_runtime": "NOT_RUN",
+    "threaded_python": "NOT_READY",
+    "production": "NOT_READY"
+  },
+  "compile": {
+    "configured_object_targets": 180,
+    "attempted_translation_units": 179,
+    "successful_translation_units": 138,
+    "failed_translation_units": 41,
+    "not_attempted_targets": [
+      "Modules/getbuildinfo.o"
+    ],
+    "first_serial_error": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/string_parser.c:134:17: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]"
+  },
+  "regressions": [
+    {
+      "cpus": 1,
+      "C": "73/73",
+      "CXX": "21/21",
+      "lifecycle": "17/17",
+      "TLS_once": "4/4",
+      "heap_ABI": "PASS",
+      "retained_admission": "PASS",
+      "condvar": "PASS (bounded functional)",
+      "signal_timeout_stress": {
+        "wakes": 38,
+        "timeouts": 22,
+        "exact_race": "UNQUALIFIED"
+      },
+      "strncpy_strings": "PASS",
+      "immediate_exit": "PASS",
+      "TCP": "NOT_RUN (unsupported)"
+    },
+    {
+      "cpus": 2,
+      "C": "73/73",
+      "CXX": "21/21",
+      "lifecycle": "17/17",
+      "TLS_once": "4/4",
+      "heap_ABI": "PASS",
+      "retained_admission": "PASS",
+      "condvar": "PASS (bounded functional)",
+      "signal_timeout_stress": {
+        "wakes": 38,
+        "timeouts": 22,
+        "exact_race": "UNQUALIFIED"
+      },
+      "strncpy_strings": "PASS",
+      "immediate_exit": "PASS",
+      "TCP": "PASS"
+    },
+    {
+      "cpus": 4,
+      "C": "73/73",
+      "CXX": "21/21",
+      "lifecycle": "17/17",
+      "TLS_once": "4/4",
+      "heap_ABI": "PASS",
+      "retained_admission": "PASS",
+      "condvar": "PASS (bounded functional)",
+      "signal_timeout_stress": {
+        "wakes": 35,
+        "timeouts": 25,
+        "exact_race": "UNQUALIFIED"
+      },
+      "strncpy_strings": "PASS",
+      "immediate_exit": "PASS",
+      "TCP": "PASS"
+    }
+  ],
+  "inherited_limits": [
+    "R2B.4 and R2B.5 retirement/security remain PARTIAL or UNQUALIFIED",
+    "Authenticated IPC continuity not upgraded",
+    "Autonomous detached reclamation not added"
+  ],
+  "production_changes": [
+    "sunlight-libc/include/pthread.h",
+    "sunlight-libc/include/stdlib.h",
+    "sunlight-libc/include/string.h",
+    "sunlight-libc/include/time.h",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/inttypes.rs",
+    "sunlight-libc/src/lib.rs",
+    "sunlight-libc/src/string.rs",
+    "sunlight-libc/src/termination.rs",
+    "sunlight-libc/src/condvar.rs",
+    "sunlight-libc/include/bits/time.h"
+  ],
+  "commit": false,
+  "push": false,
+  "remaining_bootstrap_blockers": "libc-gap-inventory.json",
+  "recommended_next": "PY-2 mandatory libc and static core closure",
+  "evidence_root": "docs/audit/probes/python/results-2026-11-14-py1",
+  "report": "docs/runtime/python-py1-minimal-static-bootstrap.md"
+}

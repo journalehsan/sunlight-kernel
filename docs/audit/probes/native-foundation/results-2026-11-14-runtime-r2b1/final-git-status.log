@@ -1,0 +1,32 @@
+ M Cargo.lock
+ M sunlight-libc/Cargo.toml
+ M sunlight-libc/include/errno.h
+ M sunlight-libc/include/limits.h
+ M sunlight-libc/include/math.h
+ M sunlight-libc/include/pthread.h
+ M sunlight-libc/include/string.h
+ M sunlight-libc/include/sys/mman.h
+ M sunlight-libc/include/time.h
+ M sunlight-libc/include/unistd.h
+ M sunlight-libc/src/lib.rs
+ M sunlight-libc/src/pthread.rs
+ M sunlight-libc/src/string.rs
+ M sunlight-libc/src/tls.rs
+ M tools/native-c/Cargo.lock
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/
+?? docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/
+?? docs/runtime/
+?? sunlight-libc/include/assert.h
+?? sunlight-libc/include/ctype.h
+?? sunlight-libc/include/inttypes.h
+?? sunlight-libc/include/sys/types.h
+?? sunlight-libc/src/ctype.rs
+?? sunlight-libc/src/inttypes.rs
+?? sunlight-libc/src/math.rs
+?? sunlight-libc/vendor/
+?? tools/native-c/tests/pthread-once-recursive.c
+?? tools/native-c/tests/pthread-tsd-exit-race.c
+?? tools/native-c/tests/pthread-tsd-headers.c
+?? tools/native-c/tests/pthread-tsd-once.c
+?? tools/native-c/tests/strerror-threads.c

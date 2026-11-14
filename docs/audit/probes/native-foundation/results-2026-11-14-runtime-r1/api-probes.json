@@ -1,0 +1,1410 @@
+[
+  {
+    "requirement": "assert.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-0.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "inttypes.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-1.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "limits.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-2.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "math.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-3.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "stdarg.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-4.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "wchar.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-5.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/types.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-6.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "errno.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-7.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "stdio.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-8.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "stdlib.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-9.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "string.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-10.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "ctype.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-11.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "unistd.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-12.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "pthread.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-13.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "semaphore.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-14.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sched.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-15.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/time.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-16.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/stat.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-17.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "fcntl.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-18.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "signal.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-19.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/select.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-20.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/mman.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-21.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "dlfcn.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-22.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "locale.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-23.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "langinfo.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-24.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "dirent.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-25.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "poll.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-26.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/socket.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-27.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "netdb.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-28.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/resource.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-29.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/wait.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-30.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "termios.h",
+    "kind": "header",
+    "status": "VERIFIED",
+    "header_available": true,
+    "evidence": "api-probes/header-31.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "pwd.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-32.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "grp.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-33.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "sys/utsname.h",
+    "kind": "header",
+    "status": "MISSING",
+    "header_available": false,
+    "evidence": "api-probes/header-34.log",
+    "basis": "compiler fragment",
+    "runtime_verification": "NOT_RUN",
+    "scope": "source-derived candidate; optional headers need configure selection"
+  },
+  {
+    "requirement": "pthread_create",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_create-compile.log",
+      "api-probes/pthread_create-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_join",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_join-compile.log",
+      "api-probes/pthread_join-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_detach",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_detach-compile.log",
+      "api-probes/pthread_detach-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_self",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_self-compile.log",
+      "api-probes/pthread_self-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_equal",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_equal-compile.log",
+      "api-probes/pthread_equal-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_exit",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_exit-compile.log",
+      "api-probes/pthread_exit-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_mutex_init",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_mutex_init-compile.log",
+      "api-probes/pthread_mutex_init-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_mutex_lock",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_mutex_lock-compile.log",
+      "api-probes/pthread_mutex_lock-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_mutex_unlock",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/pthread_mutex_unlock-compile.log",
+      "api-probes/pthread_mutex_unlock-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_init",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_init-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_destroy",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_destroy-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_wait",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_wait-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_timedwait",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_timedwait-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_signal",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_signal-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_cond_broadcast",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_cond_broadcast-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_condattr_init",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_condattr_init-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_condattr_setclock",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_condattr_setclock-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_key_create",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_key_create-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_key_delete",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_key_delete-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_getspecific",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_getspecific-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_setspecific",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_setspecific-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_once",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_once-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_attr_setstacksize",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_attr_setstacksize-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pthread_getattr_np",
+    "kind": "symbol",
+    "header": "pthread.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pthread_getattr_np-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "malloc",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/malloc-compile.log",
+      "api-probes/malloc-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "calloc",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/calloc-compile.log",
+      "api-probes/calloc-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "realloc",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/realloc-compile.log",
+      "api-probes/realloc-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "free",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/free-compile.log",
+      "api-probes/free-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "getenv",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/getenv-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "setenv",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/setenv-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "unsetenv",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/unsetenv-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "abort",
+    "kind": "symbol",
+    "header": "stdlib.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/abort-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fopen",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fopen-compile.log",
+      "api-probes/fopen-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fclose",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fclose-compile.log",
+      "api-probes/fclose-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fread",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fread-compile.log",
+      "api-probes/fread-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fwrite",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fwrite-compile.log",
+      "api-probes/fwrite-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fseek",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fseek-compile.log",
+      "api-probes/fseek-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fflush",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/fflush-compile.log",
+      "api-probes/fflush-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "setvbuf",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/setvbuf-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "snprintf",
+    "kind": "symbol",
+    "header": "stdio.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/snprintf-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "read",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/read-compile.log",
+      "api-probes/read-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "write",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/write-compile.log",
+      "api-probes/write-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "close",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/close-compile.log",
+      "api-probes/close-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "lseek",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": true,
+    "status": "UNKNOWN",
+    "evidence": [
+      "api-probes/lseek-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "getpid",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/getpid-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "isatty",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/isatty-compile.log",
+      "api-probes/isatty-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "fork",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/fork-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "execv",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/execv-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "pipe",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/pipe-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "dup",
+    "kind": "symbol",
+    "header": "unistd.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/dup-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "clock_gettime",
+    "kind": "symbol",
+    "header": "time.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/clock_gettime-compile.log",
+      "api-probes/clock_gettime-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "nanosleep",
+    "kind": "symbol",
+    "header": "time.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/nanosleep-compile.log",
+      "api-probes/nanosleep-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "sigaction",
+    "kind": "symbol",
+    "header": "signal.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/sigaction-compile.log",
+      "api-probes/sigaction-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "sigprocmask",
+    "kind": "symbol",
+    "header": "signal.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/sigprocmask-compile.log",
+      "api-probes/sigprocmask-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "kill",
+    "kind": "symbol",
+    "header": "signal.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/kill-compile.log",
+      "api-probes/kill-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "mbstowcs",
+    "kind": "symbol",
+    "header": "wchar.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/mbstowcs-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "wcstombs",
+    "kind": "symbol",
+    "header": "wchar.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/wcstombs-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "mbrtowc",
+    "kind": "symbol",
+    "header": "wchar.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/mbrtowc-compile.log",
+      "api-probes/mbrtowc-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "wcrtomb",
+    "kind": "symbol",
+    "header": "wchar.h",
+    "header_available": false,
+    "link_available": "UNKNOWN",
+    "archive_export": false,
+    "status": "MISSING",
+    "evidence": [
+      "api-probes/wcrtomb-compile.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "mmap",
+    "kind": "symbol",
+    "header": "sys/mman.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/mmap-compile.log",
+      "api-probes/mmap-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "munmap",
+    "kind": "symbol",
+    "header": "sys/mman.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/munmap-compile.log",
+      "api-probes/munmap-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "getrandom",
+    "kind": "symbol",
+    "header": "sys/random.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/getrandom-compile.log",
+      "api-probes/getrandom-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "dlopen",
+    "kind": "symbol",
+    "header": "dlfcn.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/dlopen-compile.log",
+      "api-probes/dlopen-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  },
+  {
+    "requirement": "dlsym",
+    "kind": "symbol",
+    "header": "dlfcn.h",
+    "header_available": true,
+    "link_available": true,
+    "archive_export": true,
+    "status": "PARTIAL",
+    "evidence": [
+      "api-probes/dlsym-compile.log",
+      "api-probes/dlsym-link.log"
+    ],
+    "basis": "compiler/static linker fragment and native archive symbol table",
+    "runtime_verification": "NOT_RUN",
+    "semantic_confidence": "unverified by this probe",
+    "scope": "CPython source candidate; selection conditional"
+  }
+]

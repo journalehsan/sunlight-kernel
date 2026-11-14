@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "baseline_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "baseline_branch": "main",
+  "baseline_regular_files": 86319,
+  "changed_incoming_files": [
+    "kernel/src/arch/x86_64/syscall.rs",
+    "sunlight-fat/src/fat/write.rs",
+    "sunlight-fs/src/vfs.rs",
+    "sunlight-fs/src/vfs/storage_tests.rs",
+    "tools/native-c/guest.py"
+  ],
+  "missing_incoming_files": [],
+  "unexpected_changed_files": [],
+  "incoming_snapshots_match": true,
+  "patch_roundtrip": true,
+  "final_source_matches": true,
+  "all_completed_final_executions_match": true,
+  "scope": "Tracked and unignored incoming regular files; prior evidence included. Directory/symlink metadata and ignored build artifacts excluded. Early development attempts are retained but are not final-source qualification."
+}

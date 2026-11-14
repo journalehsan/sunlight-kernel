@@ -1,0 +1,45 @@
+{
+  "configurations": [
+    {
+      "cpus": 1,
+      "status": "PARTIAL",
+      "build_identity": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "initial_exit": "BLOCKED",
+      "initial_exit_observation": "PASS",
+      "detached_accounting": "PASS",
+      "controlled_TLS": "PASS",
+      "focused_TLS_once": "PASS",
+      "precise_once_futex": "UNQUALIFIED",
+      "regressions": "NOT_RUN"
+    },
+    {
+      "cpus": 2,
+      "status": "PARTIAL",
+      "build_identity": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "initial_exit": "BLOCKED",
+      "initial_exit_observation": "PASS",
+      "detached_accounting": "PASS",
+      "controlled_TLS": "PASS",
+      "focused_TLS_once": "PASS",
+      "precise_once_futex": "UNQUALIFIED",
+      "regressions": "PASS"
+    },
+    {
+      "cpus": 4,
+      "status": "PARTIAL",
+      "build_identity": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "initial_exit": "BLOCKED",
+      "initial_exit_observation": "PASS",
+      "detached_accounting": "PASS",
+      "controlled_TLS": "PASS",
+      "focused_TLS_once": "PASS",
+      "precise_once_futex": "UNQUALIFIED",
+      "regressions": "NOT_RUN"
+    },
+    {
+      "cpus": 12,
+      "status": "NOT_RUN",
+      "reason": "unchanged tools/native-c/guest.py argparse choices=(1,2,4); no unsupported launch or runner modification"
+    }
+  ]
+}

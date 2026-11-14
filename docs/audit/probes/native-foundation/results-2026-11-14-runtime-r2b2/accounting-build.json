@@ -1,0 +1,44 @@
+{
+  "attempts": [
+    {
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.elf",
+        "-Wl,--defsym=__r2b2_queue=0"
+      ],
+      "exit": 0,
+      "bound_address": 0,
+      "actual_address": 4230176
+    },
+    {
+      "command": [
+        "python3",
+        "tools/native-c/cc.py",
+        "-O2",
+        "-std=c11",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c",
+        "-o",
+        "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.elf",
+        "-Wl,--defsym=__r2b2_queue=4230176"
+      ],
+      "exit": 0,
+      "bound_address": 4230176,
+      "actual_address": 4230176
+    }
+  ],
+  "binding_verified": true,
+  "elf_sha256": "2180ab66fa43855cc48778ee251c46f416a54e2f588f61e37606b4665a3d8e74",
+  "private_layout_source": "sunlight-libc/src/pthread.rs Control repr(C), size 72",
+  "production_source_changed": false
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "name": "lifecycle",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+      "-o",
+      "target/r2b4-lifecycle-validated.elf"
+    ],
+    "exit": 0,
+    "tested_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+    "fresh_sha256": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+    "identical": true,
+    "runtime_archive_sha256": "c7e2116aae244faf586fb541cc41e254b4f7b9ab9a295ce201485f09bf0b53de"
+  },
+  {
+    "name": "exit-matrix",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+      "-o",
+      "target/r2b4-exit-matrix-validated.elf"
+    ],
+    "exit": 0,
+    "tested_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+    "fresh_sha256": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+    "identical": true,
+    "runtime_archive_sha256": "c7e2116aae244faf586fb541cc41e254b4f7b9ab9a295ce201485f09bf0b53de"
+  }
+]

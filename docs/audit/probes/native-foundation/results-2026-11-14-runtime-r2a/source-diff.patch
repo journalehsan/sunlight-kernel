@@ -1,0 +1,252 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index c0cceca47..a5c4f251d 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -1317,6 +1317,10 @@ dependencies = [
+  "windows-link",
+ ]
+ 
++[[package]]
++name = "libm"
++version = "0.2.16"
++
+ [[package]]
+ name = "libm"
+ version = "0.2.16"
+@@ -1520,7 +1524,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "e661dda6640fad38e827a6d4a310ff4763082116fe217f279885c97f511bb0b7"
+ dependencies = [
+  "lazy_static",
+- "libm",
++ "libm 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+  "num-integer",
+  "num-iter",
+  "num-traits",
+@@ -1556,7 +1560,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
+ dependencies = [
+  "autocfg",
+- "libm",
++ "libm 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ ]
+ 
+ [[package]]
+@@ -3069,6 +3073,7 @@ dependencies = [
+ name = "sunlight-libc"
+ version = "0.2.7279-alpha.2"
+ dependencies = [
++ "libm 0.2.16",
+  "sunlight-ipc",
+ ]
+ 
+@@ -3077,7 +3082,7 @@ name = "sunlight-light-lens"
+ version = "0.2.7279-alpha.2"
+ dependencies = [
+  "fontdue",
+- "libm",
++ "libm 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+  "sun-font",
+  "sun-img",
+  "sunlight-dialogs",
+@@ -3582,7 +3587,7 @@ dependencies = [
+ name = "sunshell"
+ version = "0.2.7279-alpha.2"
+ dependencies = [
+- "libm",
++ "libm 0.2.16 (registry+https://github.com/rust-lang/crates.io-index)",
+  "sunlight-ipc",
+  "sunlight-libc",
+  "sunlight-locale",
+diff --git a/sunlight-libc/Cargo.toml b/sunlight-libc/Cargo.toml
+index ab3d6428e..5bd157622 100644
+--- a/sunlight-libc/Cargo.toml
++++ b/sunlight-libc/Cargo.toml
+@@ -656,6 +656,7 @@ version = "0.2.7279-alpha.2"
+ edition = "2021"
+ 
+ [dependencies]
++libm = { path = "vendor/libm", default-features = false, optional = true }
+ sunlight-ipc = { path = "../ipc" }
+ 
+ [features]
+@@ -679,6 +680,6 @@ dynamic-heap-128m = ["dynamic-heap"]
+ # Link the native Rust std platform ABI and startup entry point.
+ native-std = ["dynamic-heap"]
+ # C main-return/exit callbacks; keep Rust's raw std exit contract unchanged.
+-native-c = ["native-std"]
++native-c = ["native-std", "dep:libm"]
+ 
+ [lib]
+diff --git a/sunlight-libc/include/errno.h b/sunlight-libc/include/errno.h
+index 3ed865f2b..c8c88a947 100644
+--- a/sunlight-libc/include/errno.h
++++ b/sunlight-libc/include/errno.h
+@@ -14,11 +14,14 @@ int *__errno_location(void);
+ #define ENOMEM 12
+ #define EACCES 13
+ #define EFAULT 14
++#define EBUSY 16
+ #define EEXIST 17
+ #define EISDIR 21
+ #define ENOTDIR 20
+ #define EILSEQ 84
+ #define EINVAL 22
++#define EDOM 33
++#define ERANGE 34
+ #define ENOSPC 28
+ #define EPIPE 32
+ #define ENOSYS 38
+diff --git a/sunlight-libc/include/limits.h b/sunlight-libc/include/limits.h
+index 9db076b32..fc016662b 100644
+--- a/sunlight-libc/include/limits.h
++++ b/sunlight-libc/include/limits.h
+@@ -4,4 +4,6 @@
+ /* Maximum over all installed native encodings, not the current locale. */
+ #undef MB_LEN_MAX
+ #define MB_LEN_MAX 4
++/* Native ssize_t is signed long in every supported feature profile. */
++#define SSIZE_MAX LONG_MAX
+ #endif
+diff --git a/sunlight-libc/include/math.h b/sunlight-libc/include/math.h
+index afcbcafdd..6f49f8d0b 100644
+--- a/sunlight-libc/include/math.h
++++ b/sunlight-libc/include/math.h
+@@ -2,7 +2,16 @@
+ #define SUNLIGHT_MATH_H
+ 
+ /* Native x86-64/SSE2 subset (FLT_EVAL_METHOD == 0).
+- * No errno/fenv or full C libm contract is advertised. */
++ * Targeted additions use pinned Rust libm. Domain/pole/overflow set errno;
++ * underflow errno and a public fenv API are not supported. No full-libm claim.
++ * long double is x87 extended (64-bit mantissa, 16-byte storage): its variants
++ * are unsupported, never silently narrowed to double. */
++/* A global math_errhandling contract is not advertised for the older subset. */
++#define signbit(x) __builtin_signbit(x)
++#define isnan(x) __builtin_isnan(x)
++#define isinf(x) __builtin_isinf(x)
++#define isfinite(x) __builtin_isfinite(x)
++#define isnormal(x) __builtin_isnormal(x)
+ typedef float float_t;
+ typedef double double_t;
+ 
+@@ -15,6 +24,25 @@ typedef double double_t;
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
++double atanh(double x);
++float atanhf(float x);
++double frexp(double x, int *exponent);
++float frexpf(float x, int *exponent);
++double modf(double x, double *integral);
++float modff(float x, float *integral);
++double lgamma(double x);
++float lgammaf(float x);
++/* POSIX signgam is shared storage; concurrent lgamma calls require external
++ * synchronization. GNU reentrant variants do not change signgam. */
++extern int signgam;
++#if defined(_GNU_SOURCE)
++double lgamma_r(double x, int *sign);
++float lgammaf_r(float x, int *sign);
++#endif
++/* Existing compiler-builtins exports, now declared for CPython longobject.
++ * These older functions have no errno guarantee. */
++double ldexp(double x, int exponent);
++double log(double x);
+ double sqrt(double x);
+ float sqrtf(float x);
+ double fabs(double x);
+diff --git a/sunlight-libc/include/sys/mman.h b/sunlight-libc/include/sys/mman.h
+index a49d25cb0..98e26c5c3 100644
+--- a/sunlight-libc/include/sys/mman.h
++++ b/sunlight-libc/include/sys/mman.h
+@@ -1,10 +1,7 @@
+ #ifndef SUNLIGHT_SYS_MMAN_H
+ #define SUNLIGHT_SYS_MMAN_H
+ #include <stddef.h>
+-#ifndef SUNLIGHT_OFF_T_DEFINED
+-#define SUNLIGHT_OFF_T_DEFINED
+-typedef long off_t;
+-#endif
++#include <sys/types.h>
+ #define PROT_NONE 0
+ #define PROT_READ 1
+ #define PROT_WRITE 2
+diff --git a/sunlight-libc/include/time.h b/sunlight-libc/include/time.h
+index b0f359b99..1d6ace5d6 100644
+--- a/sunlight-libc/include/time.h
++++ b/sunlight-libc/include/time.h
+@@ -2,8 +2,7 @@
+ #define SUNLIGHT_TIME_H
+ /* Narrow native x86-64 LP64 slice, available with base, POSIX or GNU feature
+  * macros. No POSIX version/option or CPU-time-clock support is advertised. */
+-typedef long time_t;
+-typedef long clock_t;
++#include <sys/types.h>
+ typedef int clockid_t;
+ struct timespec {
+     time_t tv_sec;
+diff --git a/sunlight-libc/include/unistd.h b/sunlight-libc/include/unistd.h
+index c17aeb7b0..cf76e462f 100644
+--- a/sunlight-libc/include/unistd.h
++++ b/sunlight-libc/include/unistd.h
+@@ -7,10 +7,7 @@ extern "C" {
+ /* Native x86-64 LP64 ABI: int fd, unsigned long size_t, signed long ssize_t.
+  * Deliberately a first slice: no _POSIX_VERSION or feature-option claims.
+  * These base declarations do not depend on _GNU_SOURCE/_POSIX_C_SOURCE. */
+-#ifndef SUNLIGHT_SSIZE_T_DEFINED
+-#define SUNLIGHT_SSIZE_T_DEFINED
+-typedef long ssize_t;
+-#endif
++#include <sys/types.h>
+ #define STDIN_FILENO 0
+ #define STDOUT_FILENO 1
+ #define STDERR_FILENO 2
+diff --git a/sunlight-libc/src/lib.rs b/sunlight-libc/src/lib.rs
+index 770f08180..ed1021e9a 100644
+--- a/sunlight-libc/src/lib.rs
++++ b/sunlight-libc/src/lib.rs
+@@ -957,3 +957,11 @@ pub fn exit(code: u64) -> ! {
+ 
+ #[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
+ pub mod wchar;
++
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++pub mod math;
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++pub mod inttypes;
++
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++pub mod ctype;
+diff --git a/tools/native-c/Cargo.lock b/tools/native-c/Cargo.lock
+index dfbab1a97..561f79035 100644
+--- a/tools/native-c/Cargo.lock
++++ b/tools/native-c/Cargo.lock
+@@ -2,20 +2,25 @@
+ # It is not intended for manual editing.
+ version = 4
+ 
++[[package]]
++name = "libm"
++version = "0.2.16"
++
+ [[package]]
+ name = "sunlight-ipc"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ 
+ [[package]]
+ name = "sunlight-libc"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ dependencies = [
++ "libm",
+  "sunlight-ipc",
+ ]
+ 
+ [[package]]
+ name = "sunlight-native-c"
+-version = "0.2.7254-alpha.2"
++version = "0.2.7279-alpha.2"
+ dependencies = [
+  "sunlight-libc",
+ ]

@@ -14,6 +14,24 @@
 
 use crate::mman::{mmap, MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE};
 use crate::sys::{syscall1, SYS_SET_FS_BASE};
+use core::sync::atomic::AtomicU32;
+
+#[derive(Clone, Copy)]
+pub(crate) struct Specific {
+    pub(crate) key: usize,
+    pub(crate) value: *mut u8,
+}
+impl Specific {
+    pub(crate) const EMPTY: Self = Self {
+        key: 0,
+        value: core::ptr::null_mut(),
+    };
+}
+
+pub(crate) struct OnceFrame {
+    pub(crate) control: *const AtomicU32,
+    pub(crate) previous: *mut OnceFrame,
+}
 
 /// Thread Control Block layout required by the SysV AMD64 ABI.
 /// `fs:0` must be a self-pointer; `fs:8` is our per-thread errno.
@@ -28,6 +46,8 @@ pub struct Tcb {
     // ABI shared with tools/native-std/overlay/thread_local/key/sunlightos.rs.
     // Reserve the whole table after FS_BASE, including for static C TLS images.
     std_keys: [*mut u8; 256],
+    pub(crate) pthread_values: [Specific; 128],
+    pub(crate) once_active: *mut OnceFrame,
 }
 
 pub const TCB_SIZE: usize = core::mem::size_of::<Tcb>();
@@ -138,6 +158,8 @@ unsafe fn prepare_image(area: *mut u8, size: usize, image: TlsImage) -> Option<*
         pthread: core::ptr::null_mut(),
         _key_padding: 0,
         std_keys: [core::ptr::null_mut(); 256],
+        pthread_values: [Specific::EMPTY; 128],
+        once_active: core::ptr::null_mut(),
     });
     Some(tcb)
 }
@@ -264,8 +286,8 @@ mod tests {
         // std's key backend uses all 256 pointer slots at FS_BASE + 32.
         // Poison the storage so initialization cannot rely on mmap zeroing.
         #[repr(align(4096))]
-        struct Page([u8; 4096]);
-        let mut page = Page([0xa5; 4096]);
+        struct Page([u8; 8192]);
+        let mut page = Page([0xa5; 8192]);
         let base = page.0.as_mut_ptr();
         let tcb = unsafe { prepare_area(base, page.0.len()).unwrap() };
         let table_end = tcb as usize + 32 + 256 * core::mem::size_of::<*mut u8>();

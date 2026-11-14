@@ -1,0 +1,10 @@
+{
+  "command": [
+    "make",
+    "-k",
+    "-j4",
+    "python"
+  ],
+  "cwd": "/tmp/sunlight-py2-cpython/cross-static",
+  "exit": 2
+}

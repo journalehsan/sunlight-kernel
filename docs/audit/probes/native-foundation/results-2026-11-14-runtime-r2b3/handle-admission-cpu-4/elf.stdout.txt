@@ -1,0 +1,2 @@
+ADMISSION 64 retained joinable controls; kernel reaped=64; 65th create=EAGAIN
+ADMISSION released=64; subsequent create/join=PASS; 64 stale identities rejected

@@ -1,0 +1,1 @@
+R2A math PASS vectors=17342 errno/signgam/SSE-domain-pole PASS

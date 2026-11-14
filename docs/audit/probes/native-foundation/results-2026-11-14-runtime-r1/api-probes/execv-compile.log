@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/execv.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/execv.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/execv.c:2:44: error: use of undeclared identifier 'execv'
+    2 | void * volatile required_symbol = (void *)&execv;
+      |                                            ^~~~~
+1 error generated.
+
+exit=1

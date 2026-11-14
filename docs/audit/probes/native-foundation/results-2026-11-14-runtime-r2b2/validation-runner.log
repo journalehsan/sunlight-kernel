@@ -1,0 +1,46 @@
+initial-exit-build
+initial-exit-build 0
+initial-exit-cpu-1
+initial-exit-cpu-1 0
+initial-exit-cpu-2
+initial-exit-cpu-2 0
+initial-exit-cpu-4
+initial-exit-cpu-4 0
+detached-churn-build
+detached-churn-build 0
+detached-churn-cpu-1
+detached-churn-cpu-1 1
+detached-churn-cpu-2
+detached-churn-cpu-2 1
+detached-churn-cpu-4
+detached-churn-cpu-4 1
+focused-build
+focused-build 0
+focused-cpu-1
+focused-cpu-1 0
+focused-cpu-2
+focused-cpu-2 0
+focused-cpu-4
+focused-cpu-4 0
+tls-exit-race-build
+tls-exit-race-build 0
+tls-exit-race-cpu-1
+tls-exit-race-cpu-1 0
+tls-exit-race-cpu-2
+tls-exit-race-cpu-2 0
+tls-exit-race-cpu-4
+tls-exit-race-cpu-4 0
+regression-suite
+regression-suite 0
+cxx-abi
+cxx-abi 0
+heap-abi-build
+heap-abi-build 0
+heap-abi
+heap-abi 0
+tcp-loopback
+tcp-loopback 0
+pthread-abi
+pthread-abi 0
+locked-final
+locked-final 0

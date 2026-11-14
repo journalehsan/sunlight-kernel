@@ -1,0 +1,8 @@
+{
+  "command": [
+    "/tmp/sunlight-r1-cpython/build-host/python",
+    "-VV"
+  ],
+  "cwd": "/home/ehsantor/Projects/sunlightos-kernel",
+  "exit": 0
+}

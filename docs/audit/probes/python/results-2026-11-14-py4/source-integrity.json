@@ -1,0 +1,32 @@
+{
+  "status": "PASS",
+  "incoming_regular_files": 79730,
+  "changed": [
+    "sunlight-libc/src/c_file.rs",
+    "ipc/src/lib.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "sunlight-libc/include/langinfo.h",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/langinfo.rs",
+    "sunlight-libc/src/sys.rs"
+  ],
+  "allowed": [
+    "ipc/src/lib.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "sunlight-libc/include/langinfo.h",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/c_file.rs",
+    "sunlight-libc/src/langinfo.rs",
+    "sunlight-libc/src/sys.rs"
+  ],
+  "unexpected_changes": [],
+  "missing": [],
+  "CPython_source_changes": [],
+  "validated_source_matches": true,
+  "patch_applies": true,
+  "patch_reverses": true,
+  "coverage": "Git tracked/unignored regular files; directory/symlink metadata and ignored build artifacts excluded",
+  "prior_evidence": "Every prior evidence regular file is covered by the incoming map; no old report/evidence exceptions",
+  "pinned_archive_verified": true,
+  "upstream_integration_only": true
+}

@@ -1,0 +1,8 @@
+[
+  {
+    "path": "sunlight-fs/src/vfs.rs",
+    "before_sha256": "9516e88b874003fa5890c8c764e9103a409c4ab87782bac6874491920538f486",
+    "after_sha256": "8806f673fca3ee76bba86d3221fa9787276582eeac52d40f80a883e8387d210e",
+    "change": "Preserve non-root mount prefix in handle_path; clarify backend-dependent pathname lifetime; add reproduced regression test"
+  }
+]

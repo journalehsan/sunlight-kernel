@@ -1,0 +1,39 @@
+{
+  "status": "PARTIAL",
+  "design": "fat-design.json",
+  "implementation": "Explicit revocation, not retained backing after unlink",
+  "identity": {
+    "mount": "Existing mount incarnation tag",
+    "handle": "Existing local generation; exhausted slots retire",
+    "backend": "Short directory-entry (LBA, offset) under exclusive adapter borrow; not a public inode or lifetime identifier",
+    "authentication": "Every data read/write/truncate/fstat rechecks the entry location then obtains fresh cluster and size; pathname is a locator, not sufficient authority"
+  },
+  "ownership": {
+    "fd": "FdTable stores packed VFS handle plus shared description index",
+    "description": "OpenDescription refs share offset/status; last take marks release_backend",
+    "vfs": "Mount open_handles and backend slots remain owned for revoked handles until close",
+    "backend": "Raw FAT directory entries and cluster chains; no open-object refcount",
+    "unlink": "Revoke all matching entry aliases before first disk mutation, then immediate raw deletion",
+    "rename": "Revoke destination; successful source handles rebind by authenticated source location, independent of input alias spelling",
+    "directory_rename": "Conservatively revoke every other FAT handle; full descendant retention not implemented",
+    "truncate": "Fresh lookup on every operation prevents another descriptor using freed old cluster or stale size",
+    "close": "Generation-only check accepts revoked/poisoned slots exactly once; close does not free the raw chain",
+    "mount": "Existing Busy admission until all handles close; poisoned sync_dir fails, keeping mount/cache installed",
+    "failure": "Any mutating backend error poisons mounted adapter. Close remains possible; no recovery or exactly-once backing-reclamation claim"
+  },
+  "source": [
+    "sunlight-fs/src/vfs.rs:204",
+    "sunlight-fs/src/vfs.rs:257",
+    "sunlight-fs/src/vfs.rs:275",
+    "sunlight-fs/src/vfs.rs:458",
+    "sunlight-fs/src/vfs.rs:572",
+    "sunlight-fat/src/fat/write.rs:390",
+    "kernel/src/process/fd_table.rs:289"
+  ],
+  "limits": [
+    "No POSIX open-unlink access",
+    "No deferred final-close storage reclamation",
+    "Failure recovery and raw FAT transactional ownership remain incomplete",
+    "Exclusive volume ownership required; external/raw parallel mutation not supported"
+  ]
+}

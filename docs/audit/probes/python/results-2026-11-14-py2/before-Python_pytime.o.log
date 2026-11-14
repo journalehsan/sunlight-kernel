@@ -1,0 +1,93 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:2:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:289:22: error: call to undeclared function 'round'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  289 |     double rounded = round(x);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:309:13: error: call to undeclared function 'ceil'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  309 |         d = ceil(d);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:312:13: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  312 |         d = floor(d);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:316:26: error: call to undeclared function 'ceil'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  316 |         d = (d >= 0.0) ? ceil(d) : floor(d);
+      |                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:316:36: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  316 |         d = (d >= 0.0) ? ceil(d) : floor(d);
+      |                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:534:28: error: incomplete definition of type 'struct timeval'
+  534 |     static_assert(sizeof(tv->tv_sec) <= sizeof(PyTime_t),
+      |                          ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:62:8: note: forward declaration of 'struct timeval'
+   62 | struct timeval;
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:536:30: error: incomplete definition of type 'struct timeval'
+  536 |     PyTime_t t = (PyTime_t)tv->tv_sec;
+      |                            ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:62:8: note: forward declaration of 'struct timeval'
+   62 | struct timeval;
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:540:33: error: incomplete definition of type 'struct timeval'
+  540 |     PyTime_t usec = (PyTime_t)tv->tv_usec * US_TO_NS;
+      |                               ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:62:8: note: forward declaration of 'struct timeval'
+   62 | struct timeval;
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:815:40: error: incomplete definition of type 'struct timeval'
+  815 |     res2 = _PyTime_AsTime_t(tv_sec, &tv->tv_sec);
+      |                                      ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:62:8: note: forward declaration of 'struct timeval'
+   62 | struct timeval;
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:820:7: error: incomplete definition of type 'struct timeval'
+  820 |     tv->tv_usec = tv_usec;
+      |     ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:62:8: note: forward declaration of 'struct timeval'
+   62 | struct timeval;
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:965:13: error: call to undeclared function 'clock_getres'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  965 |         if (clock_getres(CLOCK_REALTIME, &res) == 0) {
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:965:13: note: did you mean 'clock_gettime'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/time.h:14:5: note: 'clock_gettime' declared here
+   14 | int clock_gettime(clockid_t clock_id, struct timespec *tp);
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1224:13: error: call to undeclared function 'clock_getres'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1224 |         if (clock_getres(clk_id, &res) != 0) {
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1286:36: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+ 1286 | _PyTime_localtime(time_t t, struct tm *tm)
+      |                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1286:1: error: conflicting types for '_PyTime_localtime'
+ 1286 | _PyTime_localtime(time_t t, struct tm *tm)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:17: note: previous declaration is here
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1312:9: error: call to undeclared function 'localtime_r'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1312 |     if (localtime_r(&t, tm) == NULL) {
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1312:29: warning: comparison between pointer and integer ('int' and 'void *') [-Wpointer-integer-compare]
+ 1312 |     if (localtime_r(&t, tm) == NULL) {
+      |         ~~~~~~~~~~~~~~~~~~~ ^  ~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1325:33: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+ 1325 | _PyTime_gmtime(time_t t, struct tm *tm)
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1325:1: error: conflicting types for '_PyTime_gmtime'
+ 1325 | _PyTime_gmtime(time_t t, struct tm *tm)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:17: note: previous declaration is here
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1338:9: error: call to undeclared function 'gmtime_r'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1338 |     if (gmtime_r(&t, tm) == NULL) {
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c:1338:26: warning: comparison between pointer and integer ('int' and 'void *') [-Wpointer-integer-compare]
+ 1338 |     if (gmtime_r(&t, tm) == NULL) {
+      |         ~~~~~~~~~~~~~~~~ ^  ~~~~
+6 warnings and 16 errors generated.

@@ -1,0 +1,1 @@
+regressions PASS integrity PASS compilation {'configured': 180, 'attempted': 180, 'passed': 165, 'failed': 15, 'unattempted': 0, 'object_set_unchanged': True, 'newly_successful': []}

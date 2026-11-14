@@ -1,0 +1,17 @@
+--- pinned-upstream/Cargo.toml
++++ vendored/Cargo.toml
+@@ -15,9 +15,6 @@
+ edition = "2021"
+ rust-version = "1.67"
+ 
+-[dev-dependencies]
+-# FIXME(msrv): switch to `no-panic.workspace` when possible
+-no-panic = "0.1.36"
+ 
+ [features]
+ default = ["arch"]
+@@ -52,3 +49,4 @@
+ 
+ [package.metadata.docs.rs]
+ features = ["unstable-float"]
++

@@ -1,0 +1,40 @@
+{
+  "status": "PARTIAL",
+  "entropy": {
+    "status": "BLOCKED",
+    "existing_secure_path": "C getrandom(flags=0) -> Rust rand::getrandom(flags=0) -> secure readiness syscall 89 -> capability lookup rand -> bounded GET IPC in 32-byte chunks. Malformed/missing/timeout failures wipe the buffer and map generic EIO. No clock/PID fallback.",
+    "required_by": "Python/bootstrap_hash.c:105 calls getrandom with GRND_NONBLOCK for nonblocking startup entropy.",
+    "missing": "Nonblocking secure-service transport/readiness with truthful EAGAIN/error semantics. Existing bounded IPC can wait and does not implement GRND_NONBLOCK.",
+    "private_bit_warning": "Rust GRND_NONCRYPTO bit 1 selects local noncryptographic PRNG. It is never exported/aliased as C GRND_NONBLOCK.",
+    "changes": false,
+    "source": [
+      "sunlight-libc/src/random.rs:10",
+      "sunlight-libc/src/rand.rs:104",
+      "sunlight-libc/include/sys/random.h"
+    ],
+    "native_existing_coverage": "Legacy random readiness/service witnesses, guards, zero-length and invalid flags; results in regression matrix. No cryptographic quality or nonblocking qualification inferred from those functional tests."
+  },
+  "signals": {
+    "status": "BLOCKED",
+    "native_subset": "Initial-thread synchronous SIGUSR1/SIGUSR2 registration, raise and deferred same-signal delivery only. syscall 174 rejects workers/groups and nonzero mask/SA flags. kill and sigprocmask return ENOSYS.",
+    "CPython_requires": [
+      "SIGINT",
+      "fatal signals including SIGABRT/SIGSEGV/SIGFPE",
+      "SA_RESTART/SA_ONSTACK/SA_NODEFER",
+      "broader dispositions and mask/delivery semantics"
+    ],
+    "compile_presence_is_not_delivery": true,
+    "changes": false,
+    "source": [
+      "sunlight-libc/include/signal.h",
+      "sunlight-libc/src/signal.rs",
+      "kernel/src/arch/x86_64/syscall.rs:13752"
+    ],
+    "native_existing_coverage": "Legacy synchronous signal controls only; unsupported asynchronous behavior remains BLOCKED."
+  },
+  "process_identity": {
+    "status": "BLOCKED",
+    "source": "kernel/src/arch/x86_64/syscall.rs:4379",
+    "reason": "Native getpid syscall returns current worker pid; only linux_tgid receives a group override. No misleading C process-identity export added."
+  }
+}

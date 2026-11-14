@@ -1,0 +1,18 @@
+{
+  "archive": "/tmp/sunlight-r1-Python-3.13.0.tar.xz",
+  "sha256": "086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d",
+  "matches_py1": true,
+  "build_python": {
+    "version": "3.13.0 (main, Nov 14 2026, 13:06:50) [GCC 16.2.1 20260810]",
+    "version_info": [
+      3,
+      13,
+      0,
+      "final",
+      0
+    ],
+    "hexversion": 51183856,
+    "executable": "/tmp/sunlight-r1-cpython/build-host/python"
+  },
+  "build_python_sha256": "7c7b34dadd57381bb58fe5a3abaf9001e11d9458951f712cb47fbbcc03ff1130"
+}

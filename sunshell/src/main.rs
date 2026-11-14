@@ -1308,15 +1308,11 @@ mod sunlight {
             } else {
                 self.env.get("HOME").unwrap_or("/")
             };
-            let Some(next) = normalize_path(&self.cwd, target) else {
-                return self.builtin_failure(b"cd: invalid path\n");
+            let Some(next) = resolve_directory(&self.cwd, target) else {
+                return self.builtin_failure(b"cd: directory unavailable or access denied\n");
             };
-
-            if !stat_is_dir(&next) {
-                return self.builtin_failure(b"cd: no such directory\n");
-            }
             if sunlight_libc::chdir(next.as_bytes()).is_err() {
-                return self.builtin_failure(b"cd: no such directory\n");
+                return self.builtin_failure(b"cd: directory unavailable or access denied\n");
             }
 
             self.env.set("OLDPWD", &self.cwd);
@@ -2792,6 +2788,22 @@ mod sunlight {
             Ok(stat) => stat.file_type == FILE_TYPE_DIR,
             Err(_) => false,
         }
+    }
+
+    // Preserve components and whitespace until the authoritative VFS walk.
+    fn resolve_directory(cwd: &str, target: &str) -> Option<alloc::string::String> {
+        if target.is_empty() {
+            return None;
+        }
+        let input = if target.starts_with('/') {
+            alloc::string::String::from(target)
+        } else {
+            alloc::format!("{}/{}", cwd.trim_end_matches('/'), target)
+        };
+        let mut output = [0u8; sunlight_libc::MAX_PATH];
+        let n = sunlight_libc::resolve_directory_path(input.as_bytes(), &mut output).ok()?;
+        let canonical = core::str::from_utf8(&output[..n]).ok()?;
+        Some(alloc::string::String::from(canonical))
     }
 
     fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {

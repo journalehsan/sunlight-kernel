@@ -1,0 +1,53 @@
+{
+  "status": "UNQUALIFIED",
+  "scenarios": {
+    "W6-A": {
+      "status": "UNQUALIFIED",
+      "native_race_executed": false,
+      "authenticated_group": null,
+      "external_actor": null,
+      "overlap": null,
+      "cleanup_winner": null
+    },
+    "W6-B": {
+      "status": "UNQUALIFIED",
+      "native_race_executed": false,
+      "authenticated_group": null,
+      "external_actor": null,
+      "overlap": null,
+      "cleanup_winner": null
+    },
+    "W6-C": {
+      "status": "UNQUALIFIED",
+      "native_race_executed": false,
+      "authenticated_group": null,
+      "external_actor": null,
+      "overlap": null,
+      "cleanup_winner": null
+    },
+    "W6-D": {
+      "status": "NOT_RUN",
+      "native_race_executed": false,
+      "authenticated_group": null,
+      "external_actor": null,
+      "overlap": null,
+      "cleanup_winner": null
+    },
+    "W6-E": {
+      "status": "NOT_RUN",
+      "native_race_executed": false,
+      "authenticated_group": null,
+      "external_actor": null,
+      "overlap": null,
+      "cleanup_winner": null
+    }
+  },
+  "controls": "lifecycle-witnesses.json: natural final exit and forced retained-owner exit pass 1/2/4, independently; neither is a W6 race",
+  "limitation": "begin_native_group_exit and final-thread/forced-kill callers hold SCHEDULER. Existing handoff observer does not coordinate contender entry. No safe resumable precommit coordinator or separately authenticated generation-qualified termination actor was installed. Holding a scheduler guard for peer completion would block participants; simultaneous launch is insufficient.",
+  "source_references": [
+    "kernel/src/sched/native_group.rs:70",
+    "kernel/src/sched/mod.rs:4530",
+    "kernel/src/arch/x86_64/syscall.rs:392",
+    "docs/kernel/kfp-2a6d-concurrent-cleanup-closure.md"
+  ]
+}

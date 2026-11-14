@@ -1,0 +1,17 @@
+[
+  {
+    "name": "py1-condvar",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-condvar.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "py1-strncpy",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-libc.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "py1-immediate-exit",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-exit.elf",
+    "expected_exit": 37
+  }
+]

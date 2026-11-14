@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/snprintf.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/snprintf.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/snprintf.c:2:44: error: use of undeclared identifier 'snprintf'
+    2 | void * volatile required_symbol = (void *)&snprintf;
+      |                                            ^~~~~~~~
+1 error generated.
+
+exit=1

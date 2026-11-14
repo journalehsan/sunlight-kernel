@@ -1,0 +1,3 @@
+0 PASS {'complete_normal_gate': True, 'zero_capacity_atomic': True, 'last_slot': True, 'durable_shared_handoff': True}
+2 PASS {'expected_terminal_failure': True, 'complete_receipt': True, 'exact_retention': True, 'quarantined_owner': True, 'withdrawn_identity': True, 'icr_budget': True, 'no_success_marker': True}
+3 PASS {'expected_terminal_failure': True, 'complete_receipt': True, 'exact_retention': True, 'quarantined_owner': True, 'withdrawn_identity': True, 'icr_budget': True, 'no_success_marker': True}

@@ -1,0 +1,12 @@
+{
+  "version": "3.13.0",
+  "origin": "https://www.python.org/ftp/python/3.13.0/Python-3.13.0.tar.xz",
+  "sha256": "086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d",
+  "md5": "726e5b829fcf352326874c1ae599abaa",
+  "release_page_md5": "726e5b829fcf352326874c1ae599abaa",
+  "integrity": "MD5 matches official release page; SHA256 matches downloaded official Sigstore bundle digest; signature/certificate trust NOT independently verified",
+  "build_python": "/tmp/sunlight-r1-cpython/build-host/python",
+  "host_configure": "../Python-3.13.0/configure --without-ensurepip",
+  "host_build": "make -j8 python",
+  "host_build_exit": 0
+}

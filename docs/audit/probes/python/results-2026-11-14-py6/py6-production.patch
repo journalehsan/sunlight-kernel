@@ -1,0 +1,1123 @@
+--- a/sunlight-libc/src/c_file.rs
++++ b/sunlight-libc/src/c_file.rs
+@@ -118,3 +118,49 @@
+         }
+     }
+ }
++
++/// Native realpath: caller-owned output must have PATH_MAX (256) bytes.
++/// NULL output allocates exactly the result plus NUL through libc malloc.
++/// Canonical output is a raced observation, never an authorization token.
++#[no_mangle]
++pub unsafe extern "C" fn realpath(path: *const u8, output: *mut u8) -> *mut u8 {
++    if path.is_null() {
++        errno::set_errno(errno::EINVAL);
++        return core::ptr::null_mut();
++    }
++    let mut len = 0;
++    while len < crate::MAX_PATH && *path.add(len) != 0 {
++        len += 1;
++    }
++    if len == crate::MAX_PATH {
++        errno::set_errno(36); // ENAMETOOLONG
++        return core::ptr::null_mut();
++    }
++    if len == 0 {
++        errno::set_errno(errno::ENOENT);
++        return core::ptr::null_mut();
++    }
++    let mut canonical = [0u8; crate::MAX_PATH];
++    let n = match crate::resolve_path(core::slice::from_raw_parts(path, len), &mut canonical) {
++        Ok(n) => n,
++        Err(sys::Errno::TooBig) => {
++            errno::set_errno(36);
++            return core::ptr::null_mut();
++        }
++        Err(e) => {
++            errno::set_from_errno(e);
++            return core::ptr::null_mut();
++        }
++    };
++    let destination = if output.is_null() {
++        crate::alloc::malloc(n + 1)
++    } else {
++        output
++    };
++    if destination.is_null() {
++        return destination;
++    }
++    core::ptr::copy_nonoverlapping(canonical.as_ptr(), destination, n + 1);
++    destination
++}
++
+--- a/ipc/src/lib.rs
++++ b/ipc/src/lib.rs
+@@ -195,6 +195,8 @@
+     /// Read-only caller identity: rdi 0=retained native pid, 1=ppid, 2=task tid.
+     /// No target PID input; native error sentinels, including EINVAL selector.
+     NativeProcessIdentity = 178,
++    /// Canonical path: rdi input, rsi output, rdx capacity incl NUL; r10 bit0 requires searchable directory.
++    ResolvePath = 179,
+     /// Braind-only: capture the authenticated caller of its current IPC request.
+     WiseOwlDelegateCaller = 142,
+     /// Sessiond-only: consume a fixed Wise Owl session-attestation delegation.
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -28,6 +28,8 @@
+     NativeTerminal = 176,
+     /// Read-only calling native group/task identity; rdi selects pid/ppid/tid.
+     NativeProcessIdentity = 178,
++    /// Canonical path: rdi input, rsi output, rdx capacity incl NUL; r10 bit0 requires searchable directory.
++    ResolvePath = 179,
+     NativeExitGroup = 157,
+     NativeStdThreadSpawn = 158,
+     NativePoll = 159,
+@@ -1035,6 +1037,7 @@
+         176 => sys_native_terminal(frame),
+         177 => sys_native_epoll_bridge(frame),
+         178 => sys_native_process_identity(frame.rdi),
++        179 => sys_resolve_path(frame),
+         160 => sys_foreground(frame),
+         23 => sys_tty_stdin_push(frame),
+         24 => sys_tty_stdout_pull(frame),
+@@ -5703,6 +5706,97 @@
+     }
+ }
+ 
++/// Snapshot authority before taking VFS; no scheduler/IPC lock inside lookup.
++fn resolve_native_existing(
++    path: &str,
++    search_final: bool,
++) -> Result<sunlight_fs::vfs::ResolvedPath, u64> {
++    if path.is_empty() {
++        return Err(ERR_NOENT);
++    }
++    let (uid, gid, _) = current_fs_actor();
++    let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
++    let host_key_admin = has_host_key_admin();
++    let trusted_kv = crate::sched::with_scheduler(|s| s.current_process().trusted_kv_service);
++    let mut guard = crate::KERNEL_VFS.lock();
++    let vfs = guard.as_mut().ok_or(ERR_EIO)?;
++    let resolved = vfs
++        .resolve_existing_authorized(
++            &cwd,
++            path,
++            &sunlight_fs::Credential { uid, gid },
++            &mut |name| {
++                if (private_secret_child(name) && !host_key_admin)
++                    || (name == "/var/lib/sunlight-kv/broker.store" && !trusted_kv)
++                {
++                    Err(sunlight_fs::FsError::PermissionDenied)
++                } else {
++                    Ok(())
++                }
++            },
++        )
++        .map_err(|error| {
++            // The syscall has already bounded and decoded its C string; the
++            // remaining InvalidPath is an overlong cwd-plus-component result.
++            if error == sunlight_fs::FsError::InvalidPath {
++                ERR_ERANGE
++            } else {
++                fs_error_raw(error)
++            }
++        })?;
++    if search_final {
++        if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
++            return Err(ERR_ENOTDIR);
++        }
++        if !sunlight_fs::check_permission(
++            &resolved.metadata.native,
++            &sunlight_fs::Credential { uid, gid },
++            sunlight_fs::PermCheck::Execute,
++        ) {
++            return Err(ERR_EACCES);
++        }
++    }
++    Ok(resolved)
++}
++
++/// Read-only canonical observation. Capacity includes the terminating NUL;
++/// short output buffers are untouched, and success returns payload length.
++fn sys_resolve_path(frame: &mut SyscallFrame) -> u64 {
++    if frame.rsi == 0 || frame.rdx == 0 || frame.r10 & !1 != 0 {
++        return ERR_EINVAL;
++    }
++    let bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
++        Ok(bytes) => bytes,
++        Err(crate::memory::user::UserMemoryError::StringTooLong) => return ERR_ERANGE,
++        Err(error) => return user_memory_failure(error),
++    };
++    let path = match core::str::from_utf8(&bytes) {
++        Ok(path) => path,
++        Err(_) => return ERR_EINVAL,
++    };
++    if path.is_empty() {
++        return ERR_NOENT;
++    }
++    let resolved = match resolve_native_existing(path, frame.r10 & 1 != 0) {
++        Ok(value) => value,
++        Err(error) => return error,
++    };
++    let len = resolved.path.len();
++    if frame.rdx <= len as u64 {
++        return ERR_ERANGE;
++    }
++    // Allocation was reserved by VFS; append NUL after dropping the VFS lock.
++    let mut output = resolved.path.into_bytes();
++    if output.try_reserve_exact(1).is_err() {
++        return ERR_ENOMEM;
++    }
++    output.push(0);
++    match copy_to_user(frame.rsi, &output) {
++        Ok(()) => len as u64,
++        Err(error) => error,
++    }
++}
++
+ fn sys_chdir(frame: &mut SyscallFrame) -> u64 {
+     let path_bytes = match read_user_cstr(frame.rdi, USER_PATH_MAX) {
+         Ok(bytes) => bytes,
+@@ -5713,39 +5807,14 @@
+         Err(_) => return u64::MAX,
+     };
+ 
+-    // Resolve against current CWD if relative.
+-    let resolved_buf;
+-    let abs_path: &str = if path.starts_with('/') {
+-        path
+-    } else {
+-        let cwd = crate::sched::with_scheduler(|s| s.current_shared_process().cwd.clone());
+-        resolved_buf = if cwd == "/" {
+-            alloc::format!("/{}", path)
+-        } else {
+-            alloc::format!("{}/{}", cwd, path)
+-        };
+-        resolved_buf.as_str()
+-    };
+-
+-    // Verify the path resolves to a directory. Directories are not regular
+-    // file handles, so VFS::open intentionally rejects them.
+-    {
+-        let mut guard = crate::KERNEL_VFS.lock();
+-        let Some(vfs) = guard.as_mut() else {
+-            return u64::MAX;
+-        };
+-        match vfs.stat(abs_path) {
+-            Ok(stat) if stat.file_type == sunlight_fs::vfs::FileType::Directory => {}
+-            Ok(_) => {
+-                crate::serial_println!("[HELIOS] chdir({}) -> not a directory", abs_path);
+-                return ERR_ENOTDIR;
+-            }
+-            Err(_) => {
+-                crate::serial_println!("[HELIOS] chdir({}) -> not found", abs_path);
+-                return ERR_NOENT;
+-            }
+-        }
+-    }
++    let resolved = match resolve_native_existing(path, true) {
++        Ok(value) => value,
++        Err(error) => return error,
++    };
++    if resolved.metadata.native.file_type != sunlight_fs::FileType::Directory {
++        return ERR_ENOTDIR;
++    }
++    let abs_path = resolved.path.as_str();
+ 
+     crate::sched::with_scheduler(|s| {
+         s.current_shared_process_mut().cwd = alloc::string::String::from(abs_path);
+--- a/sunlight-files/src/main.rs
++++ b/sunlight-files/src/main.rs
+@@ -602,74 +602,14 @@
+     }
+ 
+     fn set(&mut self, text: &str) -> bool {
+-        let bytes = text.as_bytes();
+-        let mut start = 0usize;
+-        let mut end = bytes.len();
+-        while start < end && bytes[start].is_ascii_whitespace() {
+-            start += 1;
+-        }
+-        while end > start && bytes[end - 1].is_ascii_whitespace() {
+-            end -= 1;
+-        }
+-        if start >= end {
+-            self.buf[0] = b'/';
+-            self.len = 1;
+-            return true;
+-        }
+-        // Canonical paths always start with '/'. Always write it first regardless
+-        // of whether the source started with '/'. Without this, set("/root") would
+-        // produce "root" (no leading slash) because the branch was skipped but the
+-        // component loop then wrote at offset 0 without a separator.
+-        if PATH_LEN == 0 {
++        // Preserve the user's path until VFS checks existence and traversal.
++        // In particular, whitespace and components before '..' are meaningful.
++        let text = if text.is_empty() { "/" } else { text };
++        if text.len() >= PATH_LEN || text.as_bytes().contains(&0) {
+             return false;
+         }
+-        self.buf[0] = b'/';
+-        let mut written = 1usize;
+-        let mut i = start;
+-        let mut saw_component = false;
+-        while i < end {
+-            while i < end && bytes[i] == b'/' {
+-                i += 1;
+-            }
+-            let comp_start = i;
+-            while i < end && bytes[i] != b'/' {
+-                i += 1;
+-            }
+-            if i > comp_start {
+-                match &bytes[comp_start..i] {
+-                    b"." => continue,
+-                    b".." => {
+-                        while written > 1 && self.buf[written - 1] != b'/' {
+-                            written -= 1;
+-                        }
+-                        if written > 1 {
+-                            written -= 1;
+-                        }
+-                        saw_component = written > 1;
+-                        continue;
+-                    }
+-                    _ => {}
+-                }
+-                if saw_component && written < PATH_LEN {
+-                    self.buf[written] = b'/';
+-                    written += 1;
+-                }
+-                saw_component = true;
+-                for &b in &bytes[comp_start..i] {
+-                    if written >= PATH_LEN {
+-                        return false;
+-                    }
+-                    self.buf[written] = b;
+-                    written += 1;
+-                }
+-            }
+-        }
+-        if written == 0 {
+-            self.buf[0] = b'/';
+-            self.len = 1;
+-        } else {
+-            self.len = written;
+-        }
++        self.buf[..text.len()].copy_from_slice(text.as_bytes());
++        self.len = text.len();
+         true
+     }
+ 
+@@ -1320,6 +1260,27 @@
+     }
+ 
+     fn navigate_to(&mut self, target: PathBuf) -> bool {
++        let input = if target.as_str().starts_with('/') {
++            alloc::string::String::from(target.as_str())
++        } else {
++            alloc::format!(
++                "{}/{}",
++                self.current_path.as_str().trim_end_matches('/'),
++                target.as_str()
++            )
++        };
++        let mut output = [0u8; PATH_LEN];
++        let target = match libc::resolve_directory_path(input.as_bytes(), &mut output)
++            .ok()
++            .and_then(|n| core::str::from_utf8(&output[..n]).ok())
++            .and_then(PathBuf::from_str)
++        {
++            Some(path) => path,
++            None => {
++                self.set_error("Folder unavailable or access denied");
++                return false;
++            }
++        };
+         debug_log("[FILES] navigate_start path=\"");
+         debug_log(target.as_str());
+         debug_log("\"\n");
+@@ -5772,17 +5733,19 @@
+     }
+ 
+     #[test]
+-    fn thumbnail_paths_are_lexically_normalized() {
++    fn path_storage_preserves_components_until_vfs_lookup() {
+         assert_eq!(
+             PathBuf::from_str("//pictures/./sub/../image.png")
+                 .unwrap()
+                 .as_str(),
+-            "/pictures/image.png"
++            "//pictures/./sub/../image.png"
+         );
+         assert_eq!(
+             PathBuf::from_str("/../../pictures").unwrap().as_str(),
+-            "/pictures"
++            "/../../pictures"
+         );
++        assert_eq!(PathBuf::from_str("  name  ").unwrap().as_str(), "  name  ");
++        assert!(PathBuf::from_str("/bad\0name").is_none());
+     }
+     #[test]
+     fn grid_geometry_hit_testing_scroll_and_details() {
+--- a/sunlight-fs/src/tmpfs.rs
++++ b/sunlight-fs/src/tmpfs.rs
+@@ -218,10 +218,14 @@
+     /// Return the stable inode number for a filesystem-local path.
+     pub fn lookup(&self, path: &str) -> Result<u64, FsError> {
+         let idx = self.entry_idx(path)?;
++        Ok(self.inode_id(idx))
++    }
++
++    fn inode_id(&self, idx: usize) -> u64 {
+         if idx == usize::MAX {
+-            return Ok(0);
+-        }
+-        Ok(if idx < self.entries.len() {
++            return 0;
++        }
++        if idx < self.entries.len() {
+             self.buffers
+                 .get(idx)
+                 .and_then(Option::as_ref)
+@@ -229,7 +233,7 @@
+                 .unwrap_or(idx as u64 + 1)
+         } else {
+             self.dynamic.entries[idx - self.entries.len()].data.id
+-        })
++        }
+     }
+ 
+     fn add_entry(
+@@ -357,7 +361,9 @@
+     fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
+         for (idx, slot) in self.handles.iter_mut().enumerate() {
+             if slot.is_none() {
+-                let generation = next_handle_generation(self.generations[idx]);
++                let Some(generation) = next_handle_generation(self.generations[idx]) else {
++                    continue;
++                };
+                 self.generations[idx] = generation;
+                 *slot = Some(RamOpen {
+                     entry_idx,
+@@ -401,6 +407,31 @@
+ }
+ 
+ impl FileSystem for Tmpfs {
++    fn capabilities(&self) -> crate::vfs::BackendCapabilities {
++        crate::vfs::BackendCapabilities::TMPFS
++    }
++    fn path_capabilities(&self, path: &str) -> crate::vfs::BackendCapabilities {
++        let mut caps = self.capabilities();
++        if self.entry_idx(path) == Ok(usize::MAX) {
++            caps.ownership_permissions = crate::vfs::MetadataSource::Policy;
++        }
++        caps
++    }
++    fn handle_capabilities(&self, handle: FileHandle) -> crate::vfs::BackendCapabilities {
++        let mut caps = self.capabilities();
++        if self.handle_entry_idx(handle) == Ok(usize::MAX) {
++            caps.ownership_permissions = crate::vfs::MetadataSource::Policy;
++        }
++        caps
++    }
++    fn object_id(&self, path: &str) -> Result<Option<u64>, FsError> {
++        self.lookup(path).map(Some)
++    }
++    fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
++        let idx = self.handle_entry_idx(handle)?;
++        Ok(Some(self.inode_id(idx)))
++    }
++
+     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+         let entry_idx = self.entry_idx(path)?;
+         self.alloc_handle(entry_idx)
+--- a/sunlight-fs/src/vfs.rs
++++ b/sunlight-fs/src/vfs.rs
+@@ -5,6 +5,9 @@
+ 
+ #[cfg(test)]
+ mod storage_tests;
++
++mod lookup;
++pub use lookup::{BackendCapabilities, Metadata, MetadataSource, ResolvedPath, RESOLVE_PATH_MAX};
+ 
+ pub const MAX_MOUNTS: usize = 8;
+ /// Maximum file-name length reported by `read_dir`.
+@@ -39,12 +42,11 @@
+     Ok(((slot - 1) as usize, generation))
+ }
+ 
+-pub(crate) fn next_handle_generation(generation: u32) -> u32 {
+-    if generation >= HANDLE_GENERATION_MAX {
+-        1
+-    } else {
+-        generation + 1
+-    }
++/// Retire exhausted slots rather than resurrecting an older capability.
++pub(crate) fn next_handle_generation(generation: u32) -> Option<u32> {
++    generation
++        .checked_add(1)
++        .filter(|next| *next <= HANDLE_GENERATION_MAX)
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+@@ -120,6 +122,20 @@
+ }
+ 
+ pub trait FileSystem {
++    /// Provenance of the native subset, independent of POSIX compatibility.
++    fn capabilities(&self) -> BackendCapabilities;
++    fn path_capabilities(&self, _path: &str) -> BackendCapabilities {
++        self.capabilities()
++    }
++    fn handle_capabilities(&self, _handle: FileHandle) -> BackendCapabilities {
++        self.capabilities()
++    }
++    fn object_id(&self, _path: &str) -> Result<Option<u64>, FsError> {
++        Ok(None)
++    }
++    fn handle_object_id(&self, _handle: FileHandle) -> Result<Option<u64>, FsError> {
++        Ok(None)
++    }
+     fn open(&mut self, path: &str) -> Result<FileHandle, FsError>;
+     fn create_file(
+         &mut self,
+@@ -261,6 +277,10 @@
+ }
+ 
+ impl<D: BlockDevice> FileSystem for FatFs<D> {
++    fn capabilities(&self) -> BackendCapabilities {
++        BackendCapabilities::FAT
++    }
++
+     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+         path::validate_absolute(path)?;
+         let stat = self
+@@ -273,7 +293,9 @@
+         }
+         for (idx, slot) in self.handles.iter_mut().enumerate() {
+             if slot.is_none() {
+-                let generation = next_handle_generation(self.generations[idx]);
++                let Some(generation) = next_handle_generation(self.generations[idx]) else {
++                    continue;
++                };
+                 self.generations[idx] = generation;
+                 let mut stored = [0u8; 128];
+                 stored[..path_bytes.len()].copy_from_slice(path_bytes);
+@@ -564,6 +586,37 @@
+ }
+ 
+ impl<D: BlockDevice> FileSystem for FsNode<D> {
++    fn capabilities(&self) -> BackendCapabilities {
++        match self {
++            Self::Ram(fs) => fs.capabilities(),
++            Self::Fat(fs) => fs.capabilities(),
++        }
++    }
++    fn path_capabilities(&self, path: &str) -> BackendCapabilities {
++        match self {
++            Self::Ram(fs) => fs.path_capabilities(path),
++            Self::Fat(fs) => fs.path_capabilities(path),
++        }
++    }
++    fn handle_capabilities(&self, handle: FileHandle) -> BackendCapabilities {
++        match self {
++            Self::Ram(fs) => fs.handle_capabilities(handle),
++            Self::Fat(fs) => fs.handle_capabilities(handle),
++        }
++    }
++    fn object_id(&self, path: &str) -> Result<Option<u64>, FsError> {
++        match self {
++            Self::Ram(fs) => fs.object_id(path),
++            Self::Fat(fs) => fs.object_id(path),
++        }
++    }
++    fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
++        match self {
++            Self::Ram(fs) => fs.handle_object_id(handle),
++            Self::Fat(fs) => fs.handle_object_id(handle),
++        }
++    }
++
+     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+         match self {
+             Self::Ram(fs) => fs.open(path),
+@@ -771,7 +824,9 @@
+             .ok_or(FsError::TooManyOpenFiles)?;
+         let tag = self.next_tags[slot] as u8;
+         let mut mount_path = String::new();
+-        mount_path.try_reserve_exact(path.len()).map_err(|_| FsError::NoMemory)?;
++        mount_path
++            .try_reserve_exact(path.len())
++            .map_err(|_| FsError::NoMemory)?;
+         mount_path.push_str(path);
+         self.next_tags[slot] += MAX_MOUNTS as u16;
+         self.mounts[slot] = Some(Mount {
+@@ -825,7 +880,11 @@
+ 
+     /// Number of backend opens still owned by VFS clients, across all mounts.
+     pub fn open_handle_count(&self) -> usize {
+-        self.mounts.iter().flatten().map(|mount| mount.open_handles).sum()
++        self.mounts
++            .iter()
++            .flatten()
++            .map(|mount| mount.open_handles)
++            .sum()
+     }
+ 
+     /// A narrow runtime namespace keeps root, boot, state and service state
+@@ -1380,7 +1439,10 @@
+             assert_eq!(&buf[..len], expected.as_bytes());
+         }
+         let mut short = [0xa5; 4];
+-        assert_eq!(vfs.handle_path(mounted, &mut short), Err(FsError::InvalidPath));
++        assert_eq!(
++            vfs.handle_path(mounted, &mut short),
++            Err(FsError::InvalidPath)
++        );
+         assert_eq!(short, [0xa5; 4]);
+         vfs.close(mounted).unwrap();
+         assert_eq!(vfs.handle_path(mounted, &mut buf), Err(FsError::BadHandle));
+--- a/sunlight-fs/src/vfs/storage_tests.rs
++++ b/sunlight-fs/src/vfs/storage_tests.rs
+@@ -186,3 +186,25 @@
+         Err(FsError::TooManyOpenFiles)
+     );
+ }
++
++#[test]
++fn canonical_fat_spelling_and_honest_identity_capabilities() {
++    let (mut vfs, disk) = fixture();
++    mount(&mut vfs, &disk);
++    let cred = crate::Credential { uid: 0, gid: 0 };
++    let resolved = vfs.resolve_existing("/", "/mnt//hello.txt", &cred).unwrap();
++    assert_eq!(resolved.path, "/mnt/HELLO.TXT");
++    assert_eq!(resolved.metadata.object_id, None);
++    assert_eq!(resolved.metadata.capabilities, BackendCapabilities::FAT);
++    assert_eq!(
++        vfs.resolve_existing("/", "/mnt/hello.txt/..", &cred),
++        Err(FsError::NotDir)
++    );
++    let stale = vfs.open("/mnt/HELLO.TXT").unwrap();
++    vfs.close(stale).unwrap();
++    for _ in 0..HANDLE_GENERATION_MAX {
++        let live = vfs.open("/mnt/HELLO.TXT").unwrap();
++        assert_eq!(vfs.metadata_handle(stale), Err(FsError::BadHandle));
++        vfs.close(live).unwrap();
++    }
++}
+--- a/sunlight-libc/include/errno.h
++++ b/sunlight-libc/include/errno.h
+@@ -34,6 +34,7 @@
+ #define ERANGE 34
+ #define ENOSPC 28
+ #define EPIPE 32
++#define ENAMETOOLONG 36
+ #define ENOSYS 38
+ #define ENOTTY 25
+ #define EOPNOTSUPP 95
+--- a/sunlight-libc/include/limits.h
++++ b/sunlight-libc/include/limits.h
+@@ -6,6 +6,7 @@
+ #define MB_LEN_MAX 4
+ /* Native ssize_t is signed long in every supported feature profile. */
+ #define SSIZE_MAX LONG_MAX
++#define PATH_MAX 256
+ #define PTHREAD_KEYS_MAX 128
+ #define PTHREAD_DESTRUCTOR_ITERATIONS 4
+ #endif
+--- a/sunlight-libc/include/stdlib.h
++++ b/sunlight-libc/include/stdlib.h
+@@ -10,6 +10,10 @@
+  * a writable NUL-terminated template. Caller must close and unlink the file. */
+ int mkstemp(char *path_template);
+ char *getenv(const char *name);
++/* Existing-object canonical query through native VFS. NULL output uses malloc;
++ * caller-owned output requires PATH_MAX bytes (256), including NUL. A returned
++ * path is not an atomic authorization token for a later open. */
++char *realpath(const char *path, char *output);
+ /* Private per-call conversion state; NULL destination counts all input.
+  * ASCII in C, strict UTF-8 in installed UTF-8 locales. No partial encoding. */
+ size_t mbstowcs(wchar_t *destination, const char *source, size_t count);
+--- a/sunlight-libc/src/lib.rs
++++ b/sunlight-libc/src/lib.rs
+@@ -52,7 +52,7 @@
+ /// Launch-trace argv parsing for GUI apps.
+ pub mod launch_trace;
+ /// Process locale selection and environment/configuration bridge.
+-#[cfg(any(test, all(feature = "native-c", target_os = "sunlightos")))]
++#[cfg(any(test, all(feature = "native-std", target_os = "sunlightos")))]
+ pub mod locale;
+ /// Freestanding memory primitives (memcpy, memmove, memset, memcmp, memchr).
+ pub mod mem;
+@@ -215,6 +215,37 @@
+     bounded_cwd_len(buf)
+ }
+ 
++/// Authoritative existing-object canonical path in the current namespace.
++/// The result is an observation, not authority or a pin for a later operation.
++/// Output capacity includes NUL; no partial output on a short buffer.
++pub fn resolve_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
++    resolve_path_with_flags(path, output, 0)
++}
++
++/// Canonical path plus final directory type/search validation for navigation.
++pub fn resolve_directory_path(path: &[u8], output: &mut [u8]) -> Result<usize, Errno> {
++    resolve_path_with_flags(path, output, 1)
++}
++
++fn resolve_path_with_flags(path: &[u8], output: &mut [u8], flags: u64) -> Result<usize, Errno> {
++    let mut input = [0u8; MAX_PATH];
++    let ptr = cstr(&mut input, path)?;
++    let ret = unsafe {
++        sys::syscall4(
++            sys::SYS_RESOLVE_PATH,
++            ptr as u64,
++            output.as_mut_ptr() as u64,
++            output.len() as u64,
++            flags,
++        )
++    };
++    let len = sys::check(ret)? as usize;
++    if len >= output.len() || output[len] != 0 {
++        return Err(Errno::Failed);
++    }
++    Ok(len)
++}
++
+ /// Change the current process CWD using the kernel's path-resolution contract.
+ /// The path is bounded and NUL-checked here; `.`/`..` resolution remains in the kernel.
+ pub fn chdir(path: &[u8]) -> Result<(), Errno> {
+--- a/sunlight-libc/src/sys.rs
++++ b/sunlight-libc/src/sys.rs
+@@ -44,6 +44,7 @@
+ pub const SYS_FILE_SYNC: u64 = 153;
+ pub const SYS_DIR_SYNC: u64 = 154;
+ pub const SYS_STAT: u64 = 61;
++pub const SYS_RESOLVE_PATH: u64 = 179;
+ pub const SYS_MKDIR: u64 = 62;
+ pub const SYS_CHDIR: u64 = 63;
+ pub const SYS_GETCWD: u64 = 64;
+--- a/sunshell/src/main.rs
++++ b/sunshell/src/main.rs
+@@ -1308,15 +1308,11 @@
+             } else {
+                 self.env.get("HOME").unwrap_or("/")
+             };
+-            let Some(next) = normalize_path(&self.cwd, target) else {
+-                return self.builtin_failure(b"cd: invalid path\n");
++            let Some(next) = resolve_directory(&self.cwd, target) else {
++                return self.builtin_failure(b"cd: directory unavailable or access denied\n");
+             };
+-
+-            if !stat_is_dir(&next) {
+-                return self.builtin_failure(b"cd: no such directory\n");
+-            }
+             if sunlight_libc::chdir(next.as_bytes()).is_err() {
+-                return self.builtin_failure(b"cd: no such directory\n");
++                return self.builtin_failure(b"cd: directory unavailable or access denied\n");
+             }
+ 
+             self.env.set("OLDPWD", &self.cwd);
+@@ -2794,6 +2790,22 @@
+         }
+     }
+ 
++    // Preserve components and whitespace until the authoritative VFS walk.
++    fn resolve_directory(cwd: &str, target: &str) -> Option<alloc::string::String> {
++        if target.is_empty() {
++            return None;
++        }
++        let input = if target.starts_with('/') {
++            alloc::string::String::from(target)
++        } else {
++            alloc::format!("{}/{}", cwd.trim_end_matches('/'), target)
++        };
++        let mut output = [0u8; sunlight_libc::MAX_PATH];
++        let n = sunlight_libc::resolve_directory_path(input.as_bytes(), &mut output).ok()?;
++        let canonical = core::str::from_utf8(&output[..n]).ok()?;
++        Some(alloc::string::String::from(canonical))
++    }
++
+     fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
+         let mut parts: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+         let full = if path.starts_with('/') {
+--- a/sunshell/src/native_script.rs
++++ b/sunshell/src/native_script.rs
+@@ -186,12 +186,10 @@
+         let _ = libc::close(libc::Fd(fd as u32));
+     }
+     fn directory(&mut self, name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
+-        let name = path(name, context)?;
+-        if !stat_is_dir(&name) {
+-            return Err(Error::new(1, "cd: no such directory"));
+-        }
+-        Ok(name)
+-    }
++        resolve_directory(&context.cwd, name)
++            .ok_or_else(|| Error::new(1, "cd: directory unavailable or access denied"))
++    }
++
+     fn source(&mut self, name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
+         let fd = libc::open(path(name, context)?.as_bytes())
+             .map_err(|e| Error::new(1, format!("open script {name}: {e:?}")))?;
+--- /dev/null
++++ b/sunlight-fs/src/vfs/lookup.rs
+@@ -0,0 +1,356 @@
++//! Existing-object lookup under the caller's exclusive VFS borrow. Canonical
++//! names are observations, not object pins or authority for subsequent calls.
++use super::*;
++use crate::{check_permission, Credential, PermCheck};
++
++/// Native path payload limit; syscall buffers include a further NUL byte.
++pub const RESOLVE_PATH_MAX: usize = 255;
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum MetadataSource {
++    /// Backend stores and maintains this field.
++    Stored,
++    /// Mount policy supplies a value, not on-disk POSIX metadata.
++    Policy,
++    /// No representation or backend operation exists.
++    Unsupported,
++    /// Native representation does not currently expose a trustworthy value.
++    Unavailable,
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct BackendCapabilities {
++    pub object_identity: MetadataSource,
++    pub ownership_permissions: MetadataSource,
++    pub timestamps: MetadataSource,
++    pub symlinks: MetadataSource,
++    pub posix_link_count: MetadataSource,
++    pub pinned_metadata: MetadataSource,
++}
++
++impl BackendCapabilities {
++    pub const TMPFS: Self = Self {
++        object_identity: MetadataSource::Stored,
++        ownership_permissions: MetadataSource::Stored,
++        timestamps: MetadataSource::Unavailable,
++        symlinks: MetadataSource::Unsupported,
++        posix_link_count: MetadataSource::Unavailable,
++        pinned_metadata: MetadataSource::Stored,
++    };
++    pub const FAT: Self = Self {
++        object_identity: MetadataSource::Unavailable,
++        ownership_permissions: MetadataSource::Policy,
++        timestamps: MetadataSource::Unavailable,
++        symlinks: MetadataSource::Unsupported,
++        posix_link_count: MetadataSource::Unsupported,
++        pinned_metadata: MetadataSource::Unavailable,
++    };
++}
++
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Metadata {
++    /// Existing native subset; consult capabilities before interpreting it as
++    /// authoritative backend data. In particular, nlinks is not POSIX on dirs.
++    pub native: FileStat,
++    /// Mount incarnation, valid only within this VFS instance's lifetime.
++    pub mount_id: u64,
++    /// Backend object lifetime, never a handle slot or pathname hash. A local
++    /// id of zero is valid; combine with mount_id. FAT exposes None.
++    pub object_id: Option<u64>,
++    pub capabilities: BackendCapabilities,
++}
++
++#[derive(Debug, PartialEq, Eq)]
++pub struct ResolvedPath {
++    pub path: String,
++    pub metadata: Metadata,
++}
++
++impl<D: BlockDevice> Vfs<D> {
++    pub fn metadata(&mut self, path: &str) -> Result<Metadata, FsError> {
++        let (idx, local) = self.resolve_mount(path)?;
++        let mount = self.mounts[idx].as_mut().ok_or(FsError::NotFound)?;
++        Ok(Metadata {
++            native: mount.fs.stat(local)?,
++            mount_id: u64::from(mount.tag) + 1,
++            object_id: mount.fs.object_id(local)?,
++            capabilities: mount.fs.path_capabilities(local),
++        })
++    }
++
++    /// No pathname relookup: tmpfs metadata/identity refer to the retained
++    /// object even after unlink. FAT explicitly lacks that complete guarantee.
++    pub fn metadata_handle(&mut self, handle: FileHandle) -> Result<Metadata, FsError> {
++        let (idx, local) = self.unpack_handle(handle)?;
++        let mount = self.mounts[idx].as_mut().ok_or(FsError::BadHandle)?;
++        Ok(Metadata {
++            native: mount.fs.fstat_handle(local)?,
++            mount_id: u64::from(mount.tag) + 1,
++            object_id: mount.fs.handle_object_id(local)?,
++            capabilities: mount.fs.handle_capabilities(local),
++        })
++    }
++
++    /// Resolve an existing object with search checks on each traversed parent.
++    /// Uses the current global namespace and existing uid/gid/root policy.
++    /// There are no native symlink objects yet; this API does not advertise
++    /// follow/no-follow or directory-fd pinning. No mutation policy is bypassed.
++    pub fn resolve_existing(
++        &mut self,
++        cwd: &str,
++        input: &str,
++        cred: &Credential,
++    ) -> Result<ResolvedPath, FsError> {
++        self.resolve_existing_authorized(cwd, input, cred, &mut |_| Ok(()))
++    }
++
++    /// Additional kernel capability restrictions are checked before each
++    /// component metadata lookup, including components later removed by '..'.
++    pub fn resolve_existing_authorized(
++        &mut self,
++        cwd: &str,
++        input: &str,
++        cred: &Credential,
++        authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
++    ) -> Result<ResolvedPath, FsError> {
++        if input.is_empty() || input.len() > RESOLVE_PATH_MAX || input.contains('\0') {
++            return Err(FsError::InvalidPath);
++        }
++        let mut path = String::new();
++        path.try_reserve_exact(RESOLVE_PATH_MAX)
++            .map_err(|_| FsError::NoMemory)?;
++        path.push('/');
++        if !input.starts_with('/') {
++            if !cwd.starts_with('/') || cwd.len() > RESOLVE_PATH_MAX || cwd.contains('\0') {
++                return Err(FsError::InvalidPath);
++            }
++            self.walk_components(&mut path, cwd, cred, authorize)?;
++        }
++        self.walk_components(&mut path, input, cred, authorize)?;
++        authorize(&path)?;
++        let metadata = self.metadata(&path)?;
++        Ok(ResolvedPath { path, metadata })
++    }
++
++    fn search_directory(&mut self, path: &str, cred: &Credential) -> Result<(), FsError> {
++        let stat = self.stat(path)?;
++        if stat.file_type != FileType::Directory {
++            return Err(FsError::NotDir);
++        }
++        if !check_permission(&stat, cred, PermCheck::Execute) {
++            return Err(FsError::PermissionDenied);
++        }
++        Ok(())
++    }
++
++    fn walk_components(
++        &mut self,
++        path: &mut String,
++        input: &str,
++        cred: &Credential,
++        authorize: &mut dyn FnMut(&str) -> Result<(), FsError>,
++    ) -> Result<(), FsError> {
++        authorize(path)?;
++        for component in input.split('/').filter(|part| !part.is_empty()) {
++            self.search_directory(path, cred)?;
++            match component {
++                "." => continue,
++                ".." => {
++                    path.truncate(path.rfind('/').unwrap_or(0).max(1));
++                    continue;
++                }
++                _ => {}
++            }
++            let parent_len = path.len();
++            let required = parent_len + usize::from(parent_len > 1) + component.len();
++            if required > RESOLVE_PATH_MAX {
++                return Err(FsError::InvalidPath);
++            }
++            if parent_len > 1 {
++                path.push('/');
++            }
++            let name_start = path.len();
++            path.push_str(component);
++            let (idx, local) = self.resolve_mount(path)?;
++            // Mounted roots use the mount table's spelling. FAT names need
++            // backend spelling, not the user's case-insensitive lookup text.
++            if local != "/" && matches!(self.mounts[idx].as_ref().unwrap().fs, FsNode::Fat(_)) {
++                let local_parent = local
++                    .rsplit_once('/')
++                    .map(|(p, _)| if p.is_empty() { "/" } else { p })
++                    .unwrap_or("/");
++                let mut found = None;
++                self.mounts[idx]
++                    .as_mut()
++                    .unwrap()
++                    .fs
++                    .read_dir(local_parent, &mut |entry| {
++                        if entry
++                            .name_bytes()
++                            .eq_ignore_ascii_case(component.as_bytes())
++                        {
++                            found = Some(*entry);
++                            false
++                        } else {
++                            true
++                        }
++                    })?;
++                let entry = found.ok_or(FsError::NotFound)?;
++                let name =
++                    core::str::from_utf8(entry.name_bytes()).map_err(|_| FsError::Unsupported)?;
++                path.truncate(name_start);
++                path.push_str(name);
++            }
++            authorize(path)?;
++            // Existence is checked before a later '..' can discard the name.
++            self.stat(path)?;
++        }
++        if input.ends_with('/') {
++            self.search_directory(path, cred)?;
++        }
++        Ok(())
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    const ROOT: Credential = Credential { uid: 0, gid: 0 };
++    const USER: Credential = Credential {
++        uid: 1000,
++        gid: 1000,
++    };
++    fn fixture() -> Vfs {
++        static SEED: &[crate::RamEntry] = &[
++            crate::RamEntry::dir("/", 0, 0, mode::DIR_755),
++            crate::RamEntry::dir("/public", 0, 0, mode::DIR_755),
++            crate::RamEntry::dir("/hidden", 0, 0, mode::DIR_700),
++            crate::RamEntry::dir("/hidden/mounted", 0, 0, mode::DIR_755),
++            crate::RamEntry::file("/hidden/secret", 0, 0, mode::FILE_644, b"secret"),
++            crate::RamEntry::file("/public/file", 0, 0, mode::FILE_644, b"data"),
++            crate::RamEntry::file("/public/ spaced ", 0, 0, mode::FILE_644, b"space"),
++        ];
++        let mut vfs = Vfs::new();
++        vfs.mount_ramfs("/", RamFs::new(SEED)).unwrap();
++        vfs.mount_ramfs("/hidden/mounted", RamFs::new(&[])).unwrap();
++        vfs
++    }
++    #[test]
++    fn component_walk_checks_objects_before_dotdot() {
++        let mut vfs = fixture();
++        for name in ["/public/missing/../file", "/public/missing/.."] {
++            assert_eq!(
++                vfs.resolve_existing("/", name, &ROOT),
++                Err(FsError::NotFound)
++            );
++        }
++        for name in ["/public/file/..", "/public/file/.", "/public/file/"] {
++            assert_eq!(vfs.resolve_existing("/", name, &ROOT), Err(FsError::NotDir));
++        }
++        assert_eq!(
++            vfs.resolve_existing("/public", "./../public// spaced ", &USER)
++                .unwrap()
++                .path,
++            "/public/ spaced "
++        );
++        assert_eq!(
++            vfs.resolve_existing("bad-cwd", "/public/file", &USER)
++                .unwrap()
++                .path,
++            "/public/file"
++        );
++        assert_eq!(
++            vfs.resolve_existing("/public/file", "child", &ROOT),
++            Err(FsError::NotDir)
++        );
++    }
++    #[test]
++    fn parent_search_and_capability_policy_cannot_be_erased() {
++        let mut vfs = fixture();
++        for name in ["/hidden/secret", "/hidden/../public", "/hidden/mounted"] {
++            assert_eq!(
++                vfs.resolve_existing("/", name, &USER),
++                Err(FsError::PermissionDenied)
++            );
++        }
++        assert_eq!(
++            vfs.resolve_existing_authorized("/", "/public/../", &ROOT, &mut |name| {
++                if name == "/public" {
++                    Err(FsError::PermissionDenied)
++                } else {
++                    Ok(())
++                }
++            }),
++            Err(FsError::PermissionDenied)
++        );
++        assert_eq!(
++            vfs.resolve_existing("/", "/../../public", &USER)
++                .unwrap()
++                .path,
++            "/public"
++        );
++    }
++    #[test]
++    fn metadata_is_object_backed_and_mount_qualified() {
++        let mut vfs = fixture();
++        let h = vfs
++            .create_file("/public/live", 1000, 1000, mode::FILE_600)
++            .unwrap();
++        let before = vfs.metadata_handle(h).unwrap();
++        assert_eq!(before, vfs.metadata("/public/live").unwrap());
++        assert_eq!(before.capabilities.timestamps, MetadataSource::Unavailable);
++        vfs.rename("/public/live", "/public/renamed").unwrap();
++        assert_eq!(
++            before.object_id,
++            vfs.metadata("/public/renamed").unwrap().object_id
++        );
++        vfs.unlink("/public/renamed").unwrap();
++        let replacement = vfs
++            .create_file("/public/renamed", 1000, 1000, mode::FILE_600)
++            .unwrap();
++        assert_ne!(
++            before.object_id,
++            vfs.metadata_handle(replacement).unwrap().object_id
++        );
++        assert_eq!(before.object_id, vfs.metadata_handle(h).unwrap().object_id);
++        assert_eq!(vfs.metadata_handle(h).unwrap().native.nlinks, 0);
++        vfs.close(h).unwrap();
++        assert_eq!(vfs.metadata_handle(h), Err(FsError::BadHandle));
++        vfs.close(replacement).unwrap();
++        let a = vfs.metadata("/").unwrap();
++        let b = vfs.metadata("/hidden/mounted").unwrap();
++        assert_ne!(a.mount_id, b.mount_id);
++        assert_eq!(b.object_id, Some(0));
++        assert_eq!(b.capabilities.ownership_permissions, MetadataSource::Policy);
++    }
++    #[test]
++    fn rejects_invalid_and_oversized_paths() {
++        let mut vfs = fixture();
++        for name in ["", "bad\0path"] {
++            assert_eq!(
++                vfs.resolve_existing("/", name, &ROOT),
++                Err(FsError::InvalidPath)
++            );
++        }
++        let oversized = "a".repeat(RESOLVE_PATH_MAX + 1);
++        assert_eq!(
++            vfs.resolve_existing("/", &oversized, &ROOT),
++            Err(FsError::InvalidPath)
++        );
++        assert_eq!(
++            vfs.resolve_existing("relative", "name", &ROOT),
++            Err(FsError::InvalidPath)
++        );
++    }
++    #[test]
++    fn exhausted_local_generation_never_resurrects_stale_handle() {
++        let mut vfs = fixture();
++        let stale = vfs.open("/public/file").unwrap();
++        vfs.close(stale).unwrap();
++        for _ in 0..super::super::HANDLE_GENERATION_MAX {
++            let live = vfs.open("/public/file").unwrap();
++            assert_eq!(vfs.metadata_handle(stale), Err(FsError::BadHandle));
++            vfs.close(live).unwrap();
++        }
++    }
++}

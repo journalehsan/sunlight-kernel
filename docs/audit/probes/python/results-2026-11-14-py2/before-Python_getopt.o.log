@@ -1,0 +1,13 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c:80:18: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   80 |         else if (wcscmp(argv[_PyOS_optind], L"--") == 0) {
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c:112:18: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  112 |             if (!wcscmp(opt->name, opt_ptr))
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c:143:16: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  143 |     if ((ptr = wcschr(SHORT_OPTS, option)) == NULL) {
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c:143:14: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+  143 |     if ((ptr = wcschr(SHORT_OPTS, option)) == NULL) {
+      |              ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+4 errors generated.

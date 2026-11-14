@@ -1,0 +1,12 @@
+[
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-_Exit.c",
+    "sha256": "7b7a1907e7b8de15a2e71cc128798c66530f17248ba7c564a87f488ae48e9320",
+    "scope": "Inherited pre-PY1 strict missing-API probe; not a fresh PY1 execution"
+  },
+  {
+    "path": "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-_Exit.log",
+    "sha256": "27c4410a59bb9f18a6cf193bd80d3364fb9481cde253c11f591ddc3ed8282923",
+    "scope": "Inherited pre-PY1 strict missing-API probe; not a fresh PY1 execution"
+  }
+]

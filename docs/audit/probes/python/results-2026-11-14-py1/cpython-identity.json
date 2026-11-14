@@ -1,0 +1,8 @@
+{
+  "archive": "/tmp/sunlight-r1-Python-3.13.0.tar.xz",
+  "sha256": "086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d",
+  "source": "/tmp/sunlight-py1-cpython/Python-3.13.0",
+  "build": "/tmp/sunlight-py1-cpython/cross",
+  "configure_exit": 0,
+  "build_python": "/tmp/sunlight-r1-cpython/build-host/python"
+}

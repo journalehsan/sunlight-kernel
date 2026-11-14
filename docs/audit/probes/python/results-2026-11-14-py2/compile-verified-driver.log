@@ -1,0 +1,1 @@
+{'configured': 180, 'before_configured': 180, 'attempted': 179, 'passed': 157, 'failed': 22, 'unattempted': ['Modules/getbuildinfo.o'], 'first_serial_error': "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/exceptions.c:3732:32: error: use of undeclared identifier 'EWOULDBLOCK'", 'denominator_change_reason': None}

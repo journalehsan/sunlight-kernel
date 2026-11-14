@@ -1,0 +1,8 @@
+{
+  "py6-shell-paths": {
+    "exit": 0,
+    "stdout": "/tmp\n/tmp\nmissing-rejected\n/tmp\n/\n",
+    "stderr": "sshl: cd: directory unavailable or access denied\n",
+    "pass_": true
+  }
+}

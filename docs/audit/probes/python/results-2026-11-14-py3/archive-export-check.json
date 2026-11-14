@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "definitions": {
+    "mbstowcs": 1,
+    "wcstombs": 1,
+    "localeconv": 1,
+    "setbuf": 1,
+    "setvbuf": 1,
+    "clock_getres": 1,
+    "_exit": 1,
+    "_Exit": 1,
+    "strncpy": 1,
+    "abort": 0,
+    "realpath": 0,
+    "getpid": 0
+  },
+  "interpretation": "Defined-symbol evidence only, not a complete interpreter link."
+}

@@ -1,0 +1,5 @@
+W alive actor=0 tid=101 owner=100 mode=0
+W initial pthread_exit owner=100 workers=1
+W tls actor=3 tid=100
+W progress actor=0 tid=101 after-owner-query
+W tls actor=1 tid=101

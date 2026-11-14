@@ -1,0 +1,6 @@
+W alive actor=1 tid=462 owner=117 mode=2
+W alive actor=0 tid=461 owner=117 mode=2
+W initial pthread_exit owner=117 workers=2
+W tls actor=3 tid=117
+W progress actor=0 tid=461 after-owner-query
+W forced retained-owner SIGKILL

@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --suite --cpus 4 --timeout 240 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/regression-cpu-4

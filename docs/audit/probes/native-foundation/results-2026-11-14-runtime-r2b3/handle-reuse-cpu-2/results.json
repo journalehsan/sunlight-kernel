@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "HANDLE generation old=0x2 current=0x3 stale rejected iteration=0\nHANDLE generation old=0x101 current=0x102 stale rejected iteration=255\nHANDLE 256 reuse cycles: stale join/detach rejected; live joins intact\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

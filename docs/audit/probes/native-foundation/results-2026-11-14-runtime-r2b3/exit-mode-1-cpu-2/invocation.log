@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf --arg 1 --cpus 2 --timeout 120 --expect-exit 23 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-2

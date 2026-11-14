@@ -1,0 +1,8 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -fsyntax-only /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/header-1.c
+In file included from /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/header-1.c:1:
+/usr/lib/clang/23/include/inttypes.h:24:15: fatal error: 'inttypes.h' file not found
+   24 | #include_next <inttypes.h>
+      |               ^~~~~~~~~~~~
+1 error generated.
+
+exit=1

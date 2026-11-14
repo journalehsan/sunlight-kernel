@@ -1,0 +1,352 @@
+[
+  {
+    "name": "qualified-locked",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 5.525715570984175,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-format-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/format-test.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-format.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.3723169510194566,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-stream-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/stream-test.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-stream.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.3024318419920746,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-wide-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/wide-test.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-wide.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.262905565003166,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-header-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/header-test.cpp",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-header.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1768854789843317,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-math-declarations-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/math-declarations-test.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-math-declarations.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.14108367401058786,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-condvar-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/condvar.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-condvar.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.17292299499968067,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-libc-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/libc.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-libc.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.21939654200104997,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-exit-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/immediate-exit.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-exit.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.23910367701319046,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-heap-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-heap.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.3497222209989559,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-admission-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/retained-admission.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-admission.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.3861891489941627,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-pthread-tsd-once-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-once.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-pthread-tsd-once.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.7610159770119935,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-pthread-tsd-exit-race-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-exit-race.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-pthread-tsd-exit-race.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.2993624260125216,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-pthread-once-recursive-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-once-recursive.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-pthread-once-recursive.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1751045239798259,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-strerror-threads-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/strerror-threads.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-strerror-threads.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1640383139892947,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-condvar-timeout-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/condvar-timeout.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-condvar-timeout.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1624896510038525,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-string-guard-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/string-guard.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-string-guard.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.17746617598459125,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-header-abi-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/header-abi-v3.cpp",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-header-abi.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.16166716098086908,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-exit-controls-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/exit-controls.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-exit-controls.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1416108300036285,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-lifecycle-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-lifecycle.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.14123630500398576,
+    "source_matches": true
+  },
+  {
+    "name": "qualified-exit-matrix-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-Wall",
+      "-Wextra",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py2-qualified-exit-matrix.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1258143549785018,
+    "source_matches": true
+  }
+]

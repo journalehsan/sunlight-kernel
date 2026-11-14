@@ -1,0 +1,1112 @@
+--- a/sunlight-libc/src/inttypes.rs
++++ b/sunlight-libc/src/inttypes.rs
+@@ -152,3 +152,12 @@
+ pub unsafe extern "C" fn strtol(s: *const c_char, end: *mut *mut c_char, base: i32) -> i64 {
+     parse(s, end, base, true) as i64
+ }
++
++#[no_mangle]
++pub unsafe extern "C" fn strtoul(s: *const c_char, end: *mut *mut c_char, base: i32) -> u64 {
++    parse(s, end, base, false)
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcstol(s: *const i32, end: *mut *mut i32, base: i32) -> i64 {
++    parse(s, end, base, true) as i64
++}
+--- a/sunlight-libc/include/errno.h
++++ b/sunlight-libc/include/errno.h
+@@ -9,8 +9,17 @@
+ #define ENOENT 2
+ #define EIO 5
+ #define E2BIG 7
++#define EOVERFLOW 75
+ #define EBADF 9
+ #define EAGAIN 11
++#define EWOULDBLOCK EAGAIN
++/* Reserved native C errno numbers, not promises of signal/device support. */
++#define ESRCH 3
++#define EINTR 4
++#define ENXIO 6
++#define ECHILD 10
++#define ENODEV 19
++#define ESPIPE 29
+ #define ENOMEM 12
+ #define EACCES 13
+ #define EFAULT 14
+--- a/sunlight-libc/include/math.h
++++ b/sunlight-libc/include/math.h
+@@ -41,6 +41,19 @@
+ #endif
+ /* Existing compiler-builtins exports, now declared for CPython longobject.
+  * These older functions have no errno guarantee. */
++/* Existing native compiler-builtins exports. As with log/sqrt below, these
++ * older exports have no errno guarantee; no long-double ABI is advertised. */
++double atan2(double y, double x);
++double ceil(double x);
++double copysign(double x, double y);
++double cos(double x);
++double exp(double x);
++double floor(double x);
++double fmod(double x, double y);
++double hypot(double x, double y);
++double pow(double x, double y);
++double round(double x);
++double sin(double x);
+ double ldexp(double x, int exponent);
+ double log(double x);
+ double sqrt(double x);
+--- a/sunlight-libc/include/stdio.h
++++ b/sunlight-libc/include/stdio.h
+@@ -8,6 +8,8 @@
+ /* Opaque, locked streams. All streams are unbuffered in this foundation. */
+ typedef struct SunlightFile FILE;
+ #define EOF (-1)
++/* Recommended application I/O block size; streams remain unbuffered. */
++#define BUFSIZ 8192
+ #define SEEK_SET 0
+ #define SEEK_CUR 1
+ #define SEEK_END 2
+@@ -19,6 +21,8 @@
+  * Uses exclusive creation and requires the native entropy service. No name
+  * secrecy is promised. Failure returns NULL and sets errno. */
+ FILE *tmpfile(void);
++FILE *fdopen(int descriptor, const char *mode);
++int ungetc(int ch, FILE *stream);
+ int fclose(FILE *stream);
+ size_t fread(void *ptr, size_t size, size_t count, FILE *stream);
+ size_t fwrite(const void *ptr, size_t size, size_t count, FILE *stream);
+@@ -40,8 +44,14 @@
+ long ftell(FILE *stream);
+ void rewind(FILE *stream);
+ /* Integer/string subset: c s d i u o x X p %, flags, width, precision,
+- * hh/h/l/ll/j/z/t. Float, %n, wide and positional formats fail with ENOSYS;
++ * hh/h/l/ll/j/z/t. Binary64 f/F/e/E/g/G are supported in the C numeric locale.
++ * Wide lc/ls use the existing C ASCII / UTF-8 LC_CTYPE contract.
++ * Hex floats, long double, %n and positional formats fail with ENOSYS;
+  * preceding output may already have been written. No silent substitution. */
++int snprintf(char *destination, size_t size, const char *format, ...);
++int vsnprintf(char *destination, size_t size, const char *format, va_list args);
++int sprintf(char *destination, const char *format, ...);
++int vsprintf(char *destination, const char *format, va_list args);
+ int printf(const char *format, ...);
+ int fprintf(FILE *stream, const char *format, ...);
+ int vprintf(const char *format, va_list args);
+--- a/sunlight-libc/include/stdlib.h
++++ b/sunlight-libc/include/stdlib.h
+@@ -9,7 +9,11 @@
+ /* Creates a mode-0600 read/write file. Replace six trailing X characters in
+  * a writable NUL-terminated template. Caller must close and unlink the file. */
+ int mkstemp(char *path_template);
++char *getenv(const char *name);
++unsigned long strtoul(const char *s, char **end, int base);
+ long strtol(const char *s, char **end, int base);
++void qsort(void *base, size_t count, size_t size,
++           int (*compare)(const void *, const void *));
+ void *malloc(size_t size);
+ void *calloc(size_t count, size_t size);
+ void *realloc(void *ptr, size_t size);
+--- a/sunlight-libc/include/unistd.h
++++ b/sunlight-libc/include/unistd.h
+@@ -19,6 +19,7 @@
+  * Arbitrary bad non-NULL user memory retains the native generic EIO result. */
+ int isatty(int fd);
+ int close(int fd);
++int unlink(const char *path);
+ off_t lseek(int fd, off_t offset, int whence);
+ ssize_t read(int fd, void *buffer, size_t count);
+ ssize_t write(int fd, const void *buffer, size_t count);
+--- a/sunlight-libc/include/wchar.h
++++ b/sunlight-libc/include/wchar.h
+@@ -14,6 +14,16 @@
+  * Use explicit states for independent streams and concurrent conversions.
+  * After EILSEQ reset the state before reuse. Locale changes require initial
+  * states and external serialization against conversion calls. */
++size_t wcslen(const wchar_t *s);
++wchar_t *wcscpy(wchar_t *destination, const wchar_t *source);
++wchar_t *wcsncpy(wchar_t *destination, const wchar_t *source, size_t count);
++int wcscmp(const wchar_t *a, const wchar_t *b);
++int wcsncmp(const wchar_t *a, const wchar_t *b, size_t count);
++wchar_t *wcschr(const wchar_t *s, wchar_t ch);
++wchar_t *wcsrchr(const wchar_t *s, wchar_t ch);
++wchar_t *wmemchr(const wchar_t *s, wchar_t ch, size_t count);
++wchar_t *wcstok(wchar_t *s, const wchar_t *delimiters, wchar_t **save);
++long wcstol(const wchar_t *s, wchar_t **end, int base);
+ int mbsinit(const mbstate_t *ps);
+ size_t mbrtowc(wchar_t *out, const char *s, size_t n, mbstate_t *ps);
+ size_t mbrlen(const char *s, size_t n, mbstate_t *ps);
+--- a/sunlight-libc/src/env.rs
++++ b/sunlight-libc/src/env.rs
+@@ -59,3 +59,26 @@
+ pub fn getenv(key: &[u8]) -> Option<&'static str> {
+     getenv_bytes(key).and_then(|b| core::str::from_utf8(b).ok())
+ }
++
++/// C view of the immutable startup environment. Returned storage remains owned
++/// by the process startup image; no mutation or allocated snapshot is implied.
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++#[export_name = "getenv"]
++pub unsafe extern "C" fn c_getenv(name: *const core::ffi::c_char) -> *mut core::ffi::c_char {
++    if name.is_null() {
++        crate::errno::set_errno(crate::errno::EINVAL);
++        return core::ptr::null_mut();
++    }
++    let name = name.cast::<u8>();
++    let mut len = 0;
++    while *name.add(len) != 0 {
++        len += 1;
++    }
++    let key = core::slice::from_raw_parts(name, len);
++    if key.is_empty() || key.contains(&b'=') {
++        return core::ptr::null_mut();
++    }
++    getenv_bytes(key).map_or(core::ptr::null_mut(), |v| {
++        v.as_ptr() as *mut core::ffi::c_char
++    })
++}
+--- a/sunlight-libc/src/errno.rs
++++ b/sunlight-libc/src/errno.rs
+@@ -11,6 +11,7 @@
+ pub const ENOENT: i32 = 2;
+ pub const EIO: i32 = 5;
+ pub const E2BIG: i32 = 7;
++pub const EOVERFLOW: i32 = 75;
+ pub const EBADF: i32 = 9;
+ pub const EAGAIN: i32 = 11;
+ pub const EPIPE: i32 = 32;
+--- a/sunlight-libc/src/lib.rs
++++ b/sunlight-libc/src/lib.rs
+@@ -40,6 +40,8 @@
+ pub mod errno;
+ /// File descriptor helpers: `lseek`, `fstat`, `isatty`.
+ pub mod fd;
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++mod c_file;
+ pub mod termios;
+ /// Shared file-manager copy/move operations (requires an application allocator).
+ #[cfg(any(test, feature = "file-ops"))]
+@@ -968,3 +970,9 @@
+ 
+ #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+ pub mod condvar;
++
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++mod wide_string;
++
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++mod sort;
+--- a/sunlight-libc/src/stdio.rs
++++ b/sunlight-libc/src/stdio.rs
+@@ -16,6 +16,7 @@
+     eof: bool,
+     error: bool,
+     closed: bool,
++    pushback: Option<u8>,
+ }
+ #[repr(C)]
+ pub struct SunlightFile {
+@@ -35,6 +36,7 @@
+                 eof: false,
+                 error: false,
+                 closed: false,
++                pushback: None,
+             }),
+         }
+     }
+@@ -135,6 +137,12 @@
+         return 0;
+     }
+     let mut done = 0;
++    if !bytes.is_empty() {
++        if let Some(byte) = state.pushback.take() {
++            bytes[0] = byte;
++            done = 1;
++        }
++    }
+     while done < bytes.len() {
+         let end = bytes
+             .len()
+@@ -466,9 +474,21 @@
+         fail(&mut state, Errno::Inval);
+         return -1;
+     }
++    let offset = if whence == crate::SEEK_CUR && state.pushback.is_some() {
++        match offset.checked_sub(1) {
++            Some(n) => n,
++            None => {
++                fail(&mut state, Errno::Inval);
++                return -1;
++            }
++        }
++    } else {
++        offset
++    };
+     match crate::lseek(state.fd, offset, whence) {
+         Ok(_) => {
+             state.eof = false;
++            state.pushback = None;
+             0
+         }
+         Err(e) => {
+@@ -483,7 +503,13 @@
+         return -1;
+     };
+     match crate::lseek(state.fd, 0, crate::SEEK_CUR) {
+-        Ok(n) if n <= c_long::MAX as u64 => n as c_long,
++        Ok(n) if n <= c_long::MAX as u64 => {
++            if state.pushback.is_some() {
++                n as c_long - 1
++            } else {
++                n as c_long
++            }
++        }
+         Ok(_) => {
+             fail(&mut state, Errno::TooBig);
+             -1
+@@ -529,3 +555,94 @@
+ pub unsafe extern "C" fn vprintf(fmt: *const u8, args: VaList<'_>) -> c_int {
+     vfprintf(stdout, fmt, args)
+ }
++
++#[cfg_attr(not(test), no_mangle)]
++pub unsafe extern "C" fn vsnprintf(
++    destination: *mut u8,
++    size: usize,
++    fmt: *const u8,
++    args: VaList<'_>,
++) -> c_int {
++    if fmt.is_null() || (size > 0 && destination.is_null()) {
++        errno::set_errno(errno::EINVAL);
++        return -1;
++    }
++    format::memory(destination, size, cbytes(fmt), args)
++}
++#[cfg_attr(not(test), no_mangle)]
++pub unsafe extern "C" fn snprintf(
++    destination: *mut u8,
++    size: usize,
++    fmt: *const u8,
++    args: ...
++) -> c_int {
++    vsnprintf(destination, size, fmt, args)
++}
++#[cfg_attr(not(test), no_mangle)]
++pub unsafe extern "C" fn vsprintf(destination: *mut u8, fmt: *const u8, args: VaList<'_>) -> c_int {
++    vsnprintf(destination, usize::MAX, fmt, args)
++}
++#[cfg_attr(not(test), no_mangle)]
++pub unsafe extern "C" fn sprintf(destination: *mut u8, fmt: *const u8, args: ...) -> c_int {
++    vsprintf(destination, fmt, args)
++}
++
++#[cfg_attr(not(test), no_mangle)]
++pub unsafe extern "C" fn ungetc(ch: c_int, file: *mut SunlightFile) -> c_int {
++    let Some(mut state) = lock(file) else {
++        return EOF;
++    };
++    if ch == EOF {
++        return EOF;
++    }
++    if !state.readable {
++        fail(&mut state, Errno::BadFd);
++        return EOF;
++    }
++    if state.pushback.is_some() {
++        return EOF;
++    }
++    let byte = ch as u8;
++    state.pushback = Some(byte);
++    state.eof = false;
++    byte as c_int
++}
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++#[no_mangle]
++pub unsafe extern "C" fn fdopen(fd: c_int, mode: *const u8) -> *mut SunlightFile {
++    if mode.is_null() {
++        errno::set_errno(errno::EINVAL);
++        return core::ptr::null_mut();
++    }
++    let mode = cbytes(mode);
++    let Some((flags, read, write)) = mode_flags(mode) else {
++        errno::set_errno(errno::EINVAL);
++        return core::ptr::null_mut();
++    };
++    // Exclusive creation belongs to fopen, never descriptor adoption.
++    if mode.contains(&b'x') {
++        errno::set_errno(errno::EINVAL);
++        return core::ptr::null_mut();
++    }
++    let status = crate::c_file::control(fd, 3, 0);
++    if status < 0 {
++        return core::ptr::null_mut();
++    }
++    if (read && status & 3 == 1) || (write && status & 3 == 0) {
++        errno::set_errno(errno::EINVAL);
++        return core::ptr::null_mut();
++    }
++    let file = crate::alloc::malloc(core::mem::size_of::<SunlightFile>()).cast::<SunlightFile>();
++    if file.is_null() {
++        errno::set_errno(errno::ENOMEM);
++        return file;
++    }
++    if flags & crate::O_APPEND != 0
++        && crate::c_file::control(fd, 4, status | crate::O_APPEND as c_int) < 0
++    {
++        crate::alloc::free(file.cast());
++        return core::ptr::null_mut();
++    }
++    file.write(SunlightFile::new(fd as u32, read, write));
++    file
++}
+--- a/sunlight-libc/src/stdio/format.rs
++++ b/sunlight-libc/src/stdio/format.rs
+@@ -3,25 +3,54 @@
+ use super::*;
+ 
+ struct Output<'a> {
+-    state: &'a mut State,
++    state: Option<&'a mut State>,
++    destination: *mut u8,
++    capacity: usize,
+     count: usize,
+ }
+ impl Output<'_> {
++    fn error(&mut self, code: c_int) {
++        if let Some(state) = self.state.as_deref_mut() {
++            state.error = true;
++        }
++        errno::set_errno(code);
++    }
+     fn bytes(&mut self, bytes: &[u8]) -> Result<(), ()> {
+         if bytes.len() > c_int::MAX as usize - self.count {
+-            fail(self.state, Errno::TooBig);
+-            return Err(());
+-        }
+-        if write_bytes(self.state, bytes) != bytes.len() {
+-            return Err(());
++            self.error(errno::EOVERFLOW);
++            return Err(());
++        }
++        if let Some(state) = self.state.as_deref_mut() {
++            if write_bytes(state, bytes) != bytes.len() {
++                return Err(());
++            }
++        } else {
++            let n = bytes.len().min(self.capacity.saturating_sub(self.count));
++            if n > 0 {
++                unsafe {
++                    core::ptr::copy_nonoverlapping(
++                        bytes.as_ptr(),
++                        self.destination.add(self.count),
++                        n,
++                    );
++                }
++            }
+         }
+         self.count += bytes.len();
+         Ok(())
+     }
+     fn pad(&mut self, byte: u8, mut n: usize) -> Result<(), ()> {
+         if n > c_int::MAX as usize - self.count {
+-            fail(self.state, Errno::TooBig);
+-            return Err(());
++            self.error(errno::EOVERFLOW);
++            return Err(());
++        }
++        if self.state.is_none() {
++            let stored = n.min(self.capacity.saturating_sub(self.count));
++            if stored > 0 {
++                unsafe { core::ptr::write_bytes(self.destination.add(self.count), byte, stored) };
++            }
++            self.count += n;
++            return Ok(());
+         }
+         let block = [byte; 64];
+         while n > 0 {
+@@ -99,10 +128,10 @@
+             }
+             n.unsigned_abs() as usize
+         } else {
+-            number(fmt, &mut i).ok_or_else(|| fail(out.state, Errno::TooBig))?
++            number(fmt, &mut i).ok_or_else(|| out.error(errno::EOVERFLOW))?
+         };
+         if width > c_int::MAX as usize {
+-            fail(out.state, Errno::TooBig);
++            out.error(errno::EOVERFLOW);
+             return Err(());
+         }
+         let mut precision = None;
+@@ -117,10 +146,14 @@
+                     Some(n as usize)
+                 }
+             } else {
+-                Some(number(fmt, &mut i).ok_or_else(|| fail(out.state, Errno::TooBig))?)
++                Some(number(fmt, &mut i).ok_or_else(|| out.error(errno::EOVERFLOW))?)
+             };
+         }
+         let length = match fmt.get(i) {
++            Some(b'L') => {
++                i += 1;
++                4
++            }
+             Some(b'h') => {
+                 i += 1;
+                 if fmt.get(i) == Some(&b'h') {
+@@ -144,14 +177,36 @@
+             _ => 0,
+         };
+         let Some(&conversion) = fmt.get(i) else {
+-            fail(out.state, Errno::Inval);
++            out.error(errno::EINVAL);
+             return Err(());
+         };
+         i += 1;
++        if matches!(conversion, b'f' | b'F' | b'e' | b'E' | b'g' | b'G') {
++            if length != 0 && length != 3 {
++                out.error(errno::ENOSYS);
++                return Err(());
++            }
++            decimal(
++                out,
++                args.next_arg::<f64>(),
++                conversion,
++                precision,
++                width,
++                left,
++                plus,
++                space,
++                zero,
++                alternate,
++            )?;
++            continue;
++        }
++        if (conversion == b's' || conversion == b'c') && length == 3 {
++            wide(out, &mut args, conversion, precision, width, left)?;
++            continue;
++        }
+         if conversion == b's' || conversion == b'c' {
+             if length != 0 {
+-                errno::set_errno(errno::ENOSYS);
+-                out.state.error = true;
++                out.error(errno::ENOSYS);
+                 return Err(());
+             }
+             let byte;
+@@ -161,7 +216,7 @@
+             } else {
+                 let ptr = args.next_arg::<*const u8>();
+                 if ptr.is_null() {
+-                    fail(out.state, Errno::Inval);
++                    out.error(errno::EINVAL);
+                     return Err(());
+                 }
+                 // A precision bound must not scan beyond that many bytes.
+@@ -183,12 +238,11 @@
+             continue;
+         }
+         if !matches!(conversion, b'd' | b'i' | b'u' | b'o' | b'x' | b'X' | b'p') {
+-            out.state.error = true;
+-            errno::set_errno(errno::ENOSYS);
++            out.error(errno::ENOSYS);
+             return Err(());
+         }
+         if conversion == b'p' && length != 0 {
+-            fail(out.state, Errno::Inval);
++            out.error(errno::EINVAL);
+             return Err(());
+         }
+         let is_signed = conversion == b'd' || conversion == b'i';
+@@ -269,9 +323,267 @@
+         fail(state, Errno::BadFd);
+         return -1;
+     }
+-    let mut out = Output { state, count: 0 };
++    let mut out = Output {
++        state: Some(state),
++        destination: core::ptr::null_mut(),
++        capacity: 0,
++        count: 0,
++    };
+     match render(&mut out, fmt, args) {
+         Ok(()) => out.count as c_int,
+         Err(()) => -1,
+     }
+ }
++
++// Capacity excludes the final NUL. usize::MAX selects sprintf's caller-owned
++// unbounded destination contract, without a temporary output buffer.
++pub(super) unsafe fn memory(
++    destination: *mut u8,
++    size: usize,
++    fmt: &[u8],
++    args: VaList<'_>,
++) -> c_int {
++    let mut out = Output {
++        state: None,
++        destination,
++        capacity: size.saturating_sub(1),
++        count: 0,
++    };
++    let result = render(&mut out, fmt, args);
++    if size > 0 {
++        destination.add(out.count.min(size - 1)).write(0);
++    }
++    match result {
++        Ok(()) => out.count as c_int,
++        Err(()) => -1,
++    }
++}
++// Binary64 has at most 309 integral and 1074 fractional decimal digits.
++// 1536 bytes hold a complete fixed expansion or scientific expansion with
++// 1100 fractional digits. Further requested digits are streamed as zeros.
++struct Decimal {
++    bytes: [u8; 1536],
++    len: usize,
++}
++impl core::fmt::Write for Decimal {
++    fn write_str(&mut self, s: &str) -> core::fmt::Result {
++        if s.len() > self.bytes.len() - self.len {
++            return Err(core::fmt::Error);
++        }
++        self.bytes[self.len..self.len + s.len()].copy_from_slice(s.as_bytes());
++        self.len += s.len();
++        Ok(())
++    }
++}
++fn decimal(
++    out: &mut Output<'_>,
++    value: f64,
++    conversion: u8,
++    precision: Option<usize>,
++    width: usize,
++    left: bool,
++    plus: bool,
++    space: bool,
++    zero: bool,
++    alternate: bool,
++) -> Result<(), ()> {
++    use core::fmt::Write;
++    let upper = conversion.is_ascii_uppercase();
++    let kind = conversion.to_ascii_lowercase();
++    let negative = value.is_sign_negative();
++    let value = value.abs();
++    let mut d = Decimal {
++        bytes: [0; 1536],
++        len: 0,
++    };
++    let mut extra = 0;
++    let mut exponent = None;
++    if !value.is_finite() {
++        d.write_str(if value.is_nan() { "nan" } else { "inf" })
++            .map_err(|_| out.error(errno::EOVERFLOW))?;
++    } else {
++        let p = precision.unwrap_or(6);
++        let p = if kind == b'g' { p.max(1) } else { p };
++        let scientific = kind == b'e' || kind == b'g';
++        let digits = if kind == b'g' { p - 1 } else { p };
++        let bounded = digits.min(1100);
++        if scientific {
++            write!(&mut d, "{:.*e}", bounded, value)
++        } else {
++            write!(&mut d, "{:.*}", bounded, value)
++        }
++        .map_err(|_| out.error(errno::EOVERFLOW))?;
++        if scientific {
++            let e = d.bytes[..d.len]
++                .iter()
++                .position(|&b| b == b'e')
++                .ok_or_else(|| out.error(errno::EINVAL))?;
++            let exp = core::str::from_utf8(&d.bytes[e + 1..d.len])
++                .ok()
++                .and_then(|s| s.parse::<i32>().ok())
++                .ok_or_else(|| out.error(errno::EINVAL))?;
++            if kind == b'g' && exp >= -4 && exp < p as i32 {
++                d.len = 0;
++                let frac = (p as i64 - 1 - exp as i64).max(0) as usize;
++                write!(&mut d, "{:.*}", frac.min(1100), value)
++                    .map_err(|_| out.error(errno::EOVERFLOW))?;
++                extra = frac.saturating_sub(1100);
++            } else {
++                d.len = e;
++                exponent = Some(exp);
++                extra = digits.saturating_sub(1100);
++            }
++        } else {
++            extra = digits.saturating_sub(1100);
++        }
++        if kind == b'g' && !alternate {
++            extra = 0;
++            if d.bytes[..d.len].contains(&b'.') {
++                while d.len > 0 && d.bytes[d.len - 1] == b'0' {
++                    d.len -= 1;
++                }
++                if d.len > 0 && d.bytes[d.len - 1] == b'.' {
++                    d.len -= 1;
++                }
++            }
++        } else if alternate && !d.bytes[..d.len].contains(&b'.') {
++            d.write_str(".").map_err(|_| out.error(errno::EOVERFLOW))?;
++        }
++    }
++    let mut ebuf = [0u8; 16];
++    let mut elen = 0;
++    if let Some(exp) = exponent {
++        ebuf[0] = if upper { b'E' } else { b'e' };
++        ebuf[1] = if exp < 0 { b'-' } else { b'+' };
++        let mut n = exp.unsigned_abs();
++        let mut rev = [0; 10];
++        let mut len = 0;
++        loop {
++            rev[len] = b'0' + (n % 10) as u8;
++            len += 1;
++            n /= 10;
++            if n == 0 {
++                break;
++            }
++        }
++        if len == 1 {
++            rev[len] = b'0';
++            len += 1;
++        }
++        for i in 0..len {
++            ebuf[2 + i] = rev[len - 1 - i];
++        }
++        elen = 2 + len;
++    }
++    if upper {
++        for b in &mut d.bytes[..d.len] {
++            b.make_ascii_uppercase();
++        }
++    }
++    let sign = if negative {
++        Some(b'-')
++    } else if plus {
++        Some(b'+')
++    } else if space {
++        Some(b' ')
++    } else {
++        None
++    };
++    let len = d
++        .len
++        .checked_add(extra)
++        .and_then(|n| n.checked_add(elen + usize::from(sign.is_some())))
++        .ok_or_else(|| out.error(errno::EOVERFLOW))?;
++    if len > c_int::MAX as usize {
++        out.error(errno::EOVERFLOW);
++        return Err(());
++    }
++    let padding = width.saturating_sub(len);
++    let z = zero && !left && value.is_finite();
++    if !left && !z {
++        out.pad(b' ', padding)?;
++    }
++    if let Some(s) = sign {
++        out.bytes(&[s])?;
++    }
++    if z {
++        out.pad(b'0', padding)?;
++    }
++    out.bytes(&d.bytes[..d.len])?;
++    out.pad(b'0', extra)?;
++    out.bytes(&ebuf[..elen])?;
++    if left {
++        out.pad(b' ', padding)?;
++    }
++    Ok(())
++}
++
++// The existing LC_CTYPE contract is C ASCII or strict Unicode UTF-8.
++// Locale mutation requires external serialization, as for mbrtowc.
++unsafe fn wide(
++    out: &mut Output<'_>,
++    args: &mut VaList<'_>,
++    conversion: u8,
++    precision: Option<usize>,
++    width: usize,
++    left: bool,
++) -> Result<(), ()> {
++    let utf8 = crate::locale::ctype_is_utf8();
++    let encode = |value: u32, buffer: &mut [u8; 4]| -> Result<usize, ()> {
++        if !utf8 && value > 127 {
++            return Err(());
++        }
++        let c = char::from_u32(value).ok_or(())?;
++        Ok(c.encode_utf8(buffer).len())
++    };
++    if conversion == b'c' {
++        let value = args.next_arg::<u32>();
++        let mut buffer = [0; 4];
++        let n = encode(value, &mut buffer).map_err(|_| out.error(errno::EILSEQ))?;
++        if !left {
++            out.pad(b' ', width.saturating_sub(n))?;
++        }
++        out.bytes(&buffer[..n])?;
++        if left {
++            out.pad(b' ', width.saturating_sub(n))?;
++        }
++        return Ok(());
++    }
++    let source = args.next_arg::<*const i32>();
++    if source.is_null() {
++        out.error(errno::EINVAL);
++        return Err(());
++    }
++    let limit = precision.unwrap_or(usize::MAX);
++    let mut length = 0usize;
++    let mut chars = 0;
++    while length < limit {
++        let value = *source.add(chars);
++        if value == 0 {
++            break;
++        }
++        let mut buffer = [0; 4];
++        let n = encode(value as u32, &mut buffer).map_err(|_| out.error(errno::EILSEQ))?;
++        if n > limit - length {
++            break;
++        }
++        if n > c_int::MAX as usize - length {
++            out.error(errno::EOVERFLOW);
++            return Err(());
++        }
++        length += n;
++        chars += 1;
++    }
++    if !left {
++        out.pad(b' ', width.saturating_sub(length))?;
++    }
++    for i in 0..chars {
++        let mut buffer = [0; 4];
++        let n = encode(*source.add(i) as u32, &mut buffer).map_err(|_| out.error(errno::EILSEQ))?;
++        out.bytes(&buffer[..n])?;
++    }
++    if left {
++        out.pad(b' ', width.saturating_sub(length))?;
++    }
++    Ok(())
++}
+--- /dev/null
++++ b/sunlight-libc/include/fcntl.h
+@@ -0,0 +1,31 @@
++#ifndef SUNLIGHT_FCNTL_H
++#define SUNLIGHT_FCNTL_H
++#include <sys/types.h>
++#define O_RDONLY 0
++#define O_WRONLY 1
++#define O_RDWR 2
++#define O_ACCMODE 3
++#define O_CREAT 0x40
++#define O_EXCL 0x80
++#define O_TRUNC 0x200
++#define O_APPEND 0x400
++#define O_NONBLOCK 0x800
++#define O_NOFOLLOW 0x20000
++#define O_CLOEXEC 0x80000
++#define F_DUPFD 0
++#define F_GETFD 1
++#define F_SETFD 2
++#define F_GETFL 3
++#define F_SETFL 4
++#define F_DUPFD_CLOEXEC 1030
++#define FD_CLOEXEC 1
++#ifdef __cplusplus
++extern "C" {
++#endif
++/* Only the listed descriptor/flag operations are supported. No file locks. */
++int open(const char *path, int flags, ...);
++int fcntl(int fd, int command, ...);
++#ifdef __cplusplus
++}
++#endif
++#endif
+--- /dev/null
++++ b/sunlight-libc/src/c_file.rs
+@@ -0,0 +1,91 @@
++//! C entry points for existing native descriptor operations. No Linux backend.
++use crate::{errno, sys};
++use core::ffi::c_int;
++
++pub(crate) fn control(fd: c_int, command: c_int, argument: c_int) -> c_int {
++    if fd < 0 {
++        errno::set_errno(errno::EBADF);
++        return -1;
++    }
++    match sys::check(unsafe {
++        sys::syscall3(49, fd as u64, command as u64, argument as u32 as u64)
++    }) {
++        Ok(n) if n <= c_int::MAX as u64 => n as c_int,
++        Ok(_) => {
++            errno::set_errno(errno::EOVERFLOW);
++            -1
++        }
++        Err(e) => {
++            errno::set_from_errno(e);
++            -1
++        }
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn fcntl(fd: c_int, command: c_int, mut arguments: ...) -> c_int {
++    let arg = match command {
++        1 | 3 => 0,
++        0 | 2 | 4 | 1030 => arguments.next_arg::<c_int>(),
++        _ => {
++            errno::set_errno(errno::EINVAL);
++            return -1;
++        }
++    };
++    control(fd, command, arg)
++}
++#[no_mangle]
++pub unsafe extern "C" fn open(path: *const u8, flags: c_int, mut arguments: ...) -> c_int {
++    if path.is_null() {
++        errno::set_errno(errno::EFAULT);
++        return -1;
++    }
++    // Reject unknown flags rather than let the native backend ignore them.
++    const FLAGS: c_int = 3 | 0x40 | 0x80 | 0x200 | 0x400 | 0x800 | 0x20000 | 0x80000;
++    if flags & !FLAGS != 0 || flags & 3 == 3 {
++        errno::set_errno(errno::EINVAL);
++        return -1;
++    }
++    let mode = if flags & 0x40 != 0 {
++        arguments.next_arg::<u32>()
++    } else {
++        0
++    };
++    let mut len = 0;
++    while *path.add(len) != 0 {
++        len += 1;
++    }
++    if mode & !0o7777 != 0 {
++        errno::set_errno(errno::EINVAL);
++        return -1;
++    }
++    match crate::open_with_flags_mode(
++        core::slice::from_raw_parts(path, len),
++        flags as u64,
++        mode as u16,
++    ) {
++        Ok(fd) => fd.0 as c_int,
++        Err(e) => {
++            errno::set_from_errno(e);
++            -1
++        }
++    }
++}
++
++#[no_mangle]
++pub unsafe extern "C" fn unlink(path: *const u8) -> c_int {
++    if path.is_null() {
++        errno::set_errno(errno::EFAULT);
++        return -1;
++    }
++    let mut len = 0;
++    while *path.add(len) != 0 {
++        len += 1;
++    }
++    match crate::unlink(core::slice::from_raw_parts(path, len)) {
++        Ok(()) => 0,
++        Err(e) => {
++            errno::set_from_errno(e);
++            -1
++        }
++    }
++}
+--- /dev/null
++++ b/sunlight-libc/src/wide_string.rs
+@@ -0,0 +1,128 @@
++//! Locale-independent operations on the native signed 32-bit wchar_t ABI.
++#[no_mangle]
++pub unsafe extern "C" fn wcslen(s: *const i32) -> usize {
++    let mut n = 0;
++    while *s.add(n) != 0 {
++        n += 1;
++    }
++    n
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcscpy(d: *mut i32, s: *const i32) -> *mut i32 {
++    let mut n = 0;
++    loop {
++        let c = *s.add(n);
++        d.add(n).write(c);
++        if c == 0 {
++            return d;
++        }
++        n += 1;
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcsncpy(d: *mut i32, s: *const i32, n: usize) -> *mut i32 {
++    let mut i = 0;
++    while i < n {
++        let c = *s.add(i);
++        d.add(i).write(c);
++        i += 1;
++        if c == 0 {
++            break;
++        }
++    }
++    while i < n {
++        d.add(i).write(0);
++        i += 1;
++    }
++    d
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcsncmp(a: *const i32, b: *const i32, n: usize) -> i32 {
++    for i in 0..n {
++        let x = *a.add(i);
++        let y = *b.add(i);
++        if x != y {
++            return if x < y { -1 } else { 1 };
++        }
++        if x == 0 {
++            break;
++        }
++    }
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcscmp(a: *const i32, b: *const i32) -> i32 {
++    let mut i = 0;
++    loop {
++        let x = *a.add(i);
++        let y = *b.add(i);
++        if x != y {
++            return if x < y { -1 } else { 1 };
++        }
++        if x == 0 {
++            return 0;
++        }
++        i += 1;
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcschr(s: *const i32, c: i32) -> *mut i32 {
++    let mut p = s;
++    loop {
++        if *p == c {
++            return p as *mut i32;
++        }
++        if *p == 0 {
++            return core::ptr::null_mut();
++        }
++        p = p.add(1);
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcsrchr(s: *const i32, c: i32) -> *mut i32 {
++    let mut p = s;
++    let mut found = core::ptr::null_mut();
++    loop {
++        if *p == c {
++            found = p as *mut i32;
++        }
++        if *p == 0 {
++            return found;
++        }
++        p = p.add(1);
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn wmemchr(s: *const i32, c: i32, n: usize) -> *mut i32 {
++    for i in 0..n {
++        if *s.add(i) == c {
++            return s.add(i) as *mut i32;
++        }
++    }
++    core::ptr::null_mut()
++}
++#[no_mangle]
++pub unsafe extern "C" fn wcstok(s: *mut i32, delim: *const i32, save: *mut *mut i32) -> *mut i32 {
++    let mut p = if s.is_null() { *save } else { s };
++    if p.is_null() {
++        return p;
++    }
++    while *p != 0 && !wcschr(delim, *p).is_null() {
++        p = p.add(1);
++    }
++    if *p == 0 {
++        save.write(core::ptr::null_mut());
++        return core::ptr::null_mut();
++    }
++    let first = p;
++    while *p != 0 {
++        if !wcschr(delim, *p).is_null() {
++            p.write(0);
++            save.write(p.add(1));
++            return first;
++        }
++        p = p.add(1);
++    }
++    save.write(core::ptr::null_mut());
++    first
++}
+--- /dev/null
++++ b/sunlight-libc/src/sort.rs
+@@ -0,0 +1,64 @@
++//! Allocation-free C qsort. Heapsort bounds stack use and comparisons even for
++//! sorted or duplicate-heavy input. Stability is not part of the C contract.
++use core::ffi::{c_int, c_void};
++type Compare = unsafe extern "C" fn(*const c_void, *const c_void) -> c_int;
++unsafe fn swap(base: *mut u8, size: usize, a: usize, b: usize) {
++    if a == b {
++        return;
++    }
++    let a = base.add(a * size);
++    let b = base.add(b * size);
++    for i in 0..size {
++        let value = a.add(i).read();
++        a.add(i).write(b.add(i).read());
++        b.add(i).write(value);
++    }
++}
++unsafe fn sift(base: *mut u8, size: usize, mut root: usize, count: usize, compare: Compare) {
++    while root < count / 2 {
++        let mut child = root * 2 + 1;
++        if child + 1 < count
++            && compare(
++                base.add(child * size).cast(),
++                base.add((child + 1) * size).cast(),
++            ) < 0
++        {
++            child += 1;
++        }
++        if compare(base.add(root * size).cast(), base.add(child * size).cast()) >= 0 {
++            return;
++        }
++        swap(base, size, root, child);
++        root = child;
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn qsort(
++    base: *mut c_void,
++    count: usize,
++    size: usize,
++    compare: Option<Compare>,
++) {
++    if count < 2 || size == 0 {
++        return;
++    }
++    if base.is_null()
++        || compare.is_none()
++        || count
++            .checked_mul(size)
++            .filter(|&n| n <= isize::MAX as usize)
++            .is_none()
++    {
++        crate::errno::set_errno(crate::errno::EINVAL);
++        return;
++    }
++    let compare = compare.unwrap();
++    let base = base.cast::<u8>();
++    for root in (0..count / 2).rev() {
++        sift(base, size, root, count, compare);
++    }
++    for end in (2..=count).rev() {
++        swap(base, size, 0, end - 1);
++        sift(base, size, 0, end - 1, compare);
++    }
++}

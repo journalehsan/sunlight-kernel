@@ -1,0 +1,56 @@
+{
+  "status": "UNQUALIFIED",
+  "cases": {
+    "completion before waiter registration": {
+      "status": "UNQUALIFIED",
+      "reason": "Completed fast path and functional contention pass; no marker between failed CAS and kernel compare"
+    },
+    "completion during waiter registration": {
+      "status": "UNQUALIFIED",
+      "reason": "Actual registration-point SMP overlap absent; cannot interleave another user actor inside nonpreemptible critical section on1 CPU"
+    },
+    "waiter registration before completion": {
+      "status": "UNQUALIFIED",
+      "reason": "No installed-registration receipt for this actual once word"
+    },
+    "multiple waiters under contention": {
+      "status": "UNQUALIFIED",
+      "reason": "Functional12-caller test passes; exact installed waiter count unqualified"
+    },
+    "initializer pthread_exit": {
+      "status": "UNQUALIFIED",
+      "reason": "Functional cleanup/retry passes; registered-waiter abandonment not proven"
+    },
+    "retry after initializer abandonment": {
+      "status": "UNQUALIFIED",
+      "reason": "Functional reset/publication pass; precise registration ordering absent"
+    },
+    "contender exit during initialization": {
+      "status": "UNQUALIFIED",
+      "reason": "No supported pthread cancellation and no targeted kernel contender-termination fixture run"
+    },
+    "rapid completion/reuse observations": {
+      "status": "UNQUALIFIED",
+      "reason": "Repeated completed calls pass; overlapping rapid independent-control transitions absent"
+    }
+  },
+  "functional_tests": {
+    "1": {
+      "status": "PASS",
+      "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n"
+    },
+    "2": {
+      "status": "PASS",
+      "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n"
+    },
+    "4": {
+      "status": "PASS",
+      "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n"
+    }
+  },
+  "source_protocol": "0/1/2 acquire election/read, release publication/reset, wake-all; compare/register/wake serialized by kernel scheduler lock; waiter retries receipts",
+  "exact_native_witnesses_executed": false,
+  "coordination_plan": "race-closure-plan.md",
+  "test_only_existing_hooks": "Inspected isolated debug t4a_fixture; not armed or counted as once-integrated evidence",
+  "production_once_or_futex_changed": false
+}

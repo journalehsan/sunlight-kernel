@@ -1,0 +1,1 @@
+["python3", "tools/native-c/cc.py", "-O2", "-fno-builtin", "-std=c11", "-Wall", "-Wextra", "-Werror", "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-exit-race.c", "-o", "/home/ehsantor/Projects/sunlightos-kernel/target/py1-final-pthread-tsd-exit-race.elf"]

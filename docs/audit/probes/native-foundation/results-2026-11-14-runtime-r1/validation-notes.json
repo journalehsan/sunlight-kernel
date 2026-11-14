@@ -1,0 +1,12 @@
+{
+  "final_diff_check_exit": 0,
+  "initial_integrity_script_attempt": {
+    "result": "rejected newly-added-file classification",
+    "cause": "git ls-files includes existing tracked directory/broken-symlink entries; initial SHA256 baseline intentionally only hashed is_file entries",
+    "correction": "new regular files checked against R1 paths; all tracked entries additionally checked via git diff --name-only, which contains only the native Cargo.lock",
+    "production_source_effect": "none"
+  },
+  "inventory_schema": "all requirement entries contain subsystem, implementation locations, header/link availability, runtime evidence, semantic confidence, severity, next action and evidence",
+  "evidence_binary_policy": "generated ELF/object/archive products remain local and ignored; guest directories use existing runner ignore conventions",
+  "sessions": "all spawned command sessions completed; no subagents used"
+}

@@ -1,0 +1,138 @@
+[
+  {
+    "name": "initial",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "0"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "multiple",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "forced-after-owner",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "2"
+    ],
+    "expected_exit": 137
+  },
+  {
+    "name": "exit-0",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-matrix.elf",
+    "args": [
+      "0"
+    ],
+    "expected_exit": 17
+  },
+  {
+    "name": "exit-1",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-matrix.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 23
+  },
+  {
+    "name": "exit-2",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-matrix.elf",
+    "args": [
+      "2"
+    ],
+    "expected_exit": 29
+  },
+  {
+    "name": "exit-3",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-matrix.elf",
+    "args": [
+      "3"
+    ],
+    "expected_exit": 137
+  },
+  {
+    "name": "churn-0",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-1",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-2",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-3",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-4",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-5",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-6",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-7",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-8",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  },
+  {
+    "name": "churn-9",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf",
+    "args": [
+      "1"
+    ],
+    "expected_exit": 0
+  }
+]

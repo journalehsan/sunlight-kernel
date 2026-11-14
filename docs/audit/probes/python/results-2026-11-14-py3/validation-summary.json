@@ -1,0 +1,99 @@
+{
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "reason": "Locked baseline, exact archive/source/build interpreter and all 19 PY-2 failures reproduced; unattempted getbuildinfo identified without inferred diagnosis."
+    },
+    "G2": {
+      "status": "PASS",
+      "capability_status": "BLOCKED for POSIX stat and realpath",
+      "reason": "Owning-layer limitations established in source; existing native metadata subset tested. No filesystem production adapter invented."
+    },
+    "G3": {
+      "status": "PARTIAL",
+      "reason": "Implemented native-tested bulk conversions, locale conventions, unbuffered selection, clock resolution, and _exit. Mutable environment/calendar/langinfo and full buffering remain unresolved."
+    },
+    "G4": {
+      "status": "PASS",
+      "capability_status": "BLOCKED for required entropy/signals",
+      "reason": "Required semantics evaluated against existing native services; no unsafe stubs or fake constants."
+    },
+    "G5": {
+      "status": "PASS",
+      "compilation_status": "FAIL",
+      "reason": "Genuine configure plus all 180 configured object attempts; 163 PASS, 17 FAIL, zero unattempted."
+    },
+    "G6": {
+      "status": "PASS",
+      "link_status": "NOT_RUN",
+      "reason": "Conditional blocked-compilation acceptance: all mandatory blockers and exact diagnostics preserved. No complete interpreter link claimed."
+    },
+    "G7": {
+      "status": "PASS",
+      "reason": "Final-source native regressions and supported CPU matrix; see regression-results.json."
+    },
+    "G8": {
+      "status": "PASS",
+      "reason": "Standalone reversible PY-3 patch, incoming regular-file hashes, CPython/kernel integrity and security review; inherited qualifications preserved."
+    }
+  },
+  "compilation": {
+    "configured": 180,
+    "attempted": 180,
+    "passed": 163,
+    "failed": 17,
+    "unattempted": 0,
+    "status": "FAIL",
+    "previous_configured": 180,
+    "object_set_unchanged": true,
+    "first_remaining_failure": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+    "newly_successful": [
+      "Modules/getbuildinfo.o",
+      "Python/formatter_unicode.o",
+      "Python/initconfig.o"
+    ],
+    "mandatory_failed": [
+      "Modules/_io/fileio.o",
+      "Modules/_localemodule.o",
+      "Modules/_stat.o",
+      "Modules/_threadmodule.o",
+      "Modules/faulthandler.o",
+      "Modules/getpath.o",
+      "Modules/main.o",
+      "Modules/posixmodule.o",
+      "Modules/signalmodule.o",
+      "Modules/timemodule.o",
+      "Objects/obmalloc.o",
+      "Python/bootstrap_hash.o",
+      "Python/fileutils.o",
+      "Python/marshal.o",
+      "Python/pylifecycle.o",
+      "Python/pytime.o",
+      "Python/sysmodule.o"
+    ],
+    "notes": [
+      "Modules/getbuildinfo.o independently compiled with exact upstream shell recipe; make target itself remains blocked by dependencies.",
+      "Core-make log is interleaved; first failing diagnostic for each object is taken from its independent log.",
+      "No mandatory object removed and no optional module newly reclassified."
+    ],
+    "serial_reproduction": {
+      "command": [
+        "make",
+        "-j1",
+        "python"
+      ],
+      "cwd": "/tmp/sunlight-py3-cpython/cross-static",
+      "exit": 2,
+      "first_error": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]",
+      "log": "core-serial.log"
+    }
+  },
+  "static_link": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "python_operational": false,
+  "regressions": "PASS",
+  "report": "docs/runtime/python-py3-libc-core-static-link.md",
+  "evidence": "docs/audit/probes/python/results-2026-11-14-py3"
+}

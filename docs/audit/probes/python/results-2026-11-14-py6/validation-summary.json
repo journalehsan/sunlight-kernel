@@ -1,0 +1,64 @@
+{
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "reason": "Baseline locked build, source/ownership inventory, design before production, preservation"
+    },
+    "G2": {
+      "status": "PARTIAL",
+      "reason": "Explicit provenance and Tmpfs lifetime identities; FAT stale/pinning failures and missing fields; no native identity ABI"
+    },
+    "G3": {
+      "status": "PARTIAL",
+      "reason": "Native authoritative query/chdir walk validated; directory-handle pinning, all syscall convergence and mutation schedules incomplete"
+    },
+    "G4": {
+      "status": "NOT_RUN",
+      "reason": "Native symlink implementation and tests remain unfinished; FAT unsupported"
+    },
+    "G5": {
+      "status": "PARTIAL",
+      "reason": "Real native realpath implemented and exercised; full stat/lstat/fstat and links unavailable"
+    },
+    "G6": {
+      "status": "PARTIAL",
+      "reason": "Shell cd and Files navigation use shared API; Files real UI comparison NOT_RUN; other path helpers remain"
+    },
+    "G7": {
+      "status": "PASS",
+      "reason": "Application consumers audited with explicit migration status"
+    },
+    "G8": {
+      "status": "PASS",
+      "reason": "Pinned complete CPython compilation repeated; compilation itself165/180 FAIL"
+    },
+    "G9": {
+      "status": "PASS",
+      "reason": "Final-source1/2/4 CPU existing and new native regressions, host VFS/FAT and ABI/vendor/archive checks"
+    },
+    "G10": {
+      "status": "FAIL",
+      "reason": "Final integrity verified but FAT object-lifetime violations remain demonstrated; forced security schedules unqualified"
+    }
+  },
+  "compilation": {
+    "configured": 180,
+    "attempted": 180,
+    "passed": 165,
+    "failed": 15,
+    "unattempted": 0,
+    "object_set_unchanged": true
+  },
+  "regressions": "PASS",
+  "known_FAT_lifetime_tests": "FAIL",
+  "static_link": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "integrity": "PASS",
+  "production_files": "modified-production-files.json",
+  "report": "docs/runtime/python-py6-unified-filesystem-foundation.md",
+  "evidence": "docs/audit/probes/python/results-2026-11-14-py6",
+  "no_commit": true,
+  "no_push": true
+}

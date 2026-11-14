@@ -1,0 +1,16 @@
+{
+  "command": [
+    "python3",
+    "tools/native-c/cc.py",
+    "-std=c11",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c",
+    "-o",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.elf"
+  ],
+  "exit": 1,
+  "api": "_Exit",
+  "status": "FAIL"
+}

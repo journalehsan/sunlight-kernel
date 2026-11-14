@@ -1,0 +1,314 @@
+{
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "every execution/build command has expected status",
+      "pass": true
+    },
+    {
+      "check": "cpu1 256 stale public identities rejected",
+      "pass": true
+    },
+    {
+      "check": "cpu1 admission64/exhaustion/recovery",
+      "pass": true
+    },
+    {
+      "check": "cpu1 actual reserved-join interval and registry empty",
+      "pass": true
+    },
+    {
+      "check": "cpu1 E1 negative contract reproduced",
+      "pass": true
+    },
+    {
+      "check": "cpu1 exit mode0 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu1 exit mode1 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu1 exit mode2 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu1 exit mode3 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu1 force transition and exactly one owner/borrower reap",
+      "pass": true
+    },
+    {
+      "check": "cpu1 four detached waves all-kernel-reaped",
+      "pass": true
+    },
+    {
+      "check": "cpu1 four detached waves bounded-quiescence",
+      "pass": true
+    },
+    {
+      "check": "cpu1 explicit wave sweep reaches zero",
+      "pass": true
+    },
+    {
+      "check": "cpu1 actual64 detached queue idle retention and complete sweep",
+      "pass": true
+    },
+    {
+      "check": "cpu1 callback/delete/reuse interval completes",
+      "pass": true
+    },
+    {
+      "check": "cpu1 every73C/21C++ guest cell passes",
+      "pass": true
+    },
+    {
+      "check": "cpu2 256 stale public identities rejected",
+      "pass": true
+    },
+    {
+      "check": "cpu2 admission64/exhaustion/recovery",
+      "pass": true
+    },
+    {
+      "check": "cpu2 actual reserved-join interval and registry empty",
+      "pass": true
+    },
+    {
+      "check": "cpu2 E1 negative contract reproduced",
+      "pass": true
+    },
+    {
+      "check": "cpu2 exit mode0 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu2 exit mode1 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu2 exit mode2 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu2 exit mode3 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu2 force transition and exactly one owner/borrower reap",
+      "pass": true
+    },
+    {
+      "check": "cpu2 four detached waves all-kernel-reaped",
+      "pass": true
+    },
+    {
+      "check": "cpu2 four detached waves bounded-quiescence",
+      "pass": true
+    },
+    {
+      "check": "cpu2 explicit wave sweep reaches zero",
+      "pass": true
+    },
+    {
+      "check": "cpu2 actual64 detached queue idle retention and complete sweep",
+      "pass": true
+    },
+    {
+      "check": "cpu2 callback/delete/reuse interval completes",
+      "pass": true
+    },
+    {
+      "check": "cpu2 every73C/21C++ guest cell passes",
+      "pass": true
+    },
+    {
+      "check": "cpu4 256 stale public identities rejected",
+      "pass": true
+    },
+    {
+      "check": "cpu4 admission64/exhaustion/recovery",
+      "pass": true
+    },
+    {
+      "check": "cpu4 actual reserved-join interval and registry empty",
+      "pass": true
+    },
+    {
+      "check": "cpu4 E1 negative contract reproduced",
+      "pass": true
+    },
+    {
+      "check": "cpu4 exit mode0 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu4 exit mode1 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu4 exit mode2 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu4 exit mode3 exact callback/exit/resource contract",
+      "pass": true
+    },
+    {
+      "check": "cpu4 force transition and exactly one owner/borrower reap",
+      "pass": true
+    },
+    {
+      "check": "cpu4 four detached waves all-kernel-reaped",
+      "pass": true
+    },
+    {
+      "check": "cpu4 four detached waves bounded-quiescence",
+      "pass": true
+    },
+    {
+      "check": "cpu4 explicit wave sweep reaches zero",
+      "pass": true
+    },
+    {
+      "check": "cpu4 actual64 detached queue idle retention and complete sweep",
+      "pass": true
+    },
+    {
+      "check": "cpu4 callback/delete/reuse interval completes",
+      "pass": true
+    },
+    {
+      "check": "cpu4 every73C/21C++ guest cell passes",
+      "pass": true
+    },
+    {
+      "check": "accounting alias binding verified",
+      "pass": true
+    },
+    {
+      "check": "accounting cpu1 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "accounting cpu2 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "accounting cpu4 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "capacity alias binding verified",
+      "pass": true
+    },
+    {
+      "check": "capacity cpu1 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "capacity cpu2 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "capacity cpu4 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "claim alias binding verified",
+      "pass": true
+    },
+    {
+      "check": "claim cpu1 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "claim cpu2 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "claim cpu4 ELF matches audited binding",
+      "pass": true
+    },
+    {
+      "check": "missing _Exit declaration diagnostic preserved",
+      "pass": true
+    },
+    {
+      "check": "missing _Exit export diagnostic preserved",
+      "pass": true
+    },
+    {
+      "check": "TCP cpu2 live resource counters zero",
+      "pass": true
+    },
+    {
+      "check": "TCP cpu4 live resource counters zero",
+      "pass": true
+    },
+    {
+      "check": "only authorized two baseline source files changed",
+      "pass": true
+    },
+    {
+      "check": "raw vendor manifest mismatch distinguished from unchanged numerical files",
+      "pass": true
+    },
+    {
+      "check": "strict race gates remain open",
+      "pass": true
+    },
+    {
+      "check": "required artifact source-baseline.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact ownership-model.md",
+      "pass": true
+    },
+    {
+      "check": "required artifact kernel-exit-contract.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact exit-scenario-matrix.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact detached-reclamation.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact handle-identity.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact tls-race-witnesses.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact once-futex-race-witnesses.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact cpu-matrix.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact security-regressions.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact cpython-compatibility.json",
+      "pass": true
+    },
+    {
+      "check": "required artifact validation-summary.json",
+      "pass": true
+    }
+  ],
+  "scope": "Evidence consistency checks; do not replace native witnesses or qualify unobserved races"
+}

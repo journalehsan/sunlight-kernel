@@ -1,0 +1,32 @@
+[
+  {
+    "target": "Programs/python.o",
+    "exit": 0,
+    "log": "final-compile-Programs-python-o.log"
+  },
+  {
+    "target": "Python/pyctype.o",
+    "exit": 0,
+    "log": "final-compile-Python-pyctype-o.log"
+  },
+  {
+    "target": "Python/pymath.o",
+    "exit": 0,
+    "log": "final-compile-Python-pymath-o.log"
+  },
+  {
+    "target": "Python/thread.o",
+    "exit": 2,
+    "log": "final-compile-Python-thread-o.log"
+  },
+  {
+    "target": "Objects/longobject.o",
+    "exit": 2,
+    "log": "final-compile-Objects-longobject-o.log"
+  },
+  {
+    "target": "python",
+    "exit": 2,
+    "log": "final-compile-python.log"
+  }
+]

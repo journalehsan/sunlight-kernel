@@ -218,10 +218,14 @@ impl Tmpfs {
     /// Return the stable inode number for a filesystem-local path.
     pub fn lookup(&self, path: &str) -> Result<u64, FsError> {
         let idx = self.entry_idx(path)?;
+        Ok(self.inode_id(idx))
+    }
+
+    fn inode_id(&self, idx: usize) -> u64 {
         if idx == usize::MAX {
-            return Ok(0);
+            return 0;
         }
-        Ok(if idx < self.entries.len() {
+        if idx < self.entries.len() {
             self.buffers
                 .get(idx)
                 .and_then(Option::as_ref)
@@ -229,7 +233,7 @@ impl Tmpfs {
                 .unwrap_or(idx as u64 + 1)
         } else {
             self.dynamic.entries[idx - self.entries.len()].data.id
-        })
+        }
     }
 
     fn add_entry(
@@ -357,7 +361,9 @@ impl Tmpfs {
     fn alloc_handle(&mut self, entry_idx: usize) -> Result<FileHandle, FsError> {
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
-                let generation = next_handle_generation(self.generations[idx]);
+                let Some(generation) = next_handle_generation(self.generations[idx]) else {
+                    continue;
+                };
                 self.generations[idx] = generation;
                 *slot = Some(RamOpen {
                     entry_idx,
@@ -401,6 +407,31 @@ impl Drop for Tmpfs {
 }
 
 impl FileSystem for Tmpfs {
+    fn capabilities(&self) -> crate::vfs::BackendCapabilities {
+        crate::vfs::BackendCapabilities::TMPFS
+    }
+    fn path_capabilities(&self, path: &str) -> crate::vfs::BackendCapabilities {
+        let mut caps = self.capabilities();
+        if self.entry_idx(path) == Ok(usize::MAX) {
+            caps.ownership_permissions = crate::vfs::MetadataSource::Policy;
+        }
+        caps
+    }
+    fn handle_capabilities(&self, handle: FileHandle) -> crate::vfs::BackendCapabilities {
+        let mut caps = self.capabilities();
+        if self.handle_entry_idx(handle) == Ok(usize::MAX) {
+            caps.ownership_permissions = crate::vfs::MetadataSource::Policy;
+        }
+        caps
+    }
+    fn object_id(&self, path: &str) -> Result<Option<u64>, FsError> {
+        self.lookup(path).map(Some)
+    }
+    fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
+        let idx = self.handle_entry_idx(handle)?;
+        Ok(Some(self.inode_id(idx)))
+    }
+
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
         let entry_idx = self.entry_idx(path)?;
         self.alloc_handle(entry_idx)

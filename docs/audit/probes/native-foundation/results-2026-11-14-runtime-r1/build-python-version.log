@@ -1,0 +1,5 @@
+$ /tmp/sunlight-r1-cpython/build-host/python -c 'import sys; print(sys.version); assert sys.version_info[:3] == (3,13,0)'
+cwd=/tmp/sunlight-r1-cpython
+3.13.0 (main, Nov 14 2026, 13:06:50) [GCC 16.2.1 20260810]
+
+exit=0

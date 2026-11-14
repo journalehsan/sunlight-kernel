@@ -1,0 +1,98 @@
+[
+  {
+    "name": "heap-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-heap.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.3650173950009048
+  },
+  {
+    "name": "admission-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/retained-admission.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b4-admission.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.36554670199984685
+  },
+  {
+    "name": "supplemental-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 49.261902355006896
+  },
+  {
+    "name": "supplemental-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 35.15124024800025
+  },
+  {
+    "name": "supplemental-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/supplemental-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 33.51320153000415
+  },
+  {
+    "name": "cxx-abi-vendor",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_runtime.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/cxx-abi-vendor"
+    ],
+    "exit": 0,
+    "seconds": 8.340484699991066
+  }
+]

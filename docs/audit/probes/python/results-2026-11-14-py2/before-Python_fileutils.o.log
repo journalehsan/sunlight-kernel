@@ -1,0 +1,272 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:145:20: error: call to undeclared function 'mbstowcs'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  145 |     size_t count = mbstowcs(dest, src, n);
+      |                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:145:20: note: did you mean 'mbrtowc'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/wchar.h:18:8: note: 'mbrtowc' declared here
+   18 | size_t mbrtowc(wchar_t *out, const char *s, size_t n, mbstate_t *ps);
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:341:11: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  341 |     len = wcslen(text);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:686:24: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  686 |     const size_t len = wcslen(text);
+      |                        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:721:33: error: call to undeclared function 'wcstombs'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  721 |                     converted = wcstombs(bytes, buf, size);
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:724:33: error: call to undeclared function 'wcstombs'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  724 |                     converted = wcstombs(NULL, buf, 0);
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1236:34: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1236 | _Py_fstat_noraise(int fd, struct _Py_stat_struct *status)
+      |                                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1236:1: error: conflicting types for '_Py_fstat_noraise'
+ 1236 | _Py_fstat_noraise(int fd, struct _Py_stat_struct *status)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:110:17: note: previous declaration is here
+  110 | PyAPI_FUNC(int) _Py_fstat_noraise(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1290:12: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1290 |     return fstat(fd, status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1310:26: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1310 | _Py_fstat(int fd, struct _Py_stat_struct *status)
+      |                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1310:1: error: conflicting types for '_Py_fstat'
+ 1310 | _Py_fstat(int fd, struct _Py_stat_struct *status)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:105:17: note: previous declaration is here
+  105 | PyAPI_FUNC(int) _Py_fstat(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1317:33: error: incompatible pointer types passing 'struct stat *' to parameter of type 'struct stat *' [-Wincompatible-pointer-types]
+ 1317 |     res = _Py_fstat_noraise(fd, status);
+      |                                 ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:29: note: passing argument to parameter 'status' here
+  112 |     struct _Py_stat_struct *status);
+      |                             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1333:39: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1333 | _Py_wstat(const wchar_t* path, struct stat *buf)
+      |                                       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1333:1: error: conflicting types for '_Py_wstat'
+ 1333 | _Py_wstat(const wchar_t* path, struct stat *buf)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:1: note: previous declaration is here
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1349:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1349 |     err = stat(fname, buf);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1363:33: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1363 | _Py_stat(PyObject *path, struct stat *statbuf)
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1363:1: error: conflicting types for '_Py_stat'
+ 1363 | _Py_stat(PyObject *path, struct stat *statbuf)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:115:17: note: previous declaration is here
+  115 | PyAPI_FUNC(int) _Py_stat(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1390:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1390 |     ret = stat(cpath, statbuf);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1429:13: error: call to undeclared function 'fcntl'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1429 |     flags = fcntl(fd, F_GETFD, 0);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1429:23: error: use of undeclared identifier 'F_GETFD'
+ 1429 |     flags = fcntl(fd, F_GETFD, 0);
+      |                       ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1435:22: error: use of undeclared identifier 'FD_CLOEXEC'
+ 1435 |     return !(flags & FD_CLOEXEC);
+      |                      ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1551:13: error: call to undeclared function 'fcntl'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1551 |     flags = fcntl(fd, F_GETFD);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1551:23: error: use of undeclared identifier 'F_GETFD'
+ 1551 |     flags = fcntl(fd, F_GETFD);
+      |                       ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1559:30: error: use of undeclared identifier 'FD_CLOEXEC'
+ 1559 |         new_flags = flags & ~FD_CLOEXEC;
+      |                              ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1562:29: error: use of undeclared identifier 'FD_CLOEXEC'
+ 1562 |         new_flags = flags | FD_CLOEXEC;
+      |                             ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1570:21: error: use of undeclared identifier 'F_SETFD'
+ 1570 |     res = fcntl(fd, F_SETFD, new_flags);
+      |                     ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1649:18: error: call to undeclared function 'open'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1649 |             fd = open(pathname, flags);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1649:18: note: did you mean 'fopen'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdio.h:17:7: note: 'fopen' declared here
+   17 | FILE *fopen(const char *path, const char *mode);
+      |       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1652:30: error: use of undeclared identifier 'EINTR'
+ 1652 |                  && errno == EINTR && !(async_err = PyErr_CheckSignals()));
+      |                              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1665:14: error: call to undeclared function 'open'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1665 |         fd = open(pathname, flags);
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1727:9: error: call to undeclared function 'wcstombs'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1727 |     r = wcstombs(cmode, mode, 10);
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1825:26: error: use of undeclared identifier 'EINTR'
+ 1825 |              && errno == EINTR && !(async_err = PyErr_CheckSignals()));
+      |                          ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1897:30: error: use of undeclared identifier 'EINTR'
+ 1897 |     } while (n < 0 && err == EINTR &&
+      |                              ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1973:34: error: use of undeclared identifier 'EINTR'
+ 1973 |         } while (n < 0 && err == EINTR &&
+      |                                  ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1996:34: error: use of undeclared identifier 'EINTR'
+ 1996 |         } while (n < 0 && err == EINTR);
+      |                                  ^~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2179:29: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2179 |     if (path[0] == '\0' || !wcscmp(path, L".")) {
+      |                             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2205:22: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2205 |     size_t cwd_len = wcslen(cwd);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2405:21: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2405 |     size_t dirlen = wcslen(dirname);
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2413:9: error: call to undeclared function 'wcscpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2413 |         wcscpy(buffer, relfile);
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2417:13: error: call to undeclared function 'wcscpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2417 |             wcscpy(buffer, dirname);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2424:9: error: call to undeclared function 'wcscpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2424 |         wcscpy(&buffer[relstart], relfile);
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2440:21: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2440 |     size_t maxlen = wcslen(dirname) + 1 + wcslen(relfile);
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2473:21: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2473 |     for (size_t i = wcslen(filename); i > 0; --i) {
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:9: error: call to undeclared function 'getcwd'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2630 |     if (getcwd(fname, Py_ARRAY_LENGTH(fname)) == NULL)
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:9: note: did you mean 'getc'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdio.h:28:5: note: 'getc' declared here
+   28 | int getc(FILE *stream);
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:47: warning: comparison between pointer and integer ('int' and 'void *') [-Wpointer-integer-compare]
+ 2630 |     if (getcwd(fname, Py_ARRAY_LENGTH(fname)) == NULL)
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2640:5: error: call to undeclared function 'wcsncpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2640 |     wcsncpy(buf, wname, buflen);
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2726:13: error: call to undeclared function 'fcntl'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2726 |     flags = fcntl(fd, F_GETFL, 0);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2726:23: error: use of undeclared identifier 'F_GETFL'
+ 2726 |     flags = fcntl(fd, F_GETFL, 0);
+      |                       ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2733:22: error: use of undeclared identifier 'O_NONBLOCK'
+ 2733 |     return !(flags & O_NONBLOCK);
+      |                      ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2755:13: error: call to undeclared function 'fcntl'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2755 |     flags = fcntl(fd, F_GETFL, 0);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2755:23: error: use of undeclared identifier 'F_GETFL'
+ 2755 |     flags = fcntl(fd, F_GETFL, 0);
+      |                       ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2758:31: error: use of undeclared identifier 'O_NONBLOCK'
+ 2758 |             flags = flags & (~O_NONBLOCK);
+      |                               ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2760:29: error: use of undeclared identifier 'O_NONBLOCK'
+ 2760 |             flags = flags | O_NONBLOCK;
+      |                             ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2762:25: error: use of undeclared identifier 'F_SETFL'
+ 2762 |         res = fcntl(fd, F_SETFL, flags);
+      |                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:1: error: conflicting types for '_Py_GetLocaleconvNumeric'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:244:12: note: previous declaration is here
+  244 | extern int _Py_GetLocaleconvNumeric(
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2886:19: error: incomplete definition of type 'struct lconv'
+ 2886 |     if ((strlen(lc->decimal_point) > 1 || ((unsigned char)lc->decimal_point[0]) > 127)) {
+      |                 ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2886:61: error: incomplete definition of type 'struct lconv'
+ 2886 |     if ((strlen(lc->decimal_point) > 1 || ((unsigned char)lc->decimal_point[0]) > 127)) {
+      |                                                           ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2889:19: error: incomplete definition of type 'struct lconv'
+ 2889 |     if ((strlen(lc->thousands_sep) > 1 || ((unsigned char)lc->thousands_sep[0]) > 127)) {
+      |                 ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2889:61: error: incomplete definition of type 'struct lconv'
+ 2889 |     if ((strlen(lc->thousands_sep) > 1 || ((unsigned char)lc->thousands_sep[0]) > 127)) {
+      |                                                           ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2931:22: error: incomplete definition of type 'struct lconv'
+ 2931 |     *decimal_point = GET_LOCALE_STRING(decimal_point);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2923:58: note: expanded from macro 'GET_LOCALE_STRING'
+ 2923 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2936:22: error: incomplete definition of type 'struct lconv'
+ 2936 |     *thousands_sep = GET_LOCALE_STRING(thousands_sep);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2923:58: note: expanded from macro 'GET_LOCALE_STRING'
+ 2923 | #define GET_LOCALE_STRING(ATTR) PyUnicode_DecodeLocale(lc->ATTR, NULL)
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2878:33: note: forward declaration of 'struct lconv'
+ 2878 | _Py_GetLocaleconvNumeric(struct lconv *lc,
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3100:17: error: variable has incomplete type 'struct stat'
+ 3100 |     struct stat st;
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3100:12: note: forward declaration of 'struct stat'
+ 3100 |     struct stat st;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3101:13: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3101 |     return (fstat(fd, &st) == 0);
+      |             ^
+11 warnings and 56 errors generated.

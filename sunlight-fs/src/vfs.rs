@@ -6,6 +6,9 @@ use sunlight_fat::{Fat32, FatError, MAX_NAME_83};
 #[cfg(test)]
 mod storage_tests;
 
+mod lookup;
+pub use lookup::{BackendCapabilities, Metadata, MetadataSource, ResolvedPath, RESOLVE_PATH_MAX};
+
 pub const MAX_MOUNTS: usize = 8;
 /// Maximum file-name length reported by `read_dir`.
 pub const VFS_NAME_MAX: usize = 64;
@@ -39,12 +42,11 @@ pub(crate) fn split_local_handle(handle: FileHandle) -> Result<(usize, u32), FsE
     Ok(((slot - 1) as usize, generation))
 }
 
-pub(crate) fn next_handle_generation(generation: u32) -> u32 {
-    if generation >= HANDLE_GENERATION_MAX {
-        1
-    } else {
-        generation + 1
-    }
+/// Retire exhausted slots rather than resurrecting an older capability.
+pub(crate) fn next_handle_generation(generation: u32) -> Option<u32> {
+    generation
+        .checked_add(1)
+        .filter(|next| *next <= HANDLE_GENERATION_MAX)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +122,20 @@ impl VfsDirEntry {
 }
 
 pub trait FileSystem {
+    /// Provenance of the native subset, independent of POSIX compatibility.
+    fn capabilities(&self) -> BackendCapabilities;
+    fn path_capabilities(&self, _path: &str) -> BackendCapabilities {
+        self.capabilities()
+    }
+    fn handle_capabilities(&self, _handle: FileHandle) -> BackendCapabilities {
+        self.capabilities()
+    }
+    fn object_id(&self, _path: &str) -> Result<Option<u64>, FsError> {
+        Ok(None)
+    }
+    fn handle_object_id(&self, _handle: FileHandle) -> Result<Option<u64>, FsError> {
+        Ok(None)
+    }
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError>;
     fn create_file(
         &mut self,
@@ -186,6 +202,8 @@ pub trait FileSystem {
 
 #[derive(Clone, Copy)]
 struct FatOpen {
+    entry_location: (u64, u16),
+    revoked: bool,
     first_cluster: u32,
     size: u32,
     generation: u32,
@@ -194,12 +212,15 @@ struct FatOpen {
     path: [u8; 128],
 }
 
-/// Read-only `FileSystem` adapter over a [`Fat32`] volume: adds the open-file
-/// handle table the raw driver doesn't track. FAT carries no ownership, so
-/// stats report root-owned 755 entries.
+/// Exclusive mutable FAT adapter. Handles authenticate an entry location and
+/// are revoked before namespace retirement. Unlinked access returns BadHandle;
+/// this is deliberately weaker than POSIX retained-open-file semantics.
+/// An uncertain mutation failure poisons the adapter rather than allowing a
+/// possibly aliased cluster chain to authorize later I/O. Close still succeeds.
 pub struct FatFs<D: BlockDevice> {
     fat: Fat32<D>,
     user_storage: bool,
+    poisoned: bool,
     handles: [Option<FatOpen>; FAT_MAX_HANDLES],
     generations: [u32; FAT_MAX_HANDLES],
 }
@@ -209,6 +230,7 @@ impl<D: BlockDevice> FatFs<D> {
         Self {
             fat,
             user_storage: false,
+            poisoned: false,
             handles: [None; FAT_MAX_HANDLES],
             generations: [0; FAT_MAX_HANDLES],
         }
@@ -218,8 +240,49 @@ impl<D: BlockDevice> FatFs<D> {
         let (idx, generation) = split_local_handle(handle)?;
         self.handles
             .get(idx)
-            .and_then(|slot| slot.filter(|open| open.generation == generation))
+            .and_then(|slot| {
+                slot.filter(|open| open.generation == generation && !open.revoked && !self.poisoned)
+            })
             .ok_or(FsError::BadHandle)
+    }
+
+    fn ensure_healthy(&self) -> Result<(), FsError> {
+        if self.poisoned {
+            Err(FsError::Io)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn revoke_entry(&mut self, location: (u64, u16)) {
+        for open in self.handles.iter_mut().flatten() {
+            if open.entry_location == location {
+                open.revoked = true;
+            }
+        }
+    }
+
+    fn mutation<T>(&mut self, result: Result<T, FatError>) -> Result<T, FsError> {
+        result.map_err(|error| {
+            // Raw FAT mutations are not transactional. Even an error may have
+            // published an alias or released part of a chain. Never retry I/O
+            // through that uncertain state within this mount incarnation.
+            self.poisoned = true;
+            Self::map_error(error)
+        })
+    }
+
+    fn authenticated_open(&mut self, handle: FileHandle) -> Result<FatOpen, FsError> {
+        let mut open = self.handle_slot(handle)?;
+        let path = &open.path[..open.path_len as usize];
+        let location = self.fat.entry_location(path).map_err(Self::map_error)?;
+        if location != open.entry_location {
+            return Err(FsError::BadHandle);
+        }
+        let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
+        open.first_cluster = stat.first_cluster;
+        open.size = stat.size;
+        Ok(open)
     }
 
     fn map_error(error: FatError) -> FsError {
@@ -261,7 +324,12 @@ impl<D: BlockDevice> FatFs<D> {
 }
 
 impl<D: BlockDevice> FileSystem for FatFs<D> {
+    fn capabilities(&self) -> BackendCapabilities {
+        BackendCapabilities::FAT
+    }
+
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
+        self.ensure_healthy()?;
         path::validate_absolute(path)?;
         let stat = self
             .fat
@@ -271,13 +339,21 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         if path_bytes.len() > 128 {
             return Err(FsError::InvalidPath);
         }
+        let entry_location = self
+            .fat
+            .entry_location(path_bytes)
+            .map_err(Self::map_error)?;
         for (idx, slot) in self.handles.iter_mut().enumerate() {
             if slot.is_none() {
-                let generation = next_handle_generation(self.generations[idx]);
+                let Some(generation) = next_handle_generation(self.generations[idx]) else {
+                    continue;
+                };
                 self.generations[idx] = generation;
                 let mut stored = [0u8; 128];
                 stored[..path_bytes.len()].copy_from_slice(path_bytes);
                 *slot = Some(FatOpen {
+                    entry_location,
+                    revoked: false,
                     first_cluster: stat.first_cluster,
                     size: stat.size,
                     generation,
@@ -301,9 +377,8 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         match self.open(path) {
             Ok(handle) => Ok(handle),
             Err(FsError::NotFound) => {
-                self.fat
-                    .create_file_path(path.as_bytes())
-                    .map_err(Self::map_error)?;
+                let result = self.fat.create_file_path(path.as_bytes());
+                self.mutation(result)?;
                 self.open(path)
             }
             Err(error) => Err(error),
@@ -317,12 +392,13 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         _gid: u32,
         _mode: u16,
     ) -> Result<FileHandle, FsError> {
+        self.ensure_healthy()?;
+        path::validate_absolute(path)?;
         if self.fat.stat_path(path.as_bytes()).is_some() {
             return Err(FsError::AlreadyExists);
         }
-        self.fat
-            .create_file_path(path.as_bytes())
-            .map_err(Self::map_error)?;
+        let result = self.fat.create_file_path(path.as_bytes());
+        self.mutation(result)?;
         self.open(path)
     }
 
@@ -332,7 +408,7 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         offset: usize,
         buf: &mut [u8],
     ) -> Result<usize, FsError> {
-        let open = self.handle_slot(handle)?;
+        let open = self.authenticated_open(handle)?;
         if open.is_dir {
             return Err(FsError::IsDir);
         }
@@ -342,15 +418,13 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
-        let open = self.handle_slot(handle)?;
+        let open = self.authenticated_open(handle)?;
         if open.is_dir {
             return Err(FsError::IsDir);
         }
         let path = &open.path[..open.path_len as usize];
-        let written = self
-            .fat
-            .write_path(path, offset, buf)
-            .map_err(Self::map_error)?;
+        let result = self.fat.write_path(path, offset, buf);
+        let written = self.mutation(result)?;
         let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
         let (index, generation) = split_local_handle(handle)?;
         let slot = self.handles.get_mut(index).ok_or(FsError::BadHandle)?;
@@ -364,12 +438,13 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
-        let open = self.handle_slot(handle)?;
+        let open = self.authenticated_open(handle)?;
         if open.is_dir {
             return Err(FsError::IsDir);
         }
         let path = &open.path[..open.path_len as usize];
-        self.fat.truncate_path(path).map_err(Self::map_error)?;
+        let result = self.fat.truncate_path(path);
+        self.mutation(result)?;
         let (index, generation) = split_local_handle(handle)?;
         let current = self.handles[index].as_mut().ok_or(FsError::BadHandle)?;
         if current.generation != generation {
@@ -403,6 +478,7 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
+        self.ensure_healthy()?;
         let stat = self
             .fat
             .stat_path(path.as_bytes())
@@ -417,7 +493,7 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
-        let open = self.handle_slot(handle)?;
+        let open = self.authenticated_open(handle)?;
         let path = core::str::from_utf8(&open.path[..open.path_len as usize])
             .map_err(|_| FsError::InvalidPath)?;
         Ok(self.user_metadata(
@@ -445,6 +521,7 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
+        self.ensure_healthy()?;
         path::validate_absolute(path)?;
         let stat = self
             .fat
@@ -475,12 +552,13 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn mkdir(&mut self, path: &str, _uid: u32, _gid: u32, _mode: u16) -> Result<(), FsError> {
+        self.ensure_healthy()?;
+        path::validate_absolute(path)?;
         if self.fat.stat_path(path.as_bytes()).is_some() {
             return Err(FsError::AlreadyExists);
         }
-        self.fat
-            .mkdir_path(path.as_bytes())
-            .map_err(Self::map_error)
+        let result = self.fat.mkdir_path(path.as_bytes());
+        self.mutation(result)
     }
 
     fn chmod(&mut self, _path: &str, _mode: u16) -> Result<(), FsError> {
@@ -492,20 +570,63 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
     }
 
     fn unlink(&mut self, path: &str) -> Result<(), FsError> {
-        self.fat
-            .unlink_path(path.as_bytes())
-            .map_err(Self::map_error)
+        self.ensure_healthy()?;
+        path::validate_absolute(path)?;
+        let location = self
+            .fat
+            .entry_location(path.as_bytes())
+            .map_err(Self::map_error)?;
+        // Revoke every alias before the first backend mutation, including when
+        // unlink subsequently fails. Slots remain owned until valid close.
+        self.revoke_entry(location);
+        let result = self.fat.unlink_path(path.as_bytes());
+        self.mutation(result)
     }
 
     fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
-        self.fat
-            .rename_path(old.as_bytes(), new.as_bytes())
+        self.ensure_healthy()?;
+        path::validate_absolute(old)?;
+        path::validate_absolute(new)?;
+        if new.len() > 128 {
+            return Err(FsError::InvalidPath);
+        }
+        let source = self
+            .fat
+            .entry_location(old.as_bytes())
             .map_err(Self::map_error)?;
-        for open in self.handles.iter_mut().flatten() {
-            if &open.path[..open.path_len as usize] == old.as_bytes() {
-                if new.len() > open.path.len() {
-                    return Err(FsError::InvalidPath);
+        if let Ok(destination) = self.fat.entry_location(new.as_bytes()) {
+            // Raw rename-to-self deletes its own entry; handle all aliases here.
+            if source == destination {
+                return Ok(());
+            }
+            self.revoke_entry(destination);
+        }
+        let is_dir = self
+            .fat
+            .stat_path(old.as_bytes())
+            .ok_or(FsError::NotFound)?
+            .is_dir;
+        if is_dir {
+            // No retained directory-relative resolver exists yet. Do not leave
+            // textual descendant handles available for future namespace reuse.
+            for open in self.handles.iter_mut().flatten() {
+                if open.entry_location != source {
+                    open.revoked = true;
                 }
+            }
+        }
+        let result = self.fat.rename_path(old.as_bytes(), new.as_bytes());
+        self.mutation(result)?;
+        let location = match self.fat.entry_location(new.as_bytes()) {
+            Ok(location) => location,
+            Err(error) => {
+                self.poisoned = true;
+                return Err(Self::map_error(error));
+            }
+        };
+        for open in self.handles.iter_mut().flatten() {
+            if !open.revoked && open.entry_location == source {
+                open.entry_location = location;
                 open.path.fill(0);
                 open.path[..new.len()].copy_from_slice(new.as_bytes());
                 open.path_len = new.len() as u8;
@@ -519,6 +640,7 @@ impl<D: BlockDevice> FileSystem for FatFs<D> {
         path: &str,
         f: &mut dyn FnMut(&VfsDirEntry) -> bool,
     ) -> Result<(), FsError> {
+        self.ensure_healthy()?;
         path::validate_absolute(path)?;
         let stat = self
             .fat
@@ -564,6 +686,37 @@ pub enum FsNode<D: BlockDevice = NullDevice> {
 }
 
 impl<D: BlockDevice> FileSystem for FsNode<D> {
+    fn capabilities(&self) -> BackendCapabilities {
+        match self {
+            Self::Ram(fs) => fs.capabilities(),
+            Self::Fat(fs) => fs.capabilities(),
+        }
+    }
+    fn path_capabilities(&self, path: &str) -> BackendCapabilities {
+        match self {
+            Self::Ram(fs) => fs.path_capabilities(path),
+            Self::Fat(fs) => fs.path_capabilities(path),
+        }
+    }
+    fn handle_capabilities(&self, handle: FileHandle) -> BackendCapabilities {
+        match self {
+            Self::Ram(fs) => fs.handle_capabilities(handle),
+            Self::Fat(fs) => fs.handle_capabilities(handle),
+        }
+    }
+    fn object_id(&self, path: &str) -> Result<Option<u64>, FsError> {
+        match self {
+            Self::Ram(fs) => fs.object_id(path),
+            Self::Fat(fs) => fs.object_id(path),
+        }
+    }
+    fn handle_object_id(&self, handle: FileHandle) -> Result<Option<u64>, FsError> {
+        match self {
+            Self::Ram(fs) => fs.handle_object_id(handle),
+            Self::Fat(fs) => fs.handle_object_id(handle),
+        }
+    }
+
     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
         match self {
             Self::Ram(fs) => fs.open(path),
@@ -771,7 +924,9 @@ impl<D: BlockDevice> Vfs<D> {
             .ok_or(FsError::TooManyOpenFiles)?;
         let tag = self.next_tags[slot] as u8;
         let mut mount_path = String::new();
-        mount_path.try_reserve_exact(path.len()).map_err(|_| FsError::NoMemory)?;
+        mount_path
+            .try_reserve_exact(path.len())
+            .map_err(|_| FsError::NoMemory)?;
         mount_path.push_str(path);
         self.next_tags[slot] += MAX_MOUNTS as u16;
         self.mounts[slot] = Some(Mount {
@@ -825,7 +980,11 @@ impl<D: BlockDevice> Vfs<D> {
 
     /// Number of backend opens still owned by VFS clients, across all mounts.
     pub fn open_handle_count(&self) -> usize {
-        self.mounts.iter().flatten().map(|mount| mount.open_handles).sum()
+        self.mounts
+            .iter()
+            .flatten()
+            .map(|mount| mount.open_handles)
+            .sum()
     }
 
     /// A narrow runtime namespace keeps root, boot, state and service state
@@ -1196,7 +1355,9 @@ impl<D: BlockDevice> Vfs<D> {
     }
 
     /// Absolute VFS path of an open handle. Used by directory-fd resolution
-    /// and getdents64. The result is the path captured at open time.
+    /// and getdents64. Backend path lifetime differs: tmpfs follows the entry's
+    /// current name, while FAT retains the spelling captured at open time.
+    /// This is not an authoritative canonical-path or authorization interface.
     pub fn handle_path(&self, handle: FileHandle, buf: &mut [u8]) -> Result<usize, FsError> {
         let (mount_idx, local_handle) = self.unpack_handle(handle)?;
         let mount = self
@@ -1208,7 +1369,7 @@ impl<D: BlockDevice> Vfs<D> {
         let local_len = mount.fs.handle_path(local_handle, &mut local)?;
         let local_path =
             core::str::from_utf8(&local[..local_len]).map_err(|_| FsError::InvalidPath)?;
-        let absolute = if mount.path == "/" || local_path.starts_with('/') {
+        let absolute = if mount.path == "/" {
             alloc::string::String::from(local_path)
         } else if local_path == "/" {
             alloc::string::String::from(mount.path.as_str())
@@ -1358,6 +1519,35 @@ mod tests {
         vfs.rename_no_replace("/source", "/moved").unwrap();
         assert!(vfs.stat("/source").is_err());
         assert!(vfs.stat("/moved").is_ok());
+    }
+
+    #[test]
+    fn handle_paths_preserve_mount_prefix_and_validate_lifetime() {
+        let mut vfs: Vfs = Vfs::new();
+        vfs.mount_ramfs("/", RamFs::new(ROOT_ENTRIES)).unwrap();
+        vfs.mount_ramfs("/boot", RamFs::new(BOOT_ENTRIES)).unwrap();
+        let root = vfs.open("/etc/motd").unwrap();
+        let mounted = vfs.open("/boot/HELLO.TXT").unwrap();
+        let directory = vfs.open("/boot").unwrap();
+        let mut buf = [0u8; 64];
+        for (handle, expected) in [
+            (root, "/etc/motd"),
+            (mounted, "/boot/HELLO.TXT"),
+            (directory, "/boot"),
+        ] {
+            let len = vfs.handle_path(handle, &mut buf).unwrap();
+            assert_eq!(&buf[..len], expected.as_bytes());
+        }
+        let mut short = [0xa5; 4];
+        assert_eq!(
+            vfs.handle_path(mounted, &mut short),
+            Err(FsError::InvalidPath)
+        );
+        assert_eq!(short, [0xa5; 4]);
+        vfs.close(mounted).unwrap();
+        assert_eq!(vfs.handle_path(mounted, &mut buf), Err(FsError::BadHandle));
+        vfs.close(root).unwrap();
+        vfs.close(directory).unwrap();
     }
 
     #[test]

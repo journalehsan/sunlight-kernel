@@ -1,0 +1,14 @@
+{
+  "heap-abi": {
+    "exit": 0,
+    "stdout": "R1 heap and SysV ABI PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "retained-admission": {
+    "exit": 0,
+    "stdout": "A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

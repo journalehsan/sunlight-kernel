@@ -1,0 +1,51 @@
+lib extension module _gdbm... missing
+checking for stdlib extension module readline... missing
+checking for stdlib extension module _sqlite3... disabled
+checking for stdlib extension module _tkinter... missing
+checking for stdlib extension module _uuid... missing
+checking for stdlib extension module zlib... missing
+checking for stdlib extension module _bz2... missing
+checking for stdlib extension module _lzma... missing
+checking for stdlib extension module _ssl... missing
+checking for stdlib extension module _hashlib... missing
+checking for stdlib extension module _testcapi... yes
+checking for stdlib extension module _testclinic... yes
+checking for stdlib extension module _testclinic_limited... yes
+checking for stdlib extension module _testlimitedcapi... yes
+checking for stdlib extension module _testinternalcapi... yes
+checking for stdlib extension module _testbuffer... yes
+checking for stdlib extension module _testimportmultiple... yes
+checking for stdlib extension module _testmultiphase... yes
+checking for stdlib extension module _testsinglephase... yes
+checking for stdlib extension module _testexternalinspection... yes
+checking for stdlib extension module xxsubtype... yes
+checking for stdlib extension module _xxtestfuzz... yes
+checking for stdlib extension module _ctypes_test... missing
+checking for stdlib extension module xxlimited... yes
+checking for stdlib extension module xxlimited_35... yes
+configure: creating ./config.status
+config.status: creating Makefile.pre
+config.status: creating Misc/python.pc
+config.status: creating Misc/python-embed.pc
+config.status: creating Misc/python-config.sh
+config.status: creating Modules/Setup.bootstrap
+config.status: creating Modules/Setup.stdlib
+config.status: creating Modules/ld_so_aix
+config.status: creating pyconfig.h
+configure: creating Modules/Setup.local
+configure: creating Makefile
+configure:
+
+If you want a release build with all stable optimizations active (PGO, etc),
+please run ./configure --enable-optimizations
+
+configure: WARNING: using cross tools not prefixed with host triplet
+configure: WARNING: x86_64-unknown-sunlightos/clang is not supported
+configure: WARNING: no system libmpdecimal found; falling back to bundled libmpdecimal (deprecated and scheduled for removal in Python 3.15)
+configure: WARNING: pkg-config is missing. Some dependencies may not be detected correctly.
+configure: WARNING:
+
+Platform "x86_64-unknown-sunlightos" with compiler "clang" is not supported by the
+CPython core team, see https://peps.python.org/pep-0011/ for more information.
+
+

@@ -1,0 +1,97 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE -o Python/fileutils.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1236:34: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1236 | _Py_fstat_noraise(int fd, struct _Py_stat_struct *status)
+      |                                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1236:1: error: conflicting types for '_Py_fstat_noraise'
+ 1236 | _Py_fstat_noraise(int fd, struct _Py_stat_struct *status)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:110:17: note: previous declaration is here
+  110 | PyAPI_FUNC(int) _Py_fstat_noraise(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1290:12: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1290 |     return fstat(fd, status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1310:26: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1310 | _Py_fstat(int fd, struct _Py_stat_struct *status)
+      |                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1310:1: error: conflicting types for '_Py_fstat'
+ 1310 | _Py_fstat(int fd, struct _Py_stat_struct *status)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:105:17: note: previous declaration is here
+  105 | PyAPI_FUNC(int) _Py_fstat(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1317:33: error: incompatible pointer types passing 'struct stat *' to parameter of type 'struct stat *' [-Wincompatible-pointer-types]
+ 1317 |     res = _Py_fstat_noraise(fd, status);
+      |                                 ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:29: note: passing argument to parameter 'status' here
+  112 |     struct _Py_stat_struct *status);
+      |                             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1333:39: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1333 | _Py_wstat(const wchar_t* path, struct stat *buf)
+      |                                       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1333:1: error: conflicting types for '_Py_wstat'
+ 1333 | _Py_wstat(const wchar_t* path, struct stat *buf)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:1: note: previous declaration is here
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1349:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1349 |     err = stat(fname, buf);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1363:33: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 1363 | _Py_stat(PyObject *path, struct stat *statbuf)
+      |                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1363:1: error: conflicting types for '_Py_stat'
+ 1363 | _Py_stat(PyObject *path, struct stat *statbuf)
+      | ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:115:17: note: previous declaration is here
+  115 | PyAPI_FUNC(int) _Py_stat(
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:1390:11: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1390 |     ret = stat(cpath, statbuf);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:9: error: call to undeclared function 'getcwd'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2630 |     if (getcwd(fname, Py_ARRAY_LENGTH(fname)) == NULL)
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:9: note: did you mean 'getc'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdio.h:40:5: note: 'getc' declared here
+   40 | int getc(FILE *stream);
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:2630:47: warning: comparison between pointer and integer ('int' and 'void *') [-Wpointer-integer-compare]
+ 2630 |     if (getcwd(fname, Py_ARRAY_LENGTH(fname)) == NULL)
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^  ~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3100:17: error: variable has incomplete type 'struct stat'
+ 3100 |     struct stat st;
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3100:12: note: forward declaration of 'struct stat'
+ 3100 |     struct stat st;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c:3101:13: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3101 |     return (fstat(fd, &st) == 0);
+      |             ^
+9 warnings and 11 errors generated.

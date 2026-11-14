@@ -19,7 +19,9 @@ impl Scheduler {
             || !self.processes.iter().any(|p| {
                 p.owns_address_space
                     && p.address_space.identity() == identity
+                    && p.native_group_exit.is_none()
                     && (!p.is_exiting()
+                        || (p.state == ProcessState::Finished && p.native_group_owner())
                         || (p.state == ProcessState::Finished
                             && p.linux_tgid.is_some()
                             && p.linux_tgid == parent.linux_tgid))

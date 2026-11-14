@@ -1,0 +1,78 @@
+{
+  "status": "PARTIAL",
+  "implementation": "sunshell/src/main.rs native sunlight module and native_script.rs; tools/build.sh:75 selects Rust sshl. guest/sunshell/sunshell.pas is not this build path.",
+  "trace": "command -> normalize_path -> sunlight_libc Rust syscall adapter -> kernel KERNEL_VFS -> Vfs mount dispatch -> tmpfs/FAT; no filesystem IPC on these operations",
+  "operations": [
+    {
+      "operation": "cd",
+      "contract": "Lexically combine shell cwd, remove empty/dot and pop dotdot, component limit64; stat_is_dir then native chdir; interactive stores PWD/OLDPWD. Script Runtime::directory only checks normalized directory and returns lexical name.",
+      "source": "sunshell/src/main.rs:1305,2797; sunshell/src/native_script.rs:188",
+      "native_evidence": "shell-cpu-{1,2,4}/results.json"
+    },
+    {
+      "operation": "pwd",
+      "contract": "Print shell context cwd; no canonical lookup. Interactive truncates to static256 buffer.",
+      "source": "sunshell/src/main.rs:1330; sunshell/src/script.rs",
+      "native_evidence": "shell-cpu-{1,2,4}/results.json"
+    },
+    {
+      "operation": "ls",
+      "contract": "External sunlight-utils cmd_ls; normalize non-option arguments and inject cwd if absent; libc read_dir uses syscall60. Long listing prints fixed permission strings based on type, not authoritative permission bits.",
+      "source": "sunshell/src/main.rs:1341; sunlight-utils/src/main.rs:375",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "existence/type",
+      "contract": "stat_is_file/stat_is_dir collapse errors to false; file_type1/2. Executable search uses stat, not canonical path.",
+      "source": "sunshell/src/main.rs:1770,2781",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "completion",
+      "contract": "No native filesystem path-completion resolver found in inspected main/native_script/input and TTY shell; z history navigation uses retained paths. This is a bounded negative source finding.",
+      "source": "sunshell/src/main.rs; sunshell/src/input.rs; sunlight-tty/src/shell.rs",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "readlink/realpath",
+      "contract": "No native builtins or supporting native symlink API found. Host script uses Linux std::fs::canonicalize; it is not guest VFS evidence.",
+      "source": "sunshell/src/host_script.rs:128; sunshell/src/native_script.rs:188",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "mounts",
+      "contract": "Normalized absolute strings use longest component-boundary mount prefix. No component search/canonical path proof.",
+      "source": "sunlight-fs/src/vfs.rs:1238",
+      "native_evidence": "shell-cpu-{1,2,4}/results.json exercises /tmp and /"
+    },
+    {
+      "operation": "errors",
+      "contract": "cd maps missing/non-directory/metadata failure to generic no such directory; underlying errors are not preserved by builtin.",
+      "source": "sunshell/src/main.rs:1315; sunshell/src/native_script.rs:190",
+      "native_evidence": "shell-cpu-{1,2,4}/results.json"
+    }
+  ],
+  "existing_tests": [
+    {
+      "source": "sunshell/src/main.rs:3113",
+      "assertion": "lexical relative ./ and ../ normalization, not existence/canonicalization"
+    },
+    {
+      "source": "tools/test_shell_phase2_host.py",
+      "assertion": "Linux host backend; canonicalize does not prove native symlink support"
+    }
+  ],
+  "symlinks": {
+    "status": "BLOCKED",
+    "dangling": "No native representation",
+    "loops": "No traversal implementation or loop policy",
+    "canonical_target": "Unavailable"
+  },
+  "duplicate_logic": [
+    "interactive/native script share normalize_path",
+    "Files PathBuf::set",
+    "libc file_ops::normalize",
+    "Linux compatibility path adapters"
+  ],
+  "native_limit": "Native script navigation is exercised; interactive PTY, external ls, completion, symlinks and realpath are NOT_RUN here."
+}

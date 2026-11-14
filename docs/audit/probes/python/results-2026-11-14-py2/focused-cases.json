@@ -1,0 +1,39 @@
+[
+  {
+    "name": "py2-format",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py2-format.elf",
+    "expected_exit": 0,
+    "environment": [
+      "PY2_TEST=startup-value"
+    ]
+  },
+  {
+    "name": "py2-stream",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py2-stream.elf",
+    "expected_exit": 0,
+    "environment": [
+      "PY2_TEST=startup-value"
+    ]
+  },
+  {
+    "name": "py2-wide",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py2-wide.elf",
+    "expected_exit": 0,
+    "environment": [
+      "PY2_TEST=startup-value"
+    ]
+  },
+  {
+    "name": "py2-header",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py2-header.elf",
+    "expected_exit": 0,
+    "environment": [
+      "PY2_TEST=startup-value"
+    ]
+  },
+  {
+    "name": "py2-math-declarations",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py2-math-declarations.elf",
+    "expected_exit": 0
+  }
+]

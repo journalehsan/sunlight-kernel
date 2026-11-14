@@ -1,0 +1,28 @@
+{
+  "status": "PARTIAL",
+  "contract_source": "sunlight-fs/src/vfs/lookup.rs",
+  "tmpfs": {
+    "object_type_size": "Stored",
+    "identity": "mount-lifetime monotonic object identity; seed index+1; implicit root0",
+    "ownership_permissions": "Stored except implicit root Policy",
+    "timestamps": "Unavailable; no update/time source contract",
+    "symlinks": "Unsupported",
+    "POSIX_link_count": "Unavailable; native convention only",
+    "descriptor_metadata": "Object retained across rename/unlink; host identity tests, existing native subset regressions; concurrent forced schedules NOT_RUN",
+    "persistence": "Volatile PMM pages; no stable-media promise"
+  },
+  "FAT": {
+    "object_type_size": "Backend path lookup; descriptor size is cached and may be stale",
+    "identity": "Unavailable; no inode fabricated from cluster, path or handle",
+    "ownership_permissions": "Mount policy; not on-disk POSIX ownership/mode",
+    "timestamps": "Unavailable in current shared contract; not invented",
+    "symlinks": "Unsupported; no custom file encoding",
+    "POSIX_link_count": "Unsupported",
+    "descriptor_pinning": "FAIL: stale size and write-through-unlinked-name corruption reproduced on host",
+    "negative_evidence": [
+      "fat-size-negative.log",
+      "fat-unlink-negative.log"
+    ]
+  },
+  "native_runtime_backend_coverage": "One root Tmpfs; /tmp is a directory. No native mount crossing or FAT guest/real-media qualification"
+}

@@ -1,0 +1,3 @@
+EXIT live worker established
+EXIT calling exit
+EXIT atexit callback

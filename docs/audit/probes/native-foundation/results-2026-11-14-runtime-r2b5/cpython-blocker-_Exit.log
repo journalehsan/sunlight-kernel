@@ -1,0 +1,7 @@
+["python3", "tools/native-c/cc.py", "-std=c11", "-Werror", "-fno-builtin", "-fsyntax-only", "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-_Exit.c"]
+docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-_Exit.c:2:16: error: call to undeclared function '_Exit'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+    2 | int main(void){_Exit(0);}
+      |                ^
+1 error generated.
+
+exit=1

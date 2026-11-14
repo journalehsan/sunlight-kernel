@@ -1,0 +1,7 @@
+['python3', 'tools/native-c/guest.py', '--cases', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/shell-cases.json', '--cpus', '2', '--timeout', '120', '--out', '/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/final/shell-cpu-2']
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/final/shell-cpu-2
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+py6-shell-paths: PASS exit=0 expected=0
+guest py6-shell-paths stdout: b'/tmp\n/tmp\nmissing-rejected\n/tmp\n/\n'
+guest py6-shell-paths stderr: b'sshl: cd: directory unavailable or access denied\n'

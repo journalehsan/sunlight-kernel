@@ -1,0 +1,7 @@
+T1 holder=0x2 old=128 index=0 generation=1 cell=populated
+T2 deleting=0x1 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked
+T3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0
+T4 callback=0x3 key=384 generation=3 cell=cleared reentrancy=complete
+T5 delete/reuse while callback held old=384 reused=512
+T6 selected callback completed after delete/reuse
+T7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0

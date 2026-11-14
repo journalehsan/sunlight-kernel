@@ -1,0 +1,36 @@
+{
+  "command": [
+    "/tmp/sunlight-py1-cpython/Python-3.13.0/configure",
+    "--build=x86_64-pc-linux-gnu",
+    "--host=x86_64-unknown-sunlightos",
+    "--with-build-python=/tmp/sunlight-r1-cpython/build-host/python",
+    "--disable-shared",
+    "--without-ensurepip",
+    "--with-pkg-config=no",
+    "--with-libm=",
+    "--disable-test-modules"
+  ],
+  "environment_overrides": {
+    "CC": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py",
+    "CFLAGS": "-O2",
+    "LDFLAGS": "-static",
+    "AR": "llvm-ar",
+    "RANLIB": "llvm-ranlib",
+    "CONFIG_SITE": "/dev/null",
+    "PKG_CONFIG": "/bin/false",
+    "ac_cv_posix_semaphores_enabled": "no",
+    "ac_cv_file__dev_ptmx": "no",
+    "ac_cv_file__dev_ptc": "no",
+    "DYNLOADFILE": "dynload_stub.o"
+  },
+  "cache_justifications": {
+    "ac_cv_posix_semaphores_enabled": "No semaphore.h or semaphore implementation in native headers/archive; upstream cross default yes is unsupported."
+  },
+  "build": "x86_64-pc-linux-gnu",
+  "host": "x86_64-unknown-sunlightos",
+  "target": "host program ABI; driver x86_64-unknown-none-elf",
+  "build_directory": "/tmp/sunlight-py6-final-cpython/cross-static",
+  "override_justifications": {
+    "DYNLOADFILE": "Native dlopen supports only the fixed main-program namespace; shared-object relocation/loading unavailable. Select the upstream supported no-dynamic-loading adapter."
+  }
+}

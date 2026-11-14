@@ -1,0 +1,2 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+ipc-continuity,False,PASS,FAIL,FAIL,91,0,guest contract or infrastructure failed,8b45b20ef2a0e16cb6cecf5c146b1d49ff10024e726099798a050cf907bbee72

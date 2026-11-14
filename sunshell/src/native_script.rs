@@ -186,12 +186,10 @@ impl Runtime for NativeRuntime {
         let _ = libc::close(libc::Fd(fd as u32));
     }
     fn directory(&mut self, name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
-        let name = path(name, context)?;
-        if !stat_is_dir(&name) {
-            return Err(Error::new(1, "cd: no such directory"));
-        }
-        Ok(name)
+        resolve_directory(&context.cwd, name)
+            .ok_or_else(|| Error::new(1, "cd: directory unavailable or access denied"))
     }
+
     fn source(&mut self, name: &str, context: &ShellExecutionContext) -> Result<String, Error> {
         let fd = libc::open(path(name, context)?.as_bytes())
             .map_err(|e| Error::new(1, format!("open script {name}: {e:?}")))?;

@@ -1,0 +1,85 @@
+{
+  "status": "PARTIAL",
+  "production_changes": false,
+  "realpath": {
+    "status": "BLOCKED",
+    "export_added": false,
+    "reason": "No native symlink/readlink/canonical-path operation. VFS accepts validated absolute paths only; native stat exposes only File and Directory. Lexically stripping dot/dot-dot could skip nonexistent components and cannot supply filesystem-aware canonicalization or permission traversal.",
+    "source": [
+      "sunlight-fs/src/path.rs:3",
+      "sunlight-fs/src/vfs.rs:51",
+      "sunlight-fs/src/vfs.rs:1236",
+      "sunlight-libc/src/sys.rs:44",
+      "kernel/src/arch/x86_64/syscall.rs:9268"
+    ],
+    "missing_primitive": "An authoritative native path resolver with component traversal, permissions, cwd and symlink semantics; no Linux-ABI syscall substitution.",
+    "cases": {
+      "absolute/relative canonicalization": "BLOCKED",
+      "cwd expansion": "BLOCKED",
+      "dot/dot-dot traversal": "BLOCKED",
+      "multiple separator canonicalization": "BLOCKED",
+      "symlink traversal": "BLOCKED",
+      "dangling symlinks": "BLOCKED",
+      "link loops": "BLOCKED",
+      "canonical buffer sizing/allocation": "BLOCKED",
+      "race-safe component resolution": "BLOCKED"
+    },
+    "permission_error_validation": "NOT_RUN for realpath; no implementation exists"
+  },
+  "stat": {
+    "status": "BLOCKED",
+    "posix_header_added": false,
+    "native_wire_bytes": 24,
+    "native_supported": [
+      "size",
+      "uid",
+      "gid",
+      "permission mode bits",
+      "File/Directory type",
+      "nlinks"
+    ],
+    "unavailable": [
+      "device identity",
+      "inode identity",
+      "atime",
+      "mtime",
+      "ctime",
+      "special-file type metadata",
+      "symlink metadata",
+      "block accounting"
+    ],
+    "existing_C_fstat": "Existing symbol consumes the 24-byte native wire structure, not a POSIX struct stat. Do not change its destination size silently or pass an invented POSIX layout.",
+    "lstat": "BLOCKED: no native symlink model or no-follow metadata operation.",
+    "zero_field_policy": "No fields synthesized and no new POSIX stat ABI advertised.",
+    "error_mapping": {
+      "native missing path": {
+        "raw": -3,
+        "mapped_errno": "ENOENT"
+      },
+      "invalid absolute/dot path": {
+        "raw": -6,
+        "mapped_errno": "EINVAL"
+      },
+      "invalid fd": "EBADF",
+      "null fstat destination": "EFAULT",
+      "other native fstat failures": "Kernel can collapse to generic failure; libc maps EIO. No more precise claim."
+    }
+  },
+  "native_tests": {
+    "fixture": "filesystem-test.c",
+    "additional_fixture": "guards-errors-test.c",
+    "initial_log": "focused-initial-cpu-2.log",
+    "raw_error_log": "guards-errors-cpu-2.log",
+    "coverage": [
+      "mkstemp empty regular file, mode 0600, nlinks",
+      "post-write size and fd/path metadata agreement",
+      "directory type",
+      "missing intermediate component",
+      "relative and dot paths rejected",
+      "fstat EBADF and EFAULT",
+      "unlink and closed descriptor behavior"
+    ],
+    "permission_denial_injection": "NOT_RUN",
+    "filesystem_races": "NOT_RUN; no realpath adapter added"
+  }
+}

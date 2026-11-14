@@ -1,0 +1,484 @@
+--- a/sunlight-fat/src/fat/write.rs
++++ b/sunlight-fat/src/fat/write.rs
+@@ -387,6 +387,17 @@
+             .map_err(|_| FatError::Io)
+     }
+ 
++    /// Physical short-entry location, only meaningful under exclusive volume
++    /// ownership. This is not an inode or a lifetime token: callers must revoke
++    /// references before namespace removal/replacement allows slot reuse.
++    pub fn entry_location(&mut self, path: &[u8]) -> Result<(u64, u16), FatError> {
++        if path == b"/" {
++            return Ok((0, 0));
++        }
++        let entry = self.resolve_entry(path)?;
++        Ok((entry.short_location.lba, entry.short_location.offset))
++    }
++
+     pub fn write_path(
+         &mut self,
+         path: &[u8],
+--- a/sunlight-fs/src/vfs.rs
++++ b/sunlight-fs/src/vfs.rs
+@@ -202,6 +202,8 @@
+ 
+ #[derive(Clone, Copy)]
+ struct FatOpen {
++    entry_location: (u64, u16),
++    revoked: bool,
+     first_cluster: u32,
+     size: u32,
+     generation: u32,
+@@ -210,12 +212,15 @@
+     path: [u8; 128],
+ }
+ 
+-/// Read-only `FileSystem` adapter over a [`Fat32`] volume: adds the open-file
+-/// handle table the raw driver doesn't track. FAT carries no ownership, so
+-/// stats report root-owned 755 entries.
++/// Exclusive mutable FAT adapter. Handles authenticate an entry location and
++/// are revoked before namespace retirement. Unlinked access returns BadHandle;
++/// this is deliberately weaker than POSIX retained-open-file semantics.
++/// An uncertain mutation failure poisons the adapter rather than allowing a
++/// possibly aliased cluster chain to authorize later I/O. Close still succeeds.
+ pub struct FatFs<D: BlockDevice> {
+     fat: Fat32<D>,
+     user_storage: bool,
++    poisoned: bool,
+     handles: [Option<FatOpen>; FAT_MAX_HANDLES],
+     generations: [u32; FAT_MAX_HANDLES],
+ }
+@@ -225,6 +230,7 @@
+         Self {
+             fat,
+             user_storage: false,
++            poisoned: false,
+             handles: [None; FAT_MAX_HANDLES],
+             generations: [0; FAT_MAX_HANDLES],
+         }
+@@ -234,8 +240,49 @@
+         let (idx, generation) = split_local_handle(handle)?;
+         self.handles
+             .get(idx)
+-            .and_then(|slot| slot.filter(|open| open.generation == generation))
++            .and_then(|slot| {
++                slot.filter(|open| open.generation == generation && !open.revoked && !self.poisoned)
++            })
+             .ok_or(FsError::BadHandle)
++    }
++
++    fn ensure_healthy(&self) -> Result<(), FsError> {
++        if self.poisoned {
++            Err(FsError::Io)
++        } else {
++            Ok(())
++        }
++    }
++
++    fn revoke_entry(&mut self, location: (u64, u16)) {
++        for open in self.handles.iter_mut().flatten() {
++            if open.entry_location == location {
++                open.revoked = true;
++            }
++        }
++    }
++
++    fn mutation<T>(&mut self, result: Result<T, FatError>) -> Result<T, FsError> {
++        result.map_err(|error| {
++            // Raw FAT mutations are not transactional. Even an error may have
++            // published an alias or released part of a chain. Never retry I/O
++            // through that uncertain state within this mount incarnation.
++            self.poisoned = true;
++            Self::map_error(error)
++        })
++    }
++
++    fn authenticated_open(&mut self, handle: FileHandle) -> Result<FatOpen, FsError> {
++        let mut open = self.handle_slot(handle)?;
++        let path = &open.path[..open.path_len as usize];
++        let location = self.fat.entry_location(path).map_err(Self::map_error)?;
++        if location != open.entry_location {
++            return Err(FsError::BadHandle);
++        }
++        let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
++        open.first_cluster = stat.first_cluster;
++        open.size = stat.size;
++        Ok(open)
+     }
+ 
+     fn map_error(error: FatError) -> FsError {
+@@ -282,6 +329,7 @@
+     }
+ 
+     fn open(&mut self, path: &str) -> Result<FileHandle, FsError> {
++        self.ensure_healthy()?;
+         path::validate_absolute(path)?;
+         let stat = self
+             .fat
+@@ -291,6 +339,10 @@
+         if path_bytes.len() > 128 {
+             return Err(FsError::InvalidPath);
+         }
++        let entry_location = self
++            .fat
++            .entry_location(path_bytes)
++            .map_err(Self::map_error)?;
+         for (idx, slot) in self.handles.iter_mut().enumerate() {
+             if slot.is_none() {
+                 let Some(generation) = next_handle_generation(self.generations[idx]) else {
+@@ -300,6 +352,8 @@
+                 let mut stored = [0u8; 128];
+                 stored[..path_bytes.len()].copy_from_slice(path_bytes);
+                 *slot = Some(FatOpen {
++                    entry_location,
++                    revoked: false,
+                     first_cluster: stat.first_cluster,
+                     size: stat.size,
+                     generation,
+@@ -323,9 +377,8 @@
+         match self.open(path) {
+             Ok(handle) => Ok(handle),
+             Err(FsError::NotFound) => {
+-                self.fat
+-                    .create_file_path(path.as_bytes())
+-                    .map_err(Self::map_error)?;
++                let result = self.fat.create_file_path(path.as_bytes());
++                self.mutation(result)?;
+                 self.open(path)
+             }
+             Err(error) => Err(error),
+@@ -339,12 +392,13 @@
+         _gid: u32,
+         _mode: u16,
+     ) -> Result<FileHandle, FsError> {
++        self.ensure_healthy()?;
++        path::validate_absolute(path)?;
+         if self.fat.stat_path(path.as_bytes()).is_some() {
+             return Err(FsError::AlreadyExists);
+         }
+-        self.fat
+-            .create_file_path(path.as_bytes())
+-            .map_err(Self::map_error)?;
++        let result = self.fat.create_file_path(path.as_bytes());
++        self.mutation(result)?;
+         self.open(path)
+     }
+ 
+@@ -354,7 +408,7 @@
+         offset: usize,
+         buf: &mut [u8],
+     ) -> Result<usize, FsError> {
+-        let open = self.handle_slot(handle)?;
++        let open = self.authenticated_open(handle)?;
+         if open.is_dir {
+             return Err(FsError::IsDir);
+         }
+@@ -364,15 +418,13 @@
+     }
+ 
+     fn write(&mut self, handle: FileHandle, offset: usize, buf: &[u8]) -> Result<usize, FsError> {
+-        let open = self.handle_slot(handle)?;
++        let open = self.authenticated_open(handle)?;
+         if open.is_dir {
+             return Err(FsError::IsDir);
+         }
+         let path = &open.path[..open.path_len as usize];
+-        let written = self
+-            .fat
+-            .write_path(path, offset, buf)
+-            .map_err(Self::map_error)?;
++        let result = self.fat.write_path(path, offset, buf);
++        let written = self.mutation(result)?;
+         let stat = self.fat.stat_path(path).ok_or(FsError::Io)?;
+         let (index, generation) = split_local_handle(handle)?;
+         let slot = self.handles.get_mut(index).ok_or(FsError::BadHandle)?;
+@@ -386,12 +438,13 @@
+     }
+ 
+     fn truncate(&mut self, handle: FileHandle) -> Result<(), FsError> {
+-        let open = self.handle_slot(handle)?;
++        let open = self.authenticated_open(handle)?;
+         if open.is_dir {
+             return Err(FsError::IsDir);
+         }
+         let path = &open.path[..open.path_len as usize];
+-        self.fat.truncate_path(path).map_err(Self::map_error)?;
++        let result = self.fat.truncate_path(path);
++        self.mutation(result)?;
+         let (index, generation) = split_local_handle(handle)?;
+         let current = self.handles[index].as_mut().ok_or(FsError::BadHandle)?;
+         if current.generation != generation {
+@@ -425,6 +478,7 @@
+     }
+ 
+     fn sync_dir(&mut self, path: &str) -> Result<(), FsError> {
++        self.ensure_healthy()?;
+         let stat = self
+             .fat
+             .stat_path(path.as_bytes())
+@@ -439,7 +493,7 @@
+     }
+ 
+     fn fstat_handle(&mut self, handle: FileHandle) -> Result<FileStat, FsError> {
+-        let open = self.handle_slot(handle)?;
++        let open = self.authenticated_open(handle)?;
+         let path = core::str::from_utf8(&open.path[..open.path_len as usize])
+             .map_err(|_| FsError::InvalidPath)?;
+         Ok(self.user_metadata(
+@@ -467,6 +521,7 @@
+     }
+ 
+     fn stat(&mut self, path: &str) -> Result<FileStat, FsError> {
++        self.ensure_healthy()?;
+         path::validate_absolute(path)?;
+         let stat = self
+             .fat
+@@ -497,12 +552,13 @@
+     }
+ 
+     fn mkdir(&mut self, path: &str, _uid: u32, _gid: u32, _mode: u16) -> Result<(), FsError> {
++        self.ensure_healthy()?;
++        path::validate_absolute(path)?;
+         if self.fat.stat_path(path.as_bytes()).is_some() {
+             return Err(FsError::AlreadyExists);
+         }
+-        self.fat
+-            .mkdir_path(path.as_bytes())
+-            .map_err(Self::map_error)
++        let result = self.fat.mkdir_path(path.as_bytes());
++        self.mutation(result)
+     }
+ 
+     fn chmod(&mut self, _path: &str, _mode: u16) -> Result<(), FsError> {
+@@ -514,20 +570,63 @@
+     }
+ 
+     fn unlink(&mut self, path: &str) -> Result<(), FsError> {
+-        self.fat
+-            .unlink_path(path.as_bytes())
+-            .map_err(Self::map_error)
++        self.ensure_healthy()?;
++        path::validate_absolute(path)?;
++        let location = self
++            .fat
++            .entry_location(path.as_bytes())
++            .map_err(Self::map_error)?;
++        // Revoke every alias before the first backend mutation, including when
++        // unlink subsequently fails. Slots remain owned until valid close.
++        self.revoke_entry(location);
++        let result = self.fat.unlink_path(path.as_bytes());
++        self.mutation(result)
+     }
+ 
+     fn rename(&mut self, old: &str, new: &str) -> Result<(), FsError> {
+-        self.fat
+-            .rename_path(old.as_bytes(), new.as_bytes())
++        self.ensure_healthy()?;
++        path::validate_absolute(old)?;
++        path::validate_absolute(new)?;
++        if new.len() > 128 {
++            return Err(FsError::InvalidPath);
++        }
++        let source = self
++            .fat
++            .entry_location(old.as_bytes())
+             .map_err(Self::map_error)?;
++        if let Ok(destination) = self.fat.entry_location(new.as_bytes()) {
++            // Raw rename-to-self deletes its own entry; handle all aliases here.
++            if source == destination {
++                return Ok(());
++            }
++            self.revoke_entry(destination);
++        }
++        let is_dir = self
++            .fat
++            .stat_path(old.as_bytes())
++            .ok_or(FsError::NotFound)?
++            .is_dir;
++        if is_dir {
++            // No retained directory-relative resolver exists yet. Do not leave
++            // textual descendant handles available for future namespace reuse.
++            for open in self.handles.iter_mut().flatten() {
++                if open.entry_location != source {
++                    open.revoked = true;
++                }
++            }
++        }
++        let result = self.fat.rename_path(old.as_bytes(), new.as_bytes());
++        self.mutation(result)?;
++        let location = match self.fat.entry_location(new.as_bytes()) {
++            Ok(location) => location,
++            Err(error) => {
++                self.poisoned = true;
++                return Err(Self::map_error(error));
++            }
++        };
+         for open in self.handles.iter_mut().flatten() {
+-            if &open.path[..open.path_len as usize] == old.as_bytes() {
+-                if new.len() > open.path.len() {
+-                    return Err(FsError::InvalidPath);
+-                }
++            if !open.revoked && open.entry_location == source {
++                open.entry_location = location;
+                 open.path.fill(0);
+                 open.path[..new.len()].copy_from_slice(new.as_bytes());
+                 open.path_len = new.len() as u8;
+@@ -541,6 +640,7 @@
+         path: &str,
+         f: &mut dyn FnMut(&VfsDirEntry) -> bool,
+     ) -> Result<(), FsError> {
++        self.ensure_healthy()?;
+         path::validate_absolute(path)?;
+         let stat = self
+             .fat
+--- a/sunlight-fs/src/vfs/storage_tests.rs
++++ b/sunlight-fs/src/vfs/storage_tests.rs
+@@ -208,3 +208,101 @@
+         vfs.close(live).unwrap();
+     }
+ }
++
++#[test]
++fn fat_revokes_unlinked_aliases_before_slot_and_cluster_reuse() {
++    let (mut vfs, disk) = fixture();
++    mount(&mut vfs, &disk);
++    let a = vfs.create_file("/mnt/LIVE.TXT", 0, 0, 0o600).unwrap();
++    vfs.write(a, 0, b"old").unwrap();
++    let alias = vfs.open("/mnt//live.txt").unwrap();
++    vfs.unlink("/mnt/live.txt").unwrap();
++    let b = vfs.create_file("/mnt/LIVE.TXT", 0, 0, 0o600).unwrap();
++    vfs.write(b, 0, b"new").unwrap();
++    for stale in [a, alias] {
++        assert_eq!(vfs.read(stale, 0, &mut [0; 3]), Err(FsError::BadHandle));
++        assert_eq!(vfs.write(stale, 0, b"BAD"), Err(FsError::BadHandle));
++        assert_eq!(vfs.truncate(stale), Err(FsError::BadHandle));
++        assert_eq!(vfs.fstat_handle(stale), Err(FsError::BadHandle));
++        assert_eq!(
++            vfs.handle_path(stale, &mut [0; 128]),
++            Err(FsError::BadHandle)
++        );
++        vfs.close(stale).unwrap();
++        assert_eq!(vfs.close(stale), Err(FsError::BadHandle));
++    }
++    let mut bytes = [0; 3];
++    assert_eq!(vfs.read(b, 0, &mut bytes), Ok(3));
++    assert_eq!(&bytes, b"new");
++    assert_eq!(vfs.open_handle_count(), 1);
++    vfs.close(b).unwrap();
++    assert_eq!(vfs.open_handle_count(), 0);
++    let id = vfs.mount_info(1).unwrap().id;
++    vfs.unmount(id).unwrap();
++}
++
++#[test]
++fn fat_rename_replacement_rebinds_source_and_revokes_destination_alias() {
++    let (mut vfs, disk) = fixture();
++    mount(&mut vfs, &disk);
++    let a = vfs.create_file("/mnt/A.TXT", 0, 0, 0o600).unwrap();
++    let a2 = vfs.open("/mnt/a.txt").unwrap();
++    let b = vfs.create_file("/mnt/B.TXT", 0, 0, 0o600).unwrap();
++    vfs.write(a, 0, b"source").unwrap();
++    vfs.write(b, 0, b"victim").unwrap();
++    vfs.rename("/mnt//a.txt", "/mnt/b.txt").unwrap();
++    assert_eq!(vfs.write(b, 0, b"BAD"), Err(FsError::BadHandle));
++    assert_eq!(vfs.read(b, 0, &mut [0; 6]), Err(FsError::BadHandle));
++    assert_eq!(vfs.fstat_handle(a2).unwrap().size, 6);
++    vfs.write(a2, 0, b"SOURCE").unwrap();
++    let mut bytes = [0; 6];
++    vfs.read(a, 0, &mut bytes).unwrap();
++    assert_eq!(&bytes, b"SOURCE");
++    vfs.rename("/mnt/B.TXT", "/mnt/b.txt").unwrap(); // alias-to-self must not unlink
++    assert_eq!(vfs.stat("/mnt/B.TXT").unwrap().size, 6);
++    for h in [a, a2, b] {
++        vfs.close(h).unwrap();
++    }
++}
++
++#[test]
++fn fat_truncate_and_extension_refresh_all_open_snapshots() {
++    let (mut vfs, disk) = fixture();
++    mount(&mut vfs, &disk);
++    let a = vfs.create_file("/mnt/A.TXT", 0, 0, 0o600).unwrap();
++    let a2 = vfs.open("/mnt/a.txt").unwrap();
++    vfs.write(a, 0, b"original").unwrap();
++    assert_eq!(vfs.fstat_handle(a2).unwrap().size, 8);
++    vfs.truncate(a).unwrap();
++    let b = vfs.create_file("/mnt/B.TXT", 0, 0, 0o600).unwrap();
++    vfs.write(b, 0, b"private!").unwrap();
++    assert_eq!(vfs.read(a2, 0, &mut [0; 8]), Ok(0));
++    vfs.write(a2, 0, b"fresh").unwrap();
++    let mut bytes = [0; 8];
++    vfs.read(b, 0, &mut bytes).unwrap();
++    assert_eq!(&bytes, b"private!");
++    for h in [a, a2, b] {
++        vfs.close(h).unwrap();
++    }
++}
++
++#[test]
++fn fat_partial_retirement_poison_preserves_close_and_mount_ownership() {
++    let (mut vfs, disk) = fixture();
++    mount(&mut vfs, &disk);
++    let a = vfs.create_file("/mnt/A.TXT", 0, 0, 0o600).unwrap();
++    vfs.write(a, 0, b"old").unwrap();
++    let b = vfs.open("/mnt/HELLO.TXT").unwrap();
++    disk.fail_sync.set(true);
++    assert_eq!(vfs.unlink("/mnt/A.TXT"), Err(FsError::Io));
++    disk.fail_sync.set(false);
++    assert_eq!(vfs.write(a, 0, b"BAD"), Err(FsError::BadHandle));
++    assert_eq!(vfs.read(b, 0, &mut [0; 8]), Err(FsError::BadHandle));
++    assert_eq!(vfs.open("/mnt/HELLO.TXT"), Err(FsError::Io));
++    let id = vfs.mount_info(1).unwrap().id;
++    assert_eq!(vfs.unmount(id), Err(FsError::Busy));
++    vfs.close(a).unwrap();
++    vfs.close(b).unwrap();
++    assert_eq!(vfs.open_handle_count(), 0);
++    // No claim that poisoned disk state is recoverable by remounting.
++}
+--- a/kernel/src/arch/x86_64/syscall.rs
++++ b/kernel/src/arch/x86_64/syscall.rs
+@@ -10674,7 +10674,7 @@
+         };
+         match vfs.fstat_handle(VfsHandle(vfs_handle)) {
+             Ok(s) => s,
+-            Err(_) => return u64::MAX,
++            Err(error) => return if is_linux { linux_from_fs(error) } else { fs_error_raw(error) },
+         }
+     };
+ 
+--- a/tools/native-c/guest.py
++++ b/tools/native-c/guest.py
+@@ -1,7 +1,8 @@
+ #!/usr/bin/env python3
+ """Run arbitrary cc.py native ELFs in a fresh headless SunlightOS guest.
+ 
+-No disk, network, shared folder or existing VM is attached. --suite builds and
++No disk, network, shared folder or existing VM is attached by default.
++--fat-fixture attaches only a private writable copy of an explicit test image. --suite builds and
+ classifies all 21 historical executable cells plus focused runtime fixtures.
+ Single-ELF mode returns the observed guest status unless --expect-exit is set.
+ Infrastructure, timeout, exception and cleanup failures always return nonzero.
+@@ -74,6 +75,7 @@
+     parser.add_argument('--expect-exit', type=int)
+     parser.add_argument('--arg', action='append', default=[])
+     parser.add_argument('--stdin-file', type=Path)
++    parser.add_argument('--fat-fixture', type=Path, help='copy a disposable FAT test image into this run and attach that copy')
+     parser.add_argument('--locale-conf', type=Path, help='fixture contents for /etc/locale.conf')
+     parser.add_argument('--env', action='append', default=[], help='single-ELF startup KEY=VALUE')
+     parser.add_argument('--net', action='store_true',
+@@ -353,6 +355,15 @@
+             '-serial', 'file:' + str(serial),
+             '-device', 'virtio-rng-pci,disable-modern=on',
+             '-device', 'isa-debug-exit,iobase=0xf4,iosize=0x04', '-no-reboot']
++    if opts.fat_fixture:
++        disk = out / 'fat-fixture.img'
++        shutil.copyfile(opts.fat_fixture.resolve(strict=True), disk)
++        (out / 'fat-fixture-source.json').write_text(json.dumps(dict(
++            source=str(opts.fat_fixture.resolve()),
++            sha256=hashlib.sha256(disk.read_bytes()).hexdigest(),
++            contract='Disposable fixture copy; no existing VM or ordinary disk attached'), indent=2))
++        argv += ['-drive', f'file={disk},format=raw,if=none,id=fixture',
++                 '-device', 'virtio-blk-pci,drive=fixture,disable-modern=on']
+     if opts.net:
+         netdev = 'user,id=net0' + (',net=' + opts.net_subnet if opts.net_subnet else '')
+         argv += ['-netdev', netdev,

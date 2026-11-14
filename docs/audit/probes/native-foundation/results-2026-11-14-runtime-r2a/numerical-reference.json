@@ -1,0 +1,23 @@
+{
+  "reference": "host Python math and glibc libm.so.6; independent of vendored Rust libm",
+  "seed": 20261114,
+  "vectors": 17342,
+  "per_kind": {
+    "0": 1820,
+    "1": 2021,
+    "2": 2415,
+    "3": 2415,
+    "4": 1820,
+    "5": 2021,
+    "6": 2415,
+    "7": 2415
+  },
+  "tolerances": {
+    "atanh": "4 ULP, tiny/subnormal/zero exact",
+    "lgamma": "8e-14 * max(1,abs(reference))",
+    "atanhf": "4 float ULP",
+    "lgammaf": "4e-6 * max(1,abs(reference))",
+    "frexp/modf and float variants": "bit exact including signed zero; NaN classification"
+  },
+  "note": "bounded validation, not full libm conformance"
+}

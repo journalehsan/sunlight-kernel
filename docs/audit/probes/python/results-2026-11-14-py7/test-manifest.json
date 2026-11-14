@@ -1,0 +1,18 @@
+{
+  "final_source": "final/validated-source.json",
+  "baseline_source": "source-baseline.json",
+  "final_executions": "final/validated-executions.json",
+  "directory_executions": "directory-executions.json",
+  "final_fixtures": {
+    "filesystem-test.c": "911e1c2e1af2b968b7961f21ea0ecfa2457e0d75d2737c0e86a0e5cd46c8e734",
+    "directory-test.c": "5a8f93b7861d8fc13afd959d229ecb9a8df10e38e382a73f43aeae4722e1f4a3",
+    "fat-fixture.img": "858e903770e71347b02b30fd047b9cd508d708f0ae95059babc92c15d578b35d"
+  },
+  "development_attempts": {
+    "baseline_negative": "fat-unlink-before.log binds to source-baseline.json",
+    "initial_vfs": "vfs-first.log and vfs-new-tests.log: development snapshots; final source qualification is final/vfs-host-final.log",
+    "first_native": "fat-native-first: pre-formatting and pre-fstat-error-map snapshot; excluded from final qualification",
+    "initial_compile_failure": "filesystem-build.log and filesystem-initial-build-failure.c retained; undeclared dup replaced with existing raw syscall45"
+  },
+  "source_identity_limit": "Development attempts without a complete per-attempt source manifest are UNQUALIFIED for exact-source acceptance; no earlier result is used to qualify later source."
+}

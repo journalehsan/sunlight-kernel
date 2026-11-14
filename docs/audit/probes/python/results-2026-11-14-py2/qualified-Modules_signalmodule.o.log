@@ -1,0 +1,95 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:7:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:16:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:614:14: error: use of undeclared identifier 'SIGHUP'
+  614 |         case SIGHUP:
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:617:14: error: use of undeclared identifier 'SIGALRM'
+  617 |         case SIGALRM:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:620:14: error: use of undeclared identifier 'SIGPIPE'
+  620 |         case SIGPIPE:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:623:14: error: use of undeclared identifier 'SIGQUIT'
+  623 |         case SIGQUIT:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:626:14: error: use of undeclared identifier 'SIGCHLD'
+  626 |         case SIGCHLD:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:631:14: error: use of undeclared identifier 'SIGINT'
+  631 |         case SIGINT:
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:634:14: error: use of undeclared identifier 'SIGILL'
+  634 |         case SIGILL:
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:637:14: error: use of undeclared identifier 'SIGABRT'
+  637 |         case SIGABRT:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:640:14: error: use of undeclared identifier 'SIGFPE'
+  640 |         case SIGFPE:
+      |              ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:643:14: error: use of undeclared identifier 'SIGSEGV'
+  643 |         case SIGSEGV:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:646:14: error: use of undeclared identifier 'SIGTERM'
+  646 |         case SIGTERM:
+      |              ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:730:28: error: variable has incomplete type 'struct stat'
+  730 |     struct _Py_stat_struct status;
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:730:12: note: forward declaration of 'struct stat'
+  730 |     struct _Py_stat_struct status;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1594:41: error: use of undeclared identifier 'SIGINT'
+ 1594 |     PyObject* sigint_func = get_handler(SIGINT);
+      |                                         ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1602:21: error: use of undeclared identifier 'SIGINT'
+ 1602 |         set_handler(SIGINT, int_handler);
+      |                     ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1604:21: error: use of undeclared identifier 'SIGINT'
+ 1604 |         PyOS_setsig(SIGINT, signal_handler);
+      |                     ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:1906:33: error: use of undeclared identifier 'SIGINT'
+ 1906 |     (void) PyErr_SetInterruptEx(SIGINT);
+      |                                 ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:2003:48: error: use of undeclared identifier 'SIGINT'
+ 2003 |     if (!_Py_atomic_load_int_relaxed(&Handlers[SIGINT].tripped)) {
+      |                                                ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c:2007:44: error: use of undeclared identifier 'SIGINT'
+ 2007 |     _Py_atomic_store_int_relaxed(&Handlers[SIGINT].tripped, 0);
+      |                                            ^~~~~~
+7 warnings and 18 errors generated.

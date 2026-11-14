@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.elf
+*.o
+*.iso
+*.map

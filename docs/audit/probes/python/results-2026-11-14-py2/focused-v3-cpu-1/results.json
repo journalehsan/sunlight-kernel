@@ -1,0 +1,26 @@
+{
+  "py2-format": {
+    "exit": 0,
+    "stdout": "PY2 FORMAT PASS oracle=1780\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-stream": {
+    "exit": 0,
+    "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-wide": {
+    "exit": 0,
+    "stdout": "PY2 WIDE/ENV PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-header": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  }
+}

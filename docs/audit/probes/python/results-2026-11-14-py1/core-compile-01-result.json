@@ -1,0 +1,1 @@
+{"command": ["make", "-k", "-j4", "python"], "exit": 2}

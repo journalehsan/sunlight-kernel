@@ -1,0 +1,30 @@
+{
+  "status": "PASS",
+  "command": [
+    "cargo",
+    "run",
+    "--locked",
+    "--manifest-path",
+    "/tmp/sunlight-py7-fat-lifetime/Cargo.toml",
+    "--target",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "source": "final/validated-source.json",
+  "source_matches": true,
+  "fixture": "fat-accounting.rs",
+  "fixture_sha256": "0d0b0c812343274750d72c18e0ca5d5c633c89d1f5ab3408a69b7c96d9974027",
+  "raw_log": "fat-accounting.log",
+  "initial_allocated_clusters": 2,
+  "after_open_and_write": 3,
+  "after_unlink": 2,
+  "before_final_close": 2,
+  "after_final_close": 2,
+  "reused_directory_slot_byte_offset": 1056,
+  "reused_cluster": 4,
+  "old_packed_handle": 4194369,
+  "new_packed_handle": 4194370,
+  "replacement_bytes": "new",
+  "stale_read_write_truncate": "BadHandle with entire raw disk byte-for-byte unchanged",
+  "backing_release": "Immediate unlink; not deferred final-close reclamation",
+  "native_cluster_accounting": "NOT_RUN"
+}

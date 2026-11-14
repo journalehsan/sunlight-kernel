@@ -1,0 +1,409 @@
+locked-final
+locked-final 0
+focused-build
+focused-build 0
+acceptance-focused-2
+acceptance-focused-2 0
+acceptance-focused-1
+acceptance-focused-1 0
+acceptance-focused-4
+acceptance-focused-4 0
+header-c-base
+header-c-base 0
+header-c-posix
+header-c-posix 0
+header-c-gnu
+header-c-gnu 0
+header-link-c
+header-link-c 0
+header-guest-c
+header-guest-c 0
+header-cxx-base
+header-cxx-base 0
+header-cxx-posix
+header-cxx-posix 0
+header-cxx-gnu
+header-cxx-gnu 0
+header-link-cxx
+header-link-cxx 0
+header-guest-cxx
+header-guest-cxx 0
+owner-exit-build
+owner-exit-build 0
+owner-exit-observation
+owner-exit-observation 0
+acceptance-suite
+acceptance-suite 0
+cxx-abi-final
+cxx-abi-final 1
+heap-abi-build
+heap-abi-build 0
+heap-abi-guest
+heap-abi-guest 0
+tcp-loopback
+tcp-loopback 0
+pthread-abi
+pthread-abi 0
+locked-repeat
+locked-repeat 0
+[
+  {
+    "name": "locked-final",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "focused-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "tools/native-c/tests/pthread-tsd-once.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/focused.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "acceptance-focused-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/focused.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/acceptance-focused-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "acceptance-focused-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/focused.elf",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/acceptance-focused-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "acceptance-focused-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/focused.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/acceptance-focused-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-c-base",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-x",
+      "c",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/c-base.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-c-posix",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-x",
+      "c",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_POSIX_C_SOURCE=200809L",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/c-posix.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-c-gnu",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-x",
+      "c",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_GNU_SOURCE",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/c-gnu.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-link-c",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/c-base.o",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-c.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-guest-c",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-c.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-guest-c"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-cxx-base",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "-x",
+      "c++",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/cxx-base.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-cxx-posix",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "-x",
+      "c++",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_POSIX_C_SOURCE=200809L",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/cxx-posix.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-cxx-gnu",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "-x",
+      "c++",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_GNU_SOURCE",
+      "-c",
+      "tools/native-c/tests/pthread-tsd-headers.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/cxx-gnu.o"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-link-cxx",
+    "command": [
+      "python3",
+      "tools/native-c/cxx.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/cxx-base.o",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-cxx.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "header-guest-cxx",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-cxx.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/header-guest-cxx"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "owner-exit-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/owner-exit-limitation.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/owner-exit.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "owner-exit-observation",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/owner-exit.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/owner-exit-observation"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "acceptance-suite",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/acceptance-suite"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "cxx-abi-final",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_runtime.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/cxx-abi-final"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "heap-abi-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O0",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/heap-abi.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "heap-abi-guest",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/heap-abi.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/heap-abi-guest"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-loopback",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/tcp-loopback"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "pthread-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_pthread.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/final/pthread-abi"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "locked-repeat",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0
+  }
+]

@@ -1,0 +1,90 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:18:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:924:9: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  924 |     if (wcscmp(config->filesystem_encoding, L"utf-8") == 0) {
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2455:17: error: call to undeclared function 'getpid'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2455 |     pid_t pid = getpid();
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2457:17: error: use of undeclared identifier 'O_WRONLY'
+ 2457 |     int flags = O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW;
+      |                 ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2457:28: error: use of undeclared identifier 'O_CREAT'
+ 2457 |     int flags = O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW;
+      |                            ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2457:38: error: use of undeclared identifier 'O_APPEND'
+ 2457 |     int flags = O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW;
+      |                                      ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2457:49: error: use of undeclared identifier 'O_NOFOLLOW'
+ 2457 |     int flags = O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW;
+      |                                                 ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2461:5: error: call to undeclared function 'snprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2461 |     snprintf(filename, sizeof(filename) - 1, "/tmp/perf-%jd.map",
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2463:14: error: call to undeclared function 'open'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2463 |     int fd = open(filename, flags, 0600);
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2463:14: note: did you mean 'fopen'?
+/tmp/sunlight-py2-baseline-headers/stdio.h:17:7: note: 'fopen' declared here
+   17 | FILE *fopen(const char *path, const char *mode);
+      |       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2468:35: error: call to undeclared function 'fdopen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2468 |         perf_map_state.perf_map = fdopen(fd, "a");
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2468:35: note: did you mean 'fopen'?
+/tmp/sunlight-py2-baseline-headers/stdio.h:17:7: note: 'fopen' declared here
+   17 | FILE *fopen(const char *path, const char *mode);
+      |       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2468:33: error: incompatible integer to pointer conversion assigning to 'FILE *' (aka 'struct SunlightFile *') from 'int' [-Wint-conversion]
+ 2468 |         perf_map_state.perf_map = fdopen(fd, "a");
+      |                                 ^ ~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2937:31: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2937 |     const wchar_t *name_end = wcschr(s, L'=');
+      |                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:2937:20: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 2937 |     const wchar_t *name_end = wcschr(s, L'=');
+      |                    ^          ~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3607:31: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3607 |     const wchar_t *name_end = wcschr(s, L'=');
+      |                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3607:20: error: incompatible integer to pointer conversion initializing 'const wchar_t *' (aka 'const int *') with an expression of type 'int' [-Wint-conversion]
+ 3607 |     const wchar_t *name_end = wcschr(s, L'=');
+      |                    ^          ~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3875:17: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3875 |     while ((p = wcschr(p, delim)) != NULL) {
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3875:15: error: incompatible integer to pointer conversion assigning to 'const wchar_t *' (aka 'const int *') from 'int' [-Wint-conversion]
+ 3875 |     while ((p = wcschr(p, delim)) != NULL) {
+      |               ^ ~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3883:11: error: incompatible integer to pointer conversion assigning to 'const wchar_t *' (aka 'const int *') from 'int' [-Wint-conversion]
+ 3883 |         p = wcschr(path, delim);
+      |           ^ ~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c:3885:24: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3885 |             p = path + wcslen(path); /* End of string */
+      |                        ^
+5 warnings and 18 errors generated.

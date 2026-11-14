@@ -1,0 +1,20 @@
+[
+  {
+    "feature": "condvar",
+    "exit": 1,
+    "status": "BLOCKED",
+    "evidence": "cpython-blocker-condvar.log"
+  },
+  {
+    "feature": "strncpy",
+    "exit": 1,
+    "status": "BLOCKED",
+    "evidence": "cpython-blocker-strncpy.log"
+  },
+  {
+    "feature": "_Exit",
+    "exit": 1,
+    "status": "BLOCKED",
+    "evidence": "cpython-blocker-_Exit.log"
+  }
+]

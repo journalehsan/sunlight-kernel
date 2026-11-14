@@ -1,0 +1,670 @@
+{
+  "status": "PASS",
+  "basis": "Fresh byte comparison with incoming pinned PY6 vendor source; provenance not refreshed from network",
+  "files": [
+    {
+      "path": "sunlight-libc/vendor/libm/CHANGELOG.md",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/Cargo.toml",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/LICENSE.txt",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/README.md",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/SUNLIGHT-PROVENANCE.md",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/build.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/configure.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/lib.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/libm_helper.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/acos.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/acosf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/acosh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/acoshf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/approx/cbrtf64.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/approx/hypot.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/approx/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/aarch64/fma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/aarch64/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/aarch64/rounding.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/aarch64/sqrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/i586/exp_all.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/i586/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/i586/rounding.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/wasm32/fabs.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/wasm32/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/wasm32/rounding.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/wasm32/sqrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/x86/detect.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/x86/fma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/x86/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/arch/x86/sqrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/asin.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/asinf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/asinh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/asinhf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atan.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atan2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atan2f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atanf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atanh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/atanhf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/cbrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/cbrtf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/ceil.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/copysign.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/cos.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/cosf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/cosh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/coshf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/erf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/erff.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/exp.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/exp10.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/exp10f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/exp2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/exp2f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/expf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/expm1.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/expm1f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/expo2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fabs.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fdim.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/floor.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fmaf16.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fmin_fmax.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fminimum_fmaximum.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fminimum_fmaximum_num.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/fmod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/frexp.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/ceil.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/copysign.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fabs.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fdim.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/floor.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fma_wide.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fmax.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fmaximum.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fmaximum_num.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fmin.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fminimum.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fminimum_num.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/fmod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/frexp.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/ilogb.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/rint.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/round.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/scalbn.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/sqrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/generic/trunc.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/hypot.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/hypotf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/ilogb.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/j0.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/j0f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/j1.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/j1f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/jn.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/jnf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_cos.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_cosf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_expo2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_expo2f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_sin.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_sinf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_tan.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/k_tanf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/ldexp.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/lgamma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/lgamma_r.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/lgammaf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/lgammaf_r.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log10.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log10f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log1p.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log1pf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/log2f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/logf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/modf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/modff.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/nextafter.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/nextafterf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/pow.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/powf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/rem_pio2.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/rem_pio2_large.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/rem_pio2f.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/remainder.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/remainderf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/remquo.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/remquof.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/rint.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/round.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/roundeven.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/scalbn.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sin.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sincos.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sincosf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sinf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sinh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sinhf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/sqrt.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/big.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/big/tests.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/env.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/feature_detect.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/float_traits.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/hex_float.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/int_traits.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/int_traits/narrowing_div.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/macros.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/mod.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/support/modular.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tan.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tanf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tanh.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tanhf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tgamma.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/tgammaf.rs",
+      "match": true
+    },
+    {
+      "path": "sunlight-libc/vendor/libm/src/math/trunc.rs",
+      "match": true
+    }
+  ]
+}

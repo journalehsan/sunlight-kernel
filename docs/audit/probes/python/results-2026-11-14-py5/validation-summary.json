@@ -1,0 +1,61 @@
+{
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "reason": "Pinned identity, unchanged PY4 inputs/diagnostics, locked baseline, incoming preservation"
+    },
+    "G2": {
+      "status": "PASS",
+      "reason": "Source-backed shell and Files audit complete; runtime/UI limits explicit"
+    },
+    "G3": {
+      "status": "PARTIAL",
+      "reason": "Native subset and owners traced; authoritative component resolver/full POSIX metadata absent"
+    },
+    "G4": {
+      "status": "BLOCKED",
+      "reason": "Missing authoritative POSIX metadata and symlink contracts; native subset only"
+    },
+    "G5": {
+      "status": "BLOCKED",
+      "reason": "No authoritative canonical permission-checked component resolution"
+    },
+    "G6": {
+      "status": "PARTIAL",
+      "reason": "Native shell/C and host Files lexical comparison; Files UI shared-fixture comparison NOT_RUN"
+    },
+    "G7": {
+      "status": "PASS",
+      "reason": "Complete identical180 configured units retried with independent diagnostics;165 compile"
+    },
+    "G8": {
+      "status": "PASS",
+      "reason": "Final-source1/2/4 CPU regression matrix, filesystem host/native cases, ABI/vendor/archive and supported TCP"
+    },
+    "G9": {
+      "status": "PARTIAL",
+      "reason": "Narrow delta reviewed and integrity verified; ancestor permission and descriptor/mutation security qualification remain open"
+    }
+  },
+  "compilation": {
+    "configured": 180,
+    "attempted": 180,
+    "passed": 165,
+    "failed": 15,
+    "unattempted": 0,
+    "object_set_unchanged": true,
+    "newly_successful": []
+  },
+  "regressions": "PASS",
+  "static_link": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "production_changes": [
+    "sunlight-fs/src/vfs.rs"
+  ],
+  "report": "docs/runtime/python-py5-vfs-posix-filesystem-integration.md",
+  "evidence": "docs/audit/probes/python/results-2026-11-14-py5",
+  "no_commit": true,
+  "no_push": true
+}

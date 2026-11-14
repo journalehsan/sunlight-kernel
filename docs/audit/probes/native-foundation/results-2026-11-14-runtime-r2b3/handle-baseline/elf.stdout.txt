@@ -1,0 +1,2 @@
+ABA public handle reused old=0x1000002040 current=0x1000002040 iteration=0
+ABA stale detach result=0 (EINVAL required)

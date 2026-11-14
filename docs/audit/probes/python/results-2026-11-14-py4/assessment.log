@@ -1,0 +1,1 @@
+regressions PASS compile {'configured': 180, 'attempted': 180, 'passed': 165, 'failed': 15, 'unattempted': 0, 'object_set_unchanged': True, 'newly_successful': ['Modules/_localemodule.o', 'Python/sysmodule.o']} integrity PASS

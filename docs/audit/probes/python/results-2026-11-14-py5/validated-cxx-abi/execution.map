@@ -1,0 +1,1265 @@
+             VMA              LMA     Size Align Out     In      Symbol
+               0                0   400000     1 . = 0x0000000000400000
+          400000           400000    1817b    16 .text
+          400000           400000        0     1         __sl_text_start = .
+          400000           400000     158e    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text)
+          400000           400000       57     1                 __wrap_pthread_create
+          400060           400060       8f     1                 __wrap_malloc
+          4000f0           4000f0       44     1                 __wrap_free
+          400140           400140       25     1                 __cxx_global_var_init
+          400c50           400c50       1f     1                 forbidden()
+          400c70           400c70       fd     1                 std::thread::thread<main::$_0>(main::$_0&&)
+          400d70           400d70       fd     1                 std::thread::thread<main::$_1>(main::$_1&&)
+          400e70           400e70       fd     1                 std::thread::thread<main::$_2>(main::$_2&&)
+          400f70           400f70       fd     1                 std::thread::thread<main::$_3>(main::$_3&&)
+          401070           401070       16     1                 std::__sl_thread::storage<main::$_0>::storage<main::$_0>(main::$_0&&)
+          401090           401090       80     1                 std::__sl_thread::storage<main::$_0>::enter(void*)
+          401110           401110        f     1                 main::$_0::operator()() const
+          401120           401120       16     1                 std::__sl_thread::storage<main::$_1>::storage<main::$_1>(main::$_1&&)
+          401140           401140       80     1                 std::__sl_thread::storage<main::$_1>::enter(void*)
+          4011c0           4011c0       49     1                 main::$_1::operator()() const
+          401210           401210       16     1                 std::__sl_thread::storage<main::$_2>::storage<main::$_2>(main::$_2&&)
+          401230           401230       80     1                 std::__sl_thread::storage<main::$_2>::enter(void*)
+          4012b0           4012b0       1c     1                 main::$_2::operator()() const
+          4012d0           4012d0      1c3     1                 worker(int)
+          4014a0           4014a0       16     1                 std::__sl_thread::storage<main::$_3>::storage<main::$_3>(main::$_3&&)
+          4014c0           4014c0       80     1                 std::__sl_thread::storage<main::$_3>::enter(void*)
+          401540           401540       1c     1                 main::$_3::operator()() const
+          401560           401560       2e     1                 __tls_init
+          401560           401560       2e     1                 thread-local initialization routine for local
+          401590           401590       2b    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN5LocalD2Ev)
+          401590           401590       2b     1                 Local::~Local()
+          4015c0           4015c0       26    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6threadD2Ev)
+          4015c0           4015c0       26     1                 std::thread::~thread()
+          4015f0           4015f0       82    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6thread4joinEv)
+          4015f0           4015f0       82     1                 std::thread::join()
+          401680           401680       20    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN5TokenC2Ev)
+          401680           401680       20     1                 Token::Token()
+          4016a0           4016a0       20    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN5TokenD2Ev)
+          4016a0           4016a0       20     1                 Token::~Token()
+          4016c0           4016c0       1d    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN7CleanupD2Ev)
+          4016c0           4016c0       1d     1                 Cleanup::~Cleanup()
+          4016e0           4016e0        e    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text.__clang_call_terminate)
+          4016e0           4016e0        e     1                 __clang_call_terminate
+          4016f0           4016f0       34    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN7DerivedC2Ev)
+          4016f0           4016f0       34     1                 Derived::Derived()
+          401730           401730       27    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNKSt9type_infoneERKS_)
+          401730           401730       27     1                 std::type_info::operator!=(std::type_info const&) const
+          401760           401760       20    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN8CallableC2Ev)
+          401760           401760       20     1                 Callable::Callable()
+          401780           401780      106    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6threadC2I8CallableEEOT_)
+          401780           401780      106     1                 std::thread::thread<Callable>(Callable&&)
+          401890           401890       20    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN8CallableD2Ev)
+          401890           401890       20     1                 Callable::~Callable()
+          4018b0           4018b0       1a    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6threadC2Ev)
+          4018b0           4018b0       1a     1                 std::thread::thread()
+          4018d0           4018d0       1c    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNKSt6thread8joinableEv)
+          4018d0           4018d0       1c     1                 std::thread::joinable() const
+          4018f0           4018f0       2f    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6threadC2EOS_)
+          4018f0           4018f0       2f     1                 std::thread::thread(std::thread&&)
+          401920           401920       47    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt6threadaSEOS_)
+          401920           401920       47     1                 std::thread::operator=(std::thread&&)
+          401970           401970       1b    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN7DerivedD2Ev)
+          401970           401970       1b     1                 Derived::~Derived()
+          401990           401990       24    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN4BaseC2Ev)
+          401990           401990       24     1                 Base::Base()
+          4019c0           4019c0       2d    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN7DerivedD0Ev)
+          4019c0           4019c0       2d     1                 Derived::~Derived()
+          4019f0           4019f0        f    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN4BaseD2Ev)
+          4019f0           4019f0        f     1                 Base::~Base()
+          401a00           401a00       2d    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN4BaseD0Ev)
+          401a00           401a00       2d     1                 Base::~Base()
+          401a30           401a30       b8    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNKSt9type_infoeqERKS_)
+          401a30           401a30       b8     1                 std::type_info::operator==(std::type_info const&) const
+          401af0           401af0       23    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt11__sl_thread7storageI8CallableEC2IS1_EEOT_)
+          401af0           401af0       23     1                 std::__sl_thread::storage<Callable>::storage<Callable>(Callable&&)
+          401b20           401b20       92    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt11__sl_thread7storageI8CallableE5enterEPv)
+          401b20           401b20       92     1                 std::__sl_thread::storage<Callable>::enter(void*)
+          401bc0           401bc0       1b    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZNSt11__sl_thread7storageI8CallableED2Ev)
+          401bc0           401bc0       1b     1                 std::__sl_thread::storage<Callable>::~storage()
+          401be0           401be0       27    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN8CallableC2EOS_)
+          401be0           401be0       27     1                 Callable::Callable(Callable&&)
+          401c10           401c10       1d    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZN8CallableclEv)
+          401c10           401c10       1d     1                 Callable::operator()()
+          401c30           401c30       1b    16         /tmp/cxx-runtime-execution-31b5e6.o:(.text._ZTW5local)
+          401c30           401c30       1b     1                 thread-local wrapper routine for local
+          401c50           401c50      35b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.text)
+          401c50           401c50        f     1                 std::exception::~exception()
+          401c50           401c50        f     1                 std::exception::~exception()
+          401c60           401c60       2d     1                 std::exception::~exception()
+          401c90           401c90       19     1                 std::exception::what() const
+          401cb0           401cb0       c8     1                 std::runtime_error::runtime_error(char const*, unsigned long)
+          401cb0           401cb0       c8     1                 std::runtime_error::runtime_error(char const*, unsigned long)
+          401d80           401d80       55     1                 std::runtime_error::runtime_error(char const*)
+          401d80           401d80       55     1                 std::runtime_error::runtime_error(char const*)
+          401de0           401de0       44     1                 std::runtime_error::runtime_error(std::string const&)
+          401de0           401de0       44     1                 std::runtime_error::runtime_error(std::string const&)
+          401e30           401e30       68     1                 std::runtime_error::runtime_error(std::runtime_error const&)
+          401e30           401e30       68     1                 std::runtime_error::runtime_error(std::runtime_error const&)
+          401ea0           401ea0       5a     1                 std::runtime_error::operator=(std::runtime_error const&)
+          401f00           401f00       60     1                 std::runtime_error::~runtime_error()
+          401f00           401f00       60     1                 std::runtime_error::~runtime_error()
+          401f60           401f60       2d     1                 std::runtime_error::~runtime_error()
+          401f90           401f90       1b     1                 std::runtime_error::what() const
+          401fb0           401fb0       24    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.text._ZNSt9exceptionC2Ev)
+          401fb0           401fb0       24     1                 std::exception::exception()
+          401fe0           401fe0       3d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.text._ZNKSt6string4dataEv)
+          401fe0           401fe0       3d     1                 std::string::data() const
+          402020           402020       17    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.text._ZNKSt6string4sizeEv)
+          402020           402020       17     1                 std::string::size() const
+          402040           402040       2b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.text._ZNSt9exceptionC2ERKS_)
+          402040           402040       2b     1                 std::exception::exception(std::exception const&)
+          402070           402070     2643    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(private_typeinfo.o):(.text)
+          402070           402070       1b     1                 __cxxabiv1::__shim_type_info::~__shim_type_info()
+          402070           402070       1b     1                 __cxxabiv1::__shim_type_info::~__shim_type_info()
+          402090           402090        b     1                 __cxxabiv1::__shim_type_info::~__shim_type_info()
+          4020a0           4020a0        f     1                 __cxxabiv1::__shim_type_info::noop1() const
+          4020b0           4020b0        f     1                 __cxxabiv1::__shim_type_info::noop2() const
+          4020c0           4020c0       1b     1                 __cxxabiv1::__fundamental_type_info::~__fundamental_type_info()
+          4020c0           4020c0       1b     1                 __cxxabiv1::__fundamental_type_info::~__fundamental_type_info()
+          4020e0           4020e0       2d     1                 __cxxabiv1::__fundamental_type_info::~__fundamental_type_info()
+          402110           402110       1b     1                 __cxxabiv1::__array_type_info::~__array_type_info()
+          402110           402110       1b     1                 __cxxabiv1::__array_type_info::~__array_type_info()
+          402130           402130       2d     1                 __cxxabiv1::__array_type_info::~__array_type_info()
+          402160           402160       1b     1                 __cxxabiv1::__function_type_info::~__function_type_info()
+          402160           402160       1b     1                 __cxxabiv1::__function_type_info::~__function_type_info()
+          402180           402180       2d     1                 __cxxabiv1::__function_type_info::~__function_type_info()
+          4021b0           4021b0       1b     1                 __cxxabiv1::__enum_type_info::~__enum_type_info()
+          4021b0           4021b0       1b     1                 __cxxabiv1::__enum_type_info::~__enum_type_info()
+          4021d0           4021d0       2d     1                 __cxxabiv1::__enum_type_info::~__enum_type_info()
+          402200           402200       1b     1                 __cxxabiv1::__class_type_info::~__class_type_info()
+          402200           402200       1b     1                 __cxxabiv1::__class_type_info::~__class_type_info()
+          402220           402220       2d     1                 __cxxabiv1::__class_type_info::~__class_type_info()
+          402250           402250       1b     1                 __cxxabiv1::__si_class_type_info::~__si_class_type_info()
+          402250           402250       1b     1                 __cxxabiv1::__si_class_type_info::~__si_class_type_info()
+          402270           402270       2d     1                 __cxxabiv1::__si_class_type_info::~__si_class_type_info()
+          4022a0           4022a0       1b     1                 __cxxabiv1::__vmi_class_type_info::~__vmi_class_type_info()
+          4022a0           4022a0       1b     1                 __cxxabiv1::__vmi_class_type_info::~__vmi_class_type_info()
+          4022c0           4022c0       2d     1                 __cxxabiv1::__vmi_class_type_info::~__vmi_class_type_info()
+          4022f0           4022f0       1b     1                 __cxxabiv1::__pbase_type_info::~__pbase_type_info()
+          4022f0           4022f0       1b     1                 __cxxabiv1::__pbase_type_info::~__pbase_type_info()
+          402310           402310       2d     1                 __cxxabiv1::__pbase_type_info::~__pbase_type_info()
+          402340           402340       1b     1                 __cxxabiv1::__pointer_type_info::~__pointer_type_info()
+          402340           402340       1b     1                 __cxxabiv1::__pointer_type_info::~__pointer_type_info()
+          402360           402360       2d     1                 __cxxabiv1::__pointer_type_info::~__pointer_type_info()
+          402390           402390       1b     1                 __cxxabiv1::__pointer_to_member_type_info::~__pointer_to_member_type_info()
+          402390           402390       1b     1                 __cxxabiv1::__pointer_to_member_type_info::~__pointer_to_member_type_info()
+          4023b0           4023b0       2d     1                 __cxxabiv1::__pointer_to_member_type_info::~__pointer_to_member_type_info()
+          4023e0           4023e0       2b     1                 __cxxabiv1::__fundamental_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          402410           402410       7e     1                 is_equal(std::type_info const*, std::type_info const*, bool)
+          402490           402490       1e     1                 __cxxabiv1::__array_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          4024b0           4024b0       1e     1                 __cxxabiv1::__function_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          4024d0           4024d0       2b     1                 __cxxabiv1::__enum_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          402500           402500      1ac     1                 __cxxabiv1::__class_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          4026b0           4026b0       d0     1                 __dynamic_cast
+          402780           402780       b2     1                 __cxxabiv1::__class_type_info::process_found_base_class(__cxxabiv1::__dynamic_cast_info*, void*, int) const
+          402840           402840       4e     1                 __cxxabiv1::__class_type_info::has_unambiguous_public_base(__cxxabiv1::__dynamic_cast_info*, void*, int) const
+          402890           402890       69     1                 __cxxabiv1::__si_class_type_info::has_unambiguous_public_base(__cxxabiv1::__dynamic_cast_info*, void*, int) const
+          402900           402900      111     1                 __cxxabiv1::__base_class_type_info::has_unambiguous_public_base(__cxxabiv1::__dynamic_cast_info*, void*, int) const
+          402a20           402a20       13     1                 char const* strip_vtable<char const>(char const*)
+          402a40           402a40       22     1                 update_offset_to_base(char const*, long)
+          402a70           402a70       d4     1                 __cxxabiv1::__vmi_class_type_info::has_unambiguous_public_base(__cxxabiv1::__dynamic_cast_info*, void*, int) const
+          402b50           402b50       c4     1                 __cxxabiv1::__pbase_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          402c20           402c20      520     1                 __cxxabiv1::__pointer_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          403140           403140      1ae     1                 __cxxabiv1::__pointer_type_info::can_catch_nested(__cxxabiv1::__shim_type_info const*) const
+          4032f0           4032f0       d7     1                 __cxxabiv1::__pointer_to_member_type_info::can_catch_nested(__cxxabiv1::__shim_type_info const*) const
+          4033d0           4033d0      1b9     1                 __cxxabiv1::__pointer_to_member_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const
+          403590           403590       59     1                 __cxxabiv1::(anonymous namespace)::dyn_cast_get_derived_info(__cxxabiv1::(anonymous namespace)::derived_object_info*, void const*)
+          4035f0           4035f0      12d     1                 __cxxabiv1::(anonymous namespace)::dyn_cast_to_derived(void const*, void const*, __cxxabiv1::__class_type_info const*, __cxxabiv1::__class_type_info const*, long, long)
+          403720           403720      124     1                 __cxxabiv1::(anonymous namespace)::dyn_cast_try_downcast(void const*, void const*, __cxxabiv1::__class_type_info const*, __cxxabiv1::__class_type_info const*, long)
+          403850           403850      135     1                 __cxxabiv1::(anonymous namespace)::dyn_cast_slow(void const*, void const*, __cxxabiv1::__class_type_info const*, __cxxabiv1::__class_type_info const*, __cxxabiv1::__class_type_info const*, long)
+          403990           403990       e7     1                 __cxxabiv1::__class_type_info::process_static_type_above_dst(__cxxabiv1::__dynamic_cast_info*, void const*, void const*, int) const
+          403a80           403a80       41     1                 __cxxabiv1::__class_type_info::process_static_type_below_dst(__cxxabiv1::__dynamic_cast_info*, void const*, int) const
+          403ad0           403ad0      398     1                 __cxxabiv1::__vmi_class_type_info::search_below_dst(__cxxabiv1::__dynamic_cast_info*, void const*, int, bool) const
+          403e70           403e70       e1     1                 __cxxabiv1::__base_class_type_info::search_above_dst(__cxxabiv1::__dynamic_cast_info*, void const*, void const*, int, bool) const
+          403f60           403f60       cf     1                 __cxxabiv1::__base_class_type_info::search_below_dst(__cxxabiv1::__dynamic_cast_info*, void const*, int, bool) const
+          404030           404030      1ce     1                 __cxxabiv1::__si_class_type_info::search_below_dst(__cxxabiv1::__dynamic_cast_info*, void const*, int, bool) const
+          404200           404200      106     1                 __cxxabiv1::__class_type_info::search_below_dst(__cxxabiv1::__dynamic_cast_info*, void const*, int, bool) const
+          404310           404310      279     1                 __cxxabiv1::__vmi_class_type_info::search_above_dst(__cxxabiv1::__dynamic_cast_info*, void const*, void const*, int, bool) const
+          404590           404590       9e     1                 __cxxabiv1::__si_class_type_info::search_above_dst(__cxxabiv1::__dynamic_cast_info*, void const*, void const*, int, bool) const
+          404630           404630       6b     1                 __cxxabiv1::__class_type_info::search_above_dst(__cxxabiv1::__dynamic_cast_info*, void const*, void const*, int, bool) const
+          4046a0           4046a0       13     1                 void** strip_vtable<void*>(void**)
+          4046c0           4046c0       17    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(private_typeinfo.o):(.text._ZNKSt9type_info4nameEv)
+          4046c0           4046c0       17     1                 std::type_info::name() const
+          4046e0           4046e0      199    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(stdlib_typeinfo.o):(.text)
+          4046e0           4046e0        f     1                 std::type_info::~type_info()
+          4046e0           4046e0        f     1                 std::type_info::~type_info()
+          4046f0           4046f0       2d     1                 std::type_info::~type_info()
+          404720           404720       34     1                 std::bad_cast::bad_cast()
+          404720           404720       34     1                 std::bad_cast::bad_cast()
+          404760           404760       1b     1                 std::bad_cast::~bad_cast()
+          404760           404760       1b     1                 std::bad_cast::~bad_cast()
+          404780           404780       2d     1                 std::bad_cast::~bad_cast()
+          4047b0           4047b0       19     1                 std::bad_cast::what() const
+          4047d0           4047d0       34     1                 std::bad_typeid::bad_typeid()
+          4047d0           4047d0       34     1                 std::bad_typeid::bad_typeid()
+          404810           404810       1b     1                 std::bad_typeid::~bad_typeid()
+          404810           404810       1b     1                 std::bad_typeid::~bad_typeid()
+          404830           404830       2d     1                 std::bad_typeid::~bad_typeid()
+          404860           404860       19     1                 std::bad_typeid::what() const
+          404880           404880      143    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(abi_support.o):(.text)
+          404880           404880        e     1                 __cxa_pure_virtual
+          404890           404890        e     1                 __cxa_deleted_virtual
+          4048a0           4048a0       1b     1                 operator delete(void*)
+          4048c0           4048c0       1f     1                 operator delete(void*, unsigned long)
+          4048e0           4048e0       1b     1                 operator delete[](void*)
+          404900           404900       1f     1                 operator delete[](void*, unsigned long)
+          404920           404920       a3     1                 __abort_message
+          4049d0           4049d0      76f    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_exception.o):(.text)
+          4049d0           4049d0       20     1                 __cxxabiv1::__setExceptionClass(_Unwind_Exception*, unsigned long)
+          4049f0           4049f0       23     1                 __cxxabiv1::__getExceptionClass(_Unwind_Exception const*)
+          404a20           404a20       37     1                 __cxxabiv1::__isOurExceptionClass(_Unwind_Exception const*)
+          404a60           404a60       4b     1                 __cxa_allocate_exception
+          404ab0           404ab0       6d     1                 __cxa_begin_catch
+          404b20           404b20       17     1                 __cxa_free_exception
+          404b40           404b40       77     1                 __cxa_init_primary_exception
+          404bc0           404bc0       53     1                 __cxxabiv1::exception_cleanup_func(_Unwind_Reason_Code, _Unwind_Exception*)
+          404c20           404c20       36     1                 __cxa_allocate_dependent_exception
+          404c60           404c60        a     1                 __cxa_free_dependent_exception
+          404c70           404c70       45     1                 __cxa_throw
+          404cc0           404cc0       1b     1                 __cxxabiv1::failed_throw(__cxxabiv1::__cxa_exception*)
+          404ce0           404ce0        a     1                 __cxa_get_exception_ptr
+          404cf0           404cf0        a     1                 __cxxabiv1::cxa_exception_from_exception_unwind_exception(_Unwind_Exception*)
+          404d00           404d00       e5     1                 __cxa_end_catch
+          404df0           404df0       43     1                 __cxa_decrement_exception_refcount
+          404e40           404e40       50     1                 __cxa_current_exception_type
+          404e90           404e90       81     1                 __cxa_rethrow
+          404f20           404f20       10     1                 __cxa_increment_exception_refcount
+          404f30           404f30       8e     1                 __cxa_current_primary_exception
+          404fc0           404fc0       b3     1                 __cxa_rethrow_primary_exception
+          405080           405080       62     1                 __cxxabiv1::dependent_exception_cleanup(_Unwind_Reason_Code, _Unwind_Exception*)
+          4050f0           4050f0       23     1                 __cxa_uncaught_exception
+          405120           405120       1f     1                 __cxa_uncaught_exceptions
+          405140           405140      c63    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.text)
+          405140           405140      766     1                 __gxx_personality_v0
+          4058b0           4058b0      21d     1                 __cxa_call_unexpected
+          405ad0           405ad0      1b8     1                 __cxxabiv1::readEncodedPointer(unsigned char const**, unsigned char, unsigned long)
+          405c90           405c90      113     1                 __cxxabiv1::exception_spec_can_catch(long, unsigned char const*, unsigned char, __cxxabiv1::__shim_type_info const*, void*, _Unwind_Exception*, unsigned long)
+          405db0           405db0       21    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.text._ZNSt13bad_exceptionD0Ev)
+          405db0           405db0       21     1                 std::bad_exception::~bad_exception()
+          405de0           405de0        b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.text._ZNKSt13bad_exception4whatEv)
+          405de0           405de0        b     1                 std::bad_exception::what() const
+          405df0           405df0       ca    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(eh_support.o):(.text)
+          405df0           405df0        e     1                 __sl_cxx_abort
+          405e00           405e00        b     1                 std::get_terminate()
+          405e10           405e10        b     1                 std::get_unexpected()
+          405e20           405e20       18     1                 std::__terminate(void (*)())
+          405e40           405e40        b     1                 std::__unexpected(void (*)())
+          405e50           405e50        9     1                 std::terminate()
+          405e60           405e60       16     1                 __cxa_get_globals
+          405e80           405e80       16     1                 __cxa_get_globals_fast
+          405ea0           405ea0        a     1                 __cxxabiv1::__aligned_malloc_with_fallback(unsigned long)
+          405eb0           405eb0        a     1                 __cxxabiv1::__aligned_free_with_fallback(void*)
+          405ec0           405ec0       6e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(entry.o):(.text)
+          405ec0           405ec0       6e     1                 __wrap_main
+          405f30           405f30       7b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(new.o):(.text)
+          405f30           405f30       3b     1                 operator new(unsigned long)
+          405f70           405f70       3b     1                 operator new[](unsigned long)
+          405fb0           405fb0       21    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(new.o):(.text._ZNSt9bad_allocD0Ev)
+          405fb0           405fb0       21     1                 std::bad_alloc::~bad_alloc()
+          405fe0           405fe0        b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(new.o):(.text._ZNKSt9bad_alloc4whatEv)
+          405fe0           405fe0        b     1                 std::bad_alloc::what() const
+          405ff0           405ff0      1f4    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.text)
+          405ff0           405ff0       6e     1                 __cxa_atexit
+          406060           406060       5c     1                 __cxa_thread_atexit
+          4060c0           4060c0       5f     1                 __sl_cxx_tls_finalize
+          406120           406120       c4     1                 __sl_cxx_finalize
+          4061f0           4061f0       5d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.text.unlikely.)
+          4061f0           4061f0       2d     1                 __cxa_bad_typeid
+          406220           406220       2d     1                 __cxa_bad_cast
+          406250           406250      472    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(UnwindLevel1.c.o):(.text)
+          406250           406250       f7     1                 _Unwind_RaiseException
+          406350           406350       e7     1                 unwind_phase2
+          406440           406440       5e     1                 _Unwind_Resume
+          4064a0           4064a0       d3     1                 unwind_phase2_forced
+          406580           406580       5f     1                 _Unwind_ForcedUnwind
+          4065e0           4065e0       23     1                 _Unwind_GetLanguageSpecificData
+          406610           406610       23     1                 _Unwind_GetRegionStart
+          406640           406640       1a     1                 _Unwind_DeleteException
+          406660           406660       1b     1                 _Unwind_GetGR
+          406680           406680        a     1                 _Unwind_SetGR
+          406690           406690       20     1                 _Unwind_GetIP
+          4066b0           4066b0       12     1                 _Unwind_SetIP
+          4066d0           4066d0      4ae    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text)
+          4066d0           4066d0       56     1                 __unw_init_local
+          4066d0           4066d0       56     1                 unw_init_local
+          406730           406730       40     1                 __unw_get_reg
+          406730           406730       40     1                 unw_get_reg
+          406770           406770       8d     1                 __unw_set_reg
+          406770           406770       8d     1                 unw_set_reg
+          406800           406800       41     1                 __unw_get_fpreg
+          406800           406800       41     1                 unw_get_fpreg
+          406850           406850       41     1                 __unw_set_fpreg
+          406850           406850       41     1                 unw_set_fpreg
+          4068a0           4068a0        d     1                 __unw_step
+          4068a0           4068a0        d     1                 unw_step
+          4068b0           4068b0       10     1                 __unw_step_stage2
+          4068c0           4068c0       25     1                 __unw_get_proc_info
+          4068c0           4068c0       25     1                 unw_get_proc_info
+          4068f0           4068f0       11     1                 __unw_resume
+          4068f0           4068f0       11     1                 unw_resume
+          406910           406910       18     1                 __unw_get_proc_name
+          406910           406910       18     1                 unw_get_proc_name
+          406930           406930        f     1                 __unw_is_fpreg
+          406930           406930        f     1                 unw_is_fpreg
+          406940           406940        b     1                 __unw_regname
+          406940           406940        b     1                 unw_regname
+          406950           406950        f     1                 __unw_is_signal_frame
+          406950           406950        f     1                 unw_is_signal_frame
+          406960           406960       5c     1                 __unw_iterate_dwarf_unwind_cache
+          406960           406960       5c     1                 unw_iterate_dwarf_unwind_cache
+          4069c0           4069c0       26     1                 __unw_add_dynamic_fde
+          4069f0           4069f0       6e     1                 __unw_remove_dynamic_fde
+          406a60           406a60       a6     1                 __unw_add_dynamic_eh_frame_section
+          406b10           406b10       6e     1                 __unw_remove_dynamic_eh_frame_section
+          406b80           406b80      1bc    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE9decodeFDEERS1_mPNS2_8FDE_InfoEPNS2_8CIE_InfoEb)
+          406b80           406b80      1bc     1                 libunwind::CFI_Parser<libunwind::LocalAddressSpace>::decodeFDE(libunwind::LocalAddressSpace&, unsigned long, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::FDE_Info*, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::CIE_Info*, bool)
+          406d40           406d40      350    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE8parseCIEERS1_mPNS2_8CIE_InfoE)
+          406d40           406d40      350     1                 libunwind::CFI_Parser<libunwind::LocalAddressSpace>::parseCIE(libunwind::LocalAddressSpace&, unsigned long, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::CIE_Info*)
+          407090           407090        6     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind20AbstractUnwindCursorD2Ev)
+          407090           407090        6     1                 libunwind::AbstractUnwindCursor::~AbstractUnwindCursor()
+          407098           407098        6     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EED0Ev)
+          407098           407098        6     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::~UnwindCursor()
+          4070a0           4070a0        f    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE8validRegEi)
+          4070a0           4070a0        f     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::validReg(int)
+          4070b0           4070b0       aa    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE6getRegEi)
+          4070b0           4070b0       aa     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getReg(int)
+          407160           407160       1f    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE6setRegEim)
+          407160           407160       1f     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::setReg(int, unsigned long)
+          407180           407180        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE13validFloatRegEi)
+          407180           407180        8     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::validFloatReg(int)
+          407190           407190        9    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE11getFloatRegEi)
+          407190           407190        9     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getFloatReg(int)
+          4071a0           4071a0        9    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE11setFloatRegEid)
+          4071a0           4071a0        9     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::setFloatReg(int, double)
+          4071b0           4071b0       7a    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE4stepEb)
+          4071b0           4071b0       7a     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::step(bool)
+          407230           407230       55    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE7getInfoEP15unw_proc_info_t)
+          407230           407230       55     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getInfo(unw_proc_info_t*)
+          407290           407290        e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE6jumptoEv)
+          407290           407290        e     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::jumpto()
+          4072a0           4072a0        d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE13isSignalFrameEv)
+          4072a0           4072a0        d     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::isSignalFrame()
+          4072b0           4072b0       13    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE15getFunctionNameEPcmPm)
+          4072b0           4072b0       13     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getFunctionName(char*, unsigned long, unsigned long*)
+          4072d0           4072d0      1da    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE24setInfoBasedOnIPRegisterEb)
+          4072d0           4072d0      1da     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::setInfoBasedOnIPRegister(bool)
+          4074b0           4074b0       1d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE15getRegisterNameEi)
+          4074b0           4074b0       1d     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getRegisterName(int)
+          4074d0           4074d0      488    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE13stepWithDwarfERS1_mmRS2_Rbb)
+          4074d0           4074d0      488     1                 libunwind::DwarfInstructions<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::stepWithDwarf(libunwind::LocalAddressSpace&, unsigned long, unsigned long, libunwind::Registers_x86_64&, bool&, bool)
+          407960           407960      d25    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE20parseFDEInstructionsERS1_RKNS2_8FDE_InfoERKNS2_8CIE_InfoEmiPNS2_10PrologInfoE)
+          407960           407960      d25     1                 libunwind::CFI_Parser<libunwind::LocalAddressSpace>::parseFDEInstructions(libunwind::LocalAddressSpace&, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::FDE_Info const&, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::CIE_Info const&, unsigned long, int, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::PrologInfo*)
+          408690           408690      121    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE16getSavedRegisterERS1_RKS2_mRKNS_10CFI_ParserIS1_E16RegisterLocationE)
+          408690           408690      121     1                 libunwind::DwarfInstructions<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getSavedRegister(libunwind::LocalAddressSpace&, libunwind::Registers_x86_64 const&, unsigned long, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::RegisterLocation const&)
+          4087c0           4087c0      18b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind17LocalAddressSpace11getEncodedPERmmhm)
+          4087c0           4087c0      18b     1                 libunwind::LocalAddressSpace::getEncodedP(unsigned long&, unsigned long, unsigned char, unsigned long)
+          408950           408950      171    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind17LocalAddressSpace10getULEB128ERmm)
+          408950           408950      171     1                 libunwind::LocalAddressSpace::getULEB128(unsigned long&, unsigned long)
+          408ad0           408ad0      9bc    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE18evaluateExpressionEmRS1_RKS2_m)
+          408ad0           408ad0      9bc     1                 libunwind::DwarfInstructions<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::evaluateExpression(unsigned long, libunwind::LocalAddressSpace&, libunwind::Registers_x86_64 const&, unsigned long)
+          409490           409490      200    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE23getInfoFromDwarfSectionEmRKNS_18UnwindInfoSectionsEj)
+          409490           409490      200     1                 libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>::getInfoFromDwarfSection(unsigned long, libunwind::UnwindInfoSections const&, unsigned int)
+          409690           409690      225    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE7findFDEERS1_mmmmPNS2_8FDE_InfoEPNS2_8CIE_InfoE)
+          409690           409690      225     1                 libunwind::CFI_Parser<libunwind::LocalAddressSpace>::findFDE(libunwind::LocalAddressSpace&, unsigned long, unsigned long, unsigned long, unsigned long, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::FDE_Info*, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::CIE_Info*)
+          4098c0           4098c0      179    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind14EHHeaderParserINS_17LocalAddressSpaceEE7findFDEERS1_mmjPNS_10CFI_ParserIS1_E8FDE_InfoEPNS5_8CIE_InfoE)
+          4098c0           4098c0      179     1                 libunwind::EHHeaderParser<libunwind::LocalAddressSpace>::findFDE(libunwind::LocalAddressSpace&, unsigned long, unsigned long, unsigned int, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::FDE_Info*, libunwind::CFI_Parser<libunwind::LocalAddressSpace>::CIE_Info*)
+          409a40           409a40       f1    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.text._ZN9libunwind14EHHeaderParserINS_17LocalAddressSpaceEE11decodeEHHdrERS1_mmRNS2_12EHHeaderInfoE)
+          409a40           409a40       f1     1                 libunwind::EHHeaderParser<libunwind::LocalAddressSpace>::decodeEHHdr(libunwind::LocalAddressSpace&, unsigned long, unsigned long, libunwind::EHHeaderParser<libunwind::LocalAddressSpace>::EHHeaderInfo&)
+          409b34           409b34       5d     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(UnwindRegistersRestore.S.o):(.text)
+          409b34           409b34        0     1                 __libunwind_Registers_x86_64_jumpto
+          409b94           409b94       52     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(UnwindRegistersSave.S.o):(.text)
+          409b94           409b94        0     1                 __unw_getcontext
+          409b94           409b94        0     1                 unw_getcontext
+          409bf0           409bf0       bc    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc5stdio11write_bytes)
+          409bf0           409bf0       bc     1                 sunlight_libc::stdio::write_bytes
+          409cb0           409cb0       34    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.__sunlight_assert_fail)
+          409cb0           409cb0       34     1                 __sunlight_assert_fail
+          409cf0           409cf0      20e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.fprintf)
+          409cf0           409cf0      20e     1                 fprintf
+          409f00           409f00       fc    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.memcpy)
+          409f00           409f00       fc     1                 memcpy
+          40a000           40a000       9e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.memset)
+          40a000           40a000       9e     1                 memset
+          40a0a0           40a0a0      188    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.vfprintf)
+          40a0a0           40a0a0      188     1                 vfprintf
+          40a230           40a230      1a0    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.text.write)
+          40a230           40a230      1a0     1                 write
+          40a3d0           40a3d0        b     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc6thread17thread_trampoline)
+          40a3d0           40a3d0        b     1                 sunlight_libc::thread::thread_trampoline
+          40a3e0           40a3e0      157    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc3tls8init_tls)
+          40a3e0           40a3e0      157     1                 sunlight_libc::tls::init_tls
+          40a540           40a540      17a    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc16validated_header)
+          40a540           40a540      17a     1                 sunlight_libc::alloc::validated_header
+          40a6c0           40a6c0       71    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc17allocation_layout)
+          40a6c0           40a6c0       71     1                 sunlight_libc::alloc::allocation_layout
+          40a740           40a740      1ea    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc7release.llvm.12846964792014522906)
+          40a740           40a740      1ea     1                 sunlight_libc::alloc::release (.llvm.12846964792014522906)
+          40a930           40a930      2c8    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc8allocate.llvm.12846964792014522906)
+          40a930           40a930      2c8     1                 sunlight_libc::alloc::allocate (.llvm.12846964792014522906)
+          40ac00           40ac00       22    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc6thread12thread_start)
+          40ac00           40ac00       22     1                 sunlight_libc::thread::thread_start
+          40ac30           40ac30      2e8    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc6thread16spawn_with_stack)
+          40ac30           40ac30      2e8     1                 sunlight_libc::thread::spawn_with_stack
+          40af20           40af20      1d1    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread15cleanup_current)
+          40af20           40af20      1d1     1                 sunlight_libc::pthread::cleanup_current
+          40b100           40b100      607    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread15queue_if_exited)
+          40b100           40b100      607     1                 sunlight_libc::pthread::queue_if_exited
+          40b710           40b710      107    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread15release_control)
+          40b710           40b710      107     1                 sunlight_libc::pthread::release_control
+          40b820           40b820       a1    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread18pthread_trampoline)
+          40b820           40b820       a1     1                 sunlight_libc::pthread::pthread_trampoline
+          40b8d0           40b8d0       30    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.calloc)
+          40b8d0           40b8d0       30     1                 calloc
+          40b900           40b900        5    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.free)
+          40b910           40b910        a    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.malloc)
+          40b920           40b920      33e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.pthread_create)
+          40bc60           40bc60      239    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.pthread_join)
+          40bc60           40bc60      239     1                 pthread_join
+          40bea0           40bea0       63    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.pthread_mutex_lock)
+          40bea0           40bea0       63     1                 pthread_mutex_lock
+          40bf10           40bf10       30    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.pthread_mutex_unlock)
+          40bf10           40bf10       30     1                 pthread_mutex_unlock
+          40bf40           40bf40       cf    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.realloc)
+          40bf40           40bf40       cf     1                 realloc
+          40c010           40c010       2f    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.strcmp)
+          40c010           40c010       2f     1                 strcmp
+          40c040           40c040       1c    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.text.strlen)
+          40c040           40c040       1c     1                 strlen
+          40c060           40c060     47d9    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.text._RNvNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format6render.llvm.7459679528029777809)
+          40c060           40c060     47d9     1                 sunlight_libc::stdio::format::render (.llvm.7459679528029777809)
+          410840           410840       61    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.text._RNvXs_NtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6formatNtB4_7DecimalNtNtCsg6my6oZXuye_4core3fmt5Write9write_str)
+          410840           410840       61     1                 <sunlight_libc::stdio::format::Decimal as core::fmt::Write>::write_str
+          4108b0           4108b0       89    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.text._RNvXs_NvNtNtCsg6my6oZXuye_4core3fmt5Write9write_fmtQNtNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format7DecimalNtB4_12SpecWriteFmt14spec_write_fmtBU_)
+          4108b0           4108b0       89     1                 <&mut sunlight_libc::stdio::format::Decimal as core::fmt::Write::write_fmt::SpecWriteFmt>::spec_write_fmt
+          410940           410940       fc    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.text._RNvYNtNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format7DecimalNtNtCsg6my6oZXuye_4core3fmt5Write10write_charB8_)
+          410940           410940       fc     1                 <sunlight_libc::stdio::format::Decimal as core::fmt::Write>::write_char
+          410a40           410a40       85    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.text._RNvYNtNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format7DecimalNtNtCsg6my6oZXuye_4core3fmt5Write9write_fmtB8_)
+          410a40           410a40       85     1                 <sunlight_libc::stdio::format::Decimal as core::fmt::Write>::write_fmt
+          410ad0           410ad0      1b5    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge10wait_ready)
+          410ad0           410ad0      1b5     1                 sunlight_libc::net_bridge::wait_ready
+          410c90           410c90      714    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.text._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge4send)
+          410c90           410c90      714     1                 sunlight_libc::net_bridge::send
+          4113a4           4113a4       19     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text)
+          4113a4           4113a4        0     1                 _start
+          4113c0           4113c0       14    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text._Exit)
+          4113c0           4113c0       14     1                 _Exit
+          4113c0           4113c0       14     1                 _exit
+          4113c0           4113c0       14     1                 sl_std_exit
+          4113e0           4113e0       e3    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text.atexit)
+          4113e0           4113e0       e3     1                 atexit
+          4114d0           4114d0       b3    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text.exit)
+          4114d0           4114d0       b3     1                 exit
+          411590           411590       26    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text.sl_std_init_tls)
+          411590           411590       26     1                 sl_std_init_tls
+          4115c0           4115c0       41    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.text.sl_std_start)
+          4115c0           4115c0       41     1                 sl_std_start
+          411610           411610      247    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_ipc-368a4f48005d10f6.sunlight_ipc.74a6d3687a95d2ae-cgu.0.rcgu.o):(.text._RNvCsa0VUyfabYjW_12sunlight_ipc16ipc_call_timeout)
+          411610           411610      247     1                 sunlight_ipc::ipc_call_timeout
+          411860           411860      15e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_ipc-368a4f48005d10f6.sunlight_ipc.74a6d3687a95d2ae-cgu.0.rcgu.o):(.text._RNvCsa0VUyfabYjW_12sunlight_ipc25nameserver_lookup_timeout)
+          411860           411860      15e     1                 sunlight_ipc::nameserver_lookup_timeout
+          4119c0           4119c0       68    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_ipc-368a4f48005d10f6.sunlight_ipc.74a6d3687a95d2ae-cgu.0.rcgu.o):(.text._RNvCsa0VUyfabYjW_12sunlight_ipc9shm_alloc)
+          4119c0           4119c0       68     1                 sunlight_ipc::shm_alloc
+          411a28           411a28       33     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.text.unlikely._RINvNtCsg6my6oZXuye_4core9panicking13assert_failedyyEB4_)
+          411a28           411a28       33     1                 core::panicking::assert_failed::<u64, u64>
+          411a5b           411a5b       3a     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.text.unlikely._RNvNtCsg6my6oZXuye_4core9panicking18panic_bounds_check)
+          411a5b           411a5b       3a     1                 core::panicking::panic_bounds_check
+          411a95           411a95       ec     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.text.unlikely._RNvNtCsg6my6oZXuye_4core9panicking19assert_failed_inner)
+          411a95           411a95       ec     1                 core::panicking::assert_failed_inner
+          411b90           411b90        e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.text.unlikely._RNvNtCsg6my6oZXuye_4core9panicking5panic)
+          411b90           411b90        e     1                 core::panicking::panic
+          411ba0           411ba0       2b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.text.unlikely._RNvNtCsg6my6oZXuye_4core9panicking9panic_fmt)
+          411ba0           411ba0       2b     1                 core::panicking::panic_fmt
+          411bd0           411bd0        b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_native_c-ef21b3cf31d0ec91.sunlight_native_c.41f94572f447231a-cgu.0.rcgu.o):(.text._RNvCs5NZBvkRymjj_7___rustc17rust_begin_unwind)
+          411bd0           411bd0        b     1                 __rustc::rust_begin_unwind
+          411be0           411be0       d9    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.05.rcgu.o):(.text.unlikely._RNvNtNtCsg6my6oZXuye_4core5slice5index16slice_index_fail)
+          411be0           411be0       d9     1                 core::slice::index::slice_index_fail
+          411cc0           411cc0      308    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.text._RNvMs2_NtNtNtCsg6my6oZXuye_4core3num3imp6bignumNtB5_8Big32x4010mul_digits)
+          411cc0           411cc0      308     1                 <core::num::imp::bignum::Big32x40>::mul_digits
+          411fd0           411fd0      1e6    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.text._RNvMs2_NtNtNtCsg6my6oZXuye_4core3num3imp6bignumNtB5_8Big32x408mul_pow2)
+          411fd0           411fd0      1e6     1                 <core::num::imp::bignum::Big32x40>::mul_pow2
+          4121c0           4121c0      1f7    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.text._RNvNtNtCsg6my6oZXuye_4core3str8converts9from_utf8)
+          4121c0           4121c0      1f7     1                 core::str::converts::from_utf8
+          4123c0           4123c0       d7    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.text._RNvNtNtCsg6my6oZXuye_4core5slice6memchr14memchr_aligned)
+          4123c0           4123c0       d7     1                 core::slice::memchr::memchr_aligned
+          4124a0           4124a0      4d5    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral)
+          4124a0           4124a0      4d5     1                 <core::fmt::Formatter>::pad_integral
+          412980           412980      257    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter19pad_formatted_parts)
+          412980           412980      257     1                 <core::fmt::Formatter>::pad_formatted_parts
+          412be0           412be0      27a    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter21write_formatted_parts.llvm.1417779132937417444)
+          412be0           412be0      27a     1                 <core::fmt::Formatter>::write_formatted_parts (.llvm.1417779132937417444)
+          412e60           412e60      435    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter3pad)
+          412e60           412e60      435     1                 <core::fmt::Formatter>::pad
+          4132a0           4132a0      1a5    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvNtCsg6my6oZXuye_4core3fmt5write)
+          4132a0           4132a0      1a5     1                 core::fmt::write
+          413450           413450       59    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvNvMsa_NtCsg6my6oZXuye_4core3fmtNtB7_9Formatter12pad_integral12write_prefix)
+          413450           413450       59     1                 <core::fmt::Formatter>::pad_integral::write_prefix
+          4134b0           4134b0       10    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvXs1g_NtCsg6my6oZXuye_4core3fmtRDNtB6_5DebugEL_Bx_3fmtB8_)
+          4134b0           4134b0       10     1                 <&dyn core::fmt::Debug as core::fmt::Debug>::fmt
+          4134c0           4134c0      1a4    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvXs1g_NtCsg6my6oZXuye_4core3fmtRjNtB6_5Debug3fmtB8_)
+          4134c0           4134c0      1a4     1                 <&usize as core::fmt::Debug>::fmt
+          4134c0           4134c0      1a4     1                 <&u64 as core::fmt::Debug>::fmt
+          413670           413670       12    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvXs1i_NtCsg6my6oZXuye_4core3fmtReNtB6_7Display3fmtB8_)
+          413670           413670       12     1                 <&str as core::fmt::Display>::fmt
+          413690           413690       16    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.text._RNvXs8_NtCsg6my6oZXuye_4core3fmtNtB5_9ArgumentsNtB5_7Display3fmt)
+          413690           413690       16     1                 <core::fmt::Arguments as core::fmt::Display>::fmt
+          4136b0           4136b0       4e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RINvNtNtCsg6my6oZXuye_4core3fmt5float29float_to_decimal_common_exactdEB6_)
+          4136b0           4136b0       4e     1                 core::fmt::float::float_to_decimal_common_exact::<f64>
+          413700           413700       4b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RINvNtNtCsg6my6oZXuye_4core3fmt5float32float_to_decimal_common_shortestdEB6_)
+          413700           413700       4b     1                 core::fmt::float::float_to_decimal_common_shortest::<f64>
+          413750           413750       4d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RINvNtNtCsg6my6oZXuye_4core3fmt5float33float_to_exponential_common_exactdEB6_)
+          413750           413750       4d     1                 core::fmt::float::float_to_exponential_common_exact::<f64>
+          4137a0           4137a0       4e    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RINvNtNtCsg6my6oZXuye_4core3fmt5float36float_to_exponential_common_shortestdEB6_)
+          4137a0           4137a0       4e     1                 core::fmt::float::float_to_exponential_common_shortest::<f64>
+          4137f0           4137f0       30    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text.unlikely._RNvNtCsg6my6oZXuye_4core6option13expect_failed)
+          4137f0           4137f0       30     1                 core::option::expect_failed
+          413820           413820       13    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text.unlikely._RNvNtNtCsg6my6oZXuye_4core9panicking11panic_const23panic_const_div_by_zero)
+          413820           413820       13     1                 core::panicking::panic_const::panic_const_div_by_zero
+          413840           413840       34    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RNvXs7_NtNtCsg6my6oZXuye_4core3fmt5floatdNtB7_7Display3fmt)
+          413840           413840       34     1                 <f64 as core::fmt::Display>::fmt
+          413880           413880       36    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.text._RNvXs8_NtNtCsg6my6oZXuye_4core3fmt5floatdNtB7_8LowerExp3fmt)
+          413880           413880       36     1                 <f64 as core::fmt::LowerExp>::fmt
+          4138c0           4138c0      2d6    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec15to_shortest_strdNvNtNtB2_8strategy5grisu15format_shortestEB8_)
+          4138c0           4138c0      2d6     1                 core::num::imp::flt2dec::to_shortest_str::<f64, core::num::imp::flt2dec::strategy::grisu::format_shortest>
+          413ba0           413ba0      357    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec16to_exact_exp_strdNvNtNtB2_8strategy5grisu12format_exactEB8_)
+          413ba0           413ba0      357     1                 core::num::imp::flt2dec::to_exact_exp_str::<f64, core::num::imp::flt2dec::strategy::grisu::format_exact>
+          413f00           413f00      360    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec18to_exact_fixed_strdNvNtNtB2_8strategy5grisu12format_exactEB8_)
+          413f00           413f00      360     1                 core::num::imp::flt2dec::to_exact_fixed_str::<f64, core::num::imp::flt2dec::strategy::grisu::format_exact>
+          414260           414260      345    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec19to_shortest_exp_strdNvNtNtB2_8strategy5grisu15format_shortestEB8_)
+          414260           414260      345     1                 core::num::imp::flt2dec::to_shortest_exp_str::<f64, core::num::imp::flt2dec::strategy::grisu::format_shortest>
+          4145b0           4145b0      148    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RNvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec17digits_to_dec_str)
+          4145b0           4145b0      148     1                 core::num::imp::flt2dec::digits_to_dec_str
+          414700           414700      184    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.text._RNvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec17digits_to_exp_str)
+          414700           414700      184     1                 core::num::imp::flt2dec::digits_to_exp_str
+          414890           414890      103    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.13.rcgu.o):(.text._RNvXsd_NtNtNtCsg6my6oZXuye_4core3fmt3num3impyNtB9_7Display3fmt)
+          414890           414890      103     1                 <u64 as core::fmt::Display>::fmt
+          414890           414890      103     1                 <usize as core::fmt::Display>::fmt
+          4149a0           4149a0      5b8    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtCsg6my6oZXuye_4core3str5count14do_count_chars)
+          4149a0           4149a0      5b8     1                 core::str::count::do_count_chars
+          414f60           414f60      3e4    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy5grisu16format_exact_opt)
+          414f60           414f60      3e4     1                 core::num::imp::flt2dec::strategy::grisu::format_exact_opt
+          415350           415350      63d    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy5grisu19format_shortest_opt)
+          415350           415350      63d     1                 core::num::imp::flt2dec::strategy::grisu::format_shortest_opt
+          415990           415990      f20    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon12format_exact)
+          415990           415990      f20     1                 core::num::imp::flt2dec::strategy::dragon::format_exact
+          4168b0           4168b0     12b2    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon15format_shortest)
+          4168b0           4168b0     12b2     1                 core::num::imp::flt2dec::strategy::dragon::format_shortest
+          417b70           417b70      475    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon9mul_pow10)
+          417b70           417b70      475     1                 core::num::imp::flt2dec::strategy::dragon::mul_pow10
+          417ff0           417ff0      18b    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.text._RNvNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy5grisu16format_exact_opt14possibly_round)
+          417ff0           417ff0      18b     1                 core::num::imp::flt2dec::strategy::grisu::format_exact_opt::possibly_round
+          41817b           41817b        0     1         __sl_text_end = .
+          41817b           41817b      e85     1 . = ALIGN(4096)
+          419000           419000     49b0    16 .rodata
+          419000           419000       a0     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata)
+          4190a0           4190a0      883     1         <internal>:(.rodata.str1.1)
+          419928           419928       10     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTI5Token)
+          419928           419928       10     1                 typeinfo for Token
+          419938           419938        7     1         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTS5Token)
+          419938           419938        7     1                 typeinfo name for Token
+          419940           419940       18     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTISt9bad_alloc)
+          419940           419940       18     1                 typeinfo for std::bad_alloc
+          419958           419958        d     1         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTSSt9bad_alloc)
+          419958           419958        d     1                 typeinfo name for std::bad_alloc
+          419968           419968       10     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTI4Base)
+          419968           419968       10     1                 typeinfo for Base
+          419978           419978        6     1         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTS4Base)
+          419978           419978        6     1                 typeinfo name for Base
+          419980           419980       18     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTI7Derived)
+          419980           419980       18     1                 typeinfo for Derived
+          419998           419998        9     1         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTS7Derived)
+          419998           419998        9     1                 typeinfo name for Derived
+          4199a8           4199a8       20     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTV7Derived)
+          4199a8           4199a8       20     1                 vtable for Derived
+          4199c8           4199c8       20     8         /tmp/cxx-runtime-execution-31b5e6.o:(.rodata._ZTV4Base)
+          4199c8           4199c8       20     1                 vtable for Base
+          4199e8           4199e8       9a     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(exception.o):(.rodata)
+          4199e8           4199e8       28     1                 vtable for std::runtime_error
+          419a10           419a10       28     1                 vtable for std::exception
+          419a38           419a38       10     1                 typeinfo for std::exception
+          419a48           419a48        d     1                 typeinfo name for std::exception
+          419a58           419a58       18     1                 typeinfo for std::runtime_error
+          419a70           419a70       12     1                 typeinfo name for std::runtime_error
+          419a88           419a88      fb8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(private_typeinfo.o):(.rodata)
+          419a88           419a88       18     1                 typeinfo for __cxxabiv1::__shim_type_info
+          419aa0           419aa0       21     1                 typeinfo name for __cxxabiv1::__shim_type_info
+          419ac8           419ac8       18     1                 typeinfo for __cxxabiv1::__class_type_info
+          419ae0           419ae0       22     1                 typeinfo name for __cxxabiv1::__class_type_info
+          419b08           419b08       18     1                 typeinfo for __cxxabiv1::__pbase_type_info
+          419b20           419b20       22     1                 typeinfo name for __cxxabiv1::__pbase_type_info
+          419b48           419b48       18     1                 typeinfo for __cxxabiv1::__pointer_type_info
+          419b60           419b60       24     1                 typeinfo name for __cxxabiv1::__pointer_type_info
+          419b88           419b88       18     1                 typeinfo for __cxxabiv1::__function_type_info
+          419ba0           419ba0       25     1                 typeinfo name for __cxxabiv1::__function_type_info
+          419bc8           419bc8       18     1                 typeinfo for __cxxabiv1::__pointer_to_member_type_info
+          419be0           419be0       2e     1                 typeinfo name for __cxxabiv1::__pointer_to_member_type_info
+          419c10           419c10       10     1                 __cxxabiv1::__pointer_to_member_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const::null_ptr_rep
+          419c20           419c20        8     1                 __cxxabiv1::__pointer_to_member_type_info::can_catch(__cxxabiv1::__shim_type_info const*, void*&) const::null_ptr_rep
+          419c28           419c28       38     1                 vtable for __cxxabiv1::__shim_type_info
+          419c60           419c60       38     1                 vtable for __cxxabiv1::__fundamental_type_info
+          419c98           419c98       18     1                 typeinfo for __cxxabiv1::__fundamental_type_info
+          419cb0           419cb0       28     1                 typeinfo name for __cxxabiv1::__fundamental_type_info
+          419cd8           419cd8       10     1                 typeinfo for void
+          419ce8           419ce8        2     1                 typeinfo name for void
+          419cf0           419cf0       20     1                 typeinfo for void*
+          419d10           419d10        3     1                 typeinfo name for void*
+          419d18           419d18       20     1                 typeinfo for void const*
+          419d38           419d38        4     1                 typeinfo name for void const*
+          419d40           419d40       10     1                 typeinfo for std::nullptr_t
+          419d50           419d50        3     1                 typeinfo name for std::nullptr_t
+          419d58           419d58       20     1                 typeinfo for std::nullptr_t*
+          419d78           419d78        4     1                 typeinfo name for std::nullptr_t*
+          419d80           419d80       20     1                 typeinfo for std::nullptr_t const*
+          419da0           419da0        5     1                 typeinfo name for std::nullptr_t const*
+          419da8           419da8       10     1                 typeinfo for bool
+          419db8           419db8        2     1                 typeinfo name for bool
+          419dc0           419dc0       20     1                 typeinfo for bool*
+          419de0           419de0        3     1                 typeinfo name for bool*
+          419de8           419de8       20     1                 typeinfo for bool const*
+          419e08           419e08        4     1                 typeinfo name for bool const*
+          419e10           419e10       10     1                 typeinfo for wchar_t
+          419e20           419e20        2     1                 typeinfo name for wchar_t
+          419e28           419e28       20     1                 typeinfo for wchar_t*
+          419e48           419e48        3     1                 typeinfo name for wchar_t*
+          419e50           419e50       20     1                 typeinfo for wchar_t const*
+          419e70           419e70        4     1                 typeinfo name for wchar_t const*
+          419e78           419e78       10     1                 typeinfo for char
+          419e88           419e88        2     1                 typeinfo name for char
+          419e90           419e90       20     1                 typeinfo for char*
+          419eb0           419eb0        3     1                 typeinfo name for char*
+          419eb8           419eb8       20     1                 typeinfo for char const*
+          419ed8           419ed8        4     1                 typeinfo name for char const*
+          419ee0           419ee0       10     1                 typeinfo for unsigned char
+          419ef0           419ef0        2     1                 typeinfo name for unsigned char
+          419ef8           419ef8       20     1                 typeinfo for unsigned char*
+          419f18           419f18        3     1                 typeinfo name for unsigned char*
+          419f20           419f20       20     1                 typeinfo for unsigned char const*
+          419f40           419f40        4     1                 typeinfo name for unsigned char const*
+          419f48           419f48       10     1                 typeinfo for signed char
+          419f58           419f58        2     1                 typeinfo name for signed char
+          419f60           419f60       20     1                 typeinfo for signed char*
+          419f80           419f80        3     1                 typeinfo name for signed char*
+          419f88           419f88       20     1                 typeinfo for signed char const*
+          419fa8           419fa8        4     1                 typeinfo name for signed char const*
+          419fb0           419fb0       10     1                 typeinfo for short
+          419fc0           419fc0        2     1                 typeinfo name for short
+          419fc8           419fc8       20     1                 typeinfo for short*
+          419fe8           419fe8        3     1                 typeinfo name for short*
+          419ff0           419ff0       20     1                 typeinfo for short const*
+          41a010           41a010        4     1                 typeinfo name for short const*
+          41a018           41a018       10     1                 typeinfo for unsigned short
+          41a028           41a028        2     1                 typeinfo name for unsigned short
+          41a030           41a030       20     1                 typeinfo for unsigned short*
+          41a050           41a050        3     1                 typeinfo name for unsigned short*
+          41a058           41a058       20     1                 typeinfo for unsigned short const*
+          41a078           41a078        4     1                 typeinfo name for unsigned short const*
+          41a080           41a080       10     1                 typeinfo for int
+          41a090           41a090        2     1                 typeinfo name for int
+          41a098           41a098       20     1                 typeinfo for int*
+          41a0b8           41a0b8        3     1                 typeinfo name for int*
+          41a0c0           41a0c0       20     1                 typeinfo for int const*
+          41a0e0           41a0e0        4     1                 typeinfo name for int const*
+          41a0e8           41a0e8       10     1                 typeinfo for unsigned int
+          41a0f8           41a0f8        2     1                 typeinfo name for unsigned int
+          41a100           41a100       20     1                 typeinfo for unsigned int*
+          41a120           41a120        3     1                 typeinfo name for unsigned int*
+          41a128           41a128       20     1                 typeinfo for unsigned int const*
+          41a148           41a148        4     1                 typeinfo name for unsigned int const*
+          41a150           41a150       10     1                 typeinfo for long
+          41a160           41a160        2     1                 typeinfo name for long
+          41a168           41a168       20     1                 typeinfo for long*
+          41a188           41a188        3     1                 typeinfo name for long*
+          41a190           41a190       20     1                 typeinfo for long const*
+          41a1b0           41a1b0        4     1                 typeinfo name for long const*
+          41a1b8           41a1b8       10     1                 typeinfo for unsigned long
+          41a1c8           41a1c8        2     1                 typeinfo name for unsigned long
+          41a1d0           41a1d0       20     1                 typeinfo for unsigned long*
+          41a1f0           41a1f0        3     1                 typeinfo name for unsigned long*
+          41a1f8           41a1f8       20     1                 typeinfo for unsigned long const*
+          41a218           41a218        4     1                 typeinfo name for unsigned long const*
+          41a220           41a220       10     1                 typeinfo for long long
+          41a230           41a230        2     1                 typeinfo name for long long
+          41a238           41a238       20     1                 typeinfo for long long*
+          41a258           41a258        3     1                 typeinfo name for long long*
+          41a260           41a260       20     1                 typeinfo for long long const*
+          41a280           41a280        4     1                 typeinfo name for long long const*
+          41a288           41a288       10     1                 typeinfo for unsigned long long
+          41a298           41a298        2     1                 typeinfo name for unsigned long long
+          41a2a0           41a2a0       20     1                 typeinfo for unsigned long long*
+          41a2c0           41a2c0        3     1                 typeinfo name for unsigned long long*
+          41a2c8           41a2c8       20     1                 typeinfo for unsigned long long const*
+          41a2e8           41a2e8        4     1                 typeinfo name for unsigned long long const*
+          41a2f0           41a2f0       10     1                 typeinfo for __int128
+          41a300           41a300        2     1                 typeinfo name for __int128
+          41a308           41a308       20     1                 typeinfo for __int128*
+          41a328           41a328        3     1                 typeinfo name for __int128*
+          41a330           41a330       20     1                 typeinfo for __int128 const*
+          41a350           41a350        4     1                 typeinfo name for __int128 const*
+          41a358           41a358       10     1                 typeinfo for unsigned __int128
+          41a368           41a368        2     1                 typeinfo name for unsigned __int128
+          41a370           41a370       20     1                 typeinfo for unsigned __int128*
+          41a390           41a390        3     1                 typeinfo name for unsigned __int128*
+          41a398           41a398       20     1                 typeinfo for unsigned __int128 const*
+          41a3b8           41a3b8        4     1                 typeinfo name for unsigned __int128 const*
+          41a3c0           41a3c0       10     1                 typeinfo for half
+          41a3d0           41a3d0        3     1                 typeinfo name for half
+          41a3d8           41a3d8       20     1                 typeinfo for half*
+          41a3f8           41a3f8        4     1                 typeinfo name for half*
+          41a400           41a400       20     1                 typeinfo for half const*
+          41a420           41a420        5     1                 typeinfo name for half const*
+          41a428           41a428       10     1                 typeinfo for float
+          41a438           41a438        2     1                 typeinfo name for float
+          41a440           41a440       20     1                 typeinfo for float*
+          41a460           41a460        3     1                 typeinfo name for float*
+          41a468           41a468       20     1                 typeinfo for float const*
+          41a488           41a488        4     1                 typeinfo name for float const*
+          41a490           41a490       10     1                 typeinfo for double
+          41a4a0           41a4a0        2     1                 typeinfo name for double
+          41a4a8           41a4a8       20     1                 typeinfo for double*
+          41a4c8           41a4c8        3     1                 typeinfo name for double*
+          41a4d0           41a4d0       20     1                 typeinfo for double const*
+          41a4f0           41a4f0        4     1                 typeinfo name for double const*
+          41a4f8           41a4f8       10     1                 typeinfo for long double
+          41a508           41a508        2     1                 typeinfo name for long double
+          41a510           41a510       20     1                 typeinfo for long double*
+          41a530           41a530        3     1                 typeinfo name for long double*
+          41a538           41a538       20     1                 typeinfo for long double const*
+          41a558           41a558        4     1                 typeinfo name for long double const*
+          41a560           41a560       10     1                 typeinfo for __float128
+          41a570           41a570        2     1                 typeinfo name for __float128
+          41a578           41a578       20     1                 typeinfo for __float128*
+          41a598           41a598        3     1                 typeinfo name for __float128*
+          41a5a0           41a5a0       20     1                 typeinfo for __float128 const*
+          41a5c0           41a5c0        4     1                 typeinfo name for __float128 const*
+          41a5c8           41a5c8       10     1                 typeinfo for char8_t
+          41a5d8           41a5d8        3     1                 typeinfo name for char8_t
+          41a5e0           41a5e0       20     1                 typeinfo for char8_t*
+          41a600           41a600        4     1                 typeinfo name for char8_t*
+          41a608           41a608       20     1                 typeinfo for char8_t const*
+          41a628           41a628        5     1                 typeinfo name for char8_t const*
+          41a630           41a630       10     1                 typeinfo for char16_t
+          41a640           41a640        3     1                 typeinfo name for char16_t
+          41a648           41a648       20     1                 typeinfo for char16_t*
+          41a668           41a668        4     1                 typeinfo name for char16_t*
+          41a670           41a670       20     1                 typeinfo for char16_t const*
+          41a690           41a690        5     1                 typeinfo name for char16_t const*
+          41a698           41a698       10     1                 typeinfo for char32_t
+          41a6a8           41a6a8        3     1                 typeinfo name for char32_t
+          41a6b0           41a6b0       20     1                 typeinfo for char32_t*
+          41a6d0           41a6d0        4     1                 typeinfo name for char32_t*
+          41a6d8           41a6d8       20     1                 typeinfo for char32_t const*
+          41a6f8           41a6f8        5     1                 typeinfo name for char32_t const*
+          41a700           41a700       38     1                 vtable for __cxxabiv1::__array_type_info
+          41a738           41a738       18     1                 typeinfo for __cxxabiv1::__array_type_info
+          41a750           41a750       22     1                 typeinfo name for __cxxabiv1::__array_type_info
+          41a778           41a778       38     1                 vtable for __cxxabiv1::__function_type_info
+          41a7b0           41a7b0       38     1                 vtable for __cxxabiv1::__enum_type_info
+          41a7e8           41a7e8       18     1                 typeinfo for __cxxabiv1::__enum_type_info
+          41a800           41a800       21     1                 typeinfo name for __cxxabiv1::__enum_type_info
+          41a828           41a828       50     1                 vtable for __cxxabiv1::__class_type_info
+          41a878           41a878       50     1                 vtable for __cxxabiv1::__si_class_type_info
+          41a8c8           41a8c8       18     1                 typeinfo for __cxxabiv1::__si_class_type_info
+          41a8e0           41a8e0       25     1                 typeinfo name for __cxxabiv1::__si_class_type_info
+          41a908           41a908       50     1                 vtable for __cxxabiv1::__vmi_class_type_info
+          41a958           41a958       18     1                 typeinfo for __cxxabiv1::__vmi_class_type_info
+          41a970           41a970       26     1                 typeinfo name for __cxxabiv1::__vmi_class_type_info
+          41a998           41a998       38     1                 vtable for __cxxabiv1::__pbase_type_info
+          41a9d0           41a9d0       38     1                 vtable for __cxxabiv1::__pointer_type_info
+          41aa08           41aa08       38     1                 vtable for __cxxabiv1::__pointer_to_member_type_info
+          41aa40           41aa40       df     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(stdlib_typeinfo.o):(.rodata)
+          41aa40           41aa40       28     1                 vtable for std::bad_cast
+          41aa68           41aa68       28     1                 vtable for std::bad_typeid
+          41aa90           41aa90       20     1                 vtable for std::type_info
+          41aab0           41aab0       10     1                 typeinfo for std::type_info
+          41aac0           41aac0        d     1                 typeinfo name for std::type_info
+          41aad0           41aad0       18     1                 typeinfo for std::bad_cast
+          41aae8           41aae8        c     1                 typeinfo name for std::bad_cast
+          41aaf8           41aaf8       18     1                 typeinfo for std::bad_typeid
+          41ab10           41ab10        f     1                 typeinfo name for std::bad_typeid
+          41ab20           41ab20       d0     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.rodata)
+          41abf0           41abf0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.rodata._ZTISt13bad_exception)
+          41abf0           41abf0       18     1                 typeinfo for std::bad_exception
+          41ac08           41ac08       12     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.rodata._ZTSSt13bad_exception)
+          41ac08           41ac08       12     1                 typeinfo name for std::bad_exception
+          41ac20           41ac20       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.rodata._ZTVSt13bad_exception)
+          41ac20           41ac20       28     1                 vtable for std::bad_exception
+          41ac48           41ac48       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(new.o):(.rodata._ZTVSt9bad_alloc)
+          41ac48           41ac48       28     1                 vtable for std::bad_alloc
+          41ac70           41ac70      1c8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE8parseCIEERS1_mPNS2_8CIE_InfoE)
+          41ae38           41ae38       98     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EE6getRegEi)
+          41aed0           41aed0      1a8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE13stepWithDwarfERS1_mmRS2_Rbb)
+          41b078           41b078      1a0     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind10CFI_ParserINS_17LocalAddressSpaceEE20parseFDEInstructionsERS1_RKNS2_8FDE_InfoERKNS2_8CIE_InfoEmiPNS2_10PrologInfoE)
+          41b218           41b218       d0     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE16getSavedRegisterERS1_RKS2_mRKNS_10CFI_ParserIS1_E16RegisterLocationE)
+          41b2e8           41b2e8       98     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind17LocalAddressSpace11getEncodedPERmmhm)
+          41b380           41b380      700     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind17DwarfInstructionsINS_17LocalAddressSpaceENS_16Registers_x86_64EE18evaluateExpressionEmRS1_RKS2_m)
+          41ba80           41ba80       60     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZN9libunwind14EHHeaderParserINS_17LocalAddressSpaceEE7findFDEERS1_mmjPNS_10CFI_ParserIS1_E8FDE_InfoEPNS5_8CIE_InfoE)
+          41bae0           41bae0       88     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZTVN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EEE)
+          41bae0           41bae0       88     1                 vtable for libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>
+          41bb68           41bb68       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZTIN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EEE)
+          41bb68           41bb68       18     1                 typeinfo for libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>
+          41bb80           41bb80       4a     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZTSN9libunwind12UnwindCursorINS_17LocalAddressSpaceENS_16Registers_x86_64EEE)
+          41bb80           41bb80       4a     1                 typeinfo name for libunwind::UnwindCursor<libunwind::LocalAddressSpace, libunwind::Registers_x86_64>
+          41bbd0           41bbd0       10     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZTIN9libunwind20AbstractUnwindCursorE)
+          41bbd0           41bbd0       10     1                 typeinfo for libunwind::AbstractUnwindCursor
+          41bbe0           41bbe0       23     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata._ZTSN9libunwind20AbstractUnwindCursorE)
+          41bbe0           41bbe0       23     1                 typeinfo name for libunwind::AbstractUnwindCursor
+          41bc08           41bc08      130     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.rodata)
+          41bd38           41bd38       38     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.rodata..Lswitch.table.write)
+          41bd70           41bd70       25     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.0)
+          41bd98           41bd98       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.2)
+          41bdb0           41bdb0       24     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.3)
+          41bdd8           41bdd8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.4)
+          41bdf0           41bdf0       15     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.5)
+          41be08           41be08       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lanon.5cfe3390a71833c439577c1e55a6525c.6)
+          41be20           41be20        e     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.rodata..Lswitch.table._RNvNtCs21BvcBcZ9sN_13sunlight_libc6thread16spawn_with_stack.8)
+          41be30           41be30       f0    16         <internal>:(.rodata.cst16)
+          41bf20           41bf20      578     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata._RNvNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format6render.llvm.7459679528029777809)
+          41c498           41c498       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.3)
+          41c4b0           41c4b0        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.4)
+          41c4b8           41c4b8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.5)
+          41c4d0           41c4d0        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.7)
+          41c4d3           41c4d3        8     1         <internal>:(.rodata.cst8)
+          41c4e0           41c4e0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.9)
+          41c4f8           41c4f8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.10)
+          41c510           41c510       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.12)
+          41c528           41c528       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.13)
+          41c540           41c540       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.14)
+          41c558           41c558       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.15)
+          41c570           41c570       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.17)
+          41c588           41c588       30     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lanon.3b2393022e7b5cda2cb96bc1cc238ca0.18)
+          41c5b8           41c5b8       38     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.05.rcgu.o):(.rodata..Lswitch.table._RNvNtNtCs21BvcBcZ9sN_13sunlight_libc5stdio6format6render.llvm.7459679528029777809.30)
+          41c5f0           41c5f0       68     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.rodata._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge10wait_ready)
+          41c658           41c658        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.rodata.anon.58908e240f2529a36695e4732ee48ad3.4.llvm.15691225251699238351)
+          41c658           41c658        3     1                 anon.58908e240f2529a36695e4732ee48ad3.4.llvm.15691225251699238351
+          41c65c           41c65c       28     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.rodata..Lswitch.table._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge4send)
+          41c684           41c684       14     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.rodata..Lswitch.table._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge8endpoint.llvm.15691225251699238351)
+          41c698           41c698       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.rodata..Lanon.076fd2d97adc4dc541b7f770204c0006.1)
+          41c6b0           41c6b0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.rodata..Lanon.076fd2d97adc4dc541b7f770204c0006.2)
+          41c6c8           41c6c8       58     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_ipc-368a4f48005d10f6.sunlight_ipc.74a6d3687a95d2ae-cgu.0.rcgu.o):(.rodata._RNvCsa0VUyfabYjW_12sunlight_ipc16ipc_call_timeout)
+          41c720           41c720       20     8         <internal>:(.rodata.cst32)
+          41c740           41c740       20     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lanon.04d6f1a65103c741f92f9b5d55829b35.3)
+          41c760           41c760        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lanon.04d6f1a65103c741f92f9b5d55829b35.18)
+          41c762           41c762        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lanon.04d6f1a65103c741f92f9b5d55829b35.19)
+          41c764           41c764        7     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lanon.04d6f1a65103c741f92f9b5d55829b35.20)
+          41c770           41c770       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lswitch.table._RNvNtCsg6my6oZXuye_4core9panicking19assert_failed_inner)
+          41c788           41c788       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.02.rcgu.o):(.rodata..Lswitch.table._RNvNtCsg6my6oZXuye_4core9panicking19assert_failed_inner.29)
+          41c7a0           41c7a0       c8     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.04.rcgu.o):(.rodata.anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105)
+          41c7a0           41c7a0       c8     1                 anon.8f448c3c407b63c7aab40d64bd5e7a13.50.llvm.1468654908410483105
+          41c868           41c868        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.04.rcgu.o):(.rodata.anon.8f448c3c407b63c7aab40d64bd5e7a13.62.llvm.1468654908410483105)
+          41c868           41c868        2     1                 anon.8f448c3c407b63c7aab40d64bd5e7a13.62.llvm.1468654908410483105
+          41c870           41c870       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.05.rcgu.o):(.rodata.anon.202d67505d2329884a4ee7b40ecefce0.3.llvm.8897223811123093950)
+          41c870           41c870       18     1                 anon.202d67505d2329884a4ee7b40ecefce0.3.llvm.8897223811123093950
+          41c888           41c888       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.rodata.anon.7e6400f027ec2883b3f19b53d56d2bde.1.llvm.15276595769035825046)
+          41c888           41c888       18     1                 anon.7e6400f027ec2883b3f19b53d56d2bde.1.llvm.15276595769035825046
+          41c8a0           41c8a0       1b     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.rodata.anon.7e6400f027ec2883b3f19b53d56d2bde.2.llvm.15276595769035825046)
+          41c8a0           41c8a0       1b     1                 anon.7e6400f027ec2883b3f19b53d56d2bde.2.llvm.15276595769035825046
+          41c8bb           41c8bb       1a     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.rodata.anon.7e6400f027ec2883b3f19b53d56d2bde.3.llvm.15276595769035825046)
+          41c8bb           41c8bb       1a     1                 anon.7e6400f027ec2883b3f19b53d56d2bde.3.llvm.15276595769035825046
+          41c8d5           41c8d5       1d     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.rodata.anon.7e6400f027ec2883b3f19b53d56d2bde.4.llvm.15276595769035825046)
+          41c8d5           41c8d5       1d     1                 anon.7e6400f027ec2883b3f19b53d56d2bde.4.llvm.15276595769035825046
+          41c8f2           41c8f2      100     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.06.rcgu.o):(.rodata..Lanon.7e6400f027ec2883b3f19b53d56d2bde.6)
+          41c9f8           41c9f8       20     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.rodata._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter12pad_integral)
+          41ca18           41ca18       20     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.rodata._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter19pad_formatted_parts)
+          41ca38           41ca38       20     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.rodata._RNvMsa_NtCsg6my6oZXuye_4core3fmtNtB5_9Formatter3pad)
+          41ca58           41ca58       40     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.09.rcgu.o):(.rodata..Lanon.8b7076d86565ba91478481ca9fc4d3ac.2)
+          41ca98           41ca98       19     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.10.rcgu.o):(.rodata..Lanon.2f8facf7fac35929cfbe7a0608db3405.7)
+          41cab8           41cab8       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec15to_shortest_strdNvNtNtB2_8strategy5grisu15format_shortestEB8_)
+          41cae0           41cae0       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec16to_exact_exp_strdNvNtNtB2_8strategy5grisu12format_exactEB8_)
+          41cb08           41cb08       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec18to_exact_fixed_strdNvNtNtB2_8strategy5grisu12format_exactEB8_)
+          41cb30           41cb30       28     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata._RINvNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec19to_shortest_exp_strdNvNtNtB2_8strategy5grisu15format_shortestEB8_)
+          41cb58           41cb58       22     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.0.llvm.11056918763497905490)
+          41cb58           41cb58       22     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.0.llvm.11056918763497905490
+          41cb80           41cb80       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.2.llvm.11056918763497905490)
+          41cb80           41cb80       18     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.2.llvm.11056918763497905490
+          41cb98           41cb98       2d     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.3.llvm.11056918763497905490)
+          41cb98           41cb98       2d     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.3.llvm.11056918763497905490
+          41cbc8           41cbc8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.4.llvm.11056918763497905490)
+          41cbc8           41cbc8       18     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.4.llvm.11056918763497905490
+          41cbe0           41cbe0        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.5.llvm.11056918763497905490)
+          41cbe0           41cbe0        1     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.5.llvm.11056918763497905490
+          41cbe1           41cbe1        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.6.llvm.11056918763497905490)
+          41cbe1           41cbe1        1     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.6.llvm.11056918763497905490
+          41cbe2           41cbe2        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.7.llvm.11056918763497905490)
+          41cbe2           41cbe2        3     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.7.llvm.11056918763497905490
+          41cbe5           41cbe5        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.8.llvm.11056918763497905490)
+          41cbe5           41cbe5        3     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.8.llvm.11056918763497905490
+          41cbe8           41cbe8        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.9.llvm.11056918763497905490)
+          41cbe8           41cbe8        1     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.9.llvm.11056918763497905490
+          41cbe9           41cbe9        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.10.llvm.11056918763497905490)
+          41cbe9           41cbe9        2     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.10.llvm.11056918763497905490
+          41cbeb           41cbeb       22     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.11.llvm.11056918763497905490)
+          41cbeb           41cbeb       22     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.11.llvm.11056918763497905490
+          41cc10           41cc10       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.12)
+          41cc28           41cc28        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.13.llvm.11056918763497905490)
+          41cc28           41cc28        3     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.13.llvm.11056918763497905490
+          41cc2b           41cc2b        3     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.14.llvm.11056918763497905490)
+          41cc2b           41cc2b        3     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.14.llvm.11056918763497905490
+          41cc2e           41cc2e        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.15)
+          41cc30           41cc30        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.16)
+          41cc32           41cc32       29     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.17)
+          41cc60           41cc60       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.18)
+          41cc78           41cc78       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.19)
+          41cc90           41cc90       25     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.20)
+          41ccb8           41ccb8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.21)
+          41ccd0           41ccd0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.22.llvm.11056918763497905490)
+          41ccd0           41ccd0       18     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.22.llvm.11056918763497905490
+          41cce8           41cce8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.23.llvm.11056918763497905490)
+          41cce8           41cce8       18     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.23.llvm.11056918763497905490
+          41cd00           41cd00       2e     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.24.llvm.11056918763497905490)
+          41cd00           41cd00       2e     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.24.llvm.11056918763497905490
+          41cd30           41cd30       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata.anon.77cb72e551de3b9431f6979ab2a1fcb0.25.llvm.11056918763497905490)
+          41cd30           41cd30       18     1                 anon.77cb72e551de3b9431f6979ab2a1fcb0.25.llvm.11056918763497905490
+          41cd48           41cd48       21     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.26)
+          41cd70           41cd70       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.27)
+          41cd88           41cd88       1f     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.28)
+          41cda8           41cda8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.29)
+          41cdc0           41cdc0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.30)
+          41cdd8           41cdd8        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.31)
+          41cde0           41cde0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.32)
+          41cdf8           41cdf8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.33)
+          41ce10           41ce10       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.34)
+          41ce28           41ce28        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.35)
+          41ce29           41ce29        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.36)
+          41ce2a           41ce2a        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.37)
+          41ce2c           41ce2c        2     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.00.rcgu.o):(.rodata..Lanon.77cb72e551de3b9431f6979ab2a1fcb0.38)
+          41ce30           41ce30      510     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy5grisu12CACHED_POW10)
+          41ce30           41ce30      510     1                 core::num::imp::flt2dec::strategy::grisu::CACHED_POW10
+          41d340           41d340       1c     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.1)
+          41d360           41d360       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.3)
+          41d378           41d378       24     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.4)
+          41d3a0           41d3a0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.5)
+          41d3b8           41d3b8       21     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.6)
+          41d3e0           41d3e0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.7)
+          41d3f8           41d3f8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.8)
+          41d410           41d410       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.10)
+          41d428           41d428       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.11)
+          41d440           41d440       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.12)
+          41d458           41d458       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.13)
+          41d470           41d470       1d     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.14)
+          41d490           41d490       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.15)
+          41d4a8           41d4a8       1c     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.16)
+          41d4c8           41d4c8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.17)
+          41d4e0           41d4e0       2d     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.18)
+          41d510           41d510       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.19)
+          41d528           41d528       2d     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.20)
+          41d558           41d558       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.21)
+          41d570           41d570       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.22)
+          41d588           41d588       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.23)
+          41d5a0           41d5a0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.24)
+          41d5b8           41d5b8       37     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.25)
+          41d5f0           41d5f0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.26)
+          41d608           41d608       36     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.27)
+          41d640           41d640       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.28)
+          41d658           41d658       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.30)
+          41d670           41d670       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.31)
+          41d688           41d688       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.32)
+          41d6a0           41d6a0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.33)
+          41d6b8           41d6b8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.34)
+          41d6d0           41d6d0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.35)
+          41d6e8           41d6e8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.36)
+          41d700           41d700       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.37)
+          41d718           41d718       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.38)
+          41d730           41d730       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.39)
+          41d748           41d748       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.40)
+          41d760           41d760       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.41)
+          41d778           41d778       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.42)
+          41d790           41d790       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.43)
+          41d7a8           41d7a8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.44)
+          41d7c0           41d7c0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.45)
+          41d7d8           41d7d8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.46)
+          41d7f0           41d7f0       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.47)
+          41d808           41d808       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.48)
+          41d820           41d820       28     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon5POW10)
+          41d820           41d820       28     1                 core::num::imp::flt2dec::strategy::dragon::POW10
+          41d848           41d848        8     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon8POW5TO16)
+          41d848           41d848        8     1                 core::num::imp::flt2dec::strategy::dragon::POW5TO16
+          41d850           41d850        c     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon8POW5TO32)
+          41d850           41d850        c     1                 core::num::imp::flt2dec::strategy::dragon::POW5TO32
+          41d85c           41d85c       14     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon8POW5TO64)
+          41d85c           41d85c       14     1                 core::num::imp::flt2dec::strategy::dragon::POW5TO64
+          41d870           41d870       28     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon9POW5TO128)
+          41d870           41d870       28     1                 core::num::imp::flt2dec::strategy::dragon::POW5TO128
+          41d898           41d898       4c     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata._RNvNtNtNtNtNtCsg6my6oZXuye_4core3num3imp7flt2dec8strategy6dragon9POW5TO256)
+          41d898           41d898       4c     1                 core::num::imp::flt2dec::strategy::dragon::POW5TO256
+          41d8e8           41d8e8       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.49)
+          41d900           41d900       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.50)
+          41d918           41d918       18     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(core-98dfb8ed3b8bdfbd.core.bb8eb2a521f74d3c-cgu.15.rcgu.o):(.rodata..Lanon.90e6909de35e1f35bdca8d85f56dd91e.51)
+          41d930           41d930        0     1         . = ALIGN(8)
+          41d930           41d930        0     1         __sl_exports_start = .
+          41d930           41d930        1     1         BYTE(109)
+          41d931           41d931        1     1         BYTE(97)
+          41d932           41d932        1     1         BYTE(108)
+          41d933           41d933        1     1         BYTE(108)
+          41d934           41d934        1     1         BYTE(111)
+          41d935           41d935        1     1         BYTE(99)
+          41d936           41d936        1     1         BYTE(0)
+          41d937           41d937        1     1         BYTE(0)
+          41d938           41d938        1     1         BYTE(0)
+          41d939           41d939        1     1         BYTE(0)
+          41d93a           41d93a        1     1         BYTE(0)
+          41d93b           41d93b        1     1         BYTE(0)
+          41d93c           41d93c        1     1         BYTE(0)
+          41d93d           41d93d        1     1         BYTE(0)
+          41d93e           41d93e        1     1         BYTE(0)
+          41d93f           41d93f        1     1         BYTE(0)
+          41d940           41d940        1     1         BYTE(0)
+          41d941           41d941        1     1         BYTE(0)
+          41d942           41d942        1     1         BYTE(0)
+          41d943           41d943        1     1         BYTE(0)
+          41d944           41d944        1     1         BYTE(0)
+          41d945           41d945        1     1         BYTE(0)
+          41d946           41d946        1     1         BYTE(0)
+          41d947           41d947        1     1         BYTE(0)
+          41d948           41d948        8     1         QUAD(malloc)
+          41d950           41d950        1     1         BYTE(102)
+          41d951           41d951        1     1         BYTE(114)
+          41d952           41d952        1     1         BYTE(101)
+          41d953           41d953        1     1         BYTE(101)
+          41d954           41d954        1     1         BYTE(0)
+          41d955           41d955        1     1         BYTE(0)
+          41d956           41d956        1     1         BYTE(0)
+          41d957           41d957        1     1         BYTE(0)
+          41d958           41d958        1     1         BYTE(0)
+          41d959           41d959        1     1         BYTE(0)
+          41d95a           41d95a        1     1         BYTE(0)
+          41d95b           41d95b        1     1         BYTE(0)
+          41d95c           41d95c        1     1         BYTE(0)
+          41d95d           41d95d        1     1         BYTE(0)
+          41d95e           41d95e        1     1         BYTE(0)
+          41d95f           41d95f        1     1         BYTE(0)
+          41d960           41d960        1     1         BYTE(0)
+          41d961           41d961        1     1         BYTE(0)
+          41d962           41d962        1     1         BYTE(0)
+          41d963           41d963        1     1         BYTE(0)
+          41d964           41d964        1     1         BYTE(0)
+          41d965           41d965        1     1         BYTE(0)
+          41d966           41d966        1     1         BYTE(0)
+          41d967           41d967        1     1         BYTE(0)
+          41d968           41d968        8     1         QUAD(free)
+          41d970           41d970        1     1         BYTE(99)
+          41d971           41d971        1     1         BYTE(97)
+          41d972           41d972        1     1         BYTE(108)
+          41d973           41d973        1     1         BYTE(108)
+          41d974           41d974        1     1         BYTE(111)
+          41d975           41d975        1     1         BYTE(99)
+          41d976           41d976        1     1         BYTE(0)
+          41d977           41d977        1     1         BYTE(0)
+          41d978           41d978        1     1         BYTE(0)
+          41d979           41d979        1     1         BYTE(0)
+          41d97a           41d97a        1     1         BYTE(0)
+          41d97b           41d97b        1     1         BYTE(0)
+          41d97c           41d97c        1     1         BYTE(0)
+          41d97d           41d97d        1     1         BYTE(0)
+          41d97e           41d97e        1     1         BYTE(0)
+          41d97f           41d97f        1     1         BYTE(0)
+          41d980           41d980        1     1         BYTE(0)
+          41d981           41d981        1     1         BYTE(0)
+          41d982           41d982        1     1         BYTE(0)
+          41d983           41d983        1     1         BYTE(0)
+          41d984           41d984        1     1         BYTE(0)
+          41d985           41d985        1     1         BYTE(0)
+          41d986           41d986        1     1         BYTE(0)
+          41d987           41d987        1     1         BYTE(0)
+          41d988           41d988        8     1         QUAD(calloc)
+          41d990           41d990        1     1         BYTE(114)
+          41d991           41d991        1     1         BYTE(101)
+          41d992           41d992        1     1         BYTE(97)
+          41d993           41d993        1     1         BYTE(108)
+          41d994           41d994        1     1         BYTE(108)
+          41d995           41d995        1     1         BYTE(111)
+          41d996           41d996        1     1         BYTE(99)
+          41d997           41d997        1     1         BYTE(0)
+          41d998           41d998        1     1         BYTE(0)
+          41d999           41d999        1     1         BYTE(0)
+          41d99a           41d99a        1     1         BYTE(0)
+          41d99b           41d99b        1     1         BYTE(0)
+          41d99c           41d99c        1     1         BYTE(0)
+          41d99d           41d99d        1     1         BYTE(0)
+          41d99e           41d99e        1     1         BYTE(0)
+          41d99f           41d99f        1     1         BYTE(0)
+          41d9a0           41d9a0        1     1         BYTE(0)
+          41d9a1           41d9a1        1     1         BYTE(0)
+          41d9a2           41d9a2        1     1         BYTE(0)
+          41d9a3           41d9a3        1     1         BYTE(0)
+          41d9a4           41d9a4        1     1         BYTE(0)
+          41d9a5           41d9a5        1     1         BYTE(0)
+          41d9a6           41d9a6        1     1         BYTE(0)
+          41d9a7           41d9a7        1     1         BYTE(0)
+          41d9a8           41d9a8        8     1         QUAD(realloc)
+          41d9b0           41d9b0        0     1         __sl_exports_end = .
+          41d9b0           41d9b0      650     1 . = ALIGN(4096)
+          41e000           41e000     10a4     8 .eh_frame
+          41e000           41e000        0     1         __eh_frame_start = .
+          41e000           41e000      154     1         /tmp/cxx-runtime-execution-31b5e6.o:(.eh_frame+0x0)
+          41e154           41e154       20     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_cxx.a(abi_support.o):(.eh_frame+0x18)
+          41e174           41e174      174     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_exception.o):(.eh_frame+0x18)
+          41e2e8           41e2e8       8c     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.eh_frame+0x18)
+          41e374           41e374       1c     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(eh_support.o):(.eh_frame+0x18)
+          41e390           41e390       48     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(new.o):(.eh_frame+0x18)
+          41e3d8           41e3d8       38     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.eh_frame+0x18)
+          41e410           41e410      1b0     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(UnwindLevel1.c.o):(.eh_frame+0x18)
+          41e5c0           41e5c0      5f0     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.eh_frame+0x18)
+          41ebb0           41ebb0      1ec     1         /tmp/cxx-runtime-execution-31b5e6.o:(.eh_frame+0x154)
+          41ed9c           41ed9c      1f4     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_exception.o):(.eh_frame+0x1ac)
+          41ef90           41ef90       2c     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.eh_frame+0xc4)
+          41efbc           41efbc       24     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(eh_support.o):(.eh_frame+0x54)
+          41efe0           41efe0       30     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(entry.o):(.eh_frame+0x20)
+          41f010           41f010       90     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.eh_frame+0x70)
+          41f0a4           41f0a4        0     1         __eh_frame_end = .
+          41f0a8           41f0a8      38c     8 .eh_frame_hdr
+          41f0a8           41f0a8        0     1         __eh_frame_hdr_start = .
+          41f0a8           41f0a8      38c     4         <internal>:(.eh_frame_hdr)
+          41f434           41f434        0     1         __eh_frame_hdr_end = .
+          41f438           41f438      3b0     8 .gcc_except_table
+          41f438           41f438      1e0     4         /tmp/cxx-runtime-execution-31b5e6.o:(.gcc_except_table)
+          41f438           41f438        0     1                 GCC_except_table5
+          41f53c           41f53c        0     1                 GCC_except_table7
+          41f550           41f550        0     1                 GCC_except_table9
+          41f564           41f564        0     1                 GCC_except_table22
+          41f578           41f578        0     1                 GCC_except_table23
+          41f58c           41f58c        0     1                 GCC_except_table33
+          41f5a0           41f5a0        0     1                 GCC_except_table36
+          41f5b4           41f5b4        0     1                 GCC_except_table45
+          41f5c8           41f5c8        0     1                 GCC_except_table47
+          41f604           41f604        0     1                 GCC_except_table49
+          41f618           41f618       14     4         /tmp/cxx-runtime-execution-31b5e6.o:(.gcc_except_table._ZNSt6threadC2I8CallableEEOT_)
+          41f618           41f618        0     1                 GCC_except_table18
+          41f62c           41f62c       14     4         /tmp/cxx-runtime-execution-31b5e6.o:(.gcc_except_table._ZNSt11__sl_thread7storageI8CallableE5enterEPv)
+          41f62c           41f62c        0     1                 GCC_except_table39
+          41f640           41f640       dc     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_exception.o):(.gcc_except_table)
+          41f640           41f640        0     1                 GCC_except_table3
+          41f654           41f654        0     1                 GCC_except_table5
+          41f668           41f668        0     1                 GCC_except_table6
+          41f678           41f678        0     1                 GCC_except_table7
+          41f688           41f688        0     1                 GCC_except_table8
+          41f69c           41f69c        0     1                 GCC_except_table15
+          41f6c0           41f6c0        0     1                 GCC_except_table16
+          41f6d4           41f6d4        0     1                 GCC_except_table21
+          41f6e4           41f6e4        0     1                 GCC_except_table23
+          41f6fc           41f6fc        0     1                 GCC_except_table24
+          41f70c           41f70c        0     1                 GCC_except_table25
+          41f71c           41f71c       58     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(cxa_personality.o):(.gcc_except_table)
+          41f71c           41f71c        0     1                 GCC_except_table1
+          41f774           41f774       14     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(eh_support.o):(.gcc_except_table)
+          41f774           41f774        0     1                 GCC_except_table3
+          41f788           41f788       18     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(entry.o):(.gcc_except_table)
+          41f788           41f788        0     1                 GCC_except_table0
+          41f7a0           41f7a0       48     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.gcc_except_table)
+          41f7a0           41f7a0        0     1                 GCC_except_table0
+          41f7b4           41f7b4        0     1                 GCC_except_table3
+          41f7c8           41f7c8        0     1                 GCC_except_table4
+          41f7e8           41f7e8      818     1 . = ALIGN(4096)
+          420000           420000        0     1 .tdata
+          420000           420000        0     1         __tls_tdata_start = .
+          420000           420000        0     1         __tls_tdata_end = .
+          420000           420000       20     8 .tbss
+          420000           420000        0     1         __tls_tbss_start = .
+          420000           420000        5     4         /tmp/cxx-runtime-execution-31b5e6.o:(.tbss)
+               0                0        4     1                 local
+               4                4        1     1                 __tls_guard
+          420008           420008       10     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(eh_support.o):(.tbss)
+               8                8       10     1                 __cxxabiv1::globals
+          420018           420018        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.tbss)
+              18               18        8     1                 (anonymous namespace)::thread_destructors
+          420020           420020        0     1         __tls_tbss_end = .
+          420000           420000        0     1 __tls_align = MAX(ALIGNOF(.tdata), ALIGNOF(.tbss))
+          420000           420000        0     1 __tls_size = __tls_tbss_end - __tls_tdata_start
+          420000           420000        0     1 . = ALIGN(4096)
+          420000           420000       38     8 .data
+          420000           420000        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.data)
+          420000           420000        8     1                 __dso_handle
+          420008           420008        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.data._ZN9libunwind13DwarfFDECacheINS_17LocalAddressSpaceEE7_bufferE)
+          420008           420008        8     1                 libunwind::DwarfFDECache<libunwind::LocalAddressSpace>::_buffer
+          420010           420010        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.data._ZN9libunwind13DwarfFDECacheINS_17LocalAddressSpaceEE11_bufferUsedE)
+          420010           420010        8     1                 libunwind::DwarfFDECache<libunwind::LocalAddressSpace>::_bufferUsed
+          420018           420018        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.data.stderr)
+          420018           420018        8     1                 stderr
+          420020           420020       10     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.03.rcgu.o):(.data._RNvNtCs21BvcBcZ9sN_13sunlight_libc5stdio5ERROR)
+          420020           420020       10     1                 sunlight_libc::stdio::ERROR
+          420030           420030        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.data._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread11NEXT_HANDLE.0)
+          420030           420030        8     1                 sunlight_libc::pthread::NEXT_HANDLE (.0)
+          420038           420038        0     8 .init_array
+          420038           420038        0     1         __sl_init_array_start = .
+          420038           420038        0     1         __sl_init_array_end = .
+          420038           420038      fc8     1 . = ALIGN(4096)
+          421000           421000     2910    16 .bss
+          421000           421000       24     8         /tmp/cxx-runtime-execution-31b5e6.o:(.bss)
+          421000           421000        4     1                 fail_thread
+          421004           421004        4     1                 fail_alloc
+          421008           421008        8     1                 live
+          421010           421010        4     1                 Token::living
+          421014           421014        4     1                 callable_living
+          421018           421018        4     1                 errors
+          42101c           42101c        4     1                 tls_done
+          421020           421020        4     1                 ready
+          421028           421028       10     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(lifecycle.o):(.bss)
+          421028           421028        4     1                 (anonymous namespace)::mutex
+          421030           421030        8     1                 (anonymous namespace)::process_destructors
+          421038           421038        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.bss)
+          421038           421038        1     1                 libunwind::LocalAddressSpace::sThisAddressSpace
+          42103c           42103c        4     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.bss._ZN9libunwind13DwarfFDECacheINS_17LocalAddressSpaceEE5_lockE)
+          42103c           42103c        4     1                 libunwind::DwarfFDECache<libunwind::LocalAddressSpace>::_lock
+          421040           421040      800    16         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_eh.a(libunwind.cpp.o):(.bss._ZN9libunwind13DwarfFDECacheINS_17LocalAddressSpaceEE14_initialBufferE)
+          421040           421040      800     1                 libunwind::DwarfFDECache<libunwind::LocalAddressSpace>::_initialBuffer
+          421840           421840        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc10FREE_COUNT)
+          421840           421840        8     1                 sunlight_libc::alloc::FREE_COUNT
+          421848           421848        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc13REALLOC_COUNT)
+          421848           421848        8     1                 sunlight_libc::alloc::REALLOC_COUNT
+          421850           421850        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc16ALLOCATION_COUNT)
+          421850           421850        8     1                 sunlight_libc::alloc::ALLOCATION_COUNT
+          421858           421858        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc20REQUESTED_USER_BYTES)
+          421858           421858        8     1                 sunlight_libc::alloc::REQUESTED_USER_BYTES
+          421860           421860        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc21LIVE_ALLOCATION_COUNT)
+          421860           421860        8     1                 sunlight_libc::alloc::LIVE_ALLOCATION_COUNT
+          421868           421868        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc23ALLOCATED_BACKING_BYTES)
+          421868           421868        8     1                 sunlight_libc::alloc::ALLOCATED_BACKING_BYTES
+          421870           421870        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc23FAILED_ALLOCATION_COUNT)
+          421870           421870        8     1                 sunlight_libc::alloc::FAILED_ALLOCATION_COUNT
+          421878           421878        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc26HIGH_WATER_ALLOCATED_BYTES)
+          421878           421878        8     1                 sunlight_libc::alloc::HIGH_WATER_ALLOCATED_BYTES
+          421880           421880       20     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc4HEAP)
+          421880           421880       20     1                 sunlight_libc::alloc::HEAP
+          4218a0           4218a0        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5alloc9HEAP_LOCK)
+          4218a0           4218a0        1     1                 sunlight_libc::alloc::HEAP_LOCK
+          4218a8           4218a8        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread13CONTROL_COUNT.0)
+          4218a8           4218a8        8     1                 sunlight_libc::pthread::CONTROL_COUNT (.0)
+          4218b0           4218b0        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread13DETACHED_LOCK)
+          4218b0           4218b0        1     1                 sunlight_libc::pthread::DETACHED_LOCK
+          4218b8           4218b8      c00     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread4KEYS)
+          4218b8           4218b8      c00     1                 sunlight_libc::pthread::KEYS
+          4224b8           4224b8        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread8CONTROLS)
+          4224b8           4224b8        8     1                 sunlight_libc::pthread::CONTROLS
+          4224c0           4224c0      200     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread8DETACHED)
+          4224c0           4224c0      200     1                 sunlight_libc::pthread::DETACHED
+          4226c0           4226c0        4     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.04.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc7pthread8KEY_LOCK)
+          4226c0           4226c0        4     1                 sunlight_libc::pthread::KEY_LOCK
+          4226c4           4226c4        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge10TABLE_LOCK.llvm.15691225251699238351)
+          4226c4           4226c4        1     1                 sunlight_libc::net_bridge::TABLE_LOCK (.llvm.15691225251699238351)
+          4226c8           4226c8      800     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge11GENERATIONS.llvm.15691225251699238351)
+          4226c8           4226c8      800     1                 sunlight_libc::net_bridge::GENERATIONS (.llvm.15691225251699238351)
+          422ec8           422ec8      800     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge3IDS.llvm.15691225251699238351)
+          422ec8           422ec8      800     1                 sunlight_libc::net_bridge::IDS (.llvm.15691225251699238351)
+          4236c8           4236c8        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.06.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc10net_bridge7NET_CAP.0.llvm.15691225251699238351)
+          4236c8           4236c8        8     1                 sunlight_libc::net_bridge::NET_CAP (.0.llvm.15691225251699238351)
+          4236d0           4236d0        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc11std_runtime10START_ARGC.0)
+          4236d0           4236d0        8     1                 sunlight_libc::std_runtime::START_ARGC (.0)
+          4236d8           4236d8        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc11std_runtime10START_ARGV.0)
+          4236d8           4236d8        8     1                 sunlight_libc::std_runtime::START_ARGV (.0)
+          4236e0           4236e0        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc11std_runtime10START_ENVP.0)
+          4236e0           4236e0        8     1                 sunlight_libc::std_runtime::START_ENVP (.0)
+          4236e8           4236e8      110     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc11termination9CALLBACKS)
+          4236e8           4236e8      110     1                 sunlight_libc::termination::CALLBACKS
+          4237f8           4237f8        4     4         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5errno14ERRNO_FALLBACK.llvm.12576081815685727765)
+          4237f8           4237f8        4     1                 sunlight_libc::errno::ERRNO_FALLBACK (.llvm.12576081815685727765)
+          4237fc           4237fc        1     1         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.08.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc5errno9TLS_READY.0.llvm.12576081815685727765)
+          4237fc           4237fc        1     1                 sunlight_libc::errno::TLS_READY (.0.llvm.12576081815685727765)
+          423800           423800      107     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.11.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc6locale6LOCALE.llvm.11313508502657962750)
+          423800           423800      107     1                 sunlight_libc::locale::LOCALE (.llvm.11313508502657962750)
+          423908           423908        8     8         /home/ehsantor/Projects/sunlightos-kernel/target/native-c/sysroot/lib/libsunlight_native_c.a(sunlight_libc-9bcf94330d7fb31b.sunlight_libc.1798c3ee614691d7-cgu.12.rcgu.o):(.bss._RNvNtCs21BvcBcZ9sN_13sunlight_libc3env4ENVP.0.llvm.3388845495789772482)
+          423908           423908        8     1                 sunlight_libc::env::ENVP (.0.llvm.3388845495789772482)
+               0                0     4a70     8 .symtab
+               0                0     4a70     8         <internal>:(.symtab)
+               0                0       77     1 .shstrtab
+               0                0       77     1         <internal>:(.shstrtab)
+               0                0     6b22     1 .strtab
+               0                0     6b22     1         <internal>:(.strtab)

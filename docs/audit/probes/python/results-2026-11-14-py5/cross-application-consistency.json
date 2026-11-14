@@ -1,0 +1,89 @@
+{
+  "status": "PARTIAL",
+  "native_shell": {
+    "1": {
+      "py5-shell-paths": {
+        "exit": 0,
+        "stdout": "/tmp\n/tmp\nmissing-rejected\n/\n",
+        "stderr": "sshl: cd: no such directory\n",
+        "pass_": true
+      }
+    },
+    "2": {
+      "py5-shell-paths": {
+        "exit": 0,
+        "stdout": "/tmp\n/tmp\nmissing-rejected\n/\n",
+        "stderr": "sshl: cd: no such directory\n",
+        "pass_": true
+      }
+    },
+    "4": {
+      "py5-shell-paths": {
+        "exit": 0,
+        "stdout": "/tmp\n/tmp\nmissing-rejected\n/\n",
+        "stderr": "sshl: cd: no such directory\n",
+        "pass_": true
+      }
+    }
+  },
+  "native_C": {
+    "1": {
+      "exit": 0,
+      "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+      "stderr": "",
+      "pass_": true
+    },
+    "2": {
+      "exit": 0,
+      "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+      "stderr": "",
+      "pass_": true
+    },
+    "4": {
+      "exit": 0,
+      "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+      "stderr": "",
+      "pass_": true
+    }
+  },
+  "Files_UI": "NOT_RUN",
+  "lexical_source_execution": {
+    "status": "PASS",
+    "command": [
+      "rustc",
+      "--edition=2021",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/lexical-source-extract.rs",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py5-lexical-probe"
+    ],
+    "source_hashes": {
+      "sunshell/src/main.rs": "325b215cb30a035548788ff984a3bee9665090f3e3bb077f613da96044da7d34",
+      "sunlight-files/src/main.rs": "641d3470454bb3b38102067b0dbd519da7b035a13320899be8ff685585c64d68"
+    },
+    "scope": "Host execution of exact lexical source slices, not UI/native lookup or canonicalization",
+    "stdout": "cwd=\"/tmp\" input=\".\" shell=\"/tmp\" files=\"/\"\ncwd=\"/tmp\" input=\"..\" shell=\"/\" files=\"/\"\ncwd=\"/\" input=\"/tmp//./../tmp\" shell=\"/tmp\" files=\"/tmp\"\ncwd=\"/tmp\" input=\"missing/../x\" shell=\"/tmp/x\" files=\"/x\"\ncwd=\"/tmp\" input=\"relative\" shell=\"/tmp/relative\" files=\"/relative\"\ncwd=\"/tmp\" input=\" /tmp \" shell=\"/tmp/ /tmp \" files=\"/tmp\"\n"
+  },
+  "common_native_paths": [
+    "/",
+    "/tmp"
+  ],
+  "comparison_categories": [
+    "dot/dotdot/repeated separators",
+    "relative cwd path",
+    "missing path"
+  ],
+  "shared_mutable_fixture_comparison": "NOT_RUN across all three applications",
+  "observed_divergences": [
+    "Shell removes dot/repeated separators before lookup; native stat61 rejects dot paths and backend exact lookup rejects repeated separators",
+    "Native open prefixes cwd, StatPath61 does not",
+    "Files PathBuf roots relative text; Shell joins relative text to cwd",
+    "Files trims surrounding whitespace; Shell keeps it",
+    "ls long display uses fixed permission strings, not actual stat permissions"
+  ],
+  "unsupported": [
+    "Native symlinks/dangling/chains/loops unavailable",
+    "No realpath comparison possible",
+    "No click-driven Files UI or full shared mutable fixture comparison; no G6 PASS"
+  ],
+  "scope": "Native SunShell scripts and C fixture are actual guest evidence. Exact Files PathBuf source executes on host only. No application UI was refactored."
+}

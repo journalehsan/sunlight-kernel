@@ -9,6 +9,19 @@ size_t __sunlight_mb_cur_max(void);
 /* Creates a mode-0600 read/write file. Replace six trailing X characters in
  * a writable NUL-terminated template. Caller must close and unlink the file. */
 int mkstemp(char *path_template);
+char *getenv(const char *name);
+/* Existing-object canonical query through native VFS. NULL output uses malloc;
+ * caller-owned output requires PATH_MAX bytes (256), including NUL. A returned
+ * path is not an atomic authorization token for a later open. */
+char *realpath(const char *path, char *output);
+/* Private per-call conversion state; NULL destination counts all input.
+ * ASCII in C, strict UTF-8 in installed UTF-8 locales. No partial encoding. */
+size_t mbstowcs(wchar_t *destination, const char *source, size_t count);
+size_t wcstombs(char *destination, const wchar_t *source, size_t count);
+unsigned long strtoul(const char *s, char **end, int base);
+long strtol(const char *s, char **end, int base);
+void qsort(void *base, size_t count, size_t size,
+           int (*compare)(const void *, const void *));
 void *malloc(size_t size);
 void *calloc(size_t count, size_t size);
 void *realloc(void *ptr, size_t size);
@@ -20,8 +33,10 @@ void free(void *ptr);
 int atexit(void (*function)(void));
 #ifdef __cplusplus
 [[noreturn]] void exit(int status);
+[[noreturn]] void _Exit(int status);
 #else
 _Noreturn void exit(int status);
+_Noreturn void _Exit(int status);
 #endif
 #ifdef __cplusplus
 }

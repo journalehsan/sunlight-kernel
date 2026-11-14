@@ -1,0 +1,3 @@
+$ llvm-nm -u /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/verified-cxx-abi/historical.elf
+
+exit=0

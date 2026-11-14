@@ -1,0 +1,65 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c -o Modules/faulthandler.o
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:4:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:7:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:78:6: error: use of undeclared identifier 'SIGFPE'
+   78 |     {SIGFPE, 0, "Floating-point exception", },
+      |      ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:79:6: error: use of undeclared identifier 'SIGABRT'
+   79 |     {SIGABRT, 0, "Aborted", },
+      |      ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:82:6: error: use of undeclared identifier 'SIGSEGV'
+   82 |     {SIGSEGV, 0, "Segmentation fault", }
+      |      ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:85:5: error: invalid application of 'sizeof' to an incomplete type 'fault_handler_t[]'
+   85 |     Py_ARRAY_LENGTH(faulthandler_handlers);
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/pymacro.h:105:12: note: expanded from macro 'Py_ARRAY_LENGTH'
+  105 |     (sizeof(array) / sizeof((array)[0]))
+      |            ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:464:27: error: use of undeclared identifier 'SA_NODEFER'
+  464 |         action.sa_flags = SA_NODEFER;
+      |                           ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:774:23: error: use of undeclared identifier 'SA_RESTART'
+  774 |     action.sa_flags = SA_RESTART;
+      |                       ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:778:27: error: use of undeclared identifier 'SA_NODEFER'
+  778 |         action.sa_flags = SA_NODEFER;
+      |                           ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1020:11: error: use of undeclared identifier 'SIGSEGV'
+ 1020 |     raise(SIGSEGV);
+      |           ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1089:11: error: use of undeclared identifier 'SIGFPE'
+ 1089 |     raise(SIGFPE);
+      |           ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c:1100:5: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1100 |     abort();
+      |     ^
+6 warnings and 10 errors generated.

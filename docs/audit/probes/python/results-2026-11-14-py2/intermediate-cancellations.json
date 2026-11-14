@@ -1,0 +1,42 @@
+[
+  {
+    "command": [
+      "python3",
+      "docs/audit/probes/python/results-2026-11-14-py2/run-final.py"
+    ],
+    "process_start_ticks": "26371814",
+    "status": "NOT_RUN",
+    "reason": "Remaining intermediate-series commands cancelled; source binding is obsolete. Current child guest may finish independently. Final run-validated.py continues.",
+    "identity": "pidfd opened and command rechecked before sending SIGTERM to orchestration driver only"
+  },
+  {
+    "command": [
+      "python3",
+      "docs/audit/probes/python/results-2026-11-14-py2/run-verified.py"
+    ],
+    "process_start_ticks": "26404974",
+    "status": "NOT_RUN",
+    "reason": "Remaining intermediate-series commands cancelled; source binding is obsolete. Current child guest may finish independently. Final run-validated.py continues.",
+    "identity": "pidfd opened and command rechecked before sending SIGTERM to orchestration driver only"
+  },
+  {
+    "command": [
+      "python3",
+      "docs/audit/probes/python/results-2026-11-14-py2/run-acceptance.py"
+    ],
+    "process_start_ticks": "26408696",
+    "status": "NOT_RUN",
+    "reason": "Remaining intermediate-series commands cancelled; source binding is obsolete. Current child guest may finish independently. Final run-validated.py continues.",
+    "identity": "pidfd opened and command rechecked before sending SIGTERM to orchestration driver only"
+  },
+  {
+    "command": [
+      "python3",
+      "docs/audit/probes/python/results-2026-11-14-py2/run-qualified.py"
+    ],
+    "process_start_ticks": "26427640",
+    "status": "NOT_RUN",
+    "reason": "Remaining intermediate-series commands cancelled; source binding is obsolete. Current child guest may finish independently. Final run-validated.py continues.",
+    "identity": "pidfd opened and command rechecked before sending SIGTERM to orchestration driver only"
+  }
+]

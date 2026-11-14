@@ -1,0 +1,103 @@
+{
+  "status": "BLOCKED",
+  "attempts": [
+    {
+      "cpu": 1,
+      "scenario": "explicit-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-1/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 1,
+      "scenario": "creator-exit",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-1/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 1,
+      "scenario": "forced-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-1/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 2,
+      "scenario": "explicit-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-2/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 2,
+      "scenario": "creator-exit",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-2/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 2,
+      "scenario": "forced-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-2/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 4,
+      "scenario": "explicit-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-4/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 4,
+      "scenario": "creator-exit",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-4/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    },
+    {
+      "cpu": 4,
+      "scenario": "forced-views",
+      "test_result": "FAIL",
+      "exit": 91,
+      "qualification": "BLOCKED before backing allocation",
+      "evidence": "resources-cpu-4/",
+      "scope": "Unauthenticated uid=1000 headless group; required account/system allocation authority absent"
+    }
+  ],
+  "root_cause": "native_c_guest launch grants system_allocation only for network fixtures; ordinary cases have no account_membership. alloc_shared_region rejects !system_allocation when no account session exists. thread_spawn preserves these fields. This is policy rejection, not a demonstrated lifetime defect.",
+  "source_references": [
+    "kernel/src/native_c_guest.rs:152",
+    "kernel/src/arch/x86_64/syscall.rs:2910",
+    "kernel/src/memory/shared.rs:89"
+  ],
+  "VM_model": "One address-space root/generation and shared generation-qualified region ledger per group. Explicit maps would create distinct VAs/views in that same VM; mapped_shared and owned_shared vectors are task-local. No successful views were created in these attempts.",
+  "mapping_identity": "VM root/generation + VA/extent + MappingRegion kind/backing; per-task mapped_shared includes token/base/size",
+  "not_run": [
+    "Authorized post-owner allocation",
+    "Peer read/write and two-view publication",
+    "Creator exit with peer retained view",
+    "Last-view backing release and quota refund",
+    "Revocation and concurrent retirement",
+    "Forced termination with allocated backing"
+  ],
+  "production_changes": []
+}

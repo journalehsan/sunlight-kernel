@@ -1,0 +1,4421 @@
+#![cfg_attr(feature = "sunlight", no_std)]
+#![cfg_attr(feature = "sunlight", no_main)]
+
+#[cfg(feature = "std")]
+mod builtins;
+#[cfg(feature = "std")]
+mod exec;
+#[cfg(feature = "std")]
+mod host_script;
+#[cfg(feature = "std")]
+mod input;
+use sunshell::{expansion, parser, shellenv};
+
+#[cfg(feature = "std")]
+use exec::{execute_expanded, Executor, PosixExecutor};
+#[cfg(feature = "std")]
+use input::ReadLine;
+#[cfg(feature = "std")]
+use std::env;
+
+#[cfg(any(feature = "sunlight", test))]
+fn should_clear_stale_foreground(
+    foreground_before_input: Option<u64>,
+    current_foreground: u64,
+    is_alive: bool,
+) -> bool {
+    foreground_before_input == Some(current_foreground) && !is_alive
+}
+
+#[cfg(test)]
+mod foreground_tests {
+    use super::should_clear_stale_foreground;
+
+    #[test]
+    fn exited_child_spawned_by_current_input_is_still_announced() {
+        assert!(!should_clear_stale_foreground(None, 31, false));
+    }
+
+    #[test]
+    fn dead_foreground_remembered_before_input_is_recovered() {
+        assert!(should_clear_stale_foreground(Some(31), 31, false));
+        assert!(!should_clear_stale_foreground(Some(31), 31, true));
+    }
+}
+
+#[cfg(feature = "std")]
+fn run_command(
+    line: &str,
+    env: &mut crate::shellenv::ShellEnv,
+    executor: &dyn Executor,
+) -> Option<i32> {
+    let code = run_host_command(line, env, executor);
+    if let Some(code) = code {
+        env.set("?", &code.to_string());
+    }
+    code
+}
+
+#[cfg(feature = "std")]
+fn run_host_command(
+    line: &str,
+    env: &mut crate::shellenv::ShellEnv,
+    executor: &dyn Executor,
+) -> Option<i32> {
+    let _ = executor;
+    let ast = match parser::parse_line_checked(line) {
+        Ok(Some(ast)) => ast,
+        Ok(None) => return None,
+        Err(error) => {
+            eprintln!("sshl: syntax error: {}", error.message);
+            return Some(2);
+        }
+    };
+    let ast = match expansion::expand_ast(&ast, env) {
+        Ok(ast) => ast,
+        Err(error) => {
+            eprintln!("sshl: {}", error.message());
+            return Some(2);
+        }
+    };
+    if let parser::AstNode::Command(ref command) = ast {
+        if command.redirections.is_empty() {
+            if command.argv.is_empty() {
+                return Some(0);
+            }
+            let argv: Vec<&str> = command.argv.iter().map(String::as_str).collect();
+            match builtins::run(&argv) {
+                builtins::BuiltinResult::Done(code) => return Some(code),
+                builtins::BuiltinResult::Exit(code) => std::process::exit(code),
+                builtins::BuiltinResult::NotBuiltin => {}
+            }
+        }
+    }
+    match execute_expanded(&ast) {
+        Ok(code) => Some(code),
+        Err(e) => {
+            eprintln!("sshl: {e}");
+            Some(e.status())
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+fn make_prompt() -> String {
+    let cwd = env::current_dir()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "?".to_string());
+    format!("user@sunlight:{cwd} $")
+}
+
+#[cfg(feature = "std")]
+fn repl(env: &mut crate::shellenv::ShellEnv, executor: &dyn Executor) {
+    loop {
+        let prompt = make_prompt();
+        match input::readline(&prompt) {
+            Ok(ReadLine::Eof) => break,
+            Ok(ReadLine::Line(line)) => {
+                run_command(&line, env, executor);
+            }
+            Err(e) => {
+                eprintln!("sshl: read error: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+fn main() {
+    let executor = PosixExecutor;
+    let mut env = crate::shellenv::ShellEnv::new();
+    env.set("?", "0");
+    // Seed from process environment for a pleasant dev shell experience
+    for (k, v) in env::vars() {
+        env.set(&k, &v);
+    }
+    // Ensure core vars exist if not present in host env
+    if env.get("PATH").is_none() {
+        env.set("PATH", "/usr/local/bin:/usr/bin:/bin");
+    }
+    if env.get("HOME").is_none() {
+        if let Ok(h) = env::var("HOME") {
+            env.set("HOME", &h);
+        } else {
+            env.set("HOME", "/");
+        }
+    }
+    if env.get("USER").is_none() {
+        if let Ok(u) = env::var("USER") {
+            env.set("USER", &u);
+        } else {
+            env.set("USER", "user");
+        }
+    }
+
+    let args: Vec<String> = env::args().collect();
+    env.pid = std::process::id() as u64;
+    env.arg0 = args[0].clone();
+    for (key, _) in env::vars() {
+        env.export(&key);
+    }
+    if args.len() == 1 {
+        repl(&mut env, &executor);
+        return;
+    }
+    use sunshell::script::{Flow, Runtime};
+    let cwd = std::env::current_dir()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    env.pid = std::process::id() as u64;
+    let mut context = sunshell::script::ShellExecutionContext::new(env, cwd);
+    let mut runtime = host_script::HostRuntime::default();
+    let source = if args[1] == "-c" {
+        if args.len() < 3 {
+            eprintln!("sshl: -c requires a command");
+            std::process::exit(2);
+        }
+        context.env.arg0 = args.get(3).cloned().unwrap_or_else(|| args[0].clone());
+        context.env.positional = args.get(4..).unwrap_or_default().to_vec();
+        Ok(args[2].clone())
+    } else {
+        context.env.arg0 = args[1].clone();
+        context.env.positional = args[2..].to_vec();
+        runtime.source(&args[1], &context)
+    };
+    let result =
+        source.and_then(|source| sunshell::script::execute(&source, &mut context, &mut runtime));
+    let status = match result {
+        Ok(Flow::Status(s) | Flow::Exit(s)) => s,
+        Ok(_) => 2,
+        Err(e) => {
+            eprintln!("sshl: {}", e.message);
+            e.status
+        }
+    };
+    std::process::exit(status);
+}
+
+// ============================================================================
+// SunlightOS (no_std) build
+// ============================================================================
+
+#[cfg(feature = "sunlight")]
+extern crate alloc;
+
+#[cfg(feature = "sunlight")]
+mod sysfetch;
+
+#[cfg(feature = "sunlight")]
+mod sunlight {
+    // Shared calculator engine from the `sunshell` lib (same as Vortex Search).
+    use sunshell::calc;
+
+    use sunlight_ipc::{
+        debug_log, endpoint_create, ipc_call, ipc_call_timeout, ipc_recv, ipc_reply_and_wait,
+        launch_trace::{LaunchSource, LaunchTrace},
+        monotonic_millis, nameserver_lookup, nameserver_register, process_yield, sysinfo,
+        tty_stdin_push, tty_stdout_pull, unpack_ipv4, CapabilityToken, IpcMsg, PtyMsg, ResolvedMsg,
+        ShellMsg, TzMsg, VfsMsg,
+    };
+    use sunlight_uac::auth::hash_password;
+
+    /// CPU brand string via CPUID leaves 0x80000002..=0x80000004 (unprivileged).
+    /// Returns the bytes written into `buf` (trimmed of NULs/leading spaces).
+    fn cpu_brand(buf: &mut [u8; 48]) -> usize {
+        for (i, leaf) in (0x8000_0002u32..=0x8000_0004).enumerate() {
+            let r = core::arch::x86_64::__cpuid(leaf);
+            for (j, reg) in [r.eax, r.ebx, r.ecx, r.edx].into_iter().enumerate() {
+                buf[i * 16 + j * 4..i * 16 + j * 4 + 4].copy_from_slice(&reg.to_le_bytes());
+            }
+        }
+        let start = buf.iter().position(|&b| b != b' ' && b != 0).unwrap_or(0);
+        let end = buf.iter().rposition(|&b| b != 0).map_or(0, |p| p + 1);
+        if start < end {
+            buf.copy_within(start..end, 0);
+            end - start
+        } else {
+            0
+        }
+    }
+
+    const KBD_LABEL: u64 = 1;
+    const OUTPUT_LABEL: u64 = 2;
+    const EXIT_LABEL: u64 = 3;
+    const DRAIN_LABEL: u64 = 4;
+    /// Shell→tty reply: a foreground command was launched; word0 = child pid.
+    const FG_STARTED_LABEL: u64 = 5;
+    /// tty→shell request: the foreground command exited; word0 = exit code.
+    const FG_DONE_LABEL: u64 = 6;
+    const MAX_LINE: usize = 256;
+    const MAX_OUT: usize = 64;
+    const LONG_OUT_MAX: usize = 16384;
+    const IPC_OUTPUT_BYTES: usize = 16;
+    // Match sunlight-tz's bounded client policy. SET persists /etc/localtime,
+    // which can take longer than a scheduler quantum during service startup.
+    const TZCTL_QUERY_TIMEOUT_MS: u64 = 2_000;
+    const TZCTL_SET_TIMEOUT_MS: u64 = 3_000;
+    const OS_NAME: &str = "SunlightOS";
+    const KERNEL_NAME: &str = "SunlightX";
+    const OS_VERSION: &str = env!("CARGO_PKG_VERSION");
+    const KERNEL_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+    enum PasswdState {
+        None,
+        PromptNew {
+            target_user: [u8; 64],
+            target_user_len: usize,
+        },
+        PromptConfirm {
+            target_user: [u8; 64],
+            target_user_len: usize,
+            new_password: [u8; 64],
+            new_password_len: usize,
+        },
+    }
+
+    struct Shell {
+        line: [u8; MAX_LINE],
+        line_len: usize,
+        username: [u8; 64],
+        username_len: usize,
+        uid: u32,
+        gid: u32,
+        passwd_state: PasswdState,
+        passwd_buffer: [u8; 64],
+        passwd_buffer_len: usize,
+        env: crate::shellenv::ShellEnv,
+        cwd: alloc::string::String,
+        calc: calc::CalcSession,
+        /// Set when an external command was spawned as a foreground job. The
+        /// shell reports it to tty_server (FG_STARTED) and parks until tty_server
+        /// reports the child exited (FG_DONE), instead of blocking on the child.
+        fg_pid: Option<u64>,
+        fg_pids: alloc::vec::Vec<u64>,
+        builtin_status: core::cell::Cell<u8>,
+        script_io: Option<[i32; 3]>,
+    }
+
+    impl Shell {
+        fn new() -> Self {
+            Self {
+                line: [0; MAX_LINE],
+                line_len: 0,
+                username: [
+                    b'r', b'o', b'o', b't', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                ],
+                username_len: 4,
+                uid: 0,
+                gid: 0,
+                passwd_state: PasswdState::None,
+                passwd_buffer: [0; 64],
+                passwd_buffer_len: 0,
+                env: crate::shellenv::ShellEnv::new(),
+                cwd: alloc::string::String::from("/"),
+                calc: calc::CalcSession::new(),
+                fg_pid: None,
+                fg_pids: alloc::vec::Vec::new(),
+                builtin_status: core::cell::Cell::new(0),
+                script_io: None,
+            }
+        }
+
+        fn builtin_failure<'a>(&self, diagnostic: &'a [u8]) -> &'a [u8] {
+            self.builtin_status.set(1);
+            diagnostic
+        }
+
+        /// Seed PATH/USER/HOME/SHELL once the user identity is known.
+        fn init_env(&mut self) {
+            let username = alloc::string::String::from(
+                core::str::from_utf8(&self.username[..self.username_len]).unwrap_or(""),
+            );
+            self.env.load_defaults(self.uid, &username);
+            // Startup values are already exported. Import the process snapshot
+            // before session-specific PWD/locale updates.
+            let inherited = native_script::context().env;
+            for (key, value) in inherited.exported() {
+                self.env.set(key, value);
+                self.env.export(key);
+            }
+            self.env.pid = sunlight_libc::getpid();
+            self.env.arg0 = alloc::string::String::from("sshl");
+            self.env.set("PWD", &self.cwd);
+            // Locale foundation: overlay LANG/LC_* from /etc/locale.conf if present.
+            self.load_locale_into_env();
+        }
+
+        /// Read /etc/locale.conf via VFS and inject known locale vars into ShellEnv.
+        /// Falls back silently if VFS or file is unavailable (kernel defaults remain).
+        fn load_locale_into_env(&mut self) {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return,
+            };
+            let bytes = read_file(vfs_cap, "/etc/locale.conf");
+            if bytes.is_empty() {
+                return;
+            }
+            let cfg = sunlight_locale::parse_locale_conf(&bytes);
+            // Convert to pairs the ShellEnv understands.
+            let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> =
+                alloc::vec::Vec::new();
+            for (k, v) in cfg.iter() {
+                pairs.push((
+                    alloc::string::String::from(k),
+                    alloc::string::String::from(v),
+                ));
+            }
+            self.env.apply_locale(&pairs);
+        }
+
+        fn run_calc(&mut self, expr: &str) -> ([u8; MAX_OUT], usize) {
+            let output = if let Some(path) = expr.strip_prefix("file ") {
+                let path = path.trim();
+                match normalize_path(&self.cwd, path) {
+                    Some(path) => {
+                        if let Some(vfs_cap) = nameserver_lookup("vfs") {
+                            let bytes = read_file(vfs_cap, &path);
+                            match core::str::from_utf8(&bytes) {
+                                Ok(contents) => self.calc.run_file_contents(contents, expr),
+                                Err(_) => alloc::string::String::from(
+                                    "calc error: formula file is not valid UTF-8\n",
+                                ),
+                            }
+                        } else {
+                            alloc::string::String::from("calc error: vfs unavailable\n")
+                        }
+                    }
+                    None => alloc::string::String::from("calc error: invalid file path\n"),
+                }
+            } else {
+                self.calc.run_command(expr)
+            };
+
+            self.env.set(
+                "?",
+                if output.starts_with("calc error:") {
+                    "1"
+                } else {
+                    "0"
+                },
+            );
+            if output.len() > MAX_OUT {
+                long_out_replace(output.as_bytes());
+                ([0; MAX_OUT], 0)
+            } else {
+                copy_out(output.as_bytes())
+            }
+        }
+
+        fn handle_byte(&mut self, byte: u8) -> ([u8; MAX_OUT], usize) {
+            // Check if we're in password entry mode
+            match &self.passwd_state {
+                PasswdState::PromptNew {
+                    target_user,
+                    target_user_len,
+                } => {
+                    let target = (*target_user, *target_user_len);
+                    return self.handle_passwd_input(
+                        byte,
+                        PasswdState::PromptNew {
+                            target_user: target.0,
+                            target_user_len: target.1,
+                        },
+                    );
+                }
+                PasswdState::PromptConfirm {
+                    target_user,
+                    target_user_len,
+                    new_password,
+                    new_password_len,
+                } => {
+                    let state = PasswdState::PromptConfirm {
+                        target_user: *target_user,
+                        target_user_len: *target_user_len,
+                        new_password: *new_password,
+                        new_password_len: *new_password_len,
+                    };
+                    return self.handle_passwd_input(byte, state);
+                }
+                PasswdState::None => {}
+            }
+
+            // Normal command mode
+            match byte {
+                b'\n' | b'\r' => {
+                    let result = self.run_line();
+                    #[cfg(feature = "native-tests")]
+                    {
+                        let stats = sunlight_libc::alloc::heap_stats();
+                        debug_log(&alloc::format!(
+                            "[SSHL-HEAP] pid={} used={} failed={}",
+                            sunlight_libc::getpid(),
+                            stats.requested_user_bytes,
+                            stats.failed_allocation_count
+                        ));
+                    }
+                    self.line_len = 0;
+                    result
+                }
+                0x08 => {
+                    if self.line_len > 0 {
+                        self.line_len -= 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                c if c >= 0x20 && c <= 0x7E => {
+                    if self.line_len < MAX_LINE {
+                        self.line[self.line_len] = c;
+                        self.line_len += 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                _ => ([0; MAX_OUT], 0),
+            }
+        }
+
+        fn handle_passwd_input(&mut self, byte: u8, state: PasswdState) -> ([u8; MAX_OUT], usize) {
+            match byte {
+                b'\n' | b'\r' => {
+                    match state {
+                        PasswdState::PromptNew {
+                            target_user,
+                            target_user_len,
+                        } => {
+                            // Transition to confirm password prompt
+                            self.passwd_state = PasswdState::PromptConfirm {
+                                target_user,
+                                target_user_len,
+                                new_password: self.passwd_buffer,
+                                new_password_len: self.passwd_buffer_len,
+                            };
+                            for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                *byte = 0;
+                            }
+                            self.passwd_buffer_len = 0;
+                            return copy_out(b"Retype new password: ");
+                        }
+                        PasswdState::PromptConfirm {
+                            target_user,
+                            target_user_len,
+                            mut new_password,
+                            new_password_len,
+                        } => {
+                            // Verify passwords match
+                            if self.passwd_buffer_len != new_password_len
+                                || &self.passwd_buffer[..self.passwd_buffer_len]
+                                    != &new_password[..new_password_len]
+                            {
+                                self.passwd_state = PasswdState::None;
+                                for byte in &mut new_password[..new_password_len] {
+                                    *byte = 0;
+                                }
+                                for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                    *byte = 0;
+                                }
+                                self.passwd_buffer_len = 0;
+                                self.env.set("?", "1");
+                                return copy_out(b"passwd: passwords do not match\n");
+                            }
+                            // Passwords match, update shadow
+                            let result = self.update_shadow(
+                                &target_user[..target_user_len],
+                                &new_password[..new_password_len],
+                            );
+                            self.passwd_state = PasswdState::None;
+                            for byte in &mut new_password[..new_password_len] {
+                                *byte = 0;
+                            }
+                            for byte in &mut self.passwd_buffer[..self.passwd_buffer_len] {
+                                *byte = 0;
+                            }
+                            self.passwd_buffer_len = 0;
+                            self.env.set(
+                                "?",
+                                if self.builtin_status.get() == 0 {
+                                    "0"
+                                } else {
+                                    "1"
+                                },
+                            );
+                            return result;
+                        }
+                        PasswdState::None => {}
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                0x08 => {
+                    // Backspace - delete from password buffer silently
+                    if self.passwd_buffer_len > 0 {
+                        self.passwd_buffer_len -= 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                c if c >= 0x20 && c <= 0x7E => {
+                    // Accumulate password without echoing
+                    if self.passwd_buffer_len < 64 {
+                        self.passwd_buffer[self.passwd_buffer_len] = c;
+                        self.passwd_buffer_len += 1;
+                    }
+                    ([0; MAX_OUT], 0)
+                }
+                _ => ([0; MAX_OUT], 0),
+            }
+        }
+
+        fn run_line(&mut self) -> ([u8; MAX_OUT], usize) {
+            // `= <expr>` evaluates an arithmetic expression in-process and prints
+            // the result, e.g. `= 8 * 2` -> 16. Handled before tokenization so
+            // the whole remainder of the line is treated as one expression.
+            {
+                let line = &self.line[..self.line_len];
+                if let Ok(s) = core::str::from_utf8(line) {
+                    let s = s.trim();
+                    if let Some(expr) = s.strip_prefix('=').or_else(|| s.strip_prefix("calc ")) {
+                        let expr = alloc::string::String::from(expr.trim());
+                        return self.run_calc(&expr);
+                    }
+                }
+            }
+
+            // Parse once with the proper parser (handles quotes, pipes).
+            let line_str = core::str::from_utf8(&self.line[..self.line_len])
+                .unwrap_or("")
+                .trim();
+            if line_str.is_empty() {
+                return ([0; MAX_OUT], 0);
+            }
+            let ast = match super::parser::parse_line_checked(line_str) {
+                Ok(Some(a)) => a,
+                Ok(None) => return ([0; MAX_OUT], 0),
+                Err(error) => {
+                    self.env.set("?", "2");
+                    let message = alloc::format!("sshl: syntax error: {}\n", error.message);
+                    return copy_out(message.as_bytes());
+                }
+            };
+            if matches!(&ast, super::parser::AstNode::Command(command) if sunshell::script::assignment_only(command))
+            {
+                let mut context = sunshell::script::ShellExecutionContext::new(
+                    self.env.clone(),
+                    self.cwd.clone(),
+                );
+                let result = sunshell::script::execute(
+                    line_str,
+                    &mut context,
+                    &mut native_script::NativeRuntime::new(),
+                );
+                self.env = context.env;
+                return match result {
+                    Ok(sunshell::script::Flow::Status(status)) => {
+                        self.env.set("?", &alloc::format!("{status}"));
+                        ([0; MAX_OUT], 0)
+                    }
+                    Err(error) => {
+                        self.env.set("?", &alloc::format!("{}", error.status));
+                        copy_out(alloc::format!("sshl: {}\n", error.message).as_bytes())
+                    }
+                    _ => copy_out(b"sshl: invalid assignment command control flow\n"),
+                };
+            }
+            let saved_env = self.env.clone();
+            let (ast, temporary_names) = match &ast {
+                super::parser::AstNode::Command(command) => {
+                    let mut context = sunshell::script::ShellExecutionContext::new(
+                        self.env.clone(),
+                        self.cwd.clone(),
+                    );
+                    let prepared = match sunshell::script::prepare_arguments(
+                        command,
+                        &mut context,
+                        &mut native_script::NativeRuntime::new(),
+                    ) {
+                        Ok(prepared) => prepared,
+                        Err(error) => {
+                            self.env.set("?", "2");
+                            return copy_out(
+                                alloc::format!("sshl: {}\n", error.message).as_bytes(),
+                            );
+                        }
+                    };
+                    self.env = prepared.env;
+                    // Redirection operands use the same execution-aware expansion.
+                    context.env = self.env.clone();
+                    context.substitution_status = prepared.substitution_status;
+                    let ast = sunshell::script::prepare_redirections(
+                        &command.redirections,
+                        &mut context,
+                        &mut native_script::NativeRuntime::new(),
+                    )
+                    .map(|redirections| {
+                        super::parser::AstNode::Command(super::parser::SimpleCommand {
+                            argv: prepared.command.argv,
+                            redirections,
+                        })
+                    });
+                    self.env = context.env.clone();
+                    if let Ok(super::parser::AstNode::Command(command)) = &ast {
+                        if command.argv.is_empty() {
+                            match self.prepare_builtin_redirections(&command.redirections) {
+                                Ok((_, opened)) => {
+                                    for fd in opened {
+                                        let _ = sunlight_libc::close(fd);
+                                    }
+                                }
+                                Err(message) => {
+                                    self.env.set("?", "1");
+                                    return copy_out(message.as_bytes());
+                                }
+                            }
+                            self.env.set(
+                                "?",
+                                &alloc::format!("{}", context.substitution_status.unwrap_or(0)),
+                            );
+                            return ([0; MAX_OUT], 0);
+                        }
+                    }
+                    (ast, prepared.temporary_names)
+                }
+                super::parser::AstNode::Pipeline(stages) => {
+                    if stages.len() > sunshell::script::MAX_PIPELINE_STAGES {
+                        self.env.set("?", "2");
+                        return copy_out(b"sshl: pipeline exceeds 16 stages\n");
+                    }
+                    let mut context = sunshell::script::ShellExecutionContext::new(
+                        self.env.clone(),
+                        self.cwd.clone(),
+                    );
+                    let mut commands = alloc::vec::Vec::new();
+                    let mut environments = alloc::vec::Vec::new();
+                    for stage in stages {
+                        let prepared = match sunshell::script::prepare_pipeline_stage(
+                            stage,
+                            &mut context,
+                            &mut native_script::NativeRuntime::new(),
+                        ) {
+                            Ok(prepared) => prepared,
+                            Err(error) => {
+                                self.env.set("?", "2");
+                                return copy_out(
+                                    alloc::format!("sshl: {}\n", error.message).as_bytes(),
+                                );
+                            }
+                        };
+                        commands.push(prepared.command);
+                        environments.push(prepared.env);
+                    }
+                    return match self.launch_pipeline_environments(&commands, Some(&environments)) {
+                        Ok(()) => ([0; MAX_OUT], 0),
+                        Err(message) => copy_out(message.as_bytes()),
+                    };
+                }
+            };
+            let result = match ast {
+                Ok(ast) => ast,
+                Err(error) => {
+                    let _ = self.env.restore_variables(&temporary_names, &saved_env);
+                    self.env.set("?", "2");
+                    return copy_out(alloc::format!("sshl: {}\n", error.message).as_bytes());
+                }
+            };
+            let output = self.run_expanded_line(result);
+            if let Err(message) = self.env.restore_variables(&temporary_names, &saved_env) {
+                self.env.set("?", "2");
+                return copy_out(alloc::format!("sshl: {}\n", message).as_bytes());
+            }
+            output
+        }
+
+        fn run_expanded_line(
+            &mut self,
+            ast: super::parser::AstNode<alloc::string::String>,
+        ) -> ([u8; MAX_OUT], usize) {
+            self.env.set("?", "0");
+            self.builtin_status.set(0);
+            let mut builtin_redirection = None;
+            let (cmd, args_raw) = match &ast {
+                super::parser::AstNode::Command(command) if !command.argv.is_empty() => {
+                    if !command.redirections.is_empty() {
+                        if is_pipeline_builtin(&command.argv[0]) {
+                            builtin_redirection =
+                                match self.prepare_builtin_redirections(&command.redirections) {
+                                    Ok(setup) => Some(setup),
+                                    Err(message) => {
+                                        self.env.set("?", "1");
+                                        return copy_out(message.as_bytes());
+                                    }
+                                };
+                        } else {
+                            return match self.launch_pipeline(core::slice::from_ref(command)) {
+                                Ok(()) => ([0; MAX_OUT], 0),
+                                Err(message) => copy_out(message.as_bytes()),
+                            };
+                        }
+                    }
+                    (command.argv[0].clone(), command.argv[1..].to_vec())
+                }
+                super::parser::AstNode::Pipeline(commands) => {
+                    return match self.launch_pipeline(commands) {
+                        Ok(()) => ([0; MAX_OUT], 0),
+                        Err(message) => copy_out(message.as_bytes()),
+                    };
+                }
+                _ => return ([0; MAX_OUT], 0),
+            };
+            // Handle passwd specially (needs target user)
+            if cmd == "passwd" {
+                let target = args_raw.first().map(|s| s.as_str());
+                let result = self.cmd_passwd(target);
+                self.env.set(
+                    "?",
+                    if self.builtin_status.get() == 0 {
+                        "0"
+                    } else {
+                        "1"
+                    },
+                );
+                return result;
+            }
+
+            // Expand $VAR tokens in arguments
+            let expanded: alloc::vec::Vec<alloc::string::String> = args_raw;
+            let cmd = cmd.as_str();
+            let args: alloc::vec::Vec<&str> = expanded.iter().map(|s| s.as_str()).collect();
+
+            // Handle shutdown and reboot specially (they don't return)
+            match cmd {
+                "shutdown" => {
+                    self.cmd_shutdown();
+                    unreachable!();
+                }
+                "reboot" => {
+                    self.cmd_reboot();
+                    unreachable!();
+                }
+                _ => {}
+            }
+
+            let out: &[u8] = match cmd {
+                "cd" => self.cmd_cd(&args),
+                "z" => self.cmd_z(&args),
+                "pwd" => self.cmd_pwd(),
+                "ls" => self.run_ls_external(&args),
+                "useradd" => self.cmd_useradd(&args),
+                "userdel" => self.cmd_userdel(&args),
+                "su" => self.builtin_failure(b"su: not implemented\n"),
+                "groups" => self.cmd_groups(&args),
+                "chmod" => self.cmd_chmod(&args),
+                "chown" => self.cmd_chown(&args),
+                "env" => self.cmd_env(),
+                "export" => self.cmd_export(&args),
+                "unset" => self.cmd_unset(&args),
+                "sysfetch" => self.cmd_sysfetch(),
+                "hostnamectl" => self.cmd_hostnamectl(),
+                "uptime" => self.cmd_uptime(),
+                "tzctl" => self.cmd_tzctl(&args),
+                "localectl" => self.cmd_localectl(&args),
+                "help" => b"Builtins: cd, pwd, useradd, userdel, passwd, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, localectl, =<expr> (calc), help, shutdown, reboot\n",
+                "clear" => b"\x1B[2J\x1B[H",  // Clear screen + home cursor (0,0)
+                "exit" => b"exit\n",
+                // Not a builtin: resolve through $PATH and run it (Step 3)
+                _ => self.run_external_with_cwd_paths(cmd, &args),
+            };
+
+            let out = out.to_vec();
+            let failed_builtin = self.builtin_status.get() != 0;
+            if failed_builtin {
+                self.env.set("?", "1");
+            }
+            // Backward compatibility logging for phase 3.6 tests
+            let trimmed = trim_newline(&out);
+            if trimmed == b"root" {
+                debug_log("[TTY]  Output: root");
+            } else if trimmed.starts_with(b"Welcome to SunlightOS") {
+                debug_log("[TTY]  Output: Welcome to SunlightOS");
+            } else if trimmed == b"hello" {
+                debug_log("[TTY]  Output: hello");
+            }
+
+            if let Some((descriptors, opened)) = builtin_redirection {
+                let output_fd = descriptors[if failed_builtin { 2 } else { 1 }];
+                if let Some(fd) = output_fd {
+                    let write_result = if unsafe { LONG_OUT_ACTIVE } {
+                        let len = unsafe { LONG_OUT_LEN };
+                        ulibc_write_long_out_to(fd, len)
+                    } else {
+                        sunlight_libc::write_all(fd, &out)
+                    };
+                    for fd in opened {
+                        let _ = sunlight_libc::close(fd);
+                    }
+                    long_out_reset();
+                    if write_result.is_err() {
+                        self.env.set("?", "1");
+                        return copy_out(b"sshl: redirection write failed\n");
+                    }
+                    return ([0; MAX_OUT], 0);
+                }
+                for fd in opened {
+                    let _ = sunlight_libc::close(fd);
+                }
+            }
+            copy_out(&out)
+        }
+
+        /// Load user information from VFS by username
+        fn load_user_from_vfs(&mut self, username: &[u8]) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            // Build GETPWNAM request
+            let mut msg = IpcMsg::with_label(VfsMsg::GETPWNAM);
+            let mut word_idx = 0;
+            for i in 0..(username.len() / 8 + 1) {
+                let start = i * 8;
+                let end = (start + 8).min(username.len());
+                if start < username.len() {
+                    let mut word = 0u64;
+                    for (j, &b) in username[start..end].iter().enumerate() {
+                        word |= (b as u64) << (j * 8);
+                    }
+                    msg = msg.word(word_idx, word);
+                }
+                word_idx += 1;
+            }
+
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.word_count >= 3 {
+                self.uid = reply.words[1] as u32;
+                self.gid = reply.words[2] as u32;
+                // Copy username to shell
+                let len = username.len().min(self.username.len() - 1);
+                self.username[..len].copy_from_slice(&username[..len]);
+                self.username_len = len;
+                true
+            } else {
+                false
+            }
+        }
+
+        fn load_user_by_uid(&mut self, uid: u32) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            // Build GETPWUID request
+            let msg = IpcMsg::with_label(VfsMsg::GETPWUID).word(0, uid as u64);
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.word_count >= 3 {
+                self.uid = reply.words[1] as u32;
+                self.gid = reply.words[2] as u32;
+
+                // Extract username from words[3:7] if available (new GETPWUID enhancement)
+                if reply.word_count >= 7 {
+                    let mut username_bytes = [0u8; 64];
+                    for i in 0..4 {
+                        let word = reply.words[3 + i];
+                        for j in 0..8 {
+                            let b = ((word >> (j * 8)) & 0xFF) as u8;
+                            if b == 0 {
+                                break;
+                            }
+                            username_bytes[i * 8 + j] = b;
+                        }
+                    }
+                    let username_len = username_bytes
+                        .iter()
+                        .position(|&b| b == 0)
+                        .unwrap_or(64)
+                        .min(64);
+                    self.username[..username_len].copy_from_slice(&username_bytes[..username_len]);
+                    self.username_len = username_len;
+                }
+                true
+            } else {
+                false
+            }
+        }
+
+        fn cmd_whoami(&self) -> &[u8] {
+            &self.username[..self.username_len]
+        }
+
+        fn cmd_id(&self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                // Return current user's info
+                unsafe {
+                    static mut BUF: [u8; 64] = [0u8; 64];
+                    let buf = &mut BUF;
+                    let username_str =
+                        core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
+                    let prefix = alloc::format!(
+                        "uid={}({}) gid={}(root) groups={}(root)",
+                        self.uid,
+                        username_str,
+                        self.gid,
+                        self.gid
+                    );
+                    let bytes = prefix.as_bytes();
+                    let len = bytes.len().min(buf.len());
+                    buf[..len].copy_from_slice(&bytes[..len]);
+                    return &buf[..len];
+                }
+            }
+            // lookup specific user
+            let username = args[0].as_bytes();
+            if let Some((uid, gid)) = lookup_user(username) {
+                unsafe {
+                    static mut BUF: [u8; 64] = [0u8; 64];
+                    let buf = &mut BUF;
+                    let prefix =
+                        alloc::format!("uid={}({}) gid={}({})", uid, args[0], gid, "users");
+                    let bytes = prefix.as_bytes();
+                    let len = bytes.len().min(buf.len());
+                    buf[..len].copy_from_slice(&bytes[..len]);
+                    return &buf[..len];
+                }
+            }
+            b"id: no such user\n"
+        }
+
+        fn cmd_useradd(&self, args: &[&str]) -> &[u8] {
+            if self.uid != 0 {
+                return self.builtin_failure(b"useradd: permission denied\n");
+            }
+            let username = match args.get(0) {
+                Some(u) => u,
+                None => return self.builtin_failure(b"useradd: missing username\n"),
+            };
+
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return self.builtin_failure(b"useradd: VFS not available\n"),
+            };
+
+            // Read /etc/passwd to find next uid
+            let passwd_data = read_file(vfs_cap, "/etc/passwd");
+            let max_uid = find_max_uid(&passwd_data);
+            let new_uid = if max_uid < 1000 { 1000 } else { max_uid + 1 };
+
+            let mut new_passwd = alloc::string::String::from_utf8_lossy(&passwd_data).into_owned();
+            new_passwd.push_str(&alloc::format!(
+                "{}:x:{}:100::/home/{}:/bin/sh\n",
+                username,
+                new_uid,
+                username
+            ));
+
+            let shadow_data = read_file(vfs_cap, "/etc/shadow");
+            let mut new_shadow = alloc::string::String::from_utf8_lossy(&shadow_data).into_owned();
+            new_shadow.push_str(&alloc::format!("{}:!:0:0:99999:7:::\n", username));
+
+            let group_data = read_file(vfs_cap, "/etc/group");
+            let mut new_group = alloc::string::String::from_utf8_lossy(&group_data).into_owned();
+            // Append user to users group (gid=100)
+            if let Some(pos) = new_group.find("users:x:100:") {
+                let insert_pos = pos + b"users:x:100:".len();
+                new_group.insert_str(insert_pos, &alloc::format!("{},", username));
+            }
+
+            // Write back
+            if let Err(_) = write_file(vfs_cap, "/etc/passwd", new_passwd.as_bytes()) {
+                return self.builtin_failure(b"useradd: failed to write passwd\n");
+            }
+            if let Err(_) = write_file(vfs_cap, "/etc/shadow", new_shadow.as_bytes()) {
+                return self.builtin_failure(b"useradd: failed to write shadow\n");
+            }
+            if let Err(_) = write_file(vfs_cap, "/etc/group", new_group.as_bytes()) {
+                return self.builtin_failure(b"useradd: failed to write group\n");
+            }
+
+            // Create home directory
+            let home = alloc::format!("/home/{}", username);
+            let _ = mkdir(vfs_cap, &home, new_uid, 100, 0o755);
+
+            // Standard home directory layout (OS responsibility, not the file
+            // manager's). Mirrors the initramfs seed in sunlight-fs::ramfs.
+            // mkdir is idempotent here: if a folder already exists the VFS
+            // returns an error which we ignore, so re-running is safe.
+            for folder in [
+                "Desktop",
+                "Documents",
+                "Downloads",
+                "Pictures",
+                "Music",
+                "Videos",
+            ] {
+                let path = alloc::format!("{}/{}", home, folder);
+                let _ = mkdir(vfs_cap, &path, new_uid, 100, 0o755);
+            }
+
+            b"OK\n"
+        }
+
+        fn cmd_userdel(&self, args: &[&str]) -> &[u8] {
+            if self.uid != 0 {
+                return self.builtin_failure(b"userdel: permission denied\n");
+            }
+            let username = match args.get(0) {
+                Some(u) => u,
+                None => return self.builtin_failure(b"userdel: missing username\n"),
+            };
+
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return self.builtin_failure(b"userdel: VFS not available\n"),
+            };
+
+            let passwd_data = read_file(vfs_cap, "/etc/passwd");
+            let shadow_data = read_file(vfs_cap, "/etc/shadow");
+            let group_data = read_file(vfs_cap, "/etc/group");
+
+            let mut new_passwd = alloc::string::String::new();
+            for line in alloc::string::String::from_utf8_lossy(&passwd_data).lines() {
+                if !line.starts_with(username)
+                    || !line
+                        .as_bytes()
+                        .get(username.len())
+                        .map(|&b| b == b':')
+                        .unwrap_or(false)
+                {
+                    new_passwd.push_str(line);
+                    new_passwd.push('\n');
+                }
+            }
+
+            let mut new_shadow = alloc::string::String::new();
+            for line in alloc::string::String::from_utf8_lossy(&shadow_data).lines() {
+                if !line.starts_with(username)
+                    || !line
+                        .as_bytes()
+                        .get(username.len())
+                        .map(|&b| b == b':')
+                        .unwrap_or(false)
+                {
+                    new_shadow.push_str(line);
+                    new_shadow.push('\n');
+                }
+            }
+
+            let mut new_group = alloc::string::String::new();
+            for line in alloc::string::String::from_utf8_lossy(&group_data).lines() {
+                let mut modified = alloc::string::String::from(line);
+                if modified.contains("users:x:100:") {
+                    modified = modified.replace(&alloc::format!("{},", username), "");
+                    modified = modified.replace(&alloc::format!(",{}", username), "");
+                    modified = modified.replace(username, "");
+                }
+                new_group.push_str(&modified);
+                new_group.push('\n');
+            }
+
+            if let Err(_) = write_file(vfs_cap, "/etc/passwd", new_passwd.as_bytes()) {
+                return self.builtin_failure(b"userdel: failed to write passwd\n");
+            }
+            if let Err(_) = write_file(vfs_cap, "/etc/shadow", new_shadow.as_bytes()) {
+                return self.builtin_failure(b"userdel: failed to write shadow\n");
+            }
+            if let Err(_) = write_file(vfs_cap, "/etc/group", new_group.as_bytes()) {
+                return self.builtin_failure(b"userdel: failed to write group\n");
+            }
+
+            debug_log("[SunlightOS] Phase 3.8 OK");
+            b"OK\n"
+        }
+
+        fn cmd_passwd(&mut self, target_arg: Option<&str>) -> ([u8; MAX_OUT], usize) {
+            // Determine target user
+            let target_user_bytes = if let Some(arg) = target_arg {
+                // Arg provided: change specified user's password (root only)
+                if self.uid != 0 {
+                    return copy_out(self.builtin_failure(b"passwd: permission denied\n"));
+                }
+                arg.as_bytes()
+            } else {
+                // No args: change current user's password
+                &self.username[..self.username_len]
+            };
+            let target_user = target_user_bytes;
+
+            // Verify target user exists
+            if !self.user_exists(target_user) {
+                return copy_out(self.builtin_failure(b"passwd: user not found\n"));
+            }
+
+            // Enter password prompt mode
+            let mut target_user_buf = [0u8; 64];
+            let target_user_len = target_user.len().min(64);
+            target_user_buf[..target_user_len].copy_from_slice(&target_user[..target_user_len]);
+
+            self.passwd_state = PasswdState::PromptNew {
+                target_user: target_user_buf,
+                target_user_len,
+            };
+            self.passwd_buffer_len = 0;
+
+            copy_out(b"New password: ")
+        }
+
+        fn user_exists(&self, username: &[u8]) -> bool {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return false,
+            };
+
+            let mut msg = IpcMsg::with_label(VfsMsg::GETPWNAM);
+            let mut word_idx = 0;
+            for i in 0..(username.len() / 8 + 1) {
+                let start = i * 8;
+                let end = (start + 8).min(username.len());
+                if start < username.len() {
+                    let mut word = 0u64;
+                    for (j, &b) in username[start..end].iter().enumerate() {
+                        word |= (b as u64) << (j * 8);
+                    }
+                    msg = msg.word(word_idx, word);
+                }
+                word_idx += 1;
+            }
+
+            let reply = ipc_call(vfs_cap, msg);
+            reply.label == VfsMsg::REPLY && reply.words[0] == 0
+        }
+
+        fn update_shadow(&mut self, username: &[u8], password: &[u8]) -> ([u8; MAX_OUT], usize) {
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return copy_out(self.builtin_failure(b"passwd: VFS not available\n")),
+            };
+
+            // Read current shadow file
+            let shadow_data = read_file(vfs_cap, "/etc/shadow");
+            let shadow_str = core::str::from_utf8(&shadow_data).unwrap_or("");
+
+            // Find and update the target user's shadow entry
+            let mut new_shadow = alloc::string::String::new();
+            let target_username = core::str::from_utf8(username).unwrap_or("");
+            let new_password_hash = match hash_password(password) {
+                Ok(hash) => hash,
+                Err(_) => {
+                    return copy_out(self.builtin_failure(b"passwd: failed to hash password\n"))
+                }
+            };
+            let mut found = false;
+
+            for line in shadow_str.lines() {
+                let parts: alloc::vec::Vec<&str> = line.split(':').collect();
+                if !parts.is_empty() && parts[0] == target_username {
+                    // Replace password in this entry
+                    new_shadow.push_str(&alloc::format!(
+                        "{}:{}:0:0:99999:7:::\n",
+                        target_username,
+                        new_password_hash
+                    ));
+                    found = true;
+                } else {
+                    new_shadow.push_str(line);
+                    new_shadow.push('\n');
+                }
+            }
+
+            // If user not found in shadow, add new entry
+            if !found {
+                new_shadow.push_str(&alloc::format!(
+                    "{}:{}:0:0:99999:7:::\n",
+                    target_username,
+                    new_password_hash
+                ));
+            }
+
+            // Write updated shadow file
+            match write_file(vfs_cap, "/etc/shadow", new_shadow.as_bytes()) {
+                Ok(()) => {
+                    debug_log("[PASSWD] Password updated");
+                    copy_out(b"passwd: password updated\n")
+                }
+                Err(()) => copy_out(self.builtin_failure(b"passwd: failed to update shadow\n")),
+            }
+        }
+
+        fn cmd_groups(&self, _args: &[&str]) -> &[u8] {
+            b"root wheel\n"
+        }
+
+        /// List the environment, one KEY=VALUE per line (long output path).
+        fn cmd_env(&self) -> &[u8] {
+            if let Err(message) = self.env.export_size() {
+                self.builtin_status.set(2);
+                unsafe {
+                    LONG_OUT_ACTIVE = true;
+                }
+                push_line(&alloc::format!("env: {}", message));
+                return b"";
+            }
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+            for (key, value) in self.env.exported() {
+                let line = alloc::format!("{}={}", key, value);
+                push_line(&line);
+            }
+            b""
+        }
+
+        fn cmd_export(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return self.builtin_failure(b"export: supply NAME or NAME=VALUE\n");
+            }
+            for arg in args {
+                let (key, value) = arg
+                    .split_once('=')
+                    .map(|(k, v)| (k, Some(v)))
+                    .unwrap_or((arg, None));
+                if !super::expansion::valid_name(key) {
+                    return self.builtin_failure(b"export: invalid variable name\n");
+                }
+                if let Some(value) = value {
+                    if let Err(message) = self.env.assign(key, value) {
+                        self.builtin_status.set(1);
+                        unsafe {
+                            LONG_OUT_ACTIVE = true;
+                        }
+                        push_line(&alloc::format!("export: {}", message));
+                        return b"";
+                    }
+                }
+                if let Err(message) = self.env.mark_export(key) {
+                    self.builtin_status.set(1);
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("export: {}", message));
+                    return b"";
+                }
+            }
+            b""
+        }
+
+        fn cmd_cd(&mut self, args: &[&str]) -> &[u8] {
+            let target = if let Some(path) = args.first().copied() {
+                path
+            } else {
+                self.env.get("HOME").unwrap_or("/")
+            };
+            let Some(next) = normalize_path(&self.cwd, target) else {
+                return self.builtin_failure(b"cd: invalid path\n");
+            };
+
+            if !stat_is_dir(&next) {
+                return self.builtin_failure(b"cd: no such directory\n");
+            }
+            if sunlight_libc::chdir(next.as_bytes()).is_err() {
+                return self.builtin_failure(b"cd: no such directory\n");
+            }
+
+            self.env.set("OLDPWD", &self.cwd);
+            self.cwd = next;
+            self.env.set("PWD", &self.cwd);
+            let cwd_copy = self.cwd.clone();
+            self.z_spawn_add(&cwd_copy);
+            b""
+        }
+
+        fn cmd_pwd(&self) -> &[u8] {
+            static mut BUF: [u8; 256] = [0; 256];
+            unsafe {
+                let bytes = self.cwd.as_bytes();
+                let n = bytes.len().min(BUF.len().saturating_sub(1));
+                BUF[..n].copy_from_slice(&bytes[..n]);
+                BUF[n] = b'\n';
+                &BUF[..n + 1]
+            }
+        }
+
+        fn run_ls_external(&mut self, args: &[&str]) -> &'static [u8] {
+            let has_path = args.iter().any(|a| !a.starts_with('-') || *a == "-");
+            if has_path {
+                return self.run_external_with_cwd_paths("ls", args);
+            }
+            let mut forwarded: alloc::vec::Vec<&str> =
+                alloc::vec::Vec::with_capacity(args.len() + 1);
+            forwarded.extend_from_slice(args);
+            let cwd_owned = self.cwd.clone();
+            forwarded.push(cwd_owned.as_str());
+            self.run_external("ls", &forwarded)
+        }
+
+        fn run_external_with_cwd_paths(&mut self, cmd: &str, args: &[&str]) -> &'static [u8] {
+            if !external_uses_fs_paths(cmd) {
+                return self.run_external(cmd, args);
+            }
+
+            let mut owned: alloc::vec::Vec<alloc::string::String> =
+                alloc::vec::Vec::with_capacity(args.len());
+            for arg in args {
+                if arg.starts_with('-') {
+                    owned.push(alloc::string::String::from(*arg));
+                    continue;
+                }
+                let Some(path) = normalize_path(&self.cwd, arg) else {
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    self.env.set("?", "1");
+                    push_line("sshl: invalid path");
+                    return b"";
+                };
+                owned.push(path);
+            }
+
+            let forwarded: alloc::vec::Vec<&str> = owned.iter().map(|s| s.as_str()).collect();
+            self.run_external(cmd, &forwarded)
+        }
+
+        fn cmd_unset(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return self.builtin_failure(b"unset: usage: unset KEY\n");
+            }
+            for arg in args {
+                if !super::expansion::valid_name(arg) {
+                    return self.builtin_failure(b"unset: invalid variable name\n");
+                }
+                if self.env.is_readonly(arg) {
+                    return self.builtin_failure(b"unset: variable is readonly\n");
+                }
+                self.env.unset(arg);
+            }
+            b""
+        }
+
+        /// Resolve a non-builtin command via $PATH and launch it as a foreground
+        /// job. The child's fd0/fd1 are wired by the kernel to this tab's stdin/
+        /// stdout rings (inherited via tty_tab), so keyboard input reaches the
+        /// app and its output is rendered live by tty_server. We do NOT drain or
+        /// block here: we record `fg_pid`, return immediately, and the `_start`
+        /// loop reports FG_STARTED to tty_server. tty_server drives the session
+        /// and sends FG_DONE with the exit code when the child exits.
+        fn run_external(&mut self, cmd: &str, args: &[&str]) -> &'static [u8] {
+            use sunlight_libc as ulibc;
+
+            if is_gui_launch_command(cmd) {
+                let environment = match self.env.export_blob() {
+                    Ok(blob) => blob,
+                    Err(message) => {
+                        self.env.set("?", "2");
+                        unsafe {
+                            LONG_OUT_ACTIVE = true;
+                        }
+                        push_line(&alloc::format!("sshl: {}", message));
+                        return b"";
+                    }
+                };
+                if args.len() >= ulibc::MAX_ARGS {
+                    self.env.set("?", "2");
+                    return b"sshl: too many launch arguments\n";
+                }
+                let mut argv: [&[u8]; ulibc::MAX_ARGS] = [&[]; ulibc::MAX_ARGS];
+                for (idx, arg) in args.iter().take(ulibc::MAX_ARGS - 1).enumerate() {
+                    argv[idx] = arg.as_bytes();
+                }
+                let trace =
+                    LaunchTrace::new(monotonic_millis(), LaunchSource::Shell, monotonic_millis());
+                match ulibc::sun_exec::launch_with_environment(
+                    ulibc::sun_exec::LaunchRequest {
+                        trace,
+                        source: LaunchSource::Shell,
+                        command: cmd.as_bytes(),
+                        args: &argv[..args.len().min(ulibc::MAX_ARGS - 1)],
+                        require_display: true,
+                    },
+                    Some(&environment),
+                ) {
+                    Ok(result) => {
+                        debug_log(&alloc::format!("[EXEC] {} gui pid={}", cmd, result.pid));
+                    }
+                    Err(_) => {
+                        self.env.set("?", "126");
+                        unsafe {
+                            LONG_OUT_ACTIVE = true;
+                        }
+                        push_line(&alloc::format!("sshl: cannot launch {}", cmd));
+                    }
+                }
+                return b"";
+            }
+
+            let path = match self.resolve_in_path(cmd) {
+                Some(p) => p,
+                None => {
+                    self.env.set("?", "127");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("sshl: command not found: {}", cmd));
+                    return b"";
+                }
+            };
+
+            // argv[0] is the applet name (multi-call binaries dispatch on it).
+            let mut argv: alloc::vec::Vec<&[u8]> = alloc::vec::Vec::new();
+            argv.push(cmd.as_bytes());
+            for a in args {
+                argv.push(a.as_bytes());
+            }
+
+            // stdout=None → the kernel installs fd0=TtyStdin/fd1=TtyStdout for
+            // this tab on the child (foreground input routing).
+            let environment = match self.env.export_blob() {
+                Ok(blob) => blob,
+                Err(message) => {
+                    self.env.set("?", "2");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("sshl: {}", message));
+                    return b"";
+                }
+            };
+            match ulibc::spawn_with_stdio_env(
+                path.as_bytes(),
+                &argv,
+                None,
+                None,
+                None,
+                &environment,
+            ) {
+                Ok(pid) => {
+                    self.fg_pid = Some(pid);
+                    debug_log(&alloc::format!("[EXEC] {} fg pid={}", cmd, pid));
+                }
+                Err(_) => {
+                    self.env.set("?", "126");
+                    unsafe {
+                        LONG_OUT_ACTIVE = true;
+                    }
+                    push_line(&alloc::format!("sshl: cannot execute {}", path));
+                }
+            }
+            b""
+        }
+
+        fn launch_pipeline(
+            &mut self,
+            commands: &[super::parser::SimpleCommand<alloc::string::String>],
+        ) -> Result<(), alloc::string::String> {
+            self.launch_pipeline_environments(commands, None)
+        }
+
+        fn launch_pipeline_environments(
+            &mut self,
+            commands: &[super::parser::SimpleCommand<alloc::string::String>],
+            stage_environments: Option<&[crate::shellenv::ShellEnv]>,
+        ) -> Result<(), alloc::string::String> {
+            use super::parser::{RedirectMode, Redirection};
+            use sunlight_libc as ulibc;
+            self.env.set("?", "1");
+            if commands.len() > sunshell::script::MAX_PIPELINE_STAGES
+                || stage_environments.is_some_and(|envs| envs.len() != commands.len())
+            {
+                self.env.set("?", "2");
+                return Err(alloc::string::String::from(
+                    "sshl: invalid or oversized pipeline\n",
+                ));
+            }
+            let environments = if let Some(envs) = stage_environments {
+                envs.iter()
+                    .map(|env| env.export_blob())
+                    .collect::<Result<alloc::vec::Vec<_>, _>>()
+            } else {
+                self.env.export_blob().map(|blob| alloc::vec![blob])
+            }
+            .map_err(|message| {
+                self.env.set("?", "2");
+                alloc::format!("sshl: {}\n", message)
+            })?;
+            let mut pipes = alloc::vec::Vec::new();
+            for _ in 1..commands.len() {
+                match ulibc::pipe() {
+                    Ok(pair) => pipes.push(pair),
+                    Err(_) => {
+                        for (r, w) in pipes {
+                            let _ = ulibc::close(r);
+                            let _ = ulibc::close(w);
+                        }
+                        return Err(alloc::string::String::from(
+                            "sshl: pipe: resource or kernel error\n",
+                        ));
+                    }
+                }
+            }
+            let mut pids = alloc::vec::Vec::with_capacity(commands.len());
+            let mut spawn_error = None;
+            for (index, command) in commands.iter().enumerate() {
+                let environment = &environments[if stage_environments.is_some() {
+                    index
+                } else {
+                    0
+                }];
+                let mut io = self.script_io.map_or([None, None, None], |fds| {
+                    fds.map(|fd| Some(ulibc::Fd(fd as u32)))
+                });
+                if index > 0 {
+                    io[0] = Some(pipes[index - 1].0);
+                }
+                if index + 1 < commands.len() {
+                    io[1] = Some(pipes[index].1);
+                }
+                let expanded = command.argv.clone();
+                if expanded.is_empty() {
+                    spawn_error = Some(alloc::string::String::from("sshl: empty command\n"));
+                    break;
+                }
+                let mut opened = alloc::vec::Vec::new();
+                for redirection in &command.redirections {
+                    match redirection {
+                        Redirection::Open { fd, mode, path } => {
+                            let expanded_path = path.clone();
+                            let Some(path) = normalize_path(&self.cwd, &expanded_path) else {
+                                spawn_error = Some(alloc::format!(
+                                    "sshl: invalid redirection path: {}\n",
+                                    expanded_path
+                                ));
+                                break;
+                            };
+                            let flags = match mode {
+                                RedirectMode::Read => ulibc::O_RDONLY,
+                                RedirectMode::Truncate => {
+                                    ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_TRUNC
+                                }
+                                RedirectMode::Append => {
+                                    ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_APPEND
+                                }
+                            };
+                            match ulibc::open_with_flags_mode(path.as_bytes(), flags, 0o644) {
+                                Ok(file) => {
+                                    opened.push(file);
+                                    io[*fd as usize] = Some(file);
+                                }
+                                Err(error) => {
+                                    spawn_error = Some(alloc::format!(
+                                        "sshl: {}: redirection failed ({:?})\n",
+                                        path,
+                                        error
+                                    ));
+                                    break;
+                                }
+                            }
+                        }
+                        Redirection::Dup { fd, source } => {
+                            io[*fd as usize] = io[*source as usize];
+                        }
+                    }
+                }
+                if spawn_error.is_some() {
+                    for fd in opened {
+                        let _ = ulibc::close(fd);
+                    }
+                    break;
+                }
+                let (path, argv): (alloc::string::String, alloc::vec::Vec<&[u8]>) =
+                    if is_pipeline_builtin(&expanded[0]) {
+                        let path = alloc::string::String::from("/bin/sshl");
+                        let mut argv =
+                            alloc::vec![b"sshl".as_slice(), b"--pipeline-builtin".as_slice()];
+                        argv.extend(expanded.iter().map(|s| s.as_bytes()));
+                        (path, argv)
+                    } else {
+                        let command_name = &expanded[0];
+                        let env = stage_environments.map_or(&self.env, |envs| &envs[index]);
+                        let Some(path) = self.resolve_in_path_environment(command_name, env) else {
+                            self.env.set("?", "127");
+                            spawn_error = Some(alloc::format!(
+                                "sshl: command not found: {}\n",
+                                command_name
+                            ));
+                            for fd in opened {
+                                let _ = ulibc::close(fd);
+                            }
+                            break;
+                        };
+                        let mut args = alloc::vec::Vec::with_capacity(expanded.len());
+                        args.push(command_name.as_bytes());
+                        args.extend(expanded.iter().skip(1).map(|s| s.as_bytes()));
+                        (path, args)
+                    };
+                match ulibc::spawn_with_stdio_env(
+                    path.as_bytes(),
+                    &argv,
+                    io[0],
+                    io[1],
+                    io[2],
+                    environment,
+                ) {
+                    Ok(pid) => pids.push(pid),
+                    Err(error) => {
+                        self.env.set("?", "126");
+                        spawn_error = Some(alloc::format!("sshl: spawn failed ({:?})\n", error))
+                    }
+                }
+                for fd in opened {
+                    let _ = ulibc::close(fd);
+                }
+                if spawn_error.is_some() {
+                    break;
+                }
+            }
+            for (r, w) in pipes {
+                let _ = ulibc::close(r);
+                let _ = ulibc::close(w);
+            }
+            if let Some(error) = spawn_error {
+                for pid in &pids {
+                    let _ = ulibc::kill(*pid, 9);
+                }
+                for pid in pids {
+                    let _ = ulibc::waitpid(pid);
+                }
+                return Err(error);
+            }
+            self.env.set("?", "0");
+            self.fg_pid = pids.last().copied();
+            self.fg_pids = pids;
+            if let Some(pid) = self.fg_pid {
+                debug_log(&alloc::format!("[EXEC] pipeline fg pid={}", pid));
+            }
+            Ok(())
+        }
+
+        fn prepare_builtin_redirections(
+            &self,
+            redirections: &[super::parser::Redirection<alloc::string::String>],
+        ) -> Result<
+            (
+                [Option<sunlight_libc::Fd>; 3],
+                alloc::vec::Vec<sunlight_libc::Fd>,
+            ),
+            alloc::string::String,
+        > {
+            use super::parser::{RedirectMode, Redirection};
+            use sunlight_libc as ulibc;
+            // A shell attached to tty_server can have its output delivered by
+            // IPC instead of fd 1. Keep implicit TTY descriptors as None and
+            // only open real files requested by the builtin's redirections.
+            let mut descriptors = [None; 3];
+            let mut opened = alloc::vec::Vec::new();
+            for redirection in redirections {
+                match redirection {
+                    Redirection::Open { fd, mode, path } => {
+                        let expanded_path = path.clone();
+                        let Some(path) = normalize_path(&self.cwd, &expanded_path) else {
+                            for fd in opened {
+                                let _ = ulibc::close(fd);
+                            }
+                            return Err(alloc::format!(
+                                "sshl: invalid redirection path: {}\n",
+                                expanded_path
+                            ));
+                        };
+                        let flags = match mode {
+                            RedirectMode::Read => ulibc::O_RDONLY,
+                            RedirectMode::Truncate => {
+                                ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_TRUNC
+                            }
+                            RedirectMode::Append => {
+                                ulibc::O_WRONLY | ulibc::O_CREAT | ulibc::O_APPEND
+                            }
+                        };
+                        match ulibc::open_with_flags_mode(path.as_bytes(), flags, 0o644) {
+                            Ok(fd_value) => {
+                                opened.push(fd_value);
+                                descriptors[*fd as usize] = Some(fd_value);
+                            }
+                            Err(error) => {
+                                for fd in opened {
+                                    let _ = ulibc::close(fd);
+                                }
+                                return Err(alloc::format!(
+                                    "sshl: redirection open failed ({:?})\n",
+                                    error
+                                ));
+                            }
+                        }
+                    }
+                    Redirection::Dup { fd, source } => {
+                        descriptors[*fd as usize] = descriptors[*source as usize];
+                    }
+                }
+            }
+            Ok((descriptors, opened))
+        }
+
+        /// Search the colon-separated $PATH for `cmd`, probing each candidate
+        /// with the native StatPath syscall. First match wins. Paths containing
+        /// '/' bypass the search and are probed directly.
+        fn resolve_in_path(&self, cmd: &str) -> Option<alloc::string::String> {
+            self.resolve_in_path_environment(cmd, &self.env)
+        }
+        fn resolve_in_path_environment(
+            &self,
+            cmd: &str,
+            env: &crate::shellenv::ShellEnv,
+        ) -> Option<alloc::string::String> {
+            if cmd.contains('/') {
+                let resolved = normalize_path(&self.cwd, cmd)?;
+                return if sunlight_libc::stat(resolved.as_bytes()).is_ok() {
+                    Some(resolved)
+                } else if matches!(
+                    cmd,
+                    "/bin/native-fp-probe"
+                        | "/bin/sunjs"
+                        | "/bin/helios-probe"
+                        | "/usr/bin/helios-probe"
+                        | "/bin/linux-thread-probe"
+                        | "/usr/bin/linux-thread-probe"
+                        | "/bin/linux-fionbio-pipe-probe"
+                        | "/usr/bin/linux-fionbio-pipe-probe"
+                        | "/bin/linux-recvfrom-probe"
+                        | "/usr/bin/linux-recvfrom-probe"
+                        | "/bin/linux-open-largefile-probe"
+                        | "/usr/bin/linux-open-largefile-probe"
+                        | "/bin/helios-probe-runtime"
+                        | "/usr/bin/helios-probe-runtime"
+                        | "/bin/linux-echo"
+                        | "/usr/bin/linux-echo"
+                        | "/bin/linux-uname"
+                        | "/usr/bin/linux-uname"
+                        | "/bin/linux-ids"
+                        | "/usr/bin/linux-ids"
+                        | "/bin/linux-gettimeofday"
+                        | "/usr/bin/linux-gettimeofday"
+                        | "/bin/linux-mkdir"
+                        | "/usr/bin/linux-mkdir"
+                        | "/bin/linux-getdents64"
+                        | "/usr/bin/linux-getdents64"
+                        | "/bin/linux-pread-pwrite"
+                        | "/usr/bin/linux-pread-pwrite"
+                        | "/bin/linux-access"
+                        | "/usr/bin/linux-access"
+                        | "/bin/linux-open-flags"
+                        | "/usr/bin/linux-open-flags"
+                        | "/bin/linux-dup3"
+                        | "/usr/bin/linux-dup3"
+                        | "/bin/linux-stat-metadata"
+                        | "/usr/bin/linux-stat-metadata"
+                        | "/bin/note"
+                        | "/usr/bin/note"
+                        | "/bin/yazi"
+                        | "/usr/bin/yazi"
+                        | "/bin/yazi-baseline"
+                        | "/usr/bin/yazi-baseline"
+                        | "/bin/hello-linux"
+                        | "/usr/bin/hello-linux"
+                ) {
+                    // These native probes and static Linux workloads are embedded
+                    // by the kernel rather than exposed through the native VFS.
+                    Some(alloc::string::String::from(cmd))
+                } else {
+                    None
+                };
+            }
+            let embedded_linux = matches!(
+                cmd,
+                "helios-probe"
+                    | "sunjs"
+                    | "linux-thread-probe"
+                    | "linux-fionbio-pipe-probe"
+                    | "linux-recvfrom-probe"
+                    | "linux-open-largefile-probe"
+                    | "helios-probe-runtime"
+                    | "linux-echo"
+                    | "linux-uname"
+                    | "linux-ids"
+                    | "linux-gettimeofday"
+                    | "linux-mkdir"
+                    | "linux-getdents64"
+                    | "linux-pread-pwrite"
+                    | "linux-access"
+                    | "linux-open-flags"
+                    | "linux-dup3"
+                    | "linux-stat-metadata"
+                    | "note"
+                    | "yazi"
+                    | "yazi-baseline"
+                    | "hello-linux"
+            );
+            for dir in env.path_entries() {
+                let candidate = if dir.ends_with('/') {
+                    alloc::format!("{}{}", dir, cmd)
+                } else {
+                    alloc::format!("{}/{}", dir, cmd)
+                };
+                if stat_is_file(&candidate)
+                    || (embedded_linux
+                        && (candidate.starts_with("/bin/") || candidate.starts_with("/usr/bin/")))
+                {
+                    return Some(candidate);
+                }
+            }
+            None
+        }
+
+        fn cmd_echo(&self, args: &[&str]) -> &[u8] {
+            unsafe {
+                static mut BUF: [u8; 64] = [0u8; 64];
+                let buf = &mut BUF;
+                let mut len = 0usize;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 && len < buf.len() {
+                        buf[len] = b' ';
+                        len += 1;
+                    }
+                    let bytes = arg.as_bytes();
+                    let to_copy = bytes.len().min(buf.len() - len);
+                    buf[len..len + to_copy].copy_from_slice(&bytes[..to_copy]);
+                    len += to_copy;
+                }
+                if len < buf.len() {
+                    buf[len] = b'\n';
+                    len += 1;
+                }
+                &buf[..len]
+            }
+        }
+
+        fn cmd_cat(&self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return self.builtin_failure(b"cat: missing file\n");
+            }
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return self.builtin_failure(b"cat: VFS not available\n"),
+            };
+            let path = args[0];
+            let data = read_file(vfs_cap, path);
+            if data.is_empty() {
+                return self.builtin_failure(b"cat: file not found\n");
+            }
+            unsafe {
+                static mut BUF: [u8; 64] = [0u8; 64];
+                let buf = &mut BUF;
+                let len = data.len().min(buf.len() - 1);
+                buf[..len].copy_from_slice(&data[..len]);
+                buf[len] = b'\n';
+                &buf[..len + 1]
+            }
+        }
+
+        fn cmd_chmod(&self, args: &[&str]) -> &[u8] {
+            if args.len() < 2 {
+                return self.builtin_failure(b"chmod: missing operand\n");
+            }
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return self.builtin_failure(b"chmod: VFS not available\n"),
+            };
+            let mode_str = args[0];
+            let path = args[1];
+            let mode = parse_mode(mode_str).unwrap_or(0);
+            let msg = path_msg(VfsMsg::CHMOD, path).word(4, mode as u64);
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.words[0] == 0 {
+                b""
+            } else {
+                self.builtin_failure(b"chmod: failed\n")
+            }
+        }
+
+        fn cmd_chown(&self, args: &[&str]) -> &[u8] {
+            if self.uid != 0 {
+                return self.builtin_failure(b"chown: permission denied\n");
+            }
+            if args.len() < 2 {
+                return self.builtin_failure(b"chown: missing operand\n");
+            }
+            let vfs_cap = match nameserver_lookup("vfs") {
+                Some(c) => c,
+                None => return self.builtin_failure(b"chown: VFS not available\n"),
+            };
+            let owner_group = args[0];
+            let path = args[1];
+            let mut uid = 0u32;
+            let mut gid = 0u32;
+            if let Some(colon) = owner_group.find(':') {
+                uid = parse_u32(&owner_group[..colon]).unwrap_or(0);
+                gid = parse_u32(&owner_group[colon + 1..]).unwrap_or(0);
+            } else {
+                uid = parse_u32(owner_group).unwrap_or(0);
+            }
+            let msg = path_msg(VfsMsg::CHOWN, path)
+                .word(4, uid as u64)
+                .word(5, gid as u64);
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label == VfsMsg::REPLY && reply.words[0] == 0 {
+                b""
+            } else {
+                self.builtin_failure(b"chown: failed\n")
+            }
+        }
+
+        fn cmd_sysfetch(&self) -> &[u8] {
+            debug_log("[TTY]  sysfetch invoked");
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+
+            let info = sysinfo();
+            let mut cpu_buf = [0u8; 48];
+            let cpu_len = cpu_brand(&mut cpu_buf);
+            let cpu = core::str::from_utf8(&cpu_buf[..cpu_len]).unwrap_or("");
+
+            // Phase 5: fetch IP from net service for display in sysfetch (and TUI)
+            let net_ip: Option<[u8; 4]> = nameserver_lookup("net").and_then(|net_cap| {
+                let reply = ipc_call(net_cap, IpcMsg::with_label(10 /* NetOp::GETIP */));
+                if reply.label == 10 && reply.word_count >= 1 {
+                    let w = reply.words[0];
+                    Some([
+                        (w & 0xff) as u8,
+                        ((w >> 8) & 0xff) as u8,
+                        ((w >> 16) & 0xff) as u8,
+                        ((w >> 24) & 0xff) as u8,
+                    ])
+                } else {
+                    None
+                }
+            });
+            let mut dns_servers = [[0u8; 4]; 3];
+            let dns_count = Self::read_dns_servers(&mut dns_servers);
+
+            let mut buf = [0u8; 1024];
+            let username =
+                core::str::from_utf8(&self.username[..self.username_len]).unwrap_or("root");
+            let mut hostname_buf = [0u8; 64];
+            let hostname_len = read_hostname_from_vfs(&mut hostname_buf);
+            let hostname =
+                core::str::from_utf8(&hostname_buf[..hostname_len]).unwrap_or("sunlight");
+            let len = crate::sysfetch::render_sysfetch_to_buffer(
+                username,
+                hostname,
+                OS_NAME,
+                OS_VERSION,
+                KERNEL_NAME,
+                KERNEL_VERSION,
+                machine_name(),
+                option_env!("COOKBOOK_SOURCE_IDENT"),
+                cpu,
+                info.uptime_secs,
+                (info.used_ram_kb / 1024) as u32,
+                (info.total_ram_kb / 1024) as u32,
+                (info.swap_used_kb / 1024) as u32,
+                (info.swap_total_kb / 1024) as u32,
+                net_ip,
+                &dns_servers[..dns_count],
+                &mut buf,
+            );
+
+            // Copy into long output buffer for chunked transmission
+            unsafe {
+                let bytes = &buf[..len];
+                let space = LONG_OUT_MAX - LONG_OUT_LEN;
+                let to_copy = bytes.len().min(space);
+                LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy]
+                    .copy_from_slice(&bytes[..to_copy]);
+                LONG_OUT_LEN += to_copy;
+            }
+
+            b""
+        }
+
+        fn read_dns_servers(out: &mut [[u8; 4]]) -> usize {
+            if let Some(resolved_cap) = nameserver_lookup("resolved") {
+                let reply = ipc_call(
+                    resolved_cap,
+                    IpcMsg::with_label(ResolvedMsg::RENDER_RESOLV_CONF),
+                );
+                if reply.label == ResolvedMsg::REPLY && reply.word_count > 0 {
+                    let mut count = 0usize;
+                    let max = (reply.words[0] as usize).min(out.len()).min(7);
+                    for i in 0..max {
+                        let word = reply.words[1 + i];
+                        let addr = unpack_ipv4(word);
+                        if addr != [0, 0, 0, 0] {
+                            out[count] = addr;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        return count;
+                    }
+                }
+            }
+
+            if let Some(net_cap) = nameserver_lookup("net") {
+                let reply = ipc_call(net_cap, IpcMsg::with_label(10 /* NetOp::GETIP */));
+                if reply.label == 10 && reply.word_count >= 4 {
+                    let addr = unpack_ipv4(reply.words[3]);
+                    if addr != [0, 0, 0, 0] {
+                        out[0] = addr;
+                        return 1;
+                    }
+                }
+            }
+
+            out[0] = [208, 67, 222, 222];
+            out[1] = [208, 67, 220, 220];
+            2
+        }
+
+        fn cmd_tzctl(&mut self, args: &[&str]) -> &[u8] {
+            // tzctl list | get | set <id> | info <id>
+            // Uses "tz" service directly.
+            unsafe {
+                static mut OUT: [u8; 512] = [0u8; 512];
+                let out = &mut OUT;
+                let mut pos = 0usize;
+
+                fn copy_bytes(dst: &mut [u8], pos: &mut usize, src: &[u8]) -> usize {
+                    let n = src.len().min(dst.len().saturating_sub(*pos));
+                    dst[*pos..*pos + n].copy_from_slice(&src[..n]);
+                    *pos += n;
+                    n
+                }
+
+                let Some(tz_cap) = nameserver_lookup("tz") else {
+                    let msg = self.builtin_failure(b"tzctl: tz service not available\n");
+                    out[..msg.len()].copy_from_slice(msg);
+                    return &out[..msg.len()];
+                };
+
+                if args.is_empty() || args[0] == "get" {
+                    // GET_ZONE + local time for display
+                    let Ok(r) = ipc_call_timeout(
+                        tz_cap,
+                        IpcMsg::with_label(TzMsg::GET_ZONE),
+                        TZCTL_QUERY_TIMEOUT_MS,
+                    ) else {
+                        let msg = self.builtin_failure(b"tzctl: timezone service timeout\n");
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    };
+                    if r.label == TzMsg::REPLY {
+                        let _ = copy_bytes(out, &mut pos, b"Active: ");
+                        // simplistic id from first word bytes
+                        for wi in 2..4 {
+                            for b in 0..8 {
+                                let ch = ((r.words[wi] >> (b * 8)) & 0xff) as u8;
+                                if ch == 0 || pos >= 500 {
+                                    break;
+                                }
+                                out[pos] = ch;
+                                pos += 1;
+                            }
+                        }
+                    }
+                    let Ok(r2) = ipc_call_timeout(
+                        tz_cap,
+                        IpcMsg::with_label(TzMsg::GET_LOCAL_TIME),
+                        TZCTL_QUERY_TIMEOUT_MS,
+                    ) else {
+                        let msg = self.builtin_failure(b"tzctl: timezone service timeout\n");
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    };
+                    if r2.label == TzMsg::REPLY {
+                        let w0 = r2.words[0];
+                        let h = ((w0 >> 24) & 0xff) as u8;
+                        let m = ((w0 >> 16) & 0xff) as u8;
+                        let _ = copy_bytes(out, &mut pos, b"\nLocal: ");
+                        out[pos] = b'0' + h / 10;
+                        pos += 1;
+                        out[pos] = b'0' + h % 10;
+                        pos += 1;
+                        out[pos] = b':';
+                        pos += 1;
+                        out[pos] = b'0' + m / 10;
+                        pos += 1;
+                        out[pos] = b'0' + m % 10;
+                        pos += 1;
+                    }
+                    out[pos] = b'\n';
+                    pos += 1;
+                    return &out[..pos];
+                } else if args[0] == "list" {
+                    // Shared city catalog search (same ranking as Control Panel)
+                    // first, then residual IANA table matches. No IPC list
+                    // round-trips (was multi-second freezes).
+                    let filter = args.get(1).copied().unwrap_or("");
+                    let _ = copy_bytes(out, &mut pos, b"ID\tDISPLAY\tOFFSET\n");
+                    if filter.is_empty() {
+                        let _ = copy_bytes(out, &mut pos, b"(showing first matches; use 'tzctl list <filter>' to search by id/name)\n");
+                    }
+                    let mut shown = 0u32;
+                    // Track emitted zone ids (first 32 bytes each) to de-dupe.
+                    let mut seen: [[u8; 32]; 48] = [[0; 32]; 48];
+                    let mut seen_len = 0usize;
+
+                    let already_seen =
+                        |zone_id: &str, seen: &[[u8; 32]; 48], seen_len: usize| -> bool {
+                            let zb = zone_id.as_bytes();
+                            for i in 0..seen_len {
+                                let s = &seen[i];
+                                let slen = s.iter().position(|&b| b == 0).unwrap_or(32);
+                                if slen == zb.len() && s[..slen] == zb[..] {
+                                    return true;
+                                }
+                            }
+                            false
+                        };
+
+                    let record_seen =
+                        |zone_id: &str, seen: &mut [[u8; 32]; 48], seen_len: &mut usize| {
+                            if *seen_len >= seen.len() {
+                                return;
+                            }
+                            let zb = zone_id.as_bytes();
+                            let n = zb.len().min(31);
+                            seen[*seen_len][..n].copy_from_slice(&zb[..n]);
+                            seen[*seen_len][n] = 0;
+                            *seen_len += 1;
+                        };
+
+                    let write_zone_row = |out: &mut [u8],
+                                          pos: &mut usize,
+                                          zone_id: &str,
+                                          display: &str,
+                                          oh: i8,
+                                          om: u8|
+                     -> bool {
+                        let idbuf = zone_id.as_bytes();
+                        let dispbuf = display.as_bytes();
+                        if *pos + idbuf.len() + dispbuf.len() + 10 > out.len() {
+                            return false;
+                        }
+                        let _ = copy_bytes(out, pos, idbuf);
+                        out[*pos] = b'\t';
+                        *pos += 1;
+                        let _ = copy_bytes(out, pos, dispbuf);
+                        out[*pos] = b'\t';
+                        *pos += 1;
+                        out[*pos] = if oh < 0 { b'-' } else { b'+' };
+                        *pos += 1;
+                        let ah = oh.unsigned_abs();
+                        out[*pos] = b'0' + ah / 10;
+                        *pos += 1;
+                        out[*pos] = b'0' + ah % 10;
+                        *pos += 1;
+                        out[*pos] = b':';
+                        *pos += 1;
+                        out[*pos] = b'0' + om / 10;
+                        *pos += 1;
+                        out[*pos] = b'0' + om % 10;
+                        *pos += 1;
+                        out[*pos] = b'\n';
+                        *pos += 1;
+                        true
+                    };
+
+                    if !filter.is_empty() {
+                        let hits = sunlight_tz::search_locations(filter, 12);
+                        for hit in hits.iter() {
+                            let loc = hit.location;
+                            if already_seen(loc.zone_id, &seen, seen_len) {
+                                continue;
+                            }
+                            if let Some(zone) = sunlight_tz::tz_by_id(loc.zone_id) {
+                                if !write_zone_row(
+                                    out,
+                                    &mut pos,
+                                    zone.id,
+                                    zone.display_name,
+                                    zone.utc_offset_hours,
+                                    zone.utc_offset_minutes,
+                                ) {
+                                    break;
+                                }
+                                record_seen(zone.id, &mut seen, &mut seen_len);
+                                shown += 1;
+                            }
+                        }
+                    }
+
+                    let filter_l = filter.to_lowercase();
+                    for zone in sunlight_tz::all_zones() {
+                        if !filter.is_empty() {
+                            let id_l = zone.id.to_lowercase();
+                            let disp_l = zone.display_name.to_lowercase();
+                            let city_l = zone.city.to_lowercase();
+                            if !id_l.contains(filter_l.as_str())
+                                && !disp_l.contains(filter_l.as_str())
+                                && !city_l.contains(filter_l.as_str())
+                            {
+                                continue;
+                            }
+                        }
+                        if already_seen(zone.id, &seen, seen_len) {
+                            continue;
+                        }
+                        if !write_zone_row(
+                            out,
+                            &mut pos,
+                            zone.id,
+                            zone.display_name,
+                            zone.utc_offset_hours,
+                            zone.utc_offset_minutes,
+                        ) {
+                            break;
+                        }
+                        record_seen(zone.id, &mut seen, &mut seen_len);
+                        shown += 1;
+                        if filter.is_empty() && shown >= 32 {
+                            break;
+                        }
+                    }
+                    if !filter.is_empty() && shown == 0 {
+                        let _ = copy_bytes(out, &mut pos, b"(no matching zones)\n");
+                    }
+                    return &out[..pos];
+                } else if args[0] == "set" && args.len() > 1 {
+                    let id = args[1].as_bytes();
+                    let mut req = IpcMsg::with_label(TzMsg::SET_ZONE);
+                    // pack id into words[0..]
+                    let mut wi = 0;
+                    let mut bi = 0;
+                    let mut w = 0u64;
+                    for &bb in id.iter().take(32) {
+                        w |= (bb as u64) << (bi * 8);
+                        bi += 1;
+                        if bi == 8 {
+                            req = req.word(wi, w);
+                            w = 0;
+                            bi = 0;
+                            wi += 1;
+                        }
+                    }
+                    if bi > 0 {
+                        req = req.word(wi, w);
+                    }
+                    let Ok(r) = ipc_call_timeout(tz_cap, req, TZCTL_SET_TIMEOUT_MS) else {
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"tzctl: timezone service timeout\n"),
+                        );
+                        return &out[..pos];
+                    };
+                    if r.label == TzMsg::REPLY && r.words[0] == 0 {
+                        let _ = copy_bytes(out, &mut pos, b"Timezone changed to ");
+                        let _ = copy_bytes(out, &mut pos, args[1].as_bytes());
+                        out[pos] = b'\n';
+                        pos += 1;
+                    } else {
+                        let _ =
+                            copy_bytes(out, &mut pos, self.builtin_failure(b"tzctl: set failed\n"));
+                    }
+                    return &out[..pos];
+                }
+                let _ = copy_bytes(
+                    out,
+                    &mut pos,
+                    self.builtin_failure(b"tzctl: list | get | set <id>\n"),
+                );
+                &out[..pos]
+            }
+        }
+
+        fn cmd_localectl(&mut self, args: &[&str]) -> &[u8] {
+            // localectl
+            // localectl list
+            // localectl set <locale>
+            // localectl set-time <locale>
+            unsafe {
+                static mut OUT: [u8; 768] = [0u8; 768];
+                let out = &mut OUT;
+                let mut pos = 0usize;
+
+                fn copy_bytes(dst: &mut [u8], pos: &mut usize, src: &[u8]) -> usize {
+                    let n = src.len().min(dst.len().saturating_sub(*pos));
+                    dst[*pos..*pos + n].copy_from_slice(&src[..n]);
+                    *pos += n;
+                    n
+                }
+
+                let vfs_cap = match nameserver_lookup("vfs") {
+                    Some(c) => c,
+                    None => {
+                        let msg = self.builtin_failure(b"localectl: VFS not available\n");
+                        out[..msg.len()].copy_from_slice(msg);
+                        return &out[..msg.len()];
+                    }
+                };
+
+                // Read current active config from /etc/locale.conf
+                let conf_bytes = read_file(vfs_cap, "/etc/locale.conf");
+                let mut cfg = sunlight_locale::parse_locale_conf(&conf_bytes);
+
+                // If file was empty/missing, synthesize a minimal fallback view
+                if conf_bytes.is_empty() {
+                    cfg.set("LANG", "C.UTF-8");
+                    cfg.set("LC_TIME", "C.UTF-8");
+                }
+
+                if args.is_empty() {
+                    // Print active (from parsed file or fallback)
+                    let _ = copy_bytes(out, &mut pos, b"System Locale: ");
+                    if let Some(v) = cfg.get("LANG") {
+                        let _ = copy_bytes(out, &mut pos, v.as_bytes());
+                    } else {
+                        let _ = copy_bytes(out, &mut pos, b"C.UTF-8");
+                    }
+                    let _ = copy_bytes(out, &mut pos, b"\n");
+
+                    // Show a few key categories for visibility (like localectl on Linux)
+                    let keys = ["LC_TIME", "LC_NUMERIC", "LC_MONETARY", "LC_MEASUREMENT"];
+                    for &k in &keys {
+                        let _ = copy_bytes(out, &mut pos, k.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b": ");
+                        let val = cfg
+                            .get(k)
+                            .unwrap_or_else(|| cfg.get("LANG").unwrap_or("C.UTF-8"));
+                        let _ = copy_bytes(out, &mut pos, val.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"\n");
+                    }
+                    return &out[..pos];
+                } else if args[0] == "list" {
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    let _ = copy_bytes(out, &mut pos, b"Available locales:\n");
+                    for name in &avail {
+                        if pos + name.len() + 1 >= out.len() {
+                            break;
+                        }
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        out[pos] = b'\n';
+                        pos += 1;
+                    }
+                    if avail.is_empty() {
+                        // Fallback small list if file missing
+                        let _ = copy_bytes(out, &mut pos, b"C\nC.UTF-8\nen_US.UTF-8\n");
+                    }
+                    return &out[..pos];
+                } else if args[0] == "set" && args.len() > 1 {
+                    let name = args[1];
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    if !sunlight_locale::is_valid_locale(name, &avail) {
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: invalid locale '"),
+                        );
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"'\n");
+                        return &out[..pos];
+                    }
+                    // Apply full set
+                    sunlight_locale::apply_set_all(&mut cfg, name);
+                    let serialized = sunlight_locale::serialize_locale_conf(&cfg);
+                    if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: failed to write /etc/locale.conf\n"),
+                        );
+                        return &out[..pos];
+                    }
+                    // Also update our live shell env so new children see it immediately
+                    let mut pairs: alloc::vec::Vec<(alloc::string::String, alloc::string::String)> =
+                        alloc::vec::Vec::new();
+                    for (k, v) in cfg.iter() {
+                        pairs.push((
+                            alloc::string::String::from(k),
+                            alloc::string::String::from(v),
+                        ));
+                    }
+                    self.env.apply_locale(&pairs);
+
+                    let _ = copy_bytes(out, &mut pos, b"Locale set to ");
+                    let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                    out[pos] = b'\n';
+                    pos += 1;
+                    return &out[..pos];
+                } else if args[0] == "set-time" && args.len() > 1 {
+                    let name = args[1];
+                    let gen_bytes = read_file(vfs_cap, "/etc/locale.gen");
+                    let avail = sunlight_locale::parse_locale_gen(&gen_bytes);
+                    if !sunlight_locale::is_valid_locale(name, &avail) {
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: invalid locale '"),
+                        );
+                        let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                        let _ = copy_bytes(out, &mut pos, b"'\n");
+                        return &out[..pos];
+                    }
+                    sunlight_locale::apply_set_time(&mut cfg, name);
+                    let serialized = sunlight_locale::serialize_locale_conf(&cfg);
+                    if write_file(vfs_cap, "/etc/locale.conf", serialized.as_bytes()).is_err() {
+                        let _ = copy_bytes(
+                            out,
+                            &mut pos,
+                            self.builtin_failure(b"localectl: failed to write /etc/locale.conf\n"),
+                        );
+                        return &out[..pos];
+                    }
+                    // live update
+                    self.env.set("LC_TIME", name);
+
+                    let _ = copy_bytes(out, &mut pos, b"LC_TIME set to ");
+                    let _ = copy_bytes(out, &mut pos, name.as_bytes());
+                    out[pos] = b'\n';
+                    pos += 1;
+                    return &out[..pos];
+                }
+
+                let _ = copy_bytes(out, &mut pos, b"localectl | localectl list | localectl set <locale> | localectl set-time <locale>\n");
+                &out[..pos]
+            }
+        }
+
+        fn cmd_uptime(&self) -> &[u8] {
+            debug_log("[TTY]  uptime invoked");
+
+            let info = sysinfo();
+            let uptime_secs = info.uptime_secs;
+            let days = uptime_secs / 86400;
+            let hours = (uptime_secs % 86400) / 3600;
+            let mins = (uptime_secs % 3600) / 60;
+            let user_count = 1;
+
+            // Wall clock (UTC) for the leading HH:MM:SS field
+            let clock = info.unix_time % 86400;
+
+            unsafe {
+                static mut BUF: [u8; 128] = [0u8; 128];
+                let buf = &mut BUF;
+                let uptime_str = alloc::format!(
+                    " {}:{:02}:{:02} up {} day, {}:{:02}, {} user",
+                    clock / 3600,
+                    (clock / 60) % 60,
+                    clock % 60,
+                    days,
+                    hours,
+                    mins,
+                    user_count
+                );
+                let bytes = uptime_str.as_bytes();
+                let len = bytes.len().min(buf.len());
+                buf[..len].copy_from_slice(&bytes[..len]);
+                &buf[..len]
+            }
+        }
+
+        fn cmd_hostnamectl(&self) -> &[u8] {
+            debug_log("[TTY]  hostnamectl invoked");
+            unsafe {
+                LONG_OUT_ACTIVE = true;
+            }
+            let mut host_buf = [0u8; 64];
+            let host_len = read_hostname_from_vfs(&mut host_buf);
+            let host = core::str::from_utf8(&host_buf[..host_len]).unwrap_or("sunlight");
+
+            let line1 = alloc::format!(
+                "Static hostname: {} | OS: {}/{} | Kernel: {}/{} | Arch: {}",
+                host,
+                OS_NAME,
+                OS_VERSION,
+                KERNEL_NAME,
+                KERNEL_VERSION,
+                machine_name()
+            );
+            push_line(&line1);
+
+            let line2 = "Chassis: vm | Hardware Vendor: QEMU | Hardware Model: Standard PC (i440FX + PIIX, 1996) | Firmware: Limine BIOS (1.17)";
+            push_line(line2);
+            b""
+        }
+
+        fn cmd_shutdown(&self) -> ! {
+            debug_log("[TTY]  cmd: shutdown -> Broadcasting system shutdown loop...");
+            unsafe {
+                core::arch::asm!(
+                    "mov rax, 80", // PowerCtl syscall number
+                    "mov rdi, 0",  // 0 = shutdown
+                    "syscall",
+                    options(noreturn),
+                );
+            }
+        }
+
+        fn cmd_reboot(&self) -> ! {
+            debug_log("[TTY]  cmd: reboot -> Broadcasting system reboot loop...");
+            unsafe {
+                core::arch::asm!(
+                    "mov rax, 80", // PowerCtl syscall number
+                    "mov rdi, 1",  // 1 = reboot
+                    "syscall",
+                    options(noreturn),
+                );
+            }
+        }
+
+        fn cmd_z(&mut self, args: &[&str]) -> &[u8] {
+            if args.is_empty() {
+                return self.cmd_cd(&[]);
+            }
+
+            // `z --add PATH` invoked as a built-in (shell-integration parity)
+            if args.first() == Some(&"--add") {
+                let path = args.get(1).copied().unwrap_or("");
+                if !path.is_empty() {
+                    self.z_spawn_add(path);
+                }
+                return b"";
+            }
+
+            // If the single arg looks like an existing absolute directory, cd there.
+            if args.len() == 1 && args[0].starts_with('/') && stat_is_dir(args[0]) {
+                if sunlight_libc::chdir(args[0].as_bytes()).is_err() {
+                    return self.builtin_failure(b"z: unable to enter directory\n");
+                }
+                self.env.set("OLDPWD", &self.cwd);
+                self.cwd = alloc::string::String::from(args[0]);
+                self.env.set("PWD", &self.cwd);
+                let p = self.cwd.clone();
+                self.z_spawn_add(&p);
+                return b"";
+            }
+
+            // Search the zoxide history database.
+            let db_bytes = self.z_read_db();
+            let db_str = match core::str::from_utf8(&db_bytes) {
+                Ok(s) => s,
+                Err(_) => return self.builtin_failure(b"z: no match found\n"),
+            };
+
+            let terms: alloc::vec::Vec<alloc::string::String> =
+                args.iter().map(|t| z_to_lower(t)).collect();
+
+            let mut best_score: i64 = i64::MIN;
+            let mut best_path: Option<alloc::string::String> = None;
+
+            for line in db_str.lines() {
+                let tab = match line.find('\t') {
+                    Some(i) => i,
+                    None => continue,
+                };
+                let visit: u64 = match z_parse_u64(&line[..tab]) {
+                    Some(v) => v,
+                    None => continue,
+                };
+                let path = &line[tab + 1..];
+                let path_lower = z_to_lower(path);
+                if !terms.iter().all(|t| path_lower.contains(t.as_str())) {
+                    continue;
+                }
+                let score = (visit as i64) * 100 - path.len() as i64;
+                if best_path.is_none() || score > best_score {
+                    best_score = score;
+                    best_path = Some(alloc::string::String::from(path));
+                }
+            }
+
+            match best_path {
+                Some(path) => {
+                    if sunlight_libc::chdir(path.as_bytes()).is_err() {
+                        return self.builtin_failure(b"z: unable to enter directory\n");
+                    }
+                    self.env.set("OLDPWD", &self.cwd);
+                    self.cwd = path.clone();
+                    self.env.set("PWD", &self.cwd);
+                    self.z_spawn_add(&path);
+                    b""
+                }
+                None => self.builtin_failure(b"z: no match found\n"),
+            }
+        }
+
+        fn z_read_db(&self) -> alloc::vec::Vec<u8> {
+            use sunlight_libc as ulibc;
+            let home = self.env.get("HOME").unwrap_or("/root");
+            let mut path = alloc::string::String::from(home);
+            path.push_str("/.config/sunlight-zoxide/db.txt");
+            let fd = match ulibc::open(path.as_bytes()) {
+                Ok(f) => f,
+                Err(_) => return alloc::vec::Vec::new(),
+            };
+            let mut out = alloc::vec::Vec::new();
+            let mut chunk = [0u8; 512];
+            loop {
+                match ulibc::read(fd, &mut chunk) {
+                    Ok(0) => break,
+                    Ok(n) => out.extend_from_slice(&chunk[..n]),
+                    Err(_) => break,
+                }
+            }
+            let _ = ulibc::close(fd);
+            out
+        }
+
+        fn z_spawn_add(&self, path: &str) {
+            use sunlight_libc as ulibc;
+            let argv: [&[u8]; 3] = [b"z", b"--add", path.as_bytes()];
+            let Ok(environment) = self.env.export_blob() else {
+                return;
+            };
+            if let Ok(pid) =
+                ulibc::spawn_with_stdio_env(b"/bin/z", &argv, None, None, None, &environment)
+            {
+                // Ensure the next `z` query observes this visit instead of
+                // racing the asynchronous database update.
+                let _ = ulibc::waitpid(pid);
+            } else {
+                debug_log("[TTY] z: failed to update history");
+            }
+        }
+    }
+
+    fn z_to_lower(s: &str) -> alloc::string::String {
+        s.chars()
+            .map(|c| {
+                if c.is_ascii_uppercase() {
+                    (c as u8 + 32) as char
+                } else {
+                    c
+                }
+            })
+            .collect()
+    }
+
+    fn z_parse_u64(s: &str) -> Option<u64> {
+        if s.is_empty() {
+            return None;
+        }
+        let mut v = 0u64;
+        for b in s.bytes() {
+            if !b.is_ascii_digit() {
+                return None;
+            }
+            v = v.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+        }
+        Some(v)
+    }
+
+    fn copy_out(data: &[u8]) -> ([u8; MAX_OUT], usize) {
+        let mut buf = [0u8; MAX_OUT];
+        let len = data.len().min(buf.len());
+        buf[..len].copy_from_slice(&data[..len]);
+        (buf, len)
+    }
+
+    fn push_art_line(line: &[u8]) {
+        long_out_push_byte(b' ');
+        long_out_push_byte(b' ');
+        for &b in line.iter() {
+            if b != b' ' {
+                long_out_push_str("\x1b[33m");
+                long_out_push_byte(b);
+                long_out_push_str("\x1b[0m");
+            } else {
+                long_out_push_byte(b' ');
+            }
+        }
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_label_value(label: &str, value: &str) {
+        long_out_push_str("  \x1b[1m");
+        long_out_push_str(label);
+        long_out_push_str("\x1b[0m ");
+        long_out_push_str(value);
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_label_value_bytes(label: &[u8], value: &[u8]) {
+        long_out_push_str("  \x1b[1m");
+        for &b in label.iter() {
+            long_out_push_byte(b);
+        }
+        long_out_push_str("\x1b[0m ");
+        for &b in value.iter() {
+            long_out_push_byte(b);
+        }
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_section_header(title: &str) {
+        long_out_push_str("\x1b[33m\x1b[1m[");
+        long_out_push_str(title);
+        long_out_push_str("]\x1b[0m\n");
+    }
+
+    fn push_blank() {
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_line(s: &str) {
+        long_out_push_str(s);
+        long_out_push_byte(b'\n');
+    }
+
+    fn push_bytes(data: &[u8]) {
+        for &b in data {
+            long_out_push_byte(b);
+        }
+    }
+
+    fn format_uptime(total_s: u64) -> alloc::string::String {
+        let h = total_s / 3600;
+        let m = (total_s % 3600) / 60;
+        let s = total_s % 60;
+        alloc::format!("{}h {}m {}s", h, m, s)
+    }
+
+    /// STAT a path through the kernel VFS and check it is a regular file.
+    fn stat_is_file(path: &str) -> bool {
+        const FILE_TYPE_FILE: u8 = 1;
+        match sunlight_libc::stat(path.as_bytes()) {
+            Ok(stat) => stat.file_type == FILE_TYPE_FILE,
+            Err(_) => false,
+        }
+    }
+
+    fn stat_is_dir(path: &str) -> bool {
+        const FILE_TYPE_DIR: u8 = 2;
+        match sunlight_libc::stat(path.as_bytes()) {
+            Ok(stat) => stat.file_type == FILE_TYPE_DIR,
+            Err(_) => false,
+        }
+    }
+
+    fn normalize_path(cwd: &str, path: &str) -> Option<alloc::string::String> {
+        let mut parts: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+        let full = if path.starts_with('/') {
+            alloc::string::String::from(path)
+        } else if cwd == "/" {
+            alloc::format!("/{}", path)
+        } else {
+            alloc::format!("{}/{}", cwd, path)
+        };
+
+        for part in full.split('/') {
+            if part.is_empty() || part == "." {
+                continue;
+            }
+            if part == ".." {
+                if !parts.is_empty() {
+                    parts.pop();
+                }
+                continue;
+            }
+            if part.len() > 64 {
+                return None;
+            }
+            parts.push(part);
+        }
+
+        if parts.is_empty() {
+            return Some(alloc::string::String::from("/"));
+        }
+        let mut out = alloc::string::String::from("/");
+        for (idx, part) in parts.iter().enumerate() {
+            if idx > 0 {
+                out.push('/');
+            }
+            out.push_str(part);
+        }
+        Some(out)
+    }
+
+    fn external_uses_fs_paths(cmd: &str) -> bool {
+        matches!(
+            cmd,
+            "ls" | "cat"
+                | "mkdir"
+                | "touch"
+                | "rm"
+                | "rmdir"
+                | "cp"
+                | "mv"
+                | "stat"
+                | "file"
+                | "head"
+                | "wc"
+                | "cut"
+                | "fold"
+                | "expand"
+                | "find"
+                | "grep"
+                | "tail"
+                | "note"
+        )
+    }
+
+    fn read_file(vfs_cap: CapabilityToken, path: &str) -> alloc::vec::Vec<u8> {
+        let mut out = alloc::vec::Vec::new();
+        let open_msg = path_msg(VfsMsg::OPEN, path);
+        let reply = ipc_call(vfs_cap, open_msg);
+        if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
+            return out;
+        }
+        let handle = reply.words[1] as u32;
+        let mut offset = 0usize;
+        loop {
+            let read_msg = IpcMsg::with_label(VfsMsg::READ)
+                .word(0, handle as u64)
+                .word(1, offset as u64)
+                .word(2, 16);
+            let reply = ipc_call(vfs_cap, read_msg);
+            if reply.label != VfsMsg::REPLY {
+                break;
+            }
+            let n = reply.words[1] as usize;
+            if n == 0 {
+                break;
+            }
+            let src = &reply.words[2..4];
+            for i in 0..n {
+                let word_idx = i / 8;
+                let byte_idx = i % 8;
+                out.push(((src[word_idx] >> (byte_idx * 8)) & 0xFF) as u8);
+            }
+            offset += n;
+        }
+        let _ = ipc_call(
+            vfs_cap,
+            IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+        );
+        out
+    }
+
+    fn read_hostname_from_vfs(out: &mut [u8]) -> usize {
+        let Some(vfs_cap) = nameserver_lookup("vfs") else {
+            return copy_into(out, b"sunlight");
+        };
+        let data = read_file(vfs_cap, "/etc/hostname");
+        if data.is_empty() {
+            return copy_into(out, b"sunlight");
+        }
+        let end = data
+            .iter()
+            .position(|b| *b == b'\n' || *b == b'\r')
+            .unwrap_or(data.len());
+        if end == 0 {
+            copy_into(out, b"sunlight")
+        } else {
+            copy_into(out, &data[..end])
+        }
+    }
+
+    fn copy_into(dst: &mut [u8], src: &[u8]) -> usize {
+        let n = dst.len().min(src.len());
+        dst[..n].copy_from_slice(&src[..n]);
+        n
+    }
+
+    fn machine_name() -> &'static str {
+        option_env!("TARGET")
+            .and_then(|t| t.split('-').next())
+            .unwrap_or("x86_64")
+    }
+
+    fn write_file(vfs_cap: CapabilityToken, path: &str, data: &[u8]) -> Result<(), ()> {
+        let open_msg = path_msg(VfsMsg::OPEN, path);
+        let reply = ipc_call(vfs_cap, open_msg);
+        if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
+            return Err(());
+        }
+        let handle = reply.words[1] as u32;
+        let mut offset = 0usize;
+        while offset < data.len() {
+            let chunk = &data[offset..(offset + 16).min(data.len())];
+            let mut msg = IpcMsg::with_label(VfsMsg::WRITE)
+                .word(0, handle as u64)
+                .word(1, offset as u64);
+            let mut word_idx = 2;
+            let mut byte_idx = 0;
+            let mut word = 0u64;
+            for &b in chunk {
+                word |= (b as u64) << (byte_idx * 8);
+                byte_idx += 1;
+                if byte_idx == 8 {
+                    msg = msg.word(word_idx, word);
+                    word = 0;
+                    byte_idx = 0;
+                    word_idx += 1;
+                }
+            }
+            if byte_idx > 0 {
+                msg = msg.word(word_idx, word);
+            }
+            let reply = ipc_call(vfs_cap, msg);
+            if reply.label != VfsMsg::REPLY || reply.words[0] != 0 {
+                let _ = ipc_call(
+                    vfs_cap,
+                    IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+                );
+                return Err(());
+            }
+            let n = reply.words[1] as usize;
+            offset += n;
+        }
+        let _ = ipc_call(
+            vfs_cap,
+            IpcMsg::with_label(VfsMsg::CLOSE).word(0, handle as u64),
+        );
+        Ok(())
+    }
+
+    fn mkdir(
+        vfs_cap: CapabilityToken,
+        path: &str,
+        uid: u32,
+        gid: u32,
+        mode: u16,
+    ) -> Result<(), ()> {
+        let msg = path_msg(VfsMsg::MKDIR, path)
+            .word(4, uid as u64)
+            .word(5, gid as u64)
+            .word(6, mode as u64);
+        let reply = ipc_call(vfs_cap, msg);
+        if reply.label == VfsMsg::REPLY && reply.words[0] == 0 {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    fn path_msg(label: u64, path: &str) -> IpcMsg {
+        let bytes = path.as_bytes();
+        let mut msg = IpcMsg::with_label(label);
+        for word_idx in 0..4 {
+            let start = word_idx * 8;
+            let end = (start + 8).min(bytes.len());
+            if start < bytes.len() {
+                let mut word = 0u64;
+                for (i, &b) in bytes[start..end].iter().enumerate() {
+                    word |= (b as u64) << (i * 8);
+                }
+                msg = msg.word(word_idx, word);
+            }
+        }
+        msg
+    }
+
+    fn find_max_uid(passwd_data: &[u8]) -> u32 {
+        let mut max_uid = 0u32;
+        for line in alloc::string::String::from_utf8_lossy(passwd_data).lines() {
+            let parts: alloc::vec::Vec<&str> = line.split(':').collect();
+            if parts.len() >= 3 {
+                if let Some(uid) = parse_u32(parts[2]) {
+                    if uid > max_uid {
+                        max_uid = uid;
+                    }
+                }
+            }
+        }
+        max_uid
+    }
+
+    fn lookup_user(username: &[u8]) -> Option<(u32, u32)> {
+        let vfs_cap = nameserver_lookup("vfs")?;
+        let passwd_data = read_file(vfs_cap, "/etc/passwd");
+        for line in alloc::string::String::from_utf8_lossy(&passwd_data).lines() {
+            let parts: alloc::vec::Vec<&str> = line.split(':').collect();
+            if parts.len() >= 4 && parts[0].as_bytes() == username {
+                let uid = parse_u32(parts[2])?;
+                let gid = parse_u32(parts[3])?;
+                return Some((uid, gid));
+            }
+        }
+        None
+    }
+
+    fn parse_u32(s: &str) -> Option<u32> {
+        let mut result = 0u32;
+        for &b in s.as_bytes() {
+            if b < b'0' || b > b'9' {
+                return None;
+            }
+            result = result.checked_mul(10)?.checked_add((b - b'0') as u32)?;
+        }
+        Some(result)
+    }
+
+    fn parse_u64_bytes(bytes: &[u8]) -> Option<u64> {
+        if bytes.is_empty() {
+            return None;
+        }
+        let mut result = 0u64;
+        for &b in bytes {
+            if !b.is_ascii_digit() {
+                return None;
+            }
+            result = result.checked_mul(10)?.checked_add((b - b'0') as u64)?;
+        }
+        Some(result)
+    }
+
+    fn parse_mode(s: &str) -> Option<u16> {
+        let mut result = 0u16;
+        for &b in s.as_bytes() {
+            if b < b'0' || b > b'7' {
+                return None;
+            }
+            result = result * 8 + (b - b'0') as u16;
+        }
+        Some(result)
+    }
+
+    fn is_gui_launch_command(cmd: &str) -> bool {
+        matches!(
+            cmd.as_bytes(),
+            b"calculator"
+                | b"calc"
+                | b"terminal"
+                | b"term"
+                | b"sunlight-terminal"
+                | b"settings"
+                | b"control-panel"
+                | b"preferences"
+                | b"files"
+                | b"file-manager"
+                | b"sunlight-files"
+                | b"tasks"
+                | b"task-manager"
+                | b"sunlight-tasks"
+                | b"silicon-echoes"
+                | b"silicon"
+        )
+    }
+
+    fn trim_newline(data: &[u8]) -> &[u8] {
+        if data.ends_with(b"\n") {
+            &data[..data.len() - 1]
+        } else {
+            data
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{external_uses_fs_paths, normalize_path};
+
+        #[test]
+        fn normalizes_relative_dot_paths() {
+            assert_eq!(
+                normalize_path("/root/Documents", "./Why SunlightOS Exists.txt").as_deref(),
+                Some("/root/Documents/Why SunlightOS Exists.txt")
+            );
+            assert_eq!(
+                normalize_path("/root/Documents", "../Documents/Welcome to SunlightOS.txt")
+                    .as_deref(),
+                Some("/root/Documents/Welcome to SunlightOS.txt")
+            );
+        }
+
+        #[test]
+        fn note_paths_are_normalized_before_launch() {
+            assert!(external_uses_fs_paths("cat"));
+            assert!(external_uses_fs_paths("note"));
+        }
+    }
+
+    fn pack_output(data: &[u8]) -> IpcMsg {
+        let len = data.len().min(IPC_OUTPUT_BYTES);
+        let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
+            .word(0, len as u64)
+            .word(1, 0);
+        let mut word = 0u64;
+        let mut byte_idx = 0;
+        let mut word_idx = 2;
+        for &b in data.iter().take(len) {
+            word |= (b as u64) << (byte_idx * 8);
+            byte_idx += 1;
+            if byte_idx == 8 {
+                msg = msg.word(word_idx, word);
+                word = 0;
+                byte_idx = 0;
+                word_idx += 1;
+                if word_idx >= 4 {
+                    break;
+                }
+            }
+        }
+        if byte_idx > 0 && word_idx < 4 {
+            msg = msg.word(word_idx, word);
+        }
+        msg
+    }
+
+    fn pack_long_output(data: &[u8], more_remaining: usize) -> IpcMsg {
+        let len = data.len().min(IPC_OUTPUT_BYTES);
+        let mut msg = IpcMsg::with_label(OUTPUT_LABEL)
+            .word(0, len as u64)
+            .word(1, more_remaining as u64);
+        let mut word = 0u64;
+        let mut byte_idx = 0;
+        let mut word_idx = 2;
+        for &b in data.iter().take(len) {
+            word |= (b as u64) << (byte_idx * 8);
+            byte_idx += 1;
+            if byte_idx == 8 {
+                msg = msg.word(word_idx, word);
+                word = 0;
+                byte_idx = 0;
+                word_idx += 1;
+                if word_idx >= 4 {
+                    break;
+                }
+            }
+        }
+        if byte_idx > 0 && word_idx < 4 {
+            msg = msg.word(word_idx, word);
+        }
+        msg
+    }
+
+    fn shell_name(shell_id: u64, buf: &mut [u8; 16]) -> &str {
+        let prefix = b"sshl";
+        buf[..prefix.len()].copy_from_slice(prefix);
+        let mut pos = prefix.len();
+        pos += fmt_u64_into(&mut buf[pos..], shell_id);
+        core::str::from_utf8(&buf[..pos]).unwrap_or("sshl0")
+    }
+
+    // Retained for reference: the old shell-startup CPU/RAM banner. No longer
+    // called — these stats now render in the TUI title bar (tty_server).
+    #[allow(dead_code)]
+    fn send_system_stats_header() {
+        // System stats banner: CPU % and RAM % display
+        let cpu_percent = 15; // Placeholder: needs scheduler accounting (Phase 5.12)
+        let info = sysinfo();
+        let ram_total = (info.total_ram_kb / 1024) as u32;
+        let ram_used = (info.used_ram_kb / 1024) as u32;
+        let ram_percent = (ram_used as u64 * 100) / (ram_total as u64).max(1);
+
+        // ANSI colors
+        let bold = "\x1B[1m";
+        let cyan = "\x1B[36m";
+        let green = "\x1B[32m";
+        let yellow = "\x1B[33m";
+        let reset = "\x1B[0m";
+
+        // Color code CPU usage
+        let cpu_color = if cpu_percent < 50 {
+            green
+        } else if cpu_percent < 80 {
+            yellow
+        } else {
+            "\x1B[31m" // red
+        };
+
+        // Color code RAM usage
+        let ram_color = if ram_percent < 50 {
+            green
+        } else if ram_percent < 80 {
+            yellow
+        } else {
+            "\x1B[31m" // red
+        };
+
+        // Build header string
+        let header = alloc::format!(
+            "{}╔═══════════════════════════════════╗{}{}╝{}\n\
+             {}║{}  CPU: {}{}%{} │ RAM: {}{}%{} ({}MB)  {}║{}\n\
+             {}╚═══════════════════════════════════╝{}\n",
+            cyan,
+            reset,
+            bold,
+            reset,
+            cyan,
+            reset,
+            cpu_color,
+            cpu_percent,
+            reset,
+            ram_color,
+            ram_percent as u32,
+            reset,
+            ram_used,
+            reset,
+            reset,
+            cyan,
+            reset
+        );
+
+        // Push header into long output buffer
+        long_out_push_str(&header);
+        long_out_push_byte(b'\n');
+    }
+
+    fn fmt_u64_into(buf: &mut [u8], val: u64) -> usize {
+        if val == 0 {
+            buf[0] = b'0';
+            return 1;
+        }
+        let mut tmp = [0u8; 20];
+        let mut n = 0usize;
+        let mut v = val;
+        while v > 0 && n < tmp.len() {
+            tmp[n] = b'0' + (v % 10) as u8;
+            v /= 10;
+            n += 1;
+        }
+        for i in 0..n {
+            buf[i] = tmp[n - 1 - i];
+        }
+        n
+    }
+
+    // Set to true only during IPC debugging sessions; otherwise boot logs are too noisy.
+    const TRACE_SHELL_IPC: bool = false;
+
+    fn debug_ipc_msg(prefix: &str, msg: &IpcMsg) {
+        if !TRACE_SHELL_IPC {
+            return;
+        }
+        debug_log(&alloc::format!(
+            "{} label={} badge={} word_count={} w0={} w1={}",
+            prefix,
+            msg.label,
+            msg.badge,
+            msg.word_count,
+            msg.words[0],
+            msg.words[1]
+        ));
+    }
+
+    static mut LONG_OUT_BUF: [u8; LONG_OUT_MAX] = [0; LONG_OUT_MAX];
+    static mut LONG_OUT_LEN: usize = 0;
+    static mut LONG_OUT_ACTIVE: bool = false;
+
+    fn ulibc_write_long_out(len: usize) -> Result<(), sunlight_libc::Errno> {
+        ulibc_write_long_out_to(sunlight_libc::STDOUT, len)
+    }
+
+    fn ulibc_write_long_out_to(
+        fd: sunlight_libc::Fd,
+        len: usize,
+    ) -> Result<(), sunlight_libc::Errno> {
+        let bytes = unsafe { &LONG_OUT_BUF[..len.min(LONG_OUT_MAX)] };
+        sunlight_libc::write_all(fd, bytes)
+    }
+
+    fn long_out_reset() {
+        unsafe {
+            LONG_OUT_LEN = 0;
+            LONG_OUT_ACTIVE = false;
+        }
+    }
+
+    fn long_out_replace(data: &[u8]) {
+        unsafe {
+            LONG_OUT_ACTIVE = true;
+            LONG_OUT_LEN = 0;
+            let to_copy = data.len().min(LONG_OUT_MAX);
+            LONG_OUT_BUF[..to_copy].copy_from_slice(&data[..to_copy]);
+            LONG_OUT_LEN = to_copy;
+        }
+    }
+
+    fn long_out_push_str(s: &str) {
+        unsafe {
+            let bytes = s.as_bytes();
+            let space = LONG_OUT_MAX - LONG_OUT_LEN;
+            let to_copy = bytes.len().min(space);
+            LONG_OUT_BUF[LONG_OUT_LEN..LONG_OUT_LEN + to_copy].copy_from_slice(&bytes[..to_copy]);
+            LONG_OUT_LEN += to_copy;
+        }
+    }
+
+    fn long_out_push_byte(b: u8) {
+        unsafe {
+            if LONG_OUT_LEN < LONG_OUT_MAX {
+                LONG_OUT_BUF[LONG_OUT_LEN] = b;
+                LONG_OUT_LEN += 1;
+            }
+        }
+    }
+
+    fn build_prompt(shell: &Shell, out: &mut [u8; 128]) -> usize {
+        let user = &shell.username[..shell.username_len.min(shell.username.len())];
+        let cwd = if shell.cwd.as_str() == shell.env.get("HOME").unwrap_or("") {
+            "~"
+        } else {
+            shell.cwd.as_str()
+        };
+        let mut n = 0usize;
+        for &b in user {
+            if b == 0 || n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in b"@sunlight:" {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in cwd.as_bytes() {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        for &b in b"$ " {
+            if n >= out.len() {
+                break;
+            }
+            out[n] = b;
+            n += 1;
+        }
+        n
+    }
+
+    static mut PTY_OUTPUT_BUFFER: Option<sunlight_ipc::pty::PtyBuffer> = None;
+
+    fn pty_wait_writable(
+        service: CapabilityToken,
+        slave: CapabilityToken,
+        id: u64,
+        generation: u64,
+    ) -> bool {
+        let reply = ipc_call(
+            service,
+            IpcMsg::with_label(PtyMsg::WAIT_SLAVE_WRITABLE)
+                .word(0, id)
+                .word(1, generation)
+                .with_cap(0, slave),
+        );
+        reply.label == PtyMsg::REPLY
+    }
+
+    fn pty_write(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        bytes: &[u8],
+    ) -> usize {
+        let mut written = 0usize;
+        while written < bytes.len() {
+            if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                return bytes.len();
+            }
+            if let Some(buffer) = unsafe { PTY_OUTPUT_BUFFER.as_mut() } {
+                let chunk = buffer.copy_from(&bytes[written..]);
+                let reply = ipc_call(
+                    service_cap,
+                    buffer.request(
+                        PtyMsg::WRITE_SLAVE_BULK,
+                        session_id,
+                        generation,
+                        slave_cap,
+                        chunk,
+                    ),
+                );
+                if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
+                    if !pty_wait_writable(service_cap, slave_cap, session_id, generation) {
+                        if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                            return bytes.len();
+                        }
+                        break;
+                    }
+                    continue;
+                }
+                if reply.label != PtyMsg::REPLY {
+                    break;
+                }
+                let accepted = (reply.words[2] as usize).min(chunk);
+                if accepted == 0 {
+                    break;
+                }
+                written += accepted;
+                continue;
+            }
+            let chunk = (bytes.len() - written).min(8);
+            let mut msg = IpcMsg::with_label(PtyMsg::WRITE_SLAVE)
+                .word(0, session_id)
+                .word(1, generation)
+                .word(2, chunk as u64)
+                .with_cap(0, slave_cap);
+            let mut word = 0u64;
+            for (byte_index, &byte) in bytes[written..written + chunk].iter().enumerate() {
+                word |= (byte as u64) << (byte_index * 8);
+            }
+            msg = msg.word(3, word);
+            let reply = ipc_call(service_cap, msg);
+            if reply.label == PtyMsg::ERROR && reply.words[0] == PtyMsg::ERR_WOULD_BLOCK {
+                if !pty_wait_writable(service_cap, slave_cap, session_id, generation) {
+                    if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                        return bytes.len();
+                    }
+                    break;
+                }
+                continue;
+            }
+            if reply.label != PtyMsg::REPLY {
+                break;
+            }
+            let accepted = (reply.words[2] as usize).min(chunk);
+            if accepted == 0 {
+                break;
+            }
+            written += accepted;
+        }
+        written
+    }
+
+    fn pty_read(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        out: &mut [u8],
+    ) -> Option<usize> {
+        let mut total = 0usize;
+        while total < out.len() {
+            let chunk = (out.len() - total).min(8);
+            let reply = ipc_call(
+                service_cap,
+                IpcMsg::with_label(PtyMsg::READ_SLAVE)
+                    .word(0, session_id)
+                    .word(1, generation)
+                    .word(2, chunk as u64)
+                    .with_cap(0, slave_cap),
+            );
+            if reply.label != PtyMsg::REPLY {
+                if matches!(sunlight_ipc::foreground(1, 0), 2 | 126) {
+                    return Some(total);
+                }
+                if reply.label != PtyMsg::ERROR || reply.words[0] != PtyMsg::ERR_WOULD_BLOCK {
+                    return None;
+                }
+                break;
+            }
+            let n = (reply.words[2] as usize).min(chunk);
+            if n == 0 {
+                break;
+            }
+            for i in 0..n {
+                out[total + i] = ((reply.words[3] >> (i * 8)) & 0xFF) as u8;
+            }
+            total += n;
+            if n < chunk {
+                break;
+            }
+        }
+        Some(total)
+    }
+
+    fn pty_hangup(shell: &Shell) -> ! {
+        // Only children launched by this shell receive the normal TTY hangup.
+        // Reuse the existing signal path; never signal unrelated session PIDs.
+        for &pid in &shell.fg_pids {
+            let _ = sunlight_libc::kill(pid, 1);
+        }
+        if let Some(pid) = shell.fg_pid {
+            if !shell.fg_pids.contains(&pid) {
+                let _ = sunlight_libc::kill(pid, 1);
+            }
+        }
+        sunlight_libc::exit(129)
+    }
+
+    fn pty_write_shell_output(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        short: &[u8],
+    ) {
+        if unsafe { LONG_OUT_ACTIVE } {
+            let len = unsafe { LONG_OUT_LEN };
+            if len > 0 {
+                unsafe {
+                    let _ = pty_write(
+                        service_cap,
+                        slave_cap,
+                        session_id,
+                        generation,
+                        &LONG_OUT_BUF[..len],
+                    );
+                }
+            }
+            long_out_reset();
+            return;
+        }
+        if !short.is_empty() {
+            let _ = pty_write(service_cap, slave_cap, session_id, generation, short);
+        }
+    }
+
+    fn pty_write_prompt(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        shell: &Shell,
+    ) {
+        let mut buf = [0u8; 128];
+        let len = build_prompt(shell, &mut buf);
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..len]);
+    }
+
+    /// Send OSC 9001;prompt;TEXT sequence so the terminal emulator shows
+    /// the prompt text in its footer input bar.
+    fn send_osc_prompt(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        shell: &Shell,
+    ) {
+        let mut buf = [0u8; 192];
+        let mut n = 0;
+        for &b in b"\x1b]9001;prompt;" {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        let mut pbuf = [0u8; 128];
+        let plen = build_prompt(shell, &mut pbuf);
+        for &b in &pbuf[..plen] {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        if n < buf.len() {
+            buf[n] = 0x07; // BEL = OSC terminator
+            n += 1;
+        }
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..n]);
+    }
+
+    /// Send OSC 9001;app_start;NAME so the terminal shows the app indicator
+    /// in the footer and routes all keystrokes directly to the PTY.
+    fn send_osc_app_start(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+        name: &[u8],
+    ) {
+        let mut buf = [0u8; 64];
+        let mut n = 0;
+        for &b in b"\x1b]9001;app_start;" {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        for &b in name {
+            if n < buf.len() {
+                buf[n] = b;
+                n += 1;
+            }
+        }
+        if n < buf.len() {
+            buf[n] = 0x07;
+            n += 1;
+        }
+        let _ = pty_write(service_cap, slave_cap, session_id, generation, &buf[..n]);
+    }
+
+    /// Send OSC 9001;app_done so the terminal exits app mode and shows the
+    /// prompt+input footer again.
+    fn send_osc_app_done(
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+        session_id: u64,
+        generation: u64,
+    ) {
+        let _ = pty_write(
+            service_cap,
+            slave_cap,
+            session_id,
+            generation,
+            b"\x1b]9001;app_done\x07",
+        );
+    }
+
+    fn emit_welcome_banner() {
+        unsafe {
+            LONG_OUT_ACTIVE = true;
+            LONG_OUT_LEN = 0;
+        }
+        long_out_push_str("\x1b[36m");
+        long_out_push_str("Welcome to SunlightOS\n");
+        long_out_push_str("\x1b[0m");
+        long_out_push_str("Type commands at the prompt below.\n");
+        long_out_push_str("\n");
+    }
+
+    fn parse_shell_id_token(token: &[u8]) -> Option<u64> {
+        let base_start = token
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let base = &token[base_start..];
+        if !base.starts_with(b"sshl") {
+            return None;
+        }
+        parse_u64_bytes(&base[4..])
+    }
+
+    fn start_pty_shell(
+        shell_id: u64,
+        uid: u32,
+        gid: u32,
+        session_id: u64,
+        generation: u64,
+        service_cap: CapabilityToken,
+        slave_cap: CapabilityToken,
+    ) -> ! {
+        debug_log("[PTY-SHELL] starting PTY slave mode");
+        unsafe {
+            PTY_OUTPUT_BUFFER = sunlight_ipc::pty::PtyBuffer::new().ok();
+        }
+
+        let binding = ipc_call(
+            service_cap,
+            IpcMsg::with_label(PtyMsg::BIND_FOREGROUND_OWNER)
+                .word(0, session_id)
+                .word(1, generation)
+                .with_cap(0, slave_cap),
+        );
+        if binding.label != PtyMsg::REPLY {
+            sunlight_libc::exit(1);
+        }
+        let mut shell = Shell::new();
+        shell.load_user_by_uid(uid);
+        shell.uid = uid;
+        shell.gid = gid;
+        shell.init_env();
+
+        // Send welcome banner as content output, then prompt via OSC.
+        // The terminal shows content in the scroll area and the prompt in the footer.
+        emit_welcome_banner();
+        pty_write_shell_output(service_cap, slave_cap, session_id, generation, &[]);
+        send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
+        debug_log("[PTY-SHELL] welcome+prompt written to PTY master_out\n");
+
+        let shell_tab = shell_id as u32;
+        let mut in_buf = [0u8; 64];
+        let mut foreground_scope = 0;
+        let mut child_buf = [0u8; PtyMsg::BULK_BYTES];
+        // Track what the user is typing so we can extract the app name when it launches.
+        let mut cmd_buf = [0u8; 64];
+        let mut cmd_len = 0usize;
+        #[cfg(feature = "native-tests")]
+        let mut live_trace = false;
+
+        loop {
+            let mut progress = false;
+
+            if let Some(pid) = shell.fg_pid {
+                // Relay foreground app stdout to the terminal content area.
+                let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
+                #[cfg(feature = "native-tests")]
+                if live_trace {
+                    debug_log(&alloc::format!(
+                        "[SSHL-LIVE] relay pid={} tab={} pulled={}",
+                        pid,
+                        shell_tab,
+                        pulled
+                    ));
+                    live_trace = false;
+                }
+                if pulled > 0 {
+                    if pty_write(
+                        service_cap,
+                        slave_cap,
+                        session_id,
+                        generation,
+                        &child_buf[..pulled],
+                    ) != pulled
+                    {
+                        pty_hangup(&shell);
+                    }
+                    progress = true;
+                }
+                // Forward keystrokes from terminal (app mode) to the app's stdin.
+                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf)
+                else {
+                    pty_hangup(&shell);
+                };
+                if n > 0 {
+                    let _ = tty_stdin_push(shell_tab, &in_buf[..n]);
+                    progress = true;
+                }
+                if let Ok(Some(code)) = sunlight_libc::try_waitpid(pid) {
+                    loop {
+                        let pulled = tty_stdout_pull(shell_tab, &mut child_buf);
+                        if pulled == 0 {
+                            break;
+                        }
+                        if pty_write(
+                            service_cap,
+                            slave_cap,
+                            session_id,
+                            generation,
+                            &child_buf[..pulled],
+                        ) != pulled
+                        {
+                            pty_hangup(&shell);
+                        }
+                    }
+                    shell.fg_pid = None;
+                    for child_pid in shell.fg_pids.drain(..).filter(|p| *p != pid) {
+                        let _ = sunlight_libc::waitpid(child_pid);
+                    }
+                    let cancellation = sunlight_ipc::foreground(1, 0);
+                    let code = match cancellation {
+                        2 => 130,
+                        126 => 2,
+                        _ => code,
+                    };
+                    if foreground_scope != 0 {
+                        let _ = sunlight_ipc::foreground(2, foreground_scope);
+                        foreground_scope = 0;
+                    }
+                    shell.env.set("?", &alloc::format!("{}", code));
+                    // Tell terminal to exit app mode, add separator, then show new prompt.
+                    send_osc_app_done(service_cap, slave_cap, session_id, generation);
+                    let _ = pty_write(service_cap, slave_cap, session_id, generation, b"\n");
+                    send_osc_prompt(service_cap, slave_cap, session_id, generation, &shell);
+                    progress = true;
+                }
+            } else {
+                // Normal mode: receive complete lines from the terminal's footer input.
+                let Some(n) = pty_read(service_cap, slave_cap, session_id, generation, &mut in_buf)
+                else {
+                    pty_hangup(&shell);
+                };
+                if n > 0 {
+                    progress = true;
+                    for &byte in &in_buf[..n] {
+                        let is_enter = byte == b'\n' || byte == b'\r';
+
+                        // Accumulate command name for app_start OSC.
+                        if byte == 0x08 || byte == 0x7f {
+                            if cmd_len > 0 {
+                                cmd_len -= 1;
+                            }
+                        } else if !is_enter && byte >= 0x20 && byte <= 0x7e {
+                            if cmd_len < cmd_buf.len() {
+                                cmd_buf[cmd_len] = byte;
+                                cmd_len += 1;
+                            }
+                        }
+
+                        let fg_before = shell.fg_pid;
+                        long_out_reset();
+                        if is_enter {
+                            let id = sunlight_ipc::foreground(0, 0);
+                            if id == u64::MAX {
+                                sunlight_libc::exit(1);
+                            }
+                            foreground_scope = id;
+                        }
+                        let (out, out_len) = shell.handle_byte(byte);
+                        pty_write_shell_output(
+                            service_cap,
+                            slave_cap,
+                            session_id,
+                            generation,
+                            &out[..out_len],
+                        );
+
+                        if is_enter {
+                            if shell.fg_pid.is_none() && foreground_scope != 0 {
+                                let signal = sunlight_ipc::foreground(1, 0);
+                                if signal != 0 {
+                                    shell.env.set(
+                                        "?",
+                                        &alloc::format!(
+                                            "{}",
+                                            if signal == 126 { 2 } else { 128 + signal }
+                                        ),
+                                    );
+                                }
+                                let _ = sunlight_ipc::foreground(2, foreground_scope);
+                                foreground_scope = 0;
+                            }
+                            if shell.fg_pid.is_some() && fg_before.is_none() {
+                                #[cfg(feature = "native-tests")]
+                                {
+                                    live_trace =
+                                        cmd_buf[..cmd_len].starts_with(b"sshl --probe emit 65536");
+                                }
+                                // A foreground app just launched.
+                                let (name, name_len) = fg_app_name(&cmd_buf[..cmd_len]);
+                                send_osc_app_start(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    &name[..name_len],
+                                );
+                            } else if shell.fg_pid.is_none() {
+                                if cmd_len == 4 && &cmd_buf[..cmd_len] == b"exit" {
+                                    let _ = ipc_call(
+                                        service_cap,
+                                        IpcMsg::with_label(PtyMsg::CLOSE_SLAVE)
+                                            .word(0, session_id)
+                                            .word(1, generation)
+                                            .with_cap(0, slave_cap),
+                                    );
+                                    sunlight_ipc::process_exit::ProcessExit::exit(0);
+                                }
+                                // Command completed inline; separator then prompt.
+                                let _ = pty_write(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    b"\n",
+                                );
+                                send_osc_prompt(
+                                    service_cap,
+                                    slave_cap,
+                                    session_id,
+                                    generation,
+                                    &shell,
+                                );
+                            }
+                            cmd_len = 0;
+                        }
+                    }
+                }
+            }
+
+            if !progress {
+                process_yield();
+            }
+        }
+    }
+
+    fn is_pipeline_builtin(name: &str) -> bool {
+        matches!(
+            name,
+            "cd" | "z"
+                | "pwd"
+                | "useradd"
+                | "userdel"
+                | "groups"
+                | "chmod"
+                | "chown"
+                | "env"
+                | "export"
+                | "unset"
+                | "sysfetch"
+                | "hostnamectl"
+                | "uptime"
+                | "tzctl"
+                | "localectl"
+                | "help"
+                | "clear"
+                | "exit"
+        )
+    }
+
+    fn run_pipeline_builtin(raw: &[*const u8]) -> ! {
+        use sunlight_libc as ulibc;
+        long_out_reset();
+        let mut shell = Shell::new();
+        shell.uid = ulibc::getuid() as u32;
+        shell.gid = ulibc::getgid() as u32;
+        shell.load_user_by_uid(shell.uid);
+        shell.init_env();
+        // A pipeline builtin sees exactly the supplied child environment.
+        shell.env = native_script::context().env;
+        let mut cwd = [0u8; ulibc::MAX_PATH];
+        if let Ok(len) = ulibc::getcwd(&mut cwd) {
+            if let Ok(path) = core::str::from_utf8(&cwd[..len]) {
+                shell.cwd = alloc::string::String::from(path);
+            }
+        }
+        if raw.is_empty() {
+            ulibc::exit(127);
+        }
+        let mut owned = alloc::vec::Vec::with_capacity(raw.len());
+        for ptr in raw {
+            let len = unsafe { ulibc::crt0::cstr_len(*ptr, ulibc::MAX_PATH) };
+            let Ok(arg) = core::str::from_utf8(unsafe { core::slice::from_raw_parts(*ptr, len) })
+            else {
+                ulibc::exit(2);
+            };
+            owned.push(alloc::string::String::from(arg));
+        }
+        let name = owned[0].as_str();
+        if !is_pipeline_builtin(name) {
+            ulibc::exit(127);
+        }
+        let args: alloc::vec::Vec<&str> = owned.iter().skip(1).map(|s| s.as_str()).collect();
+        let output: &[u8] = match name {
+            "cd" => shell.cmd_cd(&args),
+            "z" => shell.cmd_z(&args),
+            "pwd" => shell.cmd_pwd(),
+            "useradd" => shell.cmd_useradd(&args),
+            "userdel" => shell.cmd_userdel(&args),
+            "groups" => shell.cmd_groups(&args),
+            "chmod" => shell.cmd_chmod(&args),
+            "chown" => shell.cmd_chown(&args),
+            "env" => shell.cmd_env(),
+            "export" => shell.cmd_export(&args),
+            "unset" => shell.cmd_unset(&args),
+            "sysfetch" => shell.cmd_sysfetch(),
+            "hostnamectl" => shell.cmd_hostnamectl(),
+            "uptime" => shell.cmd_uptime(),
+            "tzctl" => shell.cmd_tzctl(&args),
+            "localectl" => shell.cmd_localectl(&args),
+            "help" => b"Builtins: cd, pwd, useradd, userdel, groups, chmod, chown, env, export, unset, sysfetch, hostnamectl, uptime, tzctl, localectl, help, clear, exit\n",
+            "clear" => b"\x1b[2J\x1b[H",
+            "exit" => b"",
+            _ => b"",
+        };
+        let output = output.to_vec();
+        let is_long = unsafe { LONG_OUT_ACTIVE };
+        let result = if is_long {
+            let len = unsafe { LONG_OUT_LEN };
+            let bytes = unsafe { &LONG_OUT_BUF[..len] };
+            ulibc::write_all(ulibc::STDOUT, bytes)
+        } else {
+            ulibc::write_all(
+                if shell.builtin_status.get() != 0 {
+                    ulibc::STDERR
+                } else {
+                    ulibc::STDOUT
+                },
+                &output,
+            )
+        };
+        ulibc::exit(if result.is_err() {
+            1
+        } else if shell.builtin_status.get() != 0 {
+            1
+        } else {
+            0
+        });
+    }
+
+    #[cfg(feature = "native-tests")]
+    mod native_tests {
+        include!("native_tests.rs");
+    }
+
+    mod native_script {
+        include!("native_script.rs");
+    }
+
+    fn start_from_argv(argc: u64, argv: *const *const u8, envp: *const *const u8) -> ! {
+        sunlight_libc::env::init(envp);
+
+        let mut raw = [core::ptr::null::<u8>(); sunlight_libc::MAX_ARGS + 1];
+        let raw_count = unsafe { sunlight_libc::crt0::collect_raw_args(argc, argv, &mut raw) };
+        if raw_count >= 3 {
+            let len = unsafe { sunlight_libc::crt0::cstr_len(raw[1], 64) };
+            if unsafe { core::slice::from_raw_parts(raw[1], len) } == b"--pipeline-builtin" {
+                run_pipeline_builtin(&raw[2..raw_count]);
+            }
+        }
+        #[cfg(feature = "native-tests")]
+        if raw_count >= 2 {
+            let args = unsafe {
+                core::slice::from_raw_parts(raw[1], sunlight_libc::crt0::cstr_len(raw[1], 64))
+            };
+            if args == b"--probe" {
+                native_tests::probe(&raw[2..raw_count]);
+            }
+            if args == b"--native-tests" {
+                native_tests::suite();
+            }
+            if args == b"--script-tests" {
+                native_tests::script_suite();
+            }
+            if args == b"--pty-liveness-tests" {
+                native_tests::pty_liveness_suite();
+            }
+        }
+        if raw_count >= 2 {
+            let argument = unsafe {
+                core::slice::from_raw_parts(
+                    raw[1],
+                    sunlight_libc::crt0::cstr_len(raw[1], sunlight_libc::MAX_PATH),
+                )
+            };
+            if argument == b"-c" || !argument.starts_with(b"--") {
+                native_script::start(&raw[..raw_count]);
+            }
+        }
+        let mut shell_id = 0u64;
+        let mut pty_session = None;
+        let mut pty_generation = None;
+        let mut pty_service_cap = None;
+        let mut pty_slave_cap = None;
+
+        for (idx, ptr) in raw[..raw_count].iter().copied().enumerate() {
+            if ptr.is_null() {
+                continue;
+            }
+            let len = unsafe { sunlight_libc::crt0::cstr_len(ptr, 128) };
+            let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
+            if idx == 0 {
+                shell_id = parse_shell_id_token(bytes).unwrap_or(0);
+            } else if let Some(rest) = bytes.strip_prefix(b"--shell-id=") {
+                shell_id = parse_u64_bytes(rest).unwrap_or(shell_id);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-session=") {
+                pty_session = parse_u64_bytes(rest);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-generation=") {
+                pty_generation = parse_u64_bytes(rest);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-service-cap=") {
+                pty_service_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            } else if let Some(rest) = bytes.strip_prefix(b"--pty-slave-cap=") {
+                pty_slave_cap = parse_u64_bytes(rest).map(CapabilityToken);
+            }
+        }
+
+        if let (Some(session_id), Some(generation), Some(service_cap), Some(slave_cap)) =
+            (pty_session, pty_generation, pty_service_cap, pty_slave_cap)
+        {
+            start_pty_shell(
+                shell_id,
+                sunlight_libc::getuid() as u32,
+                sunlight_libc::getgid() as u32,
+                session_id,
+                generation,
+                service_cap,
+                slave_cap,
+            );
+        }
+        // A numbered shell spawned by another authenticated TTY shell uses the
+        // normal SysV argv entry path but does not carry PTY authority.
+        start_tty_shell(shell_id, sunlight_libc::getuid(), sunlight_libc::getgid());
+    }
+
+    fn start_tty_shell(shell_id: u64, uid: u64, gid: u64) -> ! {
+        debug_log("[TTY]  Shell: sshl v0.1.0 running");
+
+        let ep = endpoint_create();
+        if TRACE_SHELL_IPC {
+            debug_log("[SSHL-IPC] endpoint created");
+        }
+        let mut name_buf = [0u8; 16];
+        let name = shell_name(shell_id, &mut name_buf);
+        let numbered_registered = nameserver_register(name, ep);
+        let alias_registered = shell_id != 0 || nameserver_register("sshl", ep);
+        #[cfg(feature = "native-tests")]
+        if shell_id == 6 {
+            debug_log(&alloc::format!(
+                "[SSHL-AUTH] pid={} name={} registered={} alias={}",
+                sunlight_libc::getpid(),
+                name,
+                numbered_registered,
+                alias_registered
+            ));
+        }
+        if numbered_registered && alias_registered {
+            debug_log("[TTY]  sunshell registered as 'sshl'");
+        } else {
+            debug_log("[TTY]  FATAL: sunshell nameserver registration failed");
+        }
+        if TRACE_SHELL_IPC {
+            debug_log("[SSHL-IPC] registered with nameserver");
+        }
+
+        let mut shell = Shell::new();
+        // Load real user info from VFS by uid (GETPWUID returns uid, gid, AND username)
+        // This is more robust than hardcoded uid→username mapping
+        shell.load_user_by_uid(uid as u32);
+        // Seed PATH/USER/HOME/SHELL now that the user identity is resolved
+        shell.init_env();
+
+        emit_welcome_banner();
+
+        // First receive must be plain ipc_recv().
+        // Do not replace this with ipc_reply_and_wait(): at startup there is no current
+        // caller to reply to yet. Using reply_wait here previously caused the shell and
+        // TTY handshake to wedge after sshl registration — both sides waited forever.
+        let mut msg = ipc_recv(ep);
+        debug_ipc_msg("[SSHL-IPC] after first ipc_recv", &msg);
+        loop {
+            // Spawn additional TTY tabs from this already-authenticated shell.
+            // The normal spawn syscall inherits uid/gid, environment, and the
+            // restricted capability profile; no login grant is reused.
+            if msg.label == ShellMsg::SPAWN_TAB {
+                let new_shell_id = msg.words[0];
+                let reply = if new_shell_id == 0 || new_shell_id > u8::MAX as u64 {
+                    IpcMsg::with_label(ShellMsg::ERROR)
+                } else {
+                    let mut path = [0u8; 32];
+                    let prefix = b"/bin/sshl";
+                    path[..prefix.len()].copy_from_slice(prefix);
+                    let path_len =
+                        prefix.len() + fmt_u64_into(&mut path[prefix.len()..], new_shell_id);
+                    match sunlight_libc::spawn(&path[..path_len], &[&path[..path_len]], None) {
+                        Ok(pid) => IpcMsg::with_label(ShellMsg::TAB_SPAWNED).word(0, pid),
+                        Err(_) => IpcMsg::with_label(ShellMsg::ERROR),
+                    }
+                };
+                msg = ipc_reply_and_wait(ep, reply);
+                continue;
+            }
+
+            // Drain request from tty_server: send the next chunk of long output
+            if msg.label == DRAIN_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling DRAIN_LABEL", &msg);
+                let total = unsafe { LONG_OUT_LEN };
+                let offset = msg.words[0] as usize * IPC_OUTPUT_BYTES;
+                if offset >= total {
+                    // Nothing more — return empty marker
+                    let reply = IpcMsg::with_label(OUTPUT_LABEL).word(0, 0).word(1, 0);
+                    debug_ipc_msg("[SSHL-IPC] returning empty output", &reply);
+                    msg = ipc_reply_and_wait(ep, reply);
+                    debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
+                    continue;
+                }
+                let remaining = total - offset;
+                let chunk_size = remaining.min(IPC_OUTPUT_BYTES);
+                let mut tmp = [0u8; IPC_OUTPUT_BYTES];
+                unsafe {
+                    tmp[..chunk_size].copy_from_slice(&LONG_OUT_BUF[offset..offset + chunk_size]);
+                }
+                let more_remaining = remaining.saturating_sub(chunk_size);
+                let chunk_reply = pack_long_output(&tmp[..chunk_size], more_remaining);
+                debug_ipc_msg("[SSHL-IPC] replying OUTPUT_LABEL", &chunk_reply);
+                msg = ipc_reply_and_wait(ep, chunk_reply);
+                debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
+                continue;
+            }
+
+            // tty_server reports the foreground command exited. Reap the child,
+            // record its exit code in `$?`, and reply empty so tty_server
+            // redraws the prompt.
+            if msg.label == FG_DONE_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling FG_DONE_LABEL", &msg);
+                // We are the child's parent: reap it to get the real exit code
+                // (tty_server only knows it died, not the code).
+                let mut code = 1;
+                let final_pid = shell.fg_pid.take();
+                let mut final_reaped = false;
+                for child_pid in shell.fg_pids.drain(..) {
+                    let status = match sunlight_libc::try_waitpid(child_pid) {
+                        Ok(Some(status)) => Ok(status),
+                        Ok(None) => sunlight_libc::waitpid(child_pid),
+                        Err(error) => Err(error),
+                    };
+                    if Some(child_pid) == final_pid {
+                        code = status.unwrap_or(1);
+                        final_reaped = true;
+                    }
+                }
+                if let Some(pid) = final_pid.filter(|_| !final_reaped) {
+                    code = sunlight_libc::waitpid(pid).unwrap_or(1);
+                }
+                shell.env.set("?", &alloc::format!("{}", code));
+                long_out_reset();
+                msg = ipc_reply_and_wait(ep, IpcMsg::with_label(FG_DONE_LABEL).word(0, code));
+                debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
+                continue;
+            }
+
+            // Kbd event
+            let reply = if msg.label == KBD_LABEL {
+                debug_ipc_msg("[SSHL-IPC] handling KBD_LABEL", &msg);
+                let byte = msg.words[0] as u8;
+                let is_enter = byte == b'\n' || byte == b'\r';
+                let is_poll = byte == 0;
+                // Snapshot the full command (with args) BEFORE handle_byte
+                // resets line_len to 0 on Enter. This is what gets logged.
+                let cmd_snap_len = if is_enter { shell.line_len } else { 0 };
+                let mut cmd_snap = [0u8; MAX_LINE];
+                if is_enter {
+                    cmd_snap[..cmd_snap_len].copy_from_slice(&shell.line[..cmd_snap_len]);
+                }
+                let mut out = [0u8; MAX_OUT];
+                let mut out_len = 0usize;
+                let foreground_before_input = shell.fg_pid;
+                if !is_poll {
+                    long_out_reset();
+                    let handled = shell.handle_byte(byte);
+                    out = handled.0;
+                    out_len = handled.1;
+                }
+                if out_len > 0 {
+                    debug_log_cmd_output(&cmd_snap[..cmd_snap_len], &out[..out_len]);
+                }
+                // Recover from a missed FG_DONE only when this foreground PID
+                // was already present before handling the current key. A fast
+                // command can spawn, write its output, and exit before spawn()
+                // returns; that newly-created PID must still be announced to
+                // tty_server so it can perform the final stdout-ring drain.
+                if let Some(pid) = shell.fg_pid {
+                    let is_alive = sunlight_ipc::process_is_alive(pid);
+                    if crate::should_clear_stale_foreground(foreground_before_input, pid, is_alive)
+                    {
+                        shell.fg_pid = None;
+                    }
+                }
+                if let Some(pid) = shell.fg_pid {
+                    // An external command was launched as a foreground job. Tell
+                    // tty_server, which drives the session until the child exits.
+                    // Pack the command's basename so the tab bar can show it:
+                    // word(0)=pid, word(1)=name len, words[2..]=name (8 bytes/word).
+                    let (name, name_len) = fg_app_name(&cmd_snap[..cmd_snap_len]);
+                    let mut fg = IpcMsg::with_label(FG_STARTED_LABEL)
+                        .word(0, pid)
+                        .word(1, name_len as u64);
+                    let mut wi = 2usize;
+                    let mut ni = 0usize;
+                    while ni < name_len && wi < 8 {
+                        let mut chunk = [0u8; 8];
+                        let mut bi = 0usize;
+                        while bi < 8 && ni < name_len {
+                            chunk[bi] = name[ni];
+                            ni += 1;
+                            bi += 1;
+                        }
+                        fg = fg.word(wi, u64::from_le_bytes(chunk));
+                        wi += 1;
+                    }
+                    fg
+                } else if cmd_snap_len == 4 && &cmd_snap[..cmd_snap_len] == b"exit" {
+                    IpcMsg::with_label(EXIT_LABEL)
+                } else if unsafe { LONG_OUT_ACTIVE } {
+                    let total = unsafe { LONG_OUT_LEN };
+                    let chunk_size = total.min(IPC_OUTPUT_BYTES);
+                    let mut tmp = [0u8; IPC_OUTPUT_BYTES];
+                    unsafe {
+                        tmp[..chunk_size].copy_from_slice(&LONG_OUT_BUF[..chunk_size]);
+                    }
+                    let more_remaining = total.saturating_sub(chunk_size);
+                    pack_long_output(&tmp[..chunk_size], more_remaining)
+                } else if out_len > IPC_OUTPUT_BYTES {
+                    long_out_replace(&out[..out_len]);
+                    let chunk_size = out_len.min(IPC_OUTPUT_BYTES);
+                    let more_remaining = out_len.saturating_sub(chunk_size);
+                    pack_long_output(&out[..chunk_size], more_remaining)
+                } else {
+                    pack_output(&out[..out_len])
+                }
+            } else {
+                IpcMsg::with_label(0)
+            };
+            debug_ipc_msg("[SSHL-IPC] replying", &reply);
+            msg = ipc_reply_and_wait(ep, reply);
+            debug_ipc_msg("[SSHL-IPC] after reply_wait", &msg);
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn _start(a: u64, b: u64, c: u64) -> ! {
+        if b > 0x1000 {
+            start_from_argv(a, b as *const *const u8, c as *const *const u8);
+        }
+        start_tty_shell(a, b, c);
+    }
+
+    /// Extract the application name shown in the tab bar from a command line:
+    /// the first whitespace-delimited token, reduced to its basename
+    /// (text after the last '/'). Returns a fixed buffer + length.
+    fn fg_app_name(cmd: &[u8]) -> ([u8; 24], usize) {
+        // Skip leading whitespace.
+        let start = cmd
+            .iter()
+            .position(|&b| b != b' ' && b != b'\t')
+            .unwrap_or(cmd.len());
+        let rest = &cmd[start..];
+        // Take up to the next whitespace -> the command token.
+        let end = rest
+            .iter()
+            .position(|&b| b == b' ' || b == b'\t')
+            .unwrap_or(rest.len());
+        let token = &rest[..end];
+        // Basename: text after the last '/'.
+        let base_start = token
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let base = &token[base_start..];
+        let mut out = [0u8; 24];
+        let n = base.len().min(24);
+        out[..n].copy_from_slice(&base[..n]);
+        (out, n)
+    }
+
+    fn debug_log_cmd_output(cmd: &[u8], output: &[u8]) {
+        let mut buf = [0u8; 128];
+        let prefix = b"[TTY]  cmd: ";
+        let mut pos = prefix.len();
+        buf[..pos].copy_from_slice(prefix);
+        let clen = cmd.len().min(64);
+        buf[pos..pos + clen].copy_from_slice(&cmd[..clen]);
+        pos += clen;
+        let arrow = b" -> ";
+        buf[pos..pos + arrow.len()].copy_from_slice(arrow);
+        pos += arrow.len();
+        let olen = output.len().min(64);
+        // Remove trailing newline for log
+        let olen = if olen > 0 && output[olen - 1] == b'\n' {
+            olen - 1
+        } else {
+            olen
+        };
+        buf[pos..pos + olen].copy_from_slice(&output[..olen]);
+        pos += olen;
+        if let Ok(s) = core::str::from_utf8(&buf[..pos]) {
+            debug_log(s);
+        }
+    }
+}
+
+#[cfg(feature = "sunlight")]
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    loop {}
+}
+
+#[cfg(all(test, feature = "std"))]
+mod status_tests {
+    use super::*;
+    #[test]
+    fn records_real_errors_and_does_not_reset_on_empty_input() {
+        let mut env = shellenv::ShellEnv::new();
+        let executor = PosixExecutor;
+        for (line, status) in [
+            ("echo hello", 0),
+            ("definitely-missing-sshl-command", 127),
+            ("printf x | definitely-missing-sshl-command | cat", 127),
+            ("/tmp", 126),
+            ("cat < /definitely-missing-sshl-dir/input", 1),
+            ("printf x | cat > /definitely-missing-sshl-dir/output", 1),
+            ("sh -c 'exit 9' | sh -c 'exit 3'", 3),
+            ("cd /definitely-missing-sshl-dir", 1),
+            ("echo 'broken", 2),
+        ] {
+            assert_eq!(
+                run_command(line, &mut env, &executor),
+                Some(status),
+                "{line}"
+            );
+            assert_eq!(env.get("?"), Some(status.to_string().as_str()));
+        }
+        assert_eq!(run_command("", &mut env, &executor), None);
+        assert_eq!(env.get("?"), Some("2"));
+    }
+}

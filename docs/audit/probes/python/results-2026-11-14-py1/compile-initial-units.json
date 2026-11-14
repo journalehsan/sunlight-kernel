@@ -1,0 +1,1069 @@
+{
+  "attempted": 177,
+  "success": 130,
+  "failed": 47,
+  "units": [
+    {
+      "object": "Programs/python.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Programs/python.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Programs/python.o /tmp/sunlight-py1-cpython/Python-3.13.0/Programs/python.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/token.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/token.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/token.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/token.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/pegen.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/pegen.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/pegen.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/pegen.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/pegen_errors.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/pegen_errors.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/pegen_errors.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/pegen_errors.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/action_helpers.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/action_helpers.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/action_helpers.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/action_helpers.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Parser/string_parser.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/string_parser.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/string_parser.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/string_parser.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Parser/peg_api.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/peg_api.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/peg_api.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/peg_api.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/lexer/buffer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/buffer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/lexer/buffer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/buffer.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/lexer/lexer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/lexer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/lexer/lexer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/lexer.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/lexer/state.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/state.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/lexer/state.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/lexer/state.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/tokenizer/file_tokenizer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/file_tokenizer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/tokenizer/file_tokenizer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/file_tokenizer.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Parser/tokenizer/readline_tokenizer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/readline_tokenizer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/tokenizer/readline_tokenizer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/readline_tokenizer.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Parser/tokenizer/string_tokenizer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/string_tokenizer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/tokenizer/string_tokenizer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/string_tokenizer.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/tokenizer/utf8_tokenizer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/utf8_tokenizer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/tokenizer/utf8_tokenizer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/utf8_tokenizer.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Parser/tokenizer/helpers.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/helpers.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/tokenizer/helpers.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/helpers.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Parser/myreadline.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/myreadline.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Parser/myreadline.o /tmp/sunlight-py1-cpython/Python-3.13.0/Parser/myreadline.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/abstract.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/abstract.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/abstract.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/abstract.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/boolobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/boolobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/boolobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/boolobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/bytes_methods.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytes_methods.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/bytes_methods.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytes_methods.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/bytearrayobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytearrayobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/bytearrayobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytearrayobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/bytesobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytesobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/bytesobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/bytesobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/call.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/call.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/call.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/call.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/capsule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/capsule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/capsule.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/capsule.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/cellobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/cellobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/cellobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/cellobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/classobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/classobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/classobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/classobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/codeobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/codeobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/codeobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/codeobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/complexobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/complexobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/descrobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/descrobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/descrobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/descrobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/enumobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/enumobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/enumobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/enumobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/exceptions.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/exceptions.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/exceptions.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/exceptions.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/genericaliasobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/genericaliasobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/genericaliasobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/genericaliasobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/genobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/genobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/genobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/genobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/fileobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/fileobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/fileobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/fileobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/floatobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/floatobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/frameobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/frameobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/frameobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/frameobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/funcobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/funcobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/funcobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/funcobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/iterobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/iterobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/iterobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/iterobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/listobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/listobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/listobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/listobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/longobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/longobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/longobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/longobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/dictobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/dictobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/dictobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/dictobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/odictobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/odictobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/odictobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/odictobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/memoryobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/memoryobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/memoryobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/memoryobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/methodobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/methodobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/methodobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/methodobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/moduleobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/moduleobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/moduleobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/moduleobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/namespaceobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/namespaceobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/namespaceobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/namespaceobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/object.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/object.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/object.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/object.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/obmalloc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/obmalloc.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/picklebufobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/picklebufobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/picklebufobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/picklebufobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/rangeobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/rangeobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/rangeobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/rangeobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/setobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/setobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/setobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/setobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/sliceobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/sliceobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/sliceobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/sliceobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/structseq.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/structseq.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/structseq.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/structseq.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/tupleobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/tupleobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/tupleobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/tupleobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/typeobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/typeobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/typeobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/typeobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/typevarobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/typevarobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/typevarobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/typevarobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/unicodeobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/unicodeobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodeobject.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Objects/unicodectype.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodectype.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/unicodectype.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unicodectype.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/unionobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unionobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/unionobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/unionobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Objects/weakrefobject.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/weakrefobject.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/weakrefobject.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/weakrefobject.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/_warnings.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/_warnings.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/_warnings.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/_warnings.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/Python-ast.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/Python-ast.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/Python-ast.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/Python-ast.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/Python-tokenize.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/Python-tokenize.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/Python-tokenize.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/Python-tokenize.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/asdl.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/asdl.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/asdl.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/asdl.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/assemble.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/assemble.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/assemble.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/assemble.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/ast.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/ast.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/ast_opt.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast_opt.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/ast_opt.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast_opt.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/ast_unparse.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast_unparse.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/ast_unparse.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/ast_unparse.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/bltinmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/bltinmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/bltinmodule.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/bltinmodule.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/brc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/brc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/brc.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/brc.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/ceval.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/ceval.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/ceval.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/ceval.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/codecs.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/codecs.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/codecs.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/codecs.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/compile.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/compile.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/compile.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/compile.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/context.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/context.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/context.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/context.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/critical_section.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/critical_section.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/critical_section.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/critical_section.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/crossinterp.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/crossinterp.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/crossinterp.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/crossinterp.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/dynamic_annotations.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/dynamic_annotations.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/dynamic_annotations.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/dynamic_annotations.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/errors.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/errors.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/errors.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/errors.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/flowgraph.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/flowgraph.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/flowgraph.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/flowgraph.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/frame.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/frame.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/frame.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/frame.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/frozenmain.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/frozenmain.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/frozenmain.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/frozenmain.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/future.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/future.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/future.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/future.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/gc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/gc.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/gc_free_threading.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc_free_threading.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/gc_free_threading.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc_free_threading.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/gc_gil.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc_gil.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/gc_gil.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/gc_gil.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getargs.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getargs.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/getargs.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getargs.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getcompiler.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getcompiler.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/getcompiler.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getcompiler.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getcopyright.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getcopyright.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/getcopyright.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getcopyright.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getplatform.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getplatform.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -DPLATFORM='\"sunlightos\"' -o Python/getplatform.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getplatform.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getversion.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getversion.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/getversion.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getversion.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/ceval_gil.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/ceval_gil.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/ceval_gil.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/ceval_gil.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/hamt.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/hamt.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/hamt.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/hamt.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/hashtable.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/hashtable.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/hashtable.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/hashtable.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/import.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/import.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/import.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/import.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/importdl.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/importdl.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -I. -o Python/importdl.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/importdl.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/initconfig.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/initconfig.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/initconfig.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/interpconfig.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/interpconfig.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/interpconfig.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/interpconfig.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/instrumentation.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/instrumentation.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/instrumentation.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/instrumentation.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/instruction_sequence.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/instruction_sequence.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/instruction_sequence.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/instruction_sequence.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/intrinsics.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/intrinsics.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/intrinsics.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/intrinsics.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/jit.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/jit.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/jit.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/jit.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/legacy_tracing.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/legacy_tracing.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/legacy_tracing.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/legacy_tracing.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/lock.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/lock.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/lock.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/lock.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/marshal.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/marshal.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/marshal.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/marshal.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/modsupport.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/modsupport.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/modsupport.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/modsupport.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/mysnprintf.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/mysnprintf.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/mysnprintf.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/mysnprintf.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/mystrtoul.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/mystrtoul.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/mystrtoul.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/mystrtoul.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/object_stack.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/object_stack.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/object_stack.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/object_stack.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/optimizer.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/optimizer.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/optimizer_analysis.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer_analysis.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/optimizer_analysis.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer_analysis.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/optimizer_symbols.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer_symbols.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/optimizer_symbols.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/optimizer_symbols.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/parking_lot.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/parking_lot.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/parking_lot.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/parking_lot.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pathconfig.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pathconfig.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/preconfig.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/preconfig.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/preconfig.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/preconfig.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/pyarena.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyarena.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pyarena.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyarena.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pyctype.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyctype.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pyctype.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyctype.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pyfpe.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyfpe.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pyfpe.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyfpe.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pyhash.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyhash.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pyhash.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pyhash.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pylifecycle.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pylifecycle.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/pymath.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pymath.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pymath.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pymath.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pystate.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystate.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pystate.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystate.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pythonrun.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pythonrun.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pythonrun.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pythonrun.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pytime.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pytime.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pytime.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/qsbr.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/qsbr.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/qsbr.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/qsbr.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/bootstrap_hash.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/bootstrap_hash.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/bootstrap_hash.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/bootstrap_hash.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/specialize.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/specialize.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/specialize.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/specialize.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/structmember.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/structmember.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/structmember.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/structmember.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/symtable.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/symtable.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/symtable.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/symtable.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/sysmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE  \t-DABIFLAGS='\"\"'  \t  \t-o Python/sysmodule.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/sysmodule.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/thread.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/thread.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/thread.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/thread.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/traceback.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/traceback.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/traceback.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/traceback.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/tracemalloc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/tracemalloc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/tracemalloc.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/tracemalloc.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/getopt.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/getopt.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/getopt.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/pystrcmp.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrcmp.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pystrcmp.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrcmp.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/pystrtod.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrtod.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pystrtod.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrtod.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/pystrhex.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrhex.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/pystrhex.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrhex.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/dtoa.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/dtoa.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -fno-strict-aliasing -o Python/dtoa.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/dtoa.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/formatter_unicode.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/formatter_unicode.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/fileutils.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/fileutils.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/fileutils.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/suggestions.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/suggestions.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/suggestions.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/suggestions.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/perf_trampoline.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/perf_trampoline.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/perf_trampoline.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/perf_trampoline.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/perf_jit_trampoline.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/perf_jit_trampoline.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/perf_jit_trampoline.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/perf_jit_trampoline.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Python/dynload_shlib.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/dynload_shlib.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE  \t-DSOABI='\"cpython-313\"'  \t-o Python/dynload_shlib.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/dynload_shlib.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/dup2.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/dup2.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/dup2.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/dup2.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/config.o",
+      "source": "Modules/config.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Modules/config.o Modules/config.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/main.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Modules/main.o /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/main.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/gcmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/gcmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Modules/gcmodule.o /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/gcmodule.c",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/atexitmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/atexitmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/atexitmodule.c -o Modules/atexitmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/faulthandler.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/faulthandler.c -o Modules/faulthandler.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/posixmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c -o Modules/posixmodule.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/signalmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/signalmodule.c -o Modules/signalmodule.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/_tracemalloc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_tracemalloc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_tracemalloc.c -o Modules/_tracemalloc.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_suggestions.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_suggestions.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_suggestions.c -o Modules/_suggestions.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_codecsmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_codecsmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_codecsmodule.c -o Modules/_codecsmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_collectionsmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_collectionsmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_collectionsmodule.c -o Modules/_collectionsmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/errnomodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/errnomodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/errnomodule.c -o Modules/errnomodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_io/_iomodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/_iomodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/_iomodule.c -o Modules/_io/_iomodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_io/iobase.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/iobase.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/iobase.c -o Modules/_io/iobase.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_io/fileio.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/fileio.c -o Modules/_io/fileio.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/_io/bytesio.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/bytesio.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/bytesio.c -o Modules/_io/bytesio.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_io/bufferedio.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/bufferedio.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/bufferedio.c -o Modules/_io/bufferedio.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/_io/textio.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/textio.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/textio.c -o Modules/_io/textio.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_io/stringio.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/stringio.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -I/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_io/stringio.c -o Modules/_io/stringio.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/itertoolsmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/itertoolsmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/itertoolsmodule.c -o Modules/itertoolsmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_sre/sre.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_sre/sre.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_sre/sre.c -o Modules/_sre/sre.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_sysconfig.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_sysconfig.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_sysconfig.c -o Modules/_sysconfig.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_threadmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_threadmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_threadmodule.c -o Modules/_threadmodule.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/timemodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c -o Modules/timemodule.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/_typingmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_typingmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_typingmodule.c -o Modules/_typingmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_weakref.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_weakref.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_weakref.c -o Modules/_weakref.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_abc.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_abc.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_abc.c -o Modules/_abc.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_functoolsmodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_functoolsmodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_functoolsmodule.c -o Modules/_functoolsmodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_localemodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_localemodule.c -o Modules/_localemodule.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/_operator.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_operator.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_operator.c -o Modules/_operator.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/_stat.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/_stat.c -o Modules/_stat.o",
+      "status": "FAIL"
+    },
+    {
+      "object": "Modules/symtablemodule.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/symtablemodule.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py  -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/symtablemodule.c -o Modules/symtablemodule.o",
+      "status": "PASS"
+    },
+    {
+      "object": "Modules/getpath.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -DPYTHONPATH='\"\"'  \t-DPREFIX='\"/usr/local\"'  \t-DEXEC_PREFIX='\"/usr/local\"'  \t-DVERSION='\"3.13\"'  \t-DVPATH='\"/tmp/sunlight-py1-cpython/Python-3.13.0\"'  \t-DPLATLIBDIR='\"lib\"'  \t-DPYTHONFRAMEWORK='\"\"'  \t-o Modules/getpath.o /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c",
+      "status": "FAIL"
+    },
+    {
+      "object": "Python/frozen.o",
+      "source": "/tmp/sunlight-py1-cpython/Python-3.13.0/Python/frozen.c",
+      "command": "python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Python/frozen.o /tmp/sunlight-py1-cpython/Python-3.13.0/Python/frozen.c",
+      "status": "PASS"
+    }
+  ]
+}

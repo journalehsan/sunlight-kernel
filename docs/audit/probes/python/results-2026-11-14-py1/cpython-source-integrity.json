@@ -1,0 +1,17 @@
+{
+  "changed": [
+    "configure",
+    "config.sub"
+  ],
+  "missing": [],
+  "expected_changes": [
+    "config.sub",
+    "configure"
+  ],
+  "matches": true,
+  "patched_file_hashes": {
+    "configure": "5d1c3bb8f3df7e47e00b7fb5d3ede00ec6c4c407d005609dce940a11bafc1a6f",
+    "config.sub": "1c940f8d6a7c893a3724bc446278aa734859926aaa41f7f0cc176abe42ea9ebd"
+  },
+  "added_files": []
+}

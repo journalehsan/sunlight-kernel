@@ -1,0 +1,33 @@
+{
+  "source": "final/validated-source.json",
+  "executions": "final/validated-executions.json",
+  "source_integrity": "source-integrity.json",
+  "fixtures": {
+    "docs/audit/probes/python/results-2026-11-14-py6/baseline.py": "2ac44bb06c30d9e6ec6a0abc7461fa274d98941dab2432f4674febbdb4406d54",
+    "docs/audit/probes/python/results-2026-11-14-py6/implement-foundation.py": "4a68a0cfe6cefe8a3fa0b7e9ea044cc1c50e4011d0a0789e8a6a5a1d0f474445",
+    "docs/audit/probes/python/results-2026-11-14-py6/implement-native.py": "4680c3a92a26147d905f1e94d4ae2a8d707c82fb4e21cc890c3825dedce10bca",
+    "docs/audit/probes/python/results-2026-11-14-py6/implement-clients.py": "28337ad44a9bb261fa9eaaf45092601c7f6366115c5ad5f86c97fc307a6e17e2",
+    "docs/audit/probes/python/results-2026-11-14-py6/filesystem-test.c": "22217301b19594822009bdfaed60ee9fdf235b1600249ed2312c496cd02a01d1",
+    "docs/audit/probes/python/results-2026-11-14-py6/compile.py": "9a7c3c135a1014eb0a5063037e8bc334950e9061f2400ff6f57b641d61ad6c4a",
+    "docs/audit/probes/python/results-2026-11-14-py6/realpath-abi.cpp": "7ce30267bb0fadcf89ef52b9ee5fd9eada651a353579ca9137847ec033ba4ecf",
+    "docs/audit/probes/python/results-2026-11-14-py6/lexical-probe.py": "5396842c27f439af4ae3b9a42afde4464795d6ec51bdfe24d0c2dc4f886f26a8",
+    "docs/audit/probes/python/results-2026-11-14-py6/initial-lexical-source-extract.rs": "d74c3132cc353ce525950a525fcfaff32fca7e9f52fbb84792a8d9d620187cc9",
+    "docs/audit/probes/python/results-2026-11-14-py6/lexical-source-extract.rs": "d0b23a9333f59f83fb461514d9be790f1b4d6076de600fe439adaa8634743e96",
+    "docs/audit/probes/python/results-2026-11-14-py6/fat-lifetime-negative.rs": "aecbcd2ad65ec2afbd539b4b4a4587cdab83fc1faaf23a1e6db5f3f580992365",
+    "docs/audit/probes/python/results-2026-11-14-py6/run-validation.py": "bade52c7526a3e8ec67777e712f1d20f13454dc9d0cc6b0cd9fb138f8c19618b",
+    "docs/audit/probes/python/results-2026-11-14-py6/preserve-baseline.py": "62e43160737d0fda4c968451d4e7d5257392347367d13765b89f8bedca2482f7",
+    "docs/audit/probes/python/results-2026-11-14-py6/chdir-search-before.c": "a8136e7f3587f38446797b6a7bd2b3c8d8fc51326f8cf36408102ccc671a1526",
+    "docs/audit/probes/python/results-2026-11-14-py6/filesystem-test-initial-combined.c": "2d2b71144ba447eb750fa053261e815be74c1d1b89a06af7133b67b82da40ac0",
+    "docs/audit/probes/python/results-2026-11-14-py6/format-fragments.py": "8647f4a976fddcd1bf04897f3df8c135f98f97ca7e7e29a9c317beb9d4188570",
+    "docs/audit/probes/python/results-2026-11-14-py6/run-final-validation.py": "25d18b96837ef82d1a17fb3b9ded2ee0c4b63bacbce0578d2d4a9966bb4e07a8",
+    "docs/audit/probes/python/results-2026-11-14-py6/compile-final.py": "bd3ff689eb8e12b4d1440d254588e045651b309e107b6aa1eae3851b005f55eb",
+    "docs/audit/probes/python/results-2026-11-14-py6/assess.py": "20e2906ca10ae289a65ff8644235c103a30f8633e3873ba990ea8fab7c9a8b67",
+    "docs/audit/probes/python/results-2026-11-14-py6/generate-report.py": "19247812a5e48772d23a8a86a8727ae1e458e7249f576896421e0af05a6e94e5"
+  },
+  "CPython": "final-cpython/compile-commands.json, object-manifest.json, configure-manifest.json; source-identity-final.json",
+  "negative_FAT": "fat-lifetime-negative.rs and fat-negative-Cargo.toml/lock; host-only actual backend probes, non-workspace temporary Cargo invocation; FAIL witnesses retained",
+  "mounts": "Native isolated guest is root Tmpfs only. /tmp is a directory; no native mount crossing proof",
+  "earlier_attempts": "Root-level runs precede final/ and are not used to pass final-source gates",
+  "Files_UI": "NOT_RUN",
+  "generation_exhaustion": "Host-only actual backend open/close cycles; no injected native token proof"
+}

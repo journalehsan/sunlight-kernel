@@ -1,0 +1,128 @@
+{
+  "status": "UNQUALIFIED",
+  "source_audit": {
+    "states": {
+      "0": "uninitialized",
+      "1": "initializing",
+      "2": "complete"
+    },
+    "election": "Acquire CAS 0 to 1",
+    "publication": "Release store 2, wake-all; Acquire load/CAS on readers",
+    "wait": "existing native_futex WAIT(expected=1) then retry; compare/register and wake serialized by scheduler lock",
+    "abandonment": "TCB stack-linked frames reset to 0 Release and wake-all on supported pthread_exit before TLS callbacks",
+    "callback_lock": "no internal lock across initializer",
+    "recursion": "same control cannot complete; finite bounded observation only",
+    "unsupported": [
+      "cancellation",
+      "longjmp/exception escape",
+      "raw thread syscall bypassing cleanup"
+    ]
+  },
+  "native_functional_runs": [
+    {
+      "run": "focused-cpu-1",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "029028010473a34e6fede7bc41fcb3ab4e596d1f98f67341ca767ef94d401783",
+      "serial_log": "focused-cpu-1/serial.log",
+      "serial_sha256": "23f9dbfe09617d9b059d2d223addeb98ee56774c390107db81827bceaaadd871",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "focused-cpu-2",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "758542c5f948d81f85cc765d8ccc9b3cd1cbaa777850a13c5abdafaf9a9fd175",
+      "serial_log": "focused-cpu-2/serial.log",
+      "serial_sha256": "d0c797154a8479b206160d2bec1189a6dd6ef57521adc10b6b2dff32ffc4669c",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    {
+      "run": "focused-cpu-4",
+      "runner_status": "PASS",
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "runtime_input_fingerprint_sha256": "2ac6e6b993615c18f2d0eab7a1a9be8f9116b77efa82743a577d68609e0f14e9",
+      "kernel_sha256": "3ec90e3194cffbd9330f0cd5563bff366db358bbc33c194be60a7a655abf8d26",
+      "serial_log": "focused-cpu-4/serial.log",
+      "serial_sha256": "60ad5761df4aa730dff9298826e202ff0d85f38dca2d6081f2ffcdaa69e5ecc5",
+      "guest_result": {
+        "elf": {
+          "exit": 0,
+          "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    }
+  ],
+  "schedules": [
+    {
+      "id": "ONCE-1",
+      "schedule": "completion immediately before waiter registration",
+      "status": "UNQUALIFIED",
+      "functional_fixture": null,
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-2",
+      "schedule": "completion during waiter registration",
+      "status": "UNQUALIFIED",
+      "functional_fixture": null,
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-3",
+      "schedule": "multiple registered waiters on one initializer",
+      "status": "UNQUALIFIED",
+      "functional_fixture": "focused",
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-4",
+      "schedule": "initializer exit with registered waiting contenders",
+      "status": "UNQUALIFIED",
+      "functional_fixture": "focused",
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-5",
+      "schedule": "retry after abandonment with registered waiters",
+      "status": "UNQUALIFIED",
+      "functional_fixture": "focused",
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-6",
+      "schedule": "rapid repeated calls across completion transition",
+      "status": "UNQUALIFIED",
+      "functional_fixture": "focused",
+      "reason": "caller-start flags do not prove entry into futex registration; no once-integrated hook in this guest run"
+    },
+    {
+      "id": "ONCE-7",
+      "schedule": "concurrent termination during contention",
+      "status": "NOT_RUN",
+      "functional_fixture": null,
+      "reason": "no controlled concurrent termination witness"
+    }
+  ],
+  "completed_fast_path": "functional repeated 10000 calls per worker observed by focused test; not a race witness",
+  "existing_kernel_hooks": "atomic_futex_test t4a_fixture has controlled raw futex schedules for its own registered actor fixture; not used by native C runner and not substituted for pthread_once evidence",
+  "new_kernel_behavior": false
+}

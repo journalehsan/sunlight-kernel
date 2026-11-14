@@ -1,0 +1,5959 @@
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_std)]
+#![cfg_attr(all(not(test), not(feature = "native-svg")), no_main)]
+
+extern crate alloc;
+
+pub mod preview;
+mod thumbnails;
+
+use alloc::{format, string::String, vec::Vec};
+use core::cell::RefCell;
+use core::cmp::Ordering;
+use sunlight_ui::clipboard;
+use sunlight_ui::font::label::{wrap_label, LabelLayout};
+use sunlight_ui::font::VecText;
+use sunlight_ui::widgets::SegmentedTabs;
+
+use sun_font::{
+    draw_text as sf_draw, draw_text_centered as sf_centered, draw_text_right as sf_right,
+    draw_text_vcenter as sf_vcenter, line_height as sf_lh, FontRole, TextStyle, VecFont,
+};
+use sunlight_ipc::{
+    debug_log,
+    launch_trace::{self, LaunchSource, LaunchTrace},
+    monotonic_millis, process_yield, ProcessExit,
+};
+use sunlight_libc::{self as libc, env, sun_open, DirEntry, FT_DIR, FT_FILE};
+use sunlight_ui::image::{mime_icon, IconImage};
+use sunlight_ui::widgets::drive_card::{DriveCard, DriveCardLayout};
+use sunlight_ui::widgets::sidebar_item::{SidebarItem, SidebarState};
+use sunlight_ui::{
+    draw_scrollbar, App, AxisSizing, Canvas, Column, Event, LayoutBox, LayoutInvalidation, Rect,
+    Row, ScrollPolicy, ScrollState, Size, Sizing, Theme, UiSymbol, VBox, Window, WindowConfig,
+    WindowEvent, WindowMaterial,
+};
+
+// ── Central GUI font instance (vector / Inter) ───────────────────────────────
+// Bitmap font (paint::font) remains available for early-boot and TTY rendering.
+// Graphical desktop widgets receive this reference via with_font(); inline text
+// uses the sf_* helpers with FontRole directly.
+static FONT_UI_REG: VecFont = VecFont(FontRole::UiRegular);
+static FONT_UI_SMALL: VecFont = VecFont(FontRole::UiSmall);
+
+// ---------------------------------------------------------------------------
+// Embedded SVG place icons (rasterized at widget size)
+// ---------------------------------------------------------------------------
+
+static ICON_HOME_SVG: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/user-home.svg");
+static ICON_FOLDER_DESKTOP_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-desktop.svg");
+static ICON_FOLDER_DOCUMENTS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-documents.svg");
+static ICON_FOLDER_DOWNLOADS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-downloads.svg");
+static ICON_FOLDER_MUSIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-music.svg");
+static ICON_FOLDER_PICTURES_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-pictures.svg");
+static ICON_FOLDER_VIDEOS_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-videos.svg");
+static ICON_FOLDER_NETWORK_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/folder-network.svg");
+static ICON_USER_TRASH_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/places/16/user-trash.svg");
+static ICON_FOLDER_SVG: &[u8] = include_bytes!("../../docs/icons/SunlightOS/places/16/folder.svg");
+static ICON_INODE_DIRECTORY_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/inode-directory.svg");
+static ICON_IMAGE_FILE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/image-x-generic.svg");
+static ICON_TEXT_PLAIN_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-plain.svg");
+static ICON_TEXT_MARKDOWN_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-markdown.svg");
+static ICON_TEXT_RUST_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-rust.svg");
+static ICON_TEXT_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/text-x-generic.svg");
+static ICON_APPLICATION_JSON_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-json.svg");
+static ICON_APPLICATION_EXECUTABLE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-x-executable.svg");
+static ICON_APPLICATION_OCTET_STREAM_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/application-octet-stream.svg");
+static ICON_AUDIO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/audio-x-generic.svg");
+static ICON_VIDEO_GENERIC_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/video-x-generic.svg");
+static ICON_UNKNOWN_FILE_SVG: &[u8] =
+    include_bytes!("../../docs/icons/SunlightOS/mimetypes/32/unknown.svg");
+
+/// Load the embedded SVG place icon for the given sidebar index.
+/// Returns `None` if parsing fails (the widget falls back to the UiSymbol).
+fn sidebar_tga(idx: usize) -> Option<IconImage> {
+    let bytes: &'static [u8] = match idx {
+        0 => ICON_HOME_SVG,
+        1 => ICON_FOLDER_DESKTOP_SVG,
+        2 => ICON_FOLDER_DOCUMENTS_SVG,
+        3 => ICON_FOLDER_DOWNLOADS_SVG,
+        4 => ICON_FOLDER_PICTURES_SVG,
+        5 => ICON_FOLDER_MUSIC_SVG,
+        6 => ICON_FOLDER_VIDEOS_SVG,
+        7 => ICON_FOLDER_SVG, // Root /
+        8 => ICON_FOLDER_SVG, // Volumes (no device icon in places set)
+        9 => ICON_FOLDER_NETWORK_SVG,
+        10 => ICON_USER_TRASH_SVG,
+        _ => return None,
+    };
+    IconImage::parse(bytes).ok()
+}
+
+/// Parse a home-grid folder icon for the given folder index (0=Desktop…5=Videos).
+fn home_folder_tga(idx: usize) -> Option<IconImage> {
+    let bytes: &'static [u8] = match idx {
+        0 => ICON_FOLDER_DESKTOP_SVG,
+        1 => ICON_FOLDER_DOCUMENTS_SVG,
+        2 => ICON_FOLDER_DOWNLOADS_SVG,
+        3 => ICON_FOLDER_PICTURES_SVG,
+        4 => ICON_FOLDER_MUSIC_SVG,
+        5 => ICON_FOLDER_VIDEOS_SVG,
+        _ => ICON_FOLDER_SVG,
+    };
+    IconImage::parse(bytes).ok()
+}
+
+#[derive(Clone, Copy)]
+struct MimeIconTheme {
+    folder: Option<IconImage>,
+    inode_directory: Option<IconImage>,
+    image_generic: Option<IconImage>,
+    text_plain: Option<IconImage>,
+    text_markdown: Option<IconImage>,
+    text_rust: Option<IconImage>,
+    text_generic: Option<IconImage>,
+    application_json: Option<IconImage>,
+    application_executable: Option<IconImage>,
+    application_octet_stream: Option<IconImage>,
+    audio_generic: Option<IconImage>,
+    video_generic: Option<IconImage>,
+    unknown: Option<IconImage>,
+}
+
+impl MimeIconTheme {
+    fn load() -> Self {
+        Self {
+            folder: IconImage::parse(ICON_FOLDER_SVG).ok(),
+            inode_directory: IconImage::parse(ICON_INODE_DIRECTORY_SVG).ok(),
+            image_generic: IconImage::parse(ICON_IMAGE_FILE_SVG).ok(),
+            text_plain: IconImage::parse(ICON_TEXT_PLAIN_SVG).ok(),
+            text_markdown: IconImage::parse(ICON_TEXT_MARKDOWN_SVG).ok(),
+            text_rust: IconImage::parse(ICON_TEXT_RUST_SVG).ok(),
+            text_generic: IconImage::parse(ICON_TEXT_GENERIC_SVG).ok(),
+            application_json: IconImage::parse(ICON_APPLICATION_JSON_SVG).ok(),
+            application_executable: IconImage::parse(ICON_APPLICATION_EXECUTABLE_SVG).ok(),
+            application_octet_stream: IconImage::parse(ICON_APPLICATION_OCTET_STREAM_SVG).ok(),
+            audio_generic: IconImage::parse(ICON_AUDIO_GENERIC_SVG).ok(),
+            video_generic: IconImage::parse(ICON_VIDEO_GENERIC_SVG).ok(),
+            unknown: IconImage::parse(ICON_UNKNOWN_FILE_SVG).ok(),
+        }
+    }
+
+    fn icon_for_entry(&self, entry: DirEntry) -> Option<IconImage> {
+        if entry.file_type == FT_DIR {
+            return self
+                .folder
+                .or(self.inode_directory)
+                .or(self.application_octet_stream);
+        }
+
+        let mime = sun_open::mime_from_path(entry.name_bytes());
+        let mut exact_name = [0u8; mime_icon::MAX_MIME_ICON_NAME];
+        let lookup = mime_icon::resolve_file_icon(mime, &mut exact_name);
+
+        if let Some(name) = lookup.exact {
+            if let Some(icon) = self.icon_by_name(name) {
+                return Some(icon);
+            }
+        }
+        if let Some(name) = lookup.family {
+            if let Some(icon) = self.icon_by_name(name) {
+                return Some(icon);
+            }
+        }
+        self.icon_by_name(lookup.generic)
+            .or(self.icon_by_name(mime_icon::UNKNOWN_ICON))
+    }
+
+    fn icon_by_name(&self, name: &str) -> Option<IconImage> {
+        match name {
+            "folder" => self.folder,
+            "inode-directory" => self.inode_directory,
+            "image-x-generic" => self.image_generic,
+            "text-plain" => self.text_plain,
+            "text-markdown" => self.text_markdown,
+            "text-rust" => self.text_rust,
+            "text-x-generic" => self.text_generic,
+            "application-json" => self.application_json,
+            "application-x-executable" => self.application_executable,
+            "application-octet-stream" => self.application_octet_stream,
+            "audio-x-generic" => self.audio_generic,
+            "video-x-generic" => self.video_generic,
+            "unknown" => self.unknown,
+            _ => None,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Layout constants
+// ---------------------------------------------------------------------------
+
+const WIN_W: u32 = 960;
+const WIN_H: u32 = 620;
+const TOOLBAR_H: u32 = 64;
+const STATUS_H: u32 = 24;
+const SIDEBAR_W: u32 = 224;
+const GAP: u32 = 10;
+const PAD: i32 = 10;
+/// Shared chrome corner radius (aligned with card materials / decoration family).
+const RADIUS: u32 = 8;
+const NAV_BTN_W: u32 = 64;
+const SEARCH_W: u32 = 224;
+const SEARCH_H: u32 = 28;
+/// Height passed to VBox for each SidebarItem — fits inside the sidebar.
+const SIDEBAR_ITEM_H: u32 = 44;
+const SIDEBAR_ITEM_GAP: u32 = 1;
+/// Sidebar section-header label height + gap below it.
+const SIDEBAR_HEADER_H: u32 = 22;
+/// Gap after a section header before the first item.
+const SIDEBAR_SECTION_GAP: u32 = 2;
+const COL_HEADER_H: u32 = 26;
+const ROW_H: u32 = 34;
+const GRID_W: u32 = 128;
+const GRID_H: u32 = 128;
+const ICON_SLOT: u32 = 32; // px — thumbnail / folder icon reserved width
+const TYPE_W: u32 = 120;
+const SIZE_W: u32 = 90;
+const MOD_W: u32 = 148;
+const MAX_ENTRIES: usize = 64;
+const PATH_LEN: usize = 256;
+const ERROR_LEN: usize = 96;
+/// Bottom details/preview pane height (Vista/7-style). Compact so it does not
+/// eat the file list. Below this window height the pane shrinks further.
+const DETAILS_H: u32 = 132;
+const DETAILS_MIN_H: u32 = 92;
+const DETAILS_PREVIEW_W: u32 = 132;
+const DOUBLE_CLICK_MS: u64 = 400;
+const TEXT_PREVIEW_LIMIT: usize = 8 * 1024;
+const TEXT_PREVIEW_BUF_LEN: usize = 8 * 1024;
+
+// Right-click context menu layout.
+const MENU_W: u32 = 176;
+const MENU_ITEM_H: u32 = 30;
+const MENU_PAD_V: u32 = 4;
+
+// Properties dialog layout.
+const DIALOG_W: u32 = 480;
+const PROP_PAD: i32 = 18;
+const PROP_LABEL_W: u32 = 104;
+const PROP_TITLE_H: u32 = 26;
+const PROP_ICON_ROW_H: u32 = 46;
+const PROP_ROW_H: u32 = 22;
+const PROP_BTN_H: u32 = 30;
+/// Cap used when counting a folder's direct children (shallow, no recursion).
+/// This shallow Properties preview is capped independently of the paged file list.
+const PROP_CHILD_BUF: usize = MAX_ENTRIES;
+const PROP_ROW_CAP: usize = 10;
+const PROP_VAL_LEN: usize = 64;
+const STATUS_MSG_LEN: usize = 128;
+
+// Home grid: 6 core folders (Desktop, Documents, Downloads, Pictures, Music, Videos).
+// Templates and Public are available via navigation but not shown on the home page.
+const HOME_FOLDER_COUNT: usize = 6;
+const HOME_CARD_H: u32 = 50;
+const HOME_CARD_GAP: u32 = 10;
+const HOME_COLS: usize = 3;
+const HOME_GRID_ROWS: usize = (HOME_FOLDER_COUNT + HOME_COLS - 1) / HOME_COLS;
+
+// Sidebar: 11 entries — trimmed to the most-used destinations.
+// 0:Home  1:Desktop  2:Documents  3:Downloads  4:Pictures  5:Music  6:Videos
+// 7:Root  8:Volumes  9:Network   10:Trash
+const SIDEBAR_COUNT: usize = 11;
+
+/// Sidebar group definition: header label + the indices in the flat sidebar list.
+struct SidebarGroup {
+    label: &'static str,
+    indices: &'static [usize],
+}
+
+const SIDEBAR_GROUPS: &[SidebarGroup] = &[
+    SidebarGroup {
+        label: "Places",
+        indices: &[0, 1, 2, 3, 4, 5, 6],
+    },
+    SidebarGroup {
+        label: "Storage",
+        indices: &[7, 8],
+    },
+    SidebarGroup {
+        label: "Other",
+        indices: &[9, 10],
+    },
+];
+
+// ---------------------------------------------------------------------------
+// Message / View
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Message {
+    ShowHome,
+    SelectSidebar(usize),
+    SelectRow(usize),
+    OpenRow(usize),
+    OpenHomeFolder(usize),
+    OpenHomeVolume(usize),
+    NavigateUp,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ViewMode {
+    Home,
+    Volumes,
+    Network,
+    Directory,
+}
+
+// ---------------------------------------------------------------------------
+// Right-click context menu + Properties dialog model
+// ---------------------------------------------------------------------------
+
+/// What a context menu was opened against: a list row or the empty background.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContextTarget {
+    Row(usize),
+    Background,
+}
+
+/// File and directory actions shared with the desktop clipboard.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ContextMenuItem {
+    Open,
+    Copy,
+    Cut,
+    NewFolder,
+    NewTextFile,
+    Refresh,
+    ToggleView,
+    CopyPath,
+    Paste,
+    Properties,
+}
+
+/// Floating context-menu state. `hovered` is the index of the item under the
+/// cursor (None when outside the menu). All fields are plain values so the
+/// whole struct is `Copy`.
+#[derive(Clone, Copy)]
+struct ContextMenu {
+    x: i32,
+    y: i32,
+    target: ContextTarget,
+    hovered: Option<usize>,
+}
+
+impl ContextMenu {
+    /// Number of entries shown for this target.
+    fn item_count(&self) -> usize {
+        FilesApp::context_menu_items(self.target).len()
+    }
+
+    /// The menu card rect, clamped to stay inside the window.
+    fn menu_rect(&self) -> Rect {
+        let h = MENU_PAD_V * 2 + (self.item_count() as u32) * MENU_ITEM_H;
+        let x = self.x.min(WIN_W as i32 - MENU_W as i32 - 4).max(4);
+        let y = self.y.min(WIN_H as i32 - h as i32 - 4).max(4);
+        Rect::new(x, y, MENU_W, h)
+    }
+
+    /// Rect for entry `idx`, inset horizontally so hovered fills clear the
+    /// rounded card border.
+    fn item_rect(&self, idx: usize) -> Rect {
+        let r = self.menu_rect();
+        Rect::new(
+            r.x + 3,
+            r.y + MENU_PAD_V as i32 + (idx as i32) * MENU_ITEM_H as i32,
+            r.w - 6,
+            MENU_ITEM_H,
+        )
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PropertiesKind {
+    File,
+    Folder,
+}
+
+/// A single label/value row in the Properties dialog.
+#[derive(Clone, Copy)]
+struct PropRow {
+    label: &'static str,
+    value: [u8; PROP_VAL_LEN],
+    value_len: usize,
+}
+
+impl PropRow {
+    fn set_str(&mut self, text: &str) {
+        let b = text.as_bytes();
+        let n = b.len().min(self.value.len());
+        self.value[..n].copy_from_slice(&b[..n]);
+        self.value_len = n;
+    }
+
+    /// Store a byte slice that may not be valid UTF-8 (e.g. a MIME string).
+    fn set_bytes(&mut self, text: &[u8]) {
+        let n = text.len().min(self.value.len());
+        self.value[..n].copy_from_slice(&text[..n]);
+        self.value_len = n;
+    }
+
+    fn value_str(&self) -> &str {
+        core::str::from_utf8(&self.value[..self.value_len]).unwrap_or("")
+    }
+}
+
+/// Snapshot of everything the Properties dialog shows for one item. Computed
+/// once (cheaply) when Properties is opened, never on the draw path, and never
+/// via a recursive scan. Holds only `'static` references and fixed buffers, so
+/// it is `Copy`.
+#[derive(Clone, Copy)]
+struct PropertiesState {
+    kind: PropertiesKind,
+    name: [u8; 64],
+    name_len: usize,
+    path: PathBuf,
+    /// Human-readable type from the central presentation helpers
+    /// (`file_type_label`) or "Folder".
+    type_label: &'static str,
+    /// MIME type from the central `sun_open::mime_from_path` (empty for folders).
+    mime: &'static [u8],
+    /// Default app path from the central `sun_open::app_for_mime`, if any.
+    opener_path: Option<&'static [u8]>,
+    size: u64,
+    // Image metadata (file + image only). `img_format` is "" for non-images.
+    img_format: &'static str,
+    img_w: u32,
+    img_h: u32,
+    img_bpp: u8,
+    has_dims: bool,
+    // Folder contents (shallow, single read_dir — no recursion).
+    child_total: usize,
+    child_folders: usize,
+    child_files: usize,
+    /// True when the child count hit the buffer cap (>= PROP_CHILD_BUF), so the
+    /// dialog can hint the count may be larger.
+    child_capped: bool,
+    /// False when stat() failed (e.g. missing/unreadable item).
+    read_ok: bool,
+}
+
+impl PropertiesState {
+    /// Minimal state for an item that could not be resolved (missing/unreadable).
+    fn missing(path: PathBuf) -> Self {
+        Self {
+            kind: PropertiesKind::File,
+            name: [0; 64],
+            name_len: 0,
+            path,
+            type_label: "Unknown",
+            mime: EMPTY_BYTES,
+            opener_path: None,
+            size: 0,
+            img_format: "",
+            img_w: 0,
+            img_h: 0,
+            img_bpp: 0,
+            has_dims: false,
+            child_total: 0,
+            child_folders: 0,
+            child_files: 0,
+            child_capped: false,
+            read_ok: false,
+        }
+    }
+
+    fn name_bytes(&self) -> &[u8] {
+        &self.name[..self.name_len.min(64)]
+    }
+
+    /// Build the ordered label/value rows shown in the dialog. Returns the
+    /// filled rows and how many are valid — the single source of truth used by
+    /// both the dialog-height calculation and the draw code.
+    fn rows(&self) -> ([PropRow; PROP_ROW_CAP], usize) {
+        let mut rows = [PropRow {
+            label: "",
+            value: [0; PROP_VAL_LEN],
+            value_len: 0,
+        }; PROP_ROW_CAP];
+        let mut n = 0usize;
+
+        let push = |rows: &mut [PropRow; PROP_ROW_CAP], n: &mut usize, label, text: &str| {
+            if *n < rows.len() {
+                rows[*n].label = label;
+                rows[*n].set_str(text);
+                *n += 1;
+            }
+        };
+
+        push(&mut rows, &mut n, "Type:", self.type_label);
+        if !self.mime.is_empty() {
+            rows[n].label = "MIME:";
+            rows[n].set_bytes(self.mime);
+            n += 1;
+        }
+        push(&mut rows, &mut n, "Location:", self.path.as_str());
+
+        match self.kind {
+            PropertiesKind::File => {
+                let mut size_buf = [0u8; 16];
+                let size_len = write_size(self.size, &mut size_buf);
+                rows[n].label = "Size:";
+                let sn = size_len.min(rows[n].value.len());
+                rows[n].value[..sn].copy_from_slice(&size_buf[..sn]);
+                rows[n].value_len = sn;
+                n += 1;
+
+                if !self.img_format.is_empty() {
+                    push(&mut rows, &mut n, "Format:", self.img_format);
+                    if self.has_dims {
+                        let mut buf = [0u8; 32];
+                        let mut len = write_to_buf(&mut buf, b"");
+                        len += write_usize(&mut buf[len..], self.img_w as usize);
+                        len += write_to_buf(&mut buf[len..], b" x ");
+                        len += write_usize(&mut buf[len..], self.img_h as usize);
+                        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                            push(&mut rows, &mut n, "Dimensions:", s);
+                        }
+                        let depth = if self.img_bpp == 32 {
+                            "32-bit"
+                        } else {
+                            "24-bit"
+                        };
+                        let label = if matches!(self.img_format, "PNG" | "JPEG") {
+                            "Decoded depth:"
+                        } else {
+                            "Color depth:"
+                        };
+                        push(&mut rows, &mut n, label, depth);
+                    }
+                }
+                if let Some(app) = self.opener_path {
+                    push(&mut rows, &mut n, "Opens with:", opener_label(app));
+                }
+            }
+            PropertiesKind::Folder => {
+                // Folder size would require a recursive scan; deliberately not
+                // computed in this pass. Direct child counts are shallow only.
+                if self.read_ok {
+                    let mut buf = [0u8; 40];
+                    let mut len = write_usize(&mut buf, self.child_total);
+                    len += write_to_buf(&mut buf[len..], b" items (");
+                    len += write_usize(&mut buf[len..], self.child_folders);
+                    len += write_to_buf(&mut buf[len..], b" folders, ");
+                    len += write_usize(&mut buf[len..], self.child_files);
+                    len += write_to_buf(&mut buf[len..], b" files)");
+                    if self.child_capped {
+                        len += write_to_buf(&mut buf[len..], b"+");
+                    }
+                    if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                        push(&mut rows, &mut n, "Contents:", s);
+                    }
+                }
+            }
+        }
+
+        (rows, n)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PathBuf — fixed-capacity path string (unchanged)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy)]
+struct PathBuf {
+    buf: [u8; PATH_LEN],
+    len: usize,
+}
+
+impl PathBuf {
+    const fn root() -> Self {
+        let mut buf = [0u8; PATH_LEN];
+        buf[0] = b'/';
+        Self { buf, len: 1 }
+    }
+
+    fn from_str(text: &str) -> Option<Self> {
+        let mut out = Self::root();
+        if out.set(text) {
+            Some(out)
+        } else {
+            None
+        }
+    }
+
+    fn set(&mut self, text: &str) -> bool {
+        let bytes = text.as_bytes();
+        let mut start = 0usize;
+        let mut end = bytes.len();
+        while start < end && bytes[start].is_ascii_whitespace() {
+            start += 1;
+        }
+        while end > start && bytes[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+        if start >= end {
+            self.buf[0] = b'/';
+            self.len = 1;
+            return true;
+        }
+        // Canonical paths always start with '/'. Always write it first regardless
+        // of whether the source started with '/'. Without this, set("/root") would
+        // produce "root" (no leading slash) because the branch was skipped but the
+        // component loop then wrote at offset 0 without a separator.
+        if PATH_LEN == 0 {
+            return false;
+        }
+        self.buf[0] = b'/';
+        let mut written = 1usize;
+        let mut i = start;
+        let mut saw_component = false;
+        while i < end {
+            while i < end && bytes[i] == b'/' {
+                i += 1;
+            }
+            let comp_start = i;
+            while i < end && bytes[i] != b'/' {
+                i += 1;
+            }
+            if i > comp_start {
+                match &bytes[comp_start..i] {
+                    b"." => continue,
+                    b".." => {
+                        while written > 1 && self.buf[written - 1] != b'/' {
+                            written -= 1;
+                        }
+                        if written > 1 {
+                            written -= 1;
+                        }
+                        saw_component = written > 1;
+                        continue;
+                    }
+                    _ => {}
+                }
+                if saw_component && written < PATH_LEN {
+                    self.buf[written] = b'/';
+                    written += 1;
+                }
+                saw_component = true;
+                for &b in &bytes[comp_start..i] {
+                    if written >= PATH_LEN {
+                        return false;
+                    }
+                    self.buf[written] = b;
+                    written += 1;
+                }
+            }
+        }
+        if written == 0 {
+            self.buf[0] = b'/';
+            self.len = 1;
+        } else {
+            self.len = written;
+        }
+        true
+    }
+
+    fn join(&self, component: &str) -> Option<Self> {
+        let mut out = *self;
+        if out.len > 1 && out.buf[out.len - 1] != b'/' {
+            if out.len >= PATH_LEN {
+                return None;
+            }
+            out.buf[out.len] = b'/';
+            out.len += 1;
+        }
+        if !out.set_suffix(component.as_bytes()) {
+            return None;
+        }
+        Some(out)
+    }
+
+    fn set_suffix(&mut self, suffix: &[u8]) -> bool {
+        if self.len == 0 {
+            self.buf[0] = b'/';
+            self.len = 1;
+        }
+        if self.len > 1 && self.buf[self.len - 1] != b'/' {
+            if self.len >= PATH_LEN {
+                return false;
+            }
+            self.buf[self.len] = b'/';
+            self.len += 1;
+        }
+        for &b in suffix {
+            if b == 0 || self.len >= PATH_LEN {
+                return false;
+            }
+            self.buf[self.len] = b;
+            self.len += 1;
+        }
+        true
+    }
+
+    fn parent(&self) -> Option<Self> {
+        if self.len <= 1 {
+            return None;
+        }
+        let mut end = self.len;
+        while end > 1 && self.buf[end - 1] == b'/' {
+            end -= 1;
+        }
+        while end > 1 && self.buf[end - 1] != b'/' {
+            end -= 1;
+        }
+        if end <= 1 {
+            Some(Self::root())
+        } else {
+            let mut out = *self;
+            out.len = end - 1;
+            if out.len == 0 {
+                out.len = 1;
+                out.buf[0] = b'/';
+            }
+            Some(out)
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        core::str::from_utf8(&self.buf[..self.len]).unwrap_or("/")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Model types
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy)]
+struct HomeFolder {
+    name: &'static str,
+    path: PathBuf,
+}
+
+impl HomeFolder {
+    const fn placeholder() -> Self {
+        Self {
+            name: "",
+            path: PathBuf::root(),
+        }
+    }
+}
+
+enum SidebarTarget {
+    Home,
+    Volumes,
+    Network,
+    Path(PathBuf),
+}
+
+#[derive(Clone, Copy)]
+struct VolumeEntry {
+    name: [u8; 64],
+    name_len: usize,
+    path: PathBuf,
+}
+
+impl VolumeEntry {
+    const fn empty() -> Self {
+        Self {
+            name: [0; 64],
+            name_len: 0,
+            path: PathBuf::root(),
+        }
+    }
+
+    fn name_str(&self) -> &str {
+        core::str::from_utf8(&self.name[..self.name_len]).unwrap_or("")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Debug logging helpers (no_std — no format!, manual integer rendering)
+// ---------------------------------------------------------------------------
+
+fn log_i32(value: i32) {
+    let mut buf = [0u8; 12];
+    let mut i = buf.len();
+    let neg = value < 0;
+    let mut n = if neg {
+        (-(value as i64)) as u64
+    } else {
+        value as u64
+    };
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    if neg {
+        if i == 0 {
+            debug_log("-");
+        } else {
+            i -= 1;
+            buf[i] = b'-';
+        }
+    }
+    if let Ok(s) = core::str::from_utf8(&buf[i..]) {
+        debug_log(s);
+    }
+}
+
+fn log_usize(value: usize) {
+    let mut buf = [0u8; 20];
+    let mut i = buf.len();
+    let mut n = value;
+    if n == 0 {
+        debug_log("0");
+        return;
+    }
+    while n > 0 {
+        i -= 1;
+        buf[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    if let Ok(s) = core::str::from_utf8(&buf[i..]) {
+        debug_log(s);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Allocator / panic
+// ---------------------------------------------------------------------------
+// Global allocator comes from sunlight-libc (`global-alloc` feature).
+
+// ---------------------------------------------------------------------------
+// Thumbnail helpers — no heap; uses a static read buffer.
+// ---------------------------------------------------------------------------
+
+// Static buffer large enough for a 128×128 BGRA24 TGA (18-byte header + pixels).
+/// Resolve the image and document MIME types supported by the opener.
+fn mime_for_name(name: &[u8]) -> &'static [u8] {
+    sun_open::mime_from_path(name)
+}
+
+fn is_image_name(name: &[u8]) -> bool {
+    mime_icon::is_image_mime(mime_for_name(name))
+}
+
+fn ascii_lower(byte: u8) -> u8 {
+    if byte.is_ascii_uppercase() {
+        byte + 32
+    } else {
+        byte
+    }
+}
+
+fn ends_with_ignore_ascii_case(name: &[u8], suffix: &[u8]) -> bool {
+    if name.len() < suffix.len() {
+        return false;
+    }
+    let start = name.len() - suffix.len();
+    for i in 0..suffix.len() {
+        if ascii_lower(name[start + i]) != ascii_lower(suffix[i]) {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_known_text_name(name: &[u8]) -> bool {
+    mime_icon::is_text_like_mime(mime_for_name(name))
+}
+
+fn is_likely_text_bytes(bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return true;
+    }
+    let mut control_count = 0usize;
+    for &byte in bytes {
+        if byte == 0 {
+            return false;
+        }
+        if byte < 0x20 && byte != b'\n' && byte != b'\r' && byte != b'\t' {
+            control_count += 1;
+        }
+    }
+    control_count * 16 <= bytes.len()
+}
+
+fn text_type_label(name: &[u8]) -> &'static str {
+    if ends_with_ignore_ascii_case(name, b".md") {
+        "Markdown Text"
+    } else if ends_with_ignore_ascii_case(name, b".rs") {
+        "Rust Source"
+    } else if ends_with_ignore_ascii_case(name, b".toml") {
+        "TOML Config"
+    } else if ends_with_ignore_ascii_case(name, b".json") {
+        "JSON File"
+    } else if ends_with_ignore_ascii_case(name, b".sh") {
+        "Shell Script"
+    } else {
+        "Text File"
+    }
+}
+
+/// Human-readable type label for a supported image file name.
+fn image_type_label(name: &[u8]) -> &'static str {
+    if ends_with_ignore_ascii_case(name, b".simg") {
+        "Sunlight Image"
+    } else if ends_with_ignore_ascii_case(name, b".png") {
+        "PNG Image"
+    } else if ends_with_ignore_ascii_case(name, b".jpg")
+        || ends_with_ignore_ascii_case(name, b".jpeg")
+    {
+        "JPEG Image"
+    } else {
+        "TGA Image"
+    }
+}
+
+fn file_type_label(name: &[u8], mime: &[u8]) -> &'static str {
+    if mime_icon::is_image_mime(mime) {
+        image_type_label(name)
+    } else if mime_icon::is_text_like_mime(mime) {
+        text_type_label(name)
+    } else if mime == b"application/x-executable" {
+        "Executable"
+    } else if mime == b"application/octet-stream" {
+        "Binary File"
+    } else {
+        "File"
+    }
+}
+
+fn draw_argb_image(canvas: &mut Canvas, img: &sunlight_ui::image::RgbaImage, dst: Rect) {
+    use sunlight_ui::theme::Color;
+    if img.width == 0 || img.height == 0 {
+        return;
+    }
+    let cx0 = dst.x.max(0) as u32;
+    let cy0 = dst.y.max(0) as u32;
+    let cx1 = (dst.right() as u32).min(canvas.width);
+    let cy1 = (dst.bottom() as u32).min(canvas.height);
+    if cx0 >= cx1 || cy0 >= cy1 {
+        return;
+    }
+    let dw = cx1 - cx0;
+    let dh = cy1 - cy0;
+    let w = img.width;
+    let h = img.height;
+    for dy in 0..dh {
+        let sy = ((cy0 as i32 + dy as i32 - dst.y) as u64 * h as u64 / dst.h as u64) as u32;
+        for dx in 0..dw {
+            let sx = ((cx0 as i32 + dx as i32 - dst.x) as u64 * w as u64 / dst.w as u64) as u32;
+            let px = img.pixel(sx, sy);
+            let a = ((px >> 24) & 0xFF) as u8;
+            let r = ((px >> 16) & 0xFF) as u8;
+            let g = ((px >> 8) & 0xFF) as u8;
+            let b = (px & 0xFF) as u8;
+            if a == 0 {
+                continue;
+            }
+            let color = if a == 0xFF {
+                Color::rgb(r, g, b)
+            } else {
+                Color::rgba(r, g, b, a)
+            };
+            let x = (cx0 + dx) as i32;
+            let y = (cy0 + dy) as i32;
+            if a == 0xFF {
+                canvas.put_pixel(x, y, color);
+            } else if x >= 0 && y >= 0 && (x as u32) < canvas.width && (y as u32) < canvas.height {
+                let idx = y as usize * canvas.stride as usize + x as usize;
+                if idx < canvas.pixels.len() {
+                    canvas.pixels[idx] = color.blend_over(Color(canvas.pixels[idx])).0;
+                }
+            }
+        }
+    }
+}
+
+#[cfg(not(test))]
+#[cfg(not(feature = "native-svg"))]
+#[panic_handler]
+fn panic(_info: &core::panic::PanicInfo) -> ! {
+    debug_log("[FILES] panic\n");
+    loop {
+        process_yield();
+    }
+}
+
+// Text preview remains on the existing bounded path. Images use thumbnails.rs.
+static mut TEXT_PREVIEW_READY: u8 = 0;
+static mut TEXT_PREVIEW_LEN: usize = 0;
+static mut TEXT_PREVIEW_TRUNCATED: u8 = 0;
+static mut TEXT_PREVIEW_BUF: [u8; TEXT_PREVIEW_BUF_LEN] = [0u8; TEXT_PREVIEW_BUF_LEN];
+
+fn clear_text_preview() {
+    unsafe {
+        TEXT_PREVIEW_READY = 0;
+        TEXT_PREVIEW_LEN = 0;
+        TEXT_PREVIEW_TRUNCATED = 0;
+    }
+}
+
+fn load_text_preview_sync(path: &[u8], treat_as_text: bool) {
+    clear_text_preview();
+    let stat = match libc::stat(path) {
+        Ok(s) => s,
+        Err(_) => {
+            unsafe {
+                TEXT_PREVIEW_READY = 2;
+            }
+            return;
+        }
+    };
+    let file_size = stat.size as usize;
+    let capped = file_size.min(TEXT_PREVIEW_LIMIT);
+    let fd = match libc::open(path) {
+        Ok(f) => f,
+        Err(_) => {
+            unsafe {
+                TEXT_PREVIEW_READY = 2;
+            }
+            return;
+        }
+    };
+    let mut raw = [0u8; TEXT_PREVIEW_LIMIT];
+    let mut total = 0usize;
+    while total < capped {
+        let chunk = (capped - total).min(1024);
+        let n = libc::read(fd, &mut raw[total..total + chunk]).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        total += n;
+    }
+    let _ = libc::close(fd);
+    if total == 0 && file_size > 0 {
+        unsafe {
+            TEXT_PREVIEW_READY = 2;
+        }
+        return;
+    }
+    if !treat_as_text && !is_likely_text_bytes(&raw[..total]) {
+        unsafe {
+            TEXT_PREVIEW_READY = 3;
+        }
+        return;
+    }
+    let mut out = 0usize;
+    let mut i = 0usize;
+    while i < total && out < TEXT_PREVIEW_BUF_LEN {
+        let byte = raw[i];
+        if byte == b'\r' {
+            i += 1;
+            continue;
+        }
+        unsafe {
+            TEXT_PREVIEW_BUF[out] =
+                if byte == b'\n' || byte == b'\t' || (0x20..=0x7e).contains(&byte) {
+                    byte
+                } else if byte >= 0x80 {
+                    b'?'
+                } else {
+                    b'.'
+                };
+        }
+        out += 1;
+        i += 1;
+    }
+    unsafe {
+        TEXT_PREVIEW_LEN = out;
+        TEXT_PREVIEW_TRUNCATED = if file_size > total { 1 } else { 0 };
+        TEXT_PREVIEW_READY = 1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// App state
+// ---------------------------------------------------------------------------
+
+struct State {
+    home_path: PathBuf,
+    current_path: PathBuf,
+    view_mode: ViewMode,
+    selected_sidebar: usize,
+    selected_row: Option<usize>,
+    selected_rows: Vec<bool>,
+    entries: Vec<DirEntry>,
+    entry_count: usize,
+    folder_count: usize,
+    file_count: usize,
+    home_folders: [HomeFolder; HOME_FOLDER_COUNT],
+    volume_entries: [VolumeEntry; MAX_ENTRIES],
+    volume_count: usize,
+    error: [u8; ERROR_LEN],
+    error_len: usize,
+}
+
+impl State {
+    fn new() -> Self {
+        // Lightweight init: trust env vars, no filesystem probing.
+        // Heavy work (directory listing, volume scan) is deferred to first
+        // navigation or explicit user action.
+        let home_path = detect_home_path();
+        Self {
+            current_path: home_path,
+            home_path,
+            view_mode: ViewMode::Home,
+            selected_sidebar: 0,
+            selected_row: None,
+            selected_rows: Vec::new(),
+            entries: Vec::new(),
+            entry_count: 0,
+            folder_count: 0,
+            file_count: 0,
+            home_folders: build_home_folders(home_path),
+            volume_entries: [VolumeEntry::empty(); MAX_ENTRIES],
+            volume_count: 0,
+            error: [0; ERROR_LEN],
+            error_len: 0,
+        }
+    }
+
+    fn update(&mut self, message: Message) -> bool {
+        match message {
+            Message::ShowHome => self.show_home(),
+            Message::SelectSidebar(idx) => self.go_to_sidebar(idx),
+            Message::SelectRow(idx) => self.select_row(idx),
+            Message::OpenRow(idx) => self.open_row(idx),
+            Message::OpenHomeFolder(idx) => self.open_home_folder(idx),
+            Message::OpenHomeVolume(idx) => self.open_home_volume(idx),
+            Message::NavigateUp => self.go_up(),
+        }
+    }
+
+    fn show_home(&mut self) -> bool {
+        self.view_mode = ViewMode::Home;
+        self.current_path = self.home_path;
+        self.selected_sidebar = 0;
+        self.selected_row = None;
+        self.selected_rows.fill(false);
+        self.clear_error();
+        // Refresh volumes on demand (user navigated home explicitly).
+        self.refresh_home_volumes();
+        true
+    }
+
+    fn show_volumes(&mut self) -> bool {
+        self.view_mode = ViewMode::Volumes;
+        self.selected_sidebar = 8;
+        self.selected_row = None;
+        self.selected_rows.fill(false);
+        self.clear_error();
+        self.refresh_home_volumes();
+        true
+    }
+
+    fn show_network(&mut self) -> bool {
+        self.view_mode = ViewMode::Network;
+        self.selected_sidebar = 9;
+        self.selected_row = None;
+        self.selected_rows.fill(false);
+        self.clear_error();
+        true
+    }
+
+    fn go_to_sidebar(&mut self, idx: usize) -> bool {
+        match self.sidebar_target(idx) {
+            Some(SidebarTarget::Home) => self.show_home(),
+            Some(SidebarTarget::Volumes) => self.show_volumes(),
+            Some(SidebarTarget::Network) => self.show_network(),
+            Some(SidebarTarget::Path(target)) => {
+                self.selected_sidebar = idx;
+                // Navigate; if the directory doesn't exist, load_directory
+                // sets the error message — no pre-probing needed.
+                // Always return true: sidebar selection changed, or error needs display.
+                let _ = self.navigate_to(target);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn go_up(&mut self) -> bool {
+        if self.view_mode != ViewMode::Directory {
+            return false;
+        }
+        let Some(parent) = self.current_path.parent() else {
+            return false;
+        };
+        self.navigate_to(parent)
+    }
+
+    fn open_home_folder(&mut self, idx: usize) -> bool {
+        let Some(folder) = self.home_folders.get(idx).copied() else {
+            return false;
+        };
+        debug_log("[FILES] place_card_click idx=");
+        log_usize(idx);
+        debug_log(" name=\"");
+        debug_log(folder.name);
+        debug_log("\" path=\"");
+        debug_log(folder.path.as_str());
+        debug_log("\"\n");
+        // Navigate immediately; error surfaces only if the path is unreadable.
+        // Always return true: either we navigated, or error needs to be displayed.
+        if self.navigate_to(folder.path) {
+            self.selected_sidebar = self.sidebar_index_for_path();
+        }
+        true
+    }
+
+    fn open_home_volume(&mut self, idx: usize) -> bool {
+        let Some(volume) = self.volume_entries.get(idx).copied() else {
+            return false;
+        };
+        // Always return true: either we navigated, or error needs to be displayed.
+        if self.navigate_to(volume.path) {
+            self.selected_sidebar = self.sidebar_index_for_path();
+        }
+        true
+    }
+
+    fn select_row(&mut self, idx: usize) -> bool {
+        if idx >= self.entry_count {
+            return false;
+        }
+        self.selected_row = Some(idx);
+        self.selected_rows.fill(false);
+        self.selected_rows[idx] = true;
+        self.clear_error();
+        true
+    }
+
+    fn clear_row_selection(&mut self) -> bool {
+        let changed = self.selected_row.is_some();
+        self.selected_row = None;
+        self.selected_rows.fill(false);
+        changed
+    }
+
+    fn open_row(&mut self, idx: usize) -> bool {
+        if idx >= self.entry_count {
+            return false;
+        }
+        self.selected_row = Some(idx);
+        self.selected_rows.fill(false);
+        self.selected_rows[idx] = true;
+        let entry = self.entries[idx];
+        let name = entry.name_bytes();
+        let name = match core::str::from_utf8(name) {
+            Ok(s) => s,
+            Err(_) => {
+                self.set_error(if entry.file_type == FT_DIR {
+                    "Invalid directory name"
+                } else {
+                    "Invalid file name"
+                });
+                return false;
+            }
+        };
+        if entry.file_type == FT_DIR {
+            if let Some(next) = self.current_path.join(name) {
+                return self.navigate_to(next);
+            }
+            self.set_error("Path is too long");
+            return false;
+        }
+        if let Some(file_path) = self.current_path.join(name) {
+            self.open_file_with_resolver(&file_path)
+        } else {
+            self.set_error("Path is too long");
+            false
+        }
+    }
+
+    fn open_file_with_resolver(&mut self, path: &PathBuf) -> bool {
+        let trace =
+            launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+        match sun_open::open_path(trace, LaunchSource::Unknown, path.as_str().as_bytes()) {
+            Ok(_) => {
+                self.clear_error();
+                true
+            }
+            Err(sun_open::OpenError::NoAssociation) => {
+                self.set_error("No application is registered for this file type");
+                false
+            }
+            Err(sun_open::OpenError::InvalidDesktopEntry) => {
+                self.set_error("Invalid desktop entry file");
+                false
+            }
+            Err(sun_open::OpenError::MissingPath) => {
+                self.set_error("Missing file path");
+                false
+            }
+            Err(sun_open::OpenError::PathTooLong) => {
+                self.set_error("Path is too long");
+                false
+            }
+            Err(sun_open::OpenError::LaunchFailed(_)) => {
+                self.set_error("Unable to open file");
+                false
+            }
+        }
+    }
+
+    fn navigate_to(&mut self, target: PathBuf) -> bool {
+        debug_log("[FILES] navigate_start path=\"");
+        debug_log(target.as_str());
+        debug_log("\"\n");
+        if self.load_directory(target) {
+            self.view_mode = ViewMode::Directory;
+            self.current_path = target;
+            self.clear_error();
+            self.selected_row = None;
+            self.selected_rows.fill(false);
+            self.selected_sidebar = self.sidebar_index_for_path();
+            debug_log("[FILES] navigate_done path=\"");
+            debug_log(self.current_path.as_str());
+            debug_log("\" items=");
+            log_usize(self.entry_count);
+            debug_log("\n");
+            true
+        } else {
+            debug_log("[FILES] navigate_failed path=\"");
+            debug_log(target.as_str());
+            debug_log("\" error=\"");
+            debug_log(self.error_str());
+            debug_log("\"\n");
+            false
+        }
+    }
+
+    fn load_directory(&mut self, path: PathBuf) -> bool {
+        self.entry_count = 0;
+        self.folder_count = 0;
+        self.file_count = 0;
+        self.selected_row = None;
+        self.selected_rows.fill(false);
+        match libc::file_ops::read_directory(path.as_str(), 4096) {
+            Ok(entries) => {
+                self.entries = entries;
+                self.entry_count = self.entries.len();
+                self.selected_rows.resize(self.entry_count, false);
+                self.entries[..self.entry_count].sort_by(compare_entries);
+                for entry in self.entries[..self.entry_count].iter() {
+                    if entry.file_type == FT_DIR {
+                        self.folder_count += 1;
+                    } else {
+                        self.file_count += 1;
+                    }
+                }
+                self.current_path = path;
+                self.clear_error();
+                true
+            }
+            Err(message) => {
+                self.set_error(message);
+                false
+            }
+        }
+    }
+
+    fn refresh_home_volumes(&mut self) {
+        self.volume_count = build_volumes(&mut self.volume_entries);
+    }
+
+    fn sidebar_target(&self, idx: usize) -> Option<SidebarTarget> {
+        match idx {
+            0 => Some(SidebarTarget::Home),
+            1 => self.home_path.join("Desktop").map(SidebarTarget::Path),
+            2 => self.home_path.join("Documents").map(SidebarTarget::Path),
+            3 => self.home_path.join("Downloads").map(SidebarTarget::Path),
+            4 => self.home_path.join("Pictures").map(SidebarTarget::Path),
+            5 => self.home_path.join("Music").map(SidebarTarget::Path),
+            6 => self.home_path.join("Videos").map(SidebarTarget::Path),
+            7 => Some(SidebarTarget::Path(PathBuf::root())),
+            8 => Some(SidebarTarget::Volumes),
+            9 => Some(SidebarTarget::Network),
+            10 => self.home_path.join(".Trash").map(SidebarTarget::Path),
+            _ => None,
+        }
+    }
+
+    fn sidebar_label(idx: usize) -> &'static str {
+        match idx {
+            0 => "Home",
+            1 => "Desktop",
+            2 => "Documents",
+            3 => "Downloads",
+            4 => "Pictures",
+            5 => "Music",
+            6 => "Videos",
+            7 => "Root",
+            8 => "Volumes",
+            9 => "Network",
+            _ => "Trash",
+        }
+    }
+
+    fn sidebar_index_for_path(&self) -> usize {
+        match self.view_mode {
+            ViewMode::Home => return 0,
+            ViewMode::Volumes => return 8,
+            ViewMode::Network => return 9,
+            ViewMode::Directory => {}
+        }
+        let current = self.current_path.as_str();
+        if path_matches(current, self.home_path.as_str()) {
+            return 0;
+        }
+        let check = |name: &str, idx: usize| -> Option<usize> {
+            self.home_path
+                .join(name)
+                .filter(|p| path_matches(current, p.as_str()))
+                .map(|_| idx)
+        };
+        if let Some(i) = check("Desktop", 1) {
+            return i;
+        }
+        if let Some(i) = check("Documents", 2) {
+            return i;
+        }
+        if let Some(i) = check("Downloads", 3) {
+            return i;
+        }
+        if let Some(i) = check("Pictures", 4) {
+            return i;
+        }
+        if let Some(i) = check("Music", 5) {
+            return i;
+        }
+        if let Some(i) = check("Videos", 6) {
+            return i;
+        }
+        if current == "/" {
+            return 7;
+        }
+        if current == "/mnt" || current.starts_with("/mnt/") {
+            return 8;
+        }
+        if current == "/boot" || current.starts_with("/boot/") {
+            return 8;
+        }
+        if current == "/network" || current.starts_with("/network/") {
+            return 9;
+        }
+        7
+    }
+
+    fn clear_error(&mut self) {
+        self.error_len = 0;
+    }
+
+    fn set_error(&mut self, text: &str) {
+        let bytes = text.as_bytes();
+        self.error_len = bytes.len().min(self.error.len());
+        self.error[..self.error_len].copy_from_slice(&bytes[..self.error_len]);
+    }
+
+    fn error_str(&self) -> &str {
+        core::str::from_utf8(&self.error[..self.error_len]).unwrap_or("")
+    }
+}
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScrollFocus {
+    Sidebar,
+    Main,
+}
+
+struct FilesApp {
+    grid_view: bool,
+    label_cache: RefCell<Vec<CachedLabel>>,
+    filename_tooltip: Option<FilenameTooltip>,
+    thumbnails: thumbnails::Thumbnails,
+    state: State,
+    mime_icons: MimeIconTheme,
+    /// Cached source dimensions of the last loaded preview (for metadata display).
+    preview_src_w: u32,
+    preview_src_h: u32,
+    last_clicked_row: Option<usize>,
+    last_click_at: u64,
+    /// Active right-click context menu, if any.
+    ctrl_down: bool,
+    shift_down: bool,
+    context_menu: Option<ContextMenu>,
+    /// Active Properties dialog, if any. Modal-lite: while set it consumes
+    /// input so the underlying file list cannot be navigated.
+    properties: Option<PropertiesState>,
+    status_msg: [u8; STATUS_MSG_LEN],
+    status_msg_len: usize,
+    status_is_error: bool,
+    /// Tracks compositor focus for quieter inactive selection.
+    window_focused: bool,
+    /// Tracks pointer hover over sidebar items for hover state rendering.
+    hovered_sidebar: Option<usize>,
+    /// Scroll state for the left navigation sidebar.
+    sidebar_scroll: ScrollState,
+    /// Scroll state for the main file/directory list.
+    main_scroll: ScrollState,
+    /// Scrollable region that receives keyboard navigation.
+    scroll_focus: ScrollFocus,
+    /// Region whose scrollbar owns the current left-button interaction.
+    pressed_scrollbar: Option<ScrollFocus>,
+    /// Previous path for detecting directory changes (scroll reset).
+    prev_path: PathBuf,
+    /// Previous view mode for detecting mode changes.
+    prev_view_mode: ViewMode,
+    /// The application-host boundary for authoritative drawable client bounds.
+    client_bounds: Rect,
+    layout_invalidation: LayoutInvalidation,
+    layout: FilesLayout,
+}
+
+struct CachedLabel {
+    name: String,
+    width: u32,
+    lines: usize,
+    layout: LabelLayout,
+}
+
+struct FilenameTooltip {
+    index: usize,
+    lines: Vec<String>,
+    width: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct FilesLayout {
+    root: Rect,
+    toolbar: Rect,
+    body: Rect,
+    details: Rect,
+    status: Rect,
+    sidebar: Rect,
+    main: Rect,
+    back: Rect,
+    forward: Rect,
+    up: Rect,
+    search: Rect,
+    breadcrumb: Rect,
+    view_toggle: Rect,
+}
+
+impl FilesApp {
+    fn new() -> Self {
+        let sidebar_scroll = ScrollState::new();
+        let mut main_scroll = ScrollState::new();
+        main_scroll.focused = true;
+        Self {
+            thumbnails: thumbnails::Thumbnails::new(),
+            grid_view: true,
+            label_cache: RefCell::new(Vec::new()),
+            filename_tooltip: None,
+            state: State::new(),
+            mime_icons: MimeIconTheme::load(),
+            preview_src_w: 0,
+            preview_src_h: 0,
+            last_clicked_row: None,
+            last_click_at: 0,
+            ctrl_down: false,
+            shift_down: false,
+            context_menu: None,
+            properties: None,
+            status_msg: [0; STATUS_MSG_LEN],
+            status_msg_len: 0,
+            status_is_error: false,
+            window_focused: true,
+            hovered_sidebar: None,
+            sidebar_scroll,
+            main_scroll,
+            scroll_focus: ScrollFocus::Main,
+            pressed_scrollbar: None,
+            prev_path: PathBuf::root(),
+            prev_view_mode: ViewMode::Home,
+            client_bounds: Rect::new(0, 0, WIN_W, WIN_H),
+            layout_invalidation: LayoutInvalidation::new(),
+            layout: FilesLayout::default(),
+        }
+    }
+
+    // ── Layout helpers ────────────────────────────────────────────────────
+
+    fn compute_layout(root: Rect) -> FilesLayout {
+        let fill = Sizing::new(AxisSizing::Fill, AxisSizing::Fill);
+        let mut root_children = [
+            LayoutBox::new(Rect::new(0, 0, 0, TOOLBAR_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(TOOLBAR_H))),
+            LayoutBox::new(Rect::new(0, 0, 0, 0))
+                .with_sizing(fill)
+                .with_min_size(Size::new(0, 260)),
+            LayoutBox::new(Rect::new(0, 0, 0, DETAILS_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Flex(1)))
+                .with_natural_size(Size::new(0, DETAILS_H))
+                .with_min_size(Size::new(0, DETAILS_MIN_H))
+                .with_max_size(Size::new(u32::MAX, DETAILS_H)),
+            LayoutBox::new(Rect::new(0, 0, 0, STATUS_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(STATUS_H))),
+        ];
+        let _ = Column::new(root).arrange(&mut root_children);
+        let toolbar = root_children[0].bounds();
+        let body = root_children[1].bounds();
+        let details = root_children[2].bounds();
+        let status = root_children[3].bounds();
+
+        let mut body_children = [
+            LayoutBox::new(Rect::new(0, 0, SIDEBAR_W, 0))
+                .with_sizing(Sizing::new(AxisSizing::Fixed(SIDEBAR_W), AxisSizing::Fill)),
+            LayoutBox::new(Rect::new(0, 0, 0, 0)).with_sizing(fill),
+        ];
+        let _ = Row::new(body).with_gap(GAP).arrange(&mut body_children);
+
+        // Explicit fixed gap boxes preserve the existing 8/16 px toolbar
+        // rhythm while only the breadcrumb/path field receives Fill.
+        let fixed = |width| {
+            LayoutBox::new(Rect::new(0, 0, width, SEARCH_H)).with_sizing(Sizing::new(
+                AxisSizing::Fixed(width),
+                AxisSizing::Fixed(SEARCH_H),
+            ))
+        };
+        let mut toolbar_children = [
+            fixed(NAV_BTN_W),
+            fixed(8),
+            fixed(NAV_BTN_W),
+            fixed(8),
+            fixed(NAV_BTN_W),
+            fixed(16),
+            LayoutBox::new(Rect::new(0, 0, 0, SEARCH_H))
+                .with_sizing(Sizing::new(AxisSizing::Fill, AxisSizing::Fixed(SEARCH_H))),
+            fixed(16),
+            fixed(SEARCH_W),
+            fixed(8),
+            fixed(116),
+        ];
+        let toolbar_inner = Rect::new(
+            toolbar.x + PAD,
+            toolbar.y + (toolbar.h as i32 - SEARCH_H as i32) / 2,
+            toolbar
+                .w
+                .saturating_sub((PAD.max(0) as u32).saturating_mul(2)),
+            SEARCH_H,
+        );
+        let _ = Row::new(toolbar_inner).arrange(&mut toolbar_children);
+
+        FilesLayout {
+            root,
+            toolbar,
+            body,
+            details,
+            status,
+            sidebar: body_children[0].bounds(),
+            main: body_children[1].bounds(),
+            back: toolbar_children[0].bounds(),
+            forward: toolbar_children[2].bounds(),
+            up: toolbar_children[4].bounds(),
+            breadcrumb: toolbar_children[6].bounds(),
+            search: toolbar_children[8].bounds(),
+            view_toggle: toolbar_children[10].bounds(),
+        }
+    }
+
+    fn ensure_layout(&mut self) -> bool {
+        if !self.layout_invalidation.update(self.client_bounds) {
+            return false;
+        }
+        self.layout = Self::compute_layout(self.client_bounds);
+        true
+    }
+
+    fn set_client_bounds(&mut self, width: u32, height: u32) -> bool {
+        let bounds = Rect::new(0, 0, width, height);
+        if bounds == self.client_bounds {
+            return false;
+        }
+        self.client_bounds = bounds;
+        self.filename_tooltip = None;
+        self.layout_invalidation.invalidate();
+        let changed = self.ensure_layout();
+        self.sync_main_scroll();
+        self.ensure_selected_visible();
+        changed
+    }
+
+    fn root_layout(&self) -> (Rect, Rect, Rect, Rect) {
+        (
+            self.layout.toolbar,
+            self.layout.body,
+            self.layout.details,
+            self.layout.status,
+        )
+    }
+
+    fn body_layout(&self) -> (Rect, Rect) {
+        (self.layout.sidebar, self.layout.main)
+    }
+
+    fn sidebar_scroll_region(sidebar: Rect) -> Rect {
+        sidebar.inset(PAD)
+    }
+
+    fn main_scroll_region(main: Rect) -> Rect {
+        let inner = main.inset(PAD);
+        Rect::new(
+            inner.x,
+            inner.y + COL_HEADER_H as i32,
+            inner.w,
+            inner.h.saturating_sub(COL_HEADER_H),
+        )
+    }
+
+    fn scroll_regions(&self) -> (Rect, Rect) {
+        let (sidebar, main) = self.body_layout();
+        (
+            Self::sidebar_scroll_region(sidebar),
+            Self::main_scroll_region(main),
+        )
+    }
+
+    fn set_scroll_focus(&mut self, focus: ScrollFocus) -> bool {
+        if self.scroll_focus == focus {
+            return false;
+        }
+        self.scroll_focus = focus;
+        self.sidebar_scroll.focused = focus == ScrollFocus::Sidebar;
+        self.main_scroll.focused = focus == ScrollFocus::Main;
+        true
+    }
+
+    fn handle_scroll_pointer_event(&mut self, event: Event) -> Option<bool> {
+        let (sidebar_region, main_region) = self.scroll_regions();
+        match event {
+            Event::MouseWheel { x, y, delta } => {
+                let point = sunlight_ui::Point::new(x, y);
+                let focus = if sidebar_region.contains(point) {
+                    ScrollFocus::Sidebar
+                } else if main_region.contains(point) {
+                    ScrollFocus::Main
+                } else {
+                    return None;
+                };
+                let focus_changed = self.set_scroll_focus(focus);
+                let scrolled = match focus {
+                    ScrollFocus::Sidebar => self
+                        .sidebar_scroll
+                        .scroll_by_wheel(delta, (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32),
+                    ScrollFocus::Main => self.main_scroll.scroll_by_wheel(delta, ROW_H as i32),
+                };
+                Some(focus_changed || scrolled)
+            }
+            Event::MouseDown { x, y, button: 0 } => {
+                let point = sunlight_ui::Point::new(x, y);
+                let focus = if sidebar_region.contains(point) {
+                    Some(ScrollFocus::Sidebar)
+                } else if main_region.contains(point) {
+                    Some(ScrollFocus::Main)
+                } else {
+                    None
+                };
+                let Some(focus) = focus else {
+                    return None;
+                };
+                let focus_changed = self.set_scroll_focus(focus);
+                let (region, state) = match focus {
+                    ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                    ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                };
+                if !state.can_scroll_y() {
+                    return focus_changed.then_some(true);
+                }
+                match sunlight_ui::hit_test_scrollbar(region, state, x, y) {
+                    Some(true) => {
+                        state.hovered = true;
+                        state.start_drag(state.track_rect(region), y);
+                        self.pressed_scrollbar = Some(focus);
+                        Some(true)
+                    }
+                    Some(false) => {
+                        state.hovered = true;
+                        state.handle_track_click(state.track_rect(region), y);
+                        self.pressed_scrollbar = Some(focus);
+                        Some(true)
+                    }
+                    None => focus_changed.then_some(true),
+                }
+            }
+            Event::MouseMove { x, y } => {
+                if let Some(focus) = self.pressed_scrollbar {
+                    let (region, state) = match focus {
+                        ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                        ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                    };
+                    state.hovered = true;
+                    state.update_drag(state.track_rect(region), y);
+                    return Some(true);
+                }
+
+                let sidebar_hovered = self.sidebar_scroll.can_scroll_y()
+                    && sunlight_ui::hit_test_scrollbar(sidebar_region, &self.sidebar_scroll, x, y)
+                        .is_some();
+                let main_hovered = self.main_scroll.can_scroll_y()
+                    && sunlight_ui::hit_test_scrollbar(main_region, &self.main_scroll, x, y)
+                        .is_some();
+                let changed = self.sidebar_scroll.hovered != sidebar_hovered
+                    || self.main_scroll.hovered != main_hovered;
+                self.sidebar_scroll.hovered = sidebar_hovered;
+                self.main_scroll.hovered = main_hovered;
+                changed.then_some(true)
+            }
+            Event::Click { x, y } | Event::MouseUp { x, y, button: 0 } => {
+                let focus = self.pressed_scrollbar.take()?;
+                let (region, state) = match focus {
+                    ScrollFocus::Sidebar => (sidebar_region, &mut self.sidebar_scroll),
+                    ScrollFocus::Main => (main_region, &mut self.main_scroll),
+                };
+                state.end_drag();
+                state.hovered = sunlight_ui::hit_test_scrollbar(region, state, x, y).is_some();
+                Some(true)
+            }
+            Event::PointerOwnership { owned: false, .. } => {
+                let had_interaction = self.pressed_scrollbar.take().is_some()
+                    | self.sidebar_scroll.end_drag()
+                    | self.main_scroll.end_drag();
+                self.sidebar_scroll.hovered = false;
+                self.main_scroll.hovered = false;
+                had_interaction.then_some(true)
+            }
+            _ => None,
+        }
+    }
+
+    /// Total content height of the sidebar (groups + headers + items + gaps).
+    fn sidebar_content_height() -> u32 {
+        let mut h: u32 = 0;
+        for group in SIDEBAR_GROUPS {
+            h += SIDEBAR_HEADER_H + SIDEBAR_SECTION_GAP;
+            let count = group.indices.len() as u32;
+            h += count * SIDEBAR_ITEM_H + count.saturating_sub(1) * SIDEBAR_ITEM_GAP;
+            h += 4; // trailing gap after group
+        }
+        h
+    }
+
+    /// Draw scrollbars for sidebar and main content regions.
+    fn draw_scrollbars(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect, main: Rect) {
+        draw_scrollbar(
+            canvas,
+            theme,
+            Self::sidebar_scroll_region(sidebar),
+            &self.sidebar_scroll,
+            ScrollPolicy::Auto,
+        );
+        draw_scrollbar(
+            canvas,
+            theme,
+            Self::main_scroll_region(main),
+            &self.main_scroll,
+            ScrollPolicy::Auto,
+        );
+    }
+
+    // ── Preview methods ───────────────────────────────────────────────────
+
+    fn update_preview_for_selection(&mut self) {
+        self.preview_src_w = 0;
+        self.preview_src_h = 0;
+        self.thumbnails.request(None);
+        clear_text_preview();
+
+        if self.state.view_mode != ViewMode::Directory {
+            return;
+        }
+        let Some(idx) = self.state.selected_row else {
+            return;
+        };
+        if idx >= self.state.entry_count {
+            return;
+        }
+        let entry = self.state.entries[idx];
+        if entry.file_type == FT_DIR {
+            return;
+        }
+        let name_bytes = entry.name_bytes();
+        let name = match core::str::from_utf8(name_bytes) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        if let Some(full_path) = self.state.current_path.join(name) {
+            if is_image_name(name_bytes) || preview::pdf::supports(name_bytes) {
+                self.thumbnails.request(Some(full_path.as_str().as_bytes()));
+            } else {
+                load_text_preview_sync(
+                    full_path.as_str().as_bytes(),
+                    is_known_text_name(name_bytes),
+                );
+            }
+        }
+    }
+
+    fn reset_row_click_state(&mut self) {
+        self.last_clicked_row = None;
+        self.last_click_at = 0;
+    }
+
+    fn select_item(&mut self, idx: usize) -> bool {
+        let changed = self.state.update(Message::SelectRow(idx));
+        self.update_preview_for_selection();
+        changed
+    }
+
+    fn open_selected_or_item(&mut self, idx: usize) -> bool {
+        let changed = self.state.update(Message::OpenRow(idx));
+        self.update_preview_for_selection();
+        if changed {
+            self.reset_row_click_state();
+        }
+        changed
+    }
+
+    fn handle_directory_click(&mut self, idx: usize) -> bool {
+        if self.ctrl_down {
+            self.state.selected_rows[idx] = !self.state.selected_rows[idx];
+            self.state.selected_row = if self.state.selected_rows[idx] {
+                Some(idx)
+            } else {
+                self.state
+                    .selected_rows
+                    .iter()
+                    .position(|selected| *selected)
+            };
+            self.update_preview_for_selection();
+            self.reset_row_click_state();
+            return true;
+        }
+        if self.shift_down {
+            let anchor = self.state.selected_row.unwrap_or(idx);
+            self.state.selected_rows.fill(false);
+            self.state.selected_rows[anchor.min(idx)..=anchor.max(idx)].fill(true);
+            self.state.selected_row = Some(anchor);
+            self.update_preview_for_selection();
+            self.reset_row_click_state();
+            return true;
+        }
+        let now = monotonic_millis();
+        let is_double_click = self.last_clicked_row == Some(idx)
+            && now.saturating_sub(self.last_click_at) <= DOUBLE_CLICK_MS;
+        self.last_clicked_row = Some(idx);
+        self.last_click_at = now;
+        if is_double_click {
+            self.open_selected_or_item(idx)
+        } else {
+            self.select_item(idx)
+        }
+    }
+
+    /// Move the row selection by delta rows (for arrow key navigation).
+    /// Clamps to [0, entry_count-1]. If nothing selected, Down picks first,
+    /// Up picks last (or first on clamp).
+    fn change_row_selection(&mut self, delta: isize) -> bool {
+        if self.state.view_mode != ViewMode::Directory || self.state.entry_count == 0 {
+            return false;
+        }
+        let count = self.state.entry_count as isize;
+        let current = match self.state.selected_row {
+            Some(i) => i as isize,
+            None => {
+                if delta > 0 {
+                    -delta
+                } else {
+                    count - 1 - delta
+                }
+            }
+        };
+        let mut new = current + delta;
+        if new < 0 {
+            new = 0;
+        }
+        if new >= count {
+            new = count - 1;
+        }
+        let new_idx = new as usize;
+        if self.state.selected_row != Some(new_idx) {
+            self.select_item(new_idx)
+        } else {
+            false
+        }
+    }
+
+    /// Ensure the selected row is visible in the main scroll viewport.
+    fn ensure_selected_visible(&mut self) {
+        if let Some(idx) = self.state.selected_row {
+            let main = self.body_layout().1;
+            let item_y = if self.grid_view {
+                (idx / Self::grid_columns(main)) as i32 * GRID_H as i32
+            } else {
+                idx as i32 * ROW_H as i32
+            };
+            if self
+                .main_scroll
+                .ensure_visible(item_y, if self.grid_view { GRID_H } else { ROW_H })
+            {
+                // scroll state changed — no extra action needed, view() will respect new offset
+            }
+        }
+    }
+
+    /// Treat Enter (on selected item) the same as double-click: open the file
+    /// or descend into the folder.
+    fn activate_selected(&mut self) -> bool {
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        if let Some(idx) = self.state.selected_row {
+            if idx < self.state.entry_count {
+                return self.open_selected_or_item(idx);
+            }
+        }
+        false
+    }
+
+    fn set_status(&mut self, text: &str) {
+        self.write_status(text, false);
+    }
+
+    fn set_status_error(&mut self, text: &str) {
+        self.write_status(text, true);
+    }
+
+    fn write_status(&mut self, text: &str, is_error: bool) {
+        let bytes = text.as_bytes();
+        self.status_msg_len = bytes.len().min(self.status_msg.len());
+        self.status_msg[..self.status_msg_len].copy_from_slice(&bytes[..self.status_msg_len]);
+        self.status_is_error = is_error;
+    }
+
+    fn status_text(&self) -> &str {
+        core::str::from_utf8(&self.status_msg[..self.status_msg_len]).unwrap_or("")
+    }
+
+    fn selected_paths(&self) -> Result<Vec<String>, &'static str> {
+        if self.state.view_mode != ViewMode::Directory {
+            return Err("Open a folder first");
+        }
+        let mut paths = Vec::new();
+        for (index, entry) in self.state.entries[..self.state.entry_count]
+            .iter()
+            .enumerate()
+        {
+            if self.state.selected_rows[index] {
+                let name =
+                    core::str::from_utf8(entry.name_bytes()).map_err(|_| "Invalid file name")?;
+                let path = self
+                    .state
+                    .current_path
+                    .join(name)
+                    .ok_or("Path is too long")?;
+                paths.push(String::from(path.as_str()));
+            }
+        }
+        if paths.is_empty() {
+            return Err("No item selected");
+        }
+        Ok(paths)
+    }
+
+    fn copy_selected_path_text(&mut self) -> bool {
+        let result = self.selected_paths().and_then(|paths| {
+            clipboard::set_text_from(b"sunlight-files", &paths.join("\n"))
+                .map_err(|error| error.message())
+        });
+        self.state.clear_error();
+        match result {
+            Ok(()) => self.set_status("Path copied"),
+            Err(message) => self.set_status_error(message),
+        }
+        true
+    }
+
+    fn copy_selected_file_list(&mut self, cut: bool) -> bool {
+        let result = self.selected_paths().and_then(|paths| {
+            clipboard::set_files(b"sunlight-files", &paths, cut).map_err(|error| error.message())
+        });
+        self.state.clear_error();
+        match result {
+            Ok(()) => self.set_status(if cut {
+                "Cut selection; paste to move"
+            } else {
+                "Selection copied"
+            }),
+            Err(message) => self.set_status_error(message),
+        }
+        true
+    }
+
+    fn toggle_view(&mut self) -> bool {
+        self.set_grid_view(!self.grid_view)
+    }
+
+    fn set_grid_view(&mut self, grid: bool) -> bool {
+        if self.grid_view == grid {
+            return false;
+        }
+        self.grid_view = grid;
+        self.filename_tooltip = None;
+        // Keep the shared model and thumbnail generation intact. A pending grid
+        // completion can populate the cache in Details without starting new work.
+        self.reset_row_click_state();
+        self.sync_main_scroll();
+        self.ensure_selected_visible();
+        true
+    }
+
+    fn sync_main_scroll(&mut self) {
+        let main = self.body_layout().1;
+        let region = Self::main_scroll_region(main);
+        self.main_scroll.set_viewport(region.w, region.h);
+        self.main_scroll.content_h = if self.grid_view {
+            self.state.entry_count.div_ceil(Self::grid_columns(main)) as u32 * GRID_H
+        } else {
+            self.state.entry_count as u32 * ROW_H
+        };
+        self.main_scroll.clamp();
+    }
+
+    fn view_toggle(&self) -> SegmentedTabs<'static> {
+        SegmentedTabs::new(
+            self.layout.view_toggle,
+            &["Grid", "Details"],
+            if self.grid_view { 0 } else { 1 },
+        )
+        .with_font(&FONT_UI_SMALL)
+    }
+
+    fn draw_filename(
+        &self,
+        canvas: &mut Canvas,
+        rect: Rect,
+        name: &str,
+        lines: usize,
+        color: sunlight_ui::theme::Color,
+    ) {
+        let font = VecFont(if lines == 2 {
+            FontRole::UiSmall
+        } else {
+            FontRole::UiRegular
+        });
+        let mut cache = self.label_cache.borrow_mut();
+        let idx = match cache
+            .iter()
+            .position(|c| c.name == name && c.width == rect.w && c.lines == lines)
+        {
+            Some(idx) => idx,
+            None => {
+                if cache.len() >= 128 {
+                    cache.remove(0);
+                }
+                cache.push(CachedLabel {
+                    name: String::from(name),
+                    width: rect.w,
+                    lines,
+                    layout: LabelLayout::new(name, rect.w, lines, &font),
+                });
+                cache.len() - 1
+            }
+        };
+        cache[idx]
+            .layout
+            .draw(canvas, rect, &font, color, lines == 2);
+    }
+
+    fn hover_filename(&mut self, x: i32, y: i32) -> bool {
+        let index = if self.state.view_mode == ViewMode::Directory {
+            self.hit_test_row(
+                self.layout.main,
+                x,
+                y,
+                self.state.entry_count,
+                self.main_scroll.offset_y,
+            )
+        } else {
+            None
+        };
+        if self.filename_tooltip.as_ref().map(|t| t.index) == index {
+            return false;
+        }
+        self.filename_tooltip = index.map(|index| {
+            let max_width = self.client_bounds.w.saturating_sub(32).min(600);
+            let lines = wrap_label(
+                entry_name_str(&self.state.entries[index]),
+                max_width,
+                &FONT_UI_SMALL,
+            );
+            let width = lines
+                .iter()
+                .map(|line| FONT_UI_SMALL.measure_w(line))
+                .max()
+                .unwrap_or(0)
+                .min(max_width);
+            FilenameTooltip {
+                index,
+                lines,
+                width,
+            }
+        });
+        true
+    }
+
+    fn draw_filename_tooltip(&self, canvas: &mut Canvas, theme: &Theme) {
+        let Some(tooltip) = &self.filename_tooltip else {
+            return;
+        };
+        let tile = self.row_rect(self.layout.main, tooltip.index, self.main_scroll.offset_y);
+        let width = (tooltip.width + 16).min(canvas.width);
+        let height =
+            (tooltip.lines.len() as u32 * FONT_UI_SMALL.line_height() + 12).min(canvas.height);
+        let x = tile.x.min(canvas.width.saturating_sub(width) as i32).max(0);
+        let y = tile
+            .bottom()
+            .min(canvas.height.saturating_sub(height) as i32)
+            .max(0);
+        let rect = Rect::new(x, y, width, height);
+        canvas.fill_rounded_rect_with_border(rect, RADIUS, theme.panel_alt, theme.border, 1);
+        let inner = rect.inset(6);
+        if inner.w == 0 || inner.h == 0 {
+            return;
+        }
+        let start = inner.y as usize * canvas.stride as usize + inner.x as usize;
+        let mut clip = Canvas::new(&mut canvas.pixels[start..], canvas.stride, inner.w, inner.h);
+        for (i, line) in tooltip.lines.iter().enumerate() {
+            FONT_UI_SMALL.draw(
+                &mut clip,
+                line,
+                2,
+                (i as u32 * FONT_UI_SMALL.line_height()) as i32,
+                theme.text,
+            );
+        }
+    }
+
+    fn refresh_directory(&mut self) -> bool {
+        self.filename_tooltip = None;
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        self.context_menu = None;
+        self.thumbnails
+            .invalidate_directory(self.state.current_path.as_str().as_bytes());
+        self.state.load_directory(self.state.current_path);
+        self.update_preview_for_selection();
+        self.reset_row_click_state();
+        true
+    }
+
+    fn create_item(&mut self, folder: bool) -> bool {
+        if self.state.view_mode != ViewMode::Directory {
+            return false;
+        }
+        let result = libc::file_ops::create_item(self.state.current_path.as_str(), folder);
+        self.refresh_directory();
+        match result {
+            Ok(_) => self.set_status(if folder {
+                "Folder created"
+            } else {
+                "Text file created"
+            }),
+            Err(message) => self.set_status_error(message),
+        }
+        true
+    }
+
+    fn paste_from_clipboard(&mut self) -> bool {
+        self.state.clear_error();
+        if self.state.view_mode != ViewMode::Directory {
+            self.set_status_error("Open a destination folder first");
+            return true;
+        }
+        let item = match clipboard::get_files() {
+            Ok(item) => item,
+            Err(error) => {
+                self.set_status_error(if error == clipboard::ClipboardError::Unsupported {
+                    "Clipboard does not contain files"
+                } else {
+                    error.message()
+                });
+                return true;
+            }
+        };
+        let result =
+            libc::file_ops::transfer(&item.paths, self.state.current_path.as_str(), item.cut);
+        let completed = match &result {
+            Ok(count) => *count,
+            Err(error) => error.completed,
+        };
+        let consumed = clipboard::finish_cut(&item, completed, b"sunlight-files");
+        self.refresh_directory();
+        match result {
+            Ok(count) => self.set_status(&format!(
+                "{} item(s) {}",
+                count,
+                if item.cut { "moved" } else { "copied" }
+            )),
+            Err(error) => {
+                self.set_status_error(&format!("{} completed. {}", completed, error.message))
+            }
+        }
+        if consumed.is_err() {
+            self.set_status_error(
+                "Move completed, but clipboard update failed; copy the remaining items again",
+            );
+        }
+        true
+    }
+
+    fn toolbar_layout(&self) -> (Rect, Rect, Rect, Rect, Rect) {
+        (
+            self.layout.back,
+            self.layout.forward,
+            self.layout.up,
+            self.layout.search,
+            self.layout.breadcrumb,
+        )
+    }
+
+    /// Zero-alloc breadcrumb hit test. Iterates path components inline and
+    /// returns the path up to (including) the clicked component as a PathBuf.
+    fn hit_test_breadcrumb(breadcrumb: Rect, x: i32, path: &str) -> Option<PathBuf> {
+        let fudge = 6; // extra click margin
+
+        if x < breadcrumb.x - fudge || x > breadcrumb.right() + fudge {
+            return None;
+        }
+
+        let bytes = path.as_bytes();
+        if bytes.is_empty() {
+            return Some(PathBuf::root());
+        }
+
+        let mut cursor_x = breadcrumb.x + 8;
+        let sep_w = sf_lh(FontRole::UiSmall) as i32;
+
+        // Root "/"
+        let root_w = sun_font::measure_text("/", FontRole::UiSmall).w as i32;
+        let root_rect = Rect::new(cursor_x, breadcrumb.y, (root_w + 6) as u32, breadcrumb.h);
+        if x >= root_rect.x && x <= root_rect.right() {
+            return Some(PathBuf::root());
+        }
+        cursor_x += root_w + 6 + sep_w;
+
+        // Walk components
+        let mut comp_start = 1usize; // skip leading '/'
+        #[allow(unused_assignments)]
+        let mut current_byte = 0usize;
+        while comp_start < bytes.len() {
+            let mut comp_end = comp_start;
+            while comp_end < bytes.len() && bytes[comp_end] != b'/' {
+                comp_end += 1;
+            }
+            if comp_end > comp_start {
+                if let Ok(seg) = core::str::from_utf8(&bytes[comp_start..comp_end]) {
+                    let seg_w = sun_font::measure_text(seg, FontRole::UiSmall).w as i32;
+                    let seg_rect =
+                        Rect::new(cursor_x, breadcrumb.y, (seg_w + 6) as u32, breadcrumb.h);
+                    if x >= seg_rect.x && x <= seg_rect.right() {
+                        current_byte = comp_end;
+                        let subpath = core::str::from_utf8(&bytes[..current_byte]).unwrap_or("/");
+                        return PathBuf::from_str(subpath);
+                    }
+                    cursor_x += seg_w + 6 + sep_w;
+                }
+            }
+            comp_start = comp_end + 1;
+        }
+        None
+    }
+
+    /// Compute the rect for sidebar item `idx` using the same grouped layout as
+    /// `draw_sidebar`.
+    fn sidebar_item_rect(sidebar: Rect, idx: usize) -> Rect {
+        let inner = sidebar.inset(PAD);
+        let items_x = inner.x + 2;
+        let items_w = inner.w.saturating_sub(4);
+        let mut y = inner.y as u32;
+
+        for group in SIDEBAR_GROUPS {
+            y += SIDEBAR_HEADER_H + SIDEBAR_SECTION_GAP;
+            let group_start = y as i32;
+            for (local_idx, &gidx) in group.indices.iter().enumerate() {
+                if gidx == idx {
+                    let item_y =
+                        group_start + local_idx as i32 * (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32;
+                    return Rect::new(items_x, item_y, items_w, SIDEBAR_ITEM_H);
+                }
+            }
+            y += group.indices.len() as u32 * (SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) + 4;
+        }
+        Rect::default()
+    }
+
+    fn hit_test_sidebar(sidebar: Rect, x: i32, y: i32, scroll_y: i32) -> Option<usize> {
+        // Adjust pointer y into content space by adding scroll offset
+        let content_y = y + scroll_y;
+        let point = sunlight_ui::Point::new(x, content_y);
+        for idx in 0..SIDEBAR_COUNT {
+            if Self::sidebar_item_rect(sidebar, idx).contains(point) {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    fn row_rect(&self, main: Rect, idx: usize, scroll_y: i32) -> Rect {
+        let inner = main.inset(PAD);
+        let header_bottom = inner.y + COL_HEADER_H as i32;
+        if self.grid_view {
+            let cols = Self::grid_columns(main);
+            return Rect::new(
+                inner.x + (idx % cols) as i32 * GRID_W as i32,
+                header_bottom + (idx / cols) as i32 * GRID_H as i32 - scroll_y,
+                GRID_W.min(inner.w.saturating_sub(12)),
+                GRID_H,
+            );
+        }
+        Rect::new(
+            inner.x,
+            header_bottom + (idx as u32 * ROW_H) as i32 - scroll_y,
+            inner.w,
+            ROW_H,
+        )
+    }
+
+    fn hit_test_row(
+        &self,
+        main: Rect,
+        x: i32,
+        y: i32,
+        rows: usize,
+        scroll_y: i32,
+    ) -> Option<usize> {
+        let point = sunlight_ui::Point::new(x, y);
+        if !Self::main_scroll_region(main).contains(point) {
+            return None;
+        }
+        for idx in 0..rows {
+            if self.row_rect(main, idx, scroll_y).contains(point) {
+                return Some(idx);
+            }
+        }
+        None
+    }
+
+    fn home_folder_rect(inner: Rect, idx: usize) -> Rect {
+        let title_y = inner.y + 36;
+        let grid_top = title_y + 18;
+        let card_w = (inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
+            / HOME_COLS as u32)
+            .max(120);
+        let col = idx % HOME_COLS;
+        let row = idx / HOME_COLS;
+        let x = inner.x + (col as u32 * (card_w + HOME_CARD_GAP)) as i32;
+        let y = grid_top + (row as u32 * (HOME_CARD_H + HOME_CARD_GAP)) as i32;
+        Rect::new(x, y, card_w, HOME_CARD_H)
+    }
+
+    fn home_volume_rect(inner: Rect, idx: usize) -> Rect {
+        let section_y = Self::volumes_section_y(inner);
+        let y = section_y + idx as i32 * (DriveCard::ROW_H as i32 + 6);
+        Rect::new(inner.x, y, inner.w, DriveCard::ROW_H)
+    }
+
+    fn volumes_section_y(inner: Rect) -> i32 {
+        // title_y = folder section top + grid height + gap
+        let title_y =
+            inner.y + 36 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 12;
+        title_y + 18 // after section label
+    }
+
+    // ── Context menu + Properties ────────────────────────────────────────
+
+    fn context_menu_items(target: ContextTarget) -> &'static [ContextMenuItem] {
+        match target {
+            ContextTarget::Row(_) => &[
+                ContextMenuItem::Open,
+                ContextMenuItem::Copy,
+                ContextMenuItem::Cut,
+                ContextMenuItem::Paste,
+                ContextMenuItem::CopyPath,
+                ContextMenuItem::Properties,
+            ],
+            ContextTarget::Background => &[
+                ContextMenuItem::Paste,
+                ContextMenuItem::NewFolder,
+                ContextMenuItem::NewTextFile,
+                ContextMenuItem::Refresh,
+                ContextMenuItem::ToggleView,
+                ContextMenuItem::Properties,
+            ],
+        }
+    }
+
+    fn context_menu_item_label(item: ContextMenuItem) -> &'static str {
+        match item {
+            ContextMenuItem::Open => "Open",
+            ContextMenuItem::Copy => "Copy",
+            ContextMenuItem::Cut => "Cut",
+            ContextMenuItem::NewFolder => "New Folder",
+            ContextMenuItem::NewTextFile => "New Text File",
+            ContextMenuItem::Refresh => "Refresh",
+            ContextMenuItem::ToggleView => "Icons / Details (F6)",
+            ContextMenuItem::CopyPath => "Copy Path",
+            ContextMenuItem::Paste => "Paste",
+            ContextMenuItem::Properties => "Properties",
+        }
+    }
+
+    /// Open (or reposition) the context menu at the cursor. For a row target
+    /// the row is selected first — without navigating — mirroring single-click.
+    fn open_context_menu(&mut self, x: i32, y: i32, target: ContextTarget) -> bool {
+        if let ContextTarget::Row(idx) = target {
+            if idx < self.state.entry_count && !self.state.selected_rows[idx] {
+                self.select_item(idx);
+            }
+        }
+        self.context_menu = Some(ContextMenu {
+            x,
+            y,
+            target,
+            hovered: None,
+        });
+        true
+    }
+
+    /// Handle a right-click anywhere in the window.
+    fn handle_right_click(&mut self, x: i32, y: i32) -> bool {
+        // The context menu only applies to the directory listing.
+        if self.state.view_mode == ViewMode::Directory {
+            let (_, main) = self.body_layout();
+            if let Some(idx) = self.hit_test_row(
+                main,
+                x,
+                y,
+                self.state.entry_count,
+                self.main_scroll.offset_y,
+            ) {
+                return self.open_context_menu(x, y, ContextTarget::Row(idx));
+            }
+            // Empty space → background menu (Properties for the current folder).
+            return self.open_context_menu(x, y, ContextTarget::Background);
+        }
+        self.context_menu = None;
+        false
+    }
+
+    /// Left-click while a context menu is open: activate an item, consume
+    /// clicks inside the menu, or dismiss on click-outside.
+    fn handle_context_menu_click(&mut self, x: i32, y: i32) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let items = Self::context_menu_items(menu.target);
+        for (i, item) in items.iter().enumerate() {
+            if menu.item_rect(i).contains(pt) {
+                return self.activate_context_menu_item(*item);
+            }
+        }
+        if menu.menu_rect().contains(pt) {
+            return true; // padding — consume
+        }
+        self.context_menu = None; // outside — dismiss
+        true
+    }
+
+    /// Track the hovered menu item on mouse move. Returns whether hover
+    /// changed so the caller redraws only when needed.
+    fn update_menu_hover(&mut self, x: i32, y: i32) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let new_hover = if menu.menu_rect().contains(pt) {
+            (0..menu.item_count()).find(|&i| menu.item_rect(i).contains(pt))
+        } else {
+            None
+        };
+        if menu.hovered != new_hover {
+            self.context_menu = Some(ContextMenu {
+                hovered: new_hover,
+                ..menu
+            });
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Activate the currently hovered menu item (Enter key).
+    fn activate_hovered_menu_item(&mut self) -> bool {
+        let Some(menu) = self.context_menu else {
+            return false;
+        };
+        if let Some(i) = menu.hovered {
+            let item = Self::context_menu_items(menu.target)[i];
+            return self.activate_context_menu_item(item);
+        }
+        false
+    }
+
+    /// Run a chosen menu item. The menu is dismissed first in every case.
+    fn activate_context_menu_item(&mut self, item: ContextMenuItem) -> bool {
+        let target = match self.context_menu {
+            Some(m) => m.target,
+            None => return false,
+        };
+        self.context_menu = None;
+        match item {
+            ContextMenuItem::Open => {
+                if let ContextTarget::Row(idx) = target {
+                    if idx < self.state.entry_count {
+                        // Reuse the exact open path used by double-click/Enter.
+                        self.open_selected_or_item(idx);
+                    }
+                }
+                true
+            }
+            ContextMenuItem::Copy => self.copy_selected_file_list(false),
+            ContextMenuItem::Cut => self.copy_selected_file_list(true),
+            ContextMenuItem::NewFolder => self.create_item(true),
+            ContextMenuItem::NewTextFile => self.create_item(false),
+            ContextMenuItem::Refresh => self.refresh_directory(),
+            ContextMenuItem::ToggleView => self.toggle_view(),
+            ContextMenuItem::CopyPath => self.copy_selected_path_text(),
+            ContextMenuItem::Paste => self.paste_from_clipboard(),
+            ContextMenuItem::Properties => {
+                self.properties = Some(self.build_properties(target));
+                true
+            }
+        }
+    }
+
+    /// Left-click while the Properties dialog is open: Close button, consume
+    /// clicks inside, or dismiss on click-outside.
+    fn handle_properties_click(&mut self, x: i32, y: i32) -> bool {
+        let Some(props) = self.properties else {
+            return false;
+        };
+        let pt = sunlight_ui::Point::new(x, y);
+        let card = Self::properties_rect(&props);
+        if Self::properties_close_rect(card).contains(pt) {
+            self.properties = None;
+            return true;
+        }
+        if card.contains(pt) {
+            return true; // inside — consume
+        }
+        self.properties = None; // outside — dismiss
+        true
+    }
+
+    // ── Properties data ──────────────────────────────────────────────────
+
+    /// Snapshot the item `target` refers to into a PropertiesState.
+    fn build_properties(&self, target: ContextTarget) -> PropertiesState {
+        match target {
+            ContextTarget::Row(idx) => {
+                if idx >= self.state.entry_count {
+                    return PropertiesState::missing(self.state.current_path);
+                }
+                let entry = self.state.entries[idx];
+                let name_bytes = entry.name_bytes();
+                let name_str = core::str::from_utf8(name_bytes).unwrap_or("");
+                let path = match self.state.current_path.join(name_str) {
+                    Some(p) => p,
+                    None => return PropertiesState::missing(self.state.current_path),
+                };
+                Self::properties_for_path(path, Some(entry.file_type), name_bytes)
+            }
+            ContextTarget::Background => {
+                let path = self.state.current_path;
+                let basename = path.as_str().rsplit('/').next().unwrap_or("/");
+                Self::properties_for_path(path, Some(FT_DIR), basename.as_bytes())
+            }
+        }
+    }
+
+    /// Build a PropertiesState for an absolute path. `file_type_hint` and
+    /// `name_bytes` let us fall back gracefully when stat() fails.
+    fn properties_for_path(
+        path: PathBuf,
+        file_type_hint: Option<u8>,
+        name_bytes: &[u8],
+    ) -> PropertiesState {
+        let stat = libc::stat(path.as_str().as_bytes());
+        let (size, read_ok, file_type) = match stat {
+            Ok(s) => (s.size, true, s.file_type),
+            Err(_) => (0, false, file_type_hint.unwrap_or(0)),
+        };
+        let is_dir = file_type == FT_DIR || file_type_hint == Some(FT_DIR);
+
+        let kind = if is_dir {
+            PropertiesKind::Folder
+        } else {
+            PropertiesKind::File
+        };
+        let mime = if is_dir {
+            EMPTY_BYTES
+        } else {
+            mime_for_name(name_bytes)
+        };
+        let type_label = if is_dir {
+            "Folder"
+        } else {
+            file_type_label(name_bytes, mime)
+        };
+        let opener_path = if is_dir {
+            None
+        } else {
+            sun_open::app_for_mime(mime)
+        };
+
+        let mut props = PropertiesState {
+            kind,
+            name: [0; 64],
+            name_len: 0,
+            path,
+            type_label,
+            mime,
+            opener_path,
+            size,
+            img_format: "",
+            img_w: 0,
+            img_h: 0,
+            img_bpp: 0,
+            has_dims: false,
+            child_total: 0,
+            child_folders: 0,
+            child_files: 0,
+            child_capped: false,
+            read_ok,
+        };
+
+        let nl = name_bytes.len().min(props.name.len());
+        props.name[..nl].copy_from_slice(&name_bytes[..nl]);
+        props.name_len = nl;
+
+        if !read_ok {
+            return props;
+        }
+
+        match kind {
+            PropertiesKind::File => {
+                if mime_icon::is_image_mime(mime) {
+                    props.img_format = image_format_compact(name_bytes);
+                    // Peek at the header only — never decode the whole image,
+                    // and never touch the preview pane's buffer.
+                    let mut head = [0u8; 8192];
+                    let n = read_file_head(props.path.as_str().as_bytes(), &mut head);
+                    if let Some((w, h, bpp)) = tga_header_dims(&head[..n]) {
+                        props.img_w = w;
+                        props.img_h = h;
+                        props.img_bpp = bpp;
+                        props.has_dims = true;
+                    }
+                }
+            }
+            PropertiesKind::Folder => {
+                // Shallow child count only — never recursive, never on the
+                // hot path. A failed read_dir leaves counts at zero (the
+                // Contents row is then omitted), which is the graceful path
+                // for unreadable folders.
+                let mut buf = [DirEntry::zeroed(); PROP_CHILD_BUF];
+                if let Ok(count) = libc::read_dir(props.path.as_str().as_bytes(), &mut buf) {
+                    let n = count.min(PROP_CHILD_BUF);
+                    let mut folders = 0usize;
+                    let mut files = 0usize;
+                    for e in buf[..n].iter() {
+                        if e.file_type == FT_DIR {
+                            folders += 1;
+                        } else {
+                            files += 1;
+                        }
+                    }
+                    props.child_total = n;
+                    props.child_folders = folders;
+                    props.child_files = files;
+                    props.child_capped = n >= PROP_CHILD_BUF;
+                }
+            }
+        }
+
+        props
+    }
+
+    // ── Draw ──────────────────────────────────────────────────────────────
+
+    fn draw_toolbar(&self, canvas: &mut Canvas, theme: &Theme, toolbar: Rect) {
+        canvas.fill_rounded_rect_with_border(
+            toolbar,
+            RADIUS,
+            theme.chrome.window_bg,
+            theme.panel.lighten(20),
+            1,
+        );
+        let (back, forward, up, search, breadcrumb) = self.toolbar_layout();
+        let up_disabled = match self.state.view_mode {
+            ViewMode::Directory => self.state.current_path.parent().is_none(),
+            _ => true,
+        };
+        draw_pill(
+            canvas,
+            theme,
+            back,
+            "Back",
+            Some(UiSymbol::Back),
+            false,
+            true,
+        );
+        draw_pill(
+            canvas,
+            theme,
+            forward,
+            "Fwd",
+            Some(UiSymbol::Forward),
+            false,
+            true,
+        );
+        draw_pill(
+            canvas,
+            theme,
+            up,
+            "Up",
+            Some(UiSymbol::Up),
+            false,
+            up_disabled,
+        );
+        if self.state.view_mode == ViewMode::Directory {
+            self.view_toggle().draw(canvas, theme);
+        }
+
+        // ── Breadcrumb bar ─────────────────────────────────────────────────
+        canvas.fill_rounded_rect_with_border(breadcrumb, RADIUS, theme.panel, theme.border, 1);
+
+        match self.state.view_mode {
+            ViewMode::Home => {
+                sf_vcenter(
+                    canvas,
+                    "Home",
+                    breadcrumb.x + 10,
+                    breadcrumb.y,
+                    breadcrumb.h,
+                    &TextStyle::new(FontRole::UiRegular, theme.accent),
+                );
+            }
+            ViewMode::Volumes => {
+                sf_vcenter(
+                    canvas,
+                    "Volumes",
+                    breadcrumb.x + 10,
+                    breadcrumb.y,
+                    breadcrumb.h,
+                    &TextStyle::new(FontRole::UiRegular, theme.accent),
+                );
+            }
+            ViewMode::Network => {
+                sf_vcenter(
+                    canvas,
+                    "Network",
+                    breadcrumb.x + 10,
+                    breadcrumb.y,
+                    breadcrumb.h,
+                    &TextStyle::new(FontRole::UiRegular, theme.accent),
+                );
+            }
+            ViewMode::Directory => {
+                let path = self.state.current_path.as_str();
+                let bytes = path.as_bytes();
+                if bytes.is_empty() {
+                    return;
+                }
+                let mut cx = breadcrumb.x + 10;
+                let mut comp_start = 1usize; // skip leading '/'
+
+                // Root segment
+                let root_w = sun_font::measure_text("/", FontRole::UiSmall).w as i32;
+                let root_color = if comp_start >= bytes.len() {
+                    theme.accent
+                } else {
+                    theme.text
+                };
+                sf_vcenter(
+                    canvas,
+                    "/",
+                    cx,
+                    breadcrumb.y,
+                    breadcrumb.h,
+                    &TextStyle::new(FontRole::UiSmall, root_color),
+                );
+                cx += root_w + 4;
+
+                // Separator for non-root only
+                if comp_start < bytes.len() {
+                    sf_vcenter(
+                        canvas,
+                        ">",
+                        cx,
+                        breadcrumb.y,
+                        breadcrumb.h,
+                        &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                    );
+                    cx += sf_lh(FontRole::UiSmall) as i32 + 2;
+                }
+
+                while comp_start < bytes.len() {
+                    let mut comp_end = comp_start;
+                    while comp_end < bytes.len() && bytes[comp_end] != b'/' {
+                        comp_end += 1;
+                    }
+                    if comp_end > comp_start {
+                        if let Ok(seg) = core::str::from_utf8(&bytes[comp_start..comp_end]) {
+                            // Last visible segment gets the accent
+                            let seg_w = sun_font::measure_text(seg, FontRole::UiSmall).w as i32;
+                            if cx + seg_w > breadcrumb.right() - 4 {
+                                break; // clip
+                            }
+                            let is_last = comp_end >= bytes.len();
+                            sf_vcenter(
+                                canvas,
+                                seg,
+                                cx,
+                                breadcrumb.y,
+                                breadcrumb.h,
+                                &TextStyle::new(
+                                    FontRole::UiSmall,
+                                    if is_last { theme.accent } else { theme.text },
+                                ),
+                            );
+                            cx += seg_w + 4;
+                            if !is_last && cx < breadcrumb.right() - 20 {
+                                sf_vcenter(
+                                    canvas,
+                                    ">",
+                                    cx,
+                                    breadcrumb.y,
+                                    breadcrumb.h,
+                                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                                );
+                                cx += sf_lh(FontRole::UiSmall) as i32 + 2;
+                            }
+                        }
+                    }
+                    comp_start = comp_end + 1;
+                }
+            }
+        }
+
+        // ── Search field ────────────────────────────────────────────────────
+        canvas.fill_rounded_rect_with_border(search, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.draw_ui_symbol(search.x + 8, search.y + 9, UiSymbol::Search, theme.text_dim);
+        sf_vcenter(
+            canvas,
+            "Search",
+            search.x + 22,
+            search.y,
+            search.h,
+            &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+        );
+    }
+
+    fn draw_sidebar(&self, canvas: &mut Canvas, theme: &Theme, sidebar: Rect) {
+        canvas.fill_rounded_rect_with_border(
+            sidebar,
+            RADIUS,
+            theme.chrome.window_bg,
+            theme.panel.lighten(20),
+            1,
+        );
+
+        let inner = sidebar.inset(PAD);
+        let scroll = self.sidebar_scroll.offset_y;
+        let clip_top = inner.y;
+        let clip_bottom = inner.bottom();
+
+        // Content is built at Y=inner.y and shifted up by the scroll offset.
+        let content_y = inner.y - scroll;
+        let mut y = content_y;
+
+        // Measure item X before any per-group layout — used for hit-test helpers
+        let items_x = inner.x + 2;
+        let items_w = inner.w.saturating_sub(4);
+
+        for group in SIDEBAR_GROUPS {
+            let header_rect = Rect::new(inner.x, y, inner.w, SIDEBAR_HEADER_H);
+            // Only draw if header is at least partially visible
+            if header_rect.bottom() > clip_top && header_rect.y < clip_bottom {
+                sf_vcenter(
+                    canvas,
+                    group.label,
+                    header_rect.x + 6,
+                    header_rect.y,
+                    header_rect.h,
+                    &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+                );
+            }
+            y += SIDEBAR_HEADER_H as i32 + SIDEBAR_SECTION_GAP as i32;
+
+            // VBox layout the items in this group
+            let count = group.indices.len();
+            let items_h =
+                count as u32 * SIDEBAR_ITEM_H + (count.saturating_sub(1) as u32) * SIDEBAR_ITEM_GAP;
+            let items_area = Rect::new(items_x, y, items_w, items_h);
+
+            // Quick reject: skip group entirely if outside clip
+            if items_area.bottom() <= clip_top || items_area.y >= clip_bottom {
+                y += items_h as i32 + 4;
+                continue;
+            }
+
+            let heights = [SIDEBAR_ITEM_H; SIDEBAR_COUNT]; // big enough for max
+            let mut layout_iter = VBox::new(items_area)
+                .with_spacing(SIDEBAR_ITEM_GAP)
+                .layout(&heights);
+
+            for &idx in group.indices {
+                let Some(item_rect) = layout_iter.next() else {
+                    break;
+                };
+                // Skip items fully outside the viewport
+                if item_rect.bottom() <= clip_top {
+                    continue;
+                }
+                if item_rect.y >= clip_bottom {
+                    break;
+                }
+                let state = if idx == self.state.selected_sidebar {
+                    SidebarState::Selected
+                } else if self.hovered_sidebar == Some(idx) {
+                    SidebarState::Hovered
+                } else {
+                    SidebarState::Normal
+                };
+                let tga = sidebar_tga(idx);
+                let label = State::sidebar_label(idx);
+
+                if let Some(ref icon) = tga {
+                    SidebarItem::new(item_rect, label)
+                        .with_icon(icon)
+                        .with_state(state)
+                        .with_font(&FONT_UI_REG)
+                        .draw(canvas, theme);
+                } else {
+                    SidebarItem::new(item_rect, label)
+                        .with_state(state)
+                        .with_font(&FONT_UI_REG)
+                        .draw(canvas, theme);
+                }
+            }
+
+            y += items_h as i32 + 4;
+        }
+    }
+
+    fn draw_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        canvas.fill_rounded_rect_with_border(main, RADIUS, theme.panel, theme.border, 1);
+        match self.state.view_mode {
+            ViewMode::Home => self.draw_home_main(canvas, theme, main),
+            ViewMode::Volumes => self.draw_volumes_main(canvas, theme, main),
+            ViewMode::Network => self.draw_network_main(canvas, theme, main),
+            ViewMode::Directory => self.draw_directory_main(canvas, theme, main),
+        }
+    }
+
+    fn draw_home_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        canvas.draw_ui_symbol(inner.x, inner.y + 1, UiSymbol::FilesApp, theme.accent);
+        sf_vcenter(
+            canvas,
+            "Home",
+            inner.x + 16,
+            inner.y,
+            18,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        sf_vcenter(
+            canvas,
+            "Folders and volumes",
+            inner.x,
+            inner.y + 18,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        self.draw_home_folders(canvas, theme, inner);
+        let after_volumes = self.draw_home_volumes(canvas, theme, inner);
+        self.draw_home_network(canvas, theme, inner, after_volumes);
+    }
+
+    fn draw_home_folders(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) {
+        let title_y = inner.y + 36;
+        sf_vcenter(
+            canvas,
+            "Places",
+            inner.x,
+            title_y,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        let card_w = (inner
+            .w
+            .saturating_sub((HOME_COLS as u32 - 1) * HOME_CARD_GAP)
+            / HOME_COLS as u32)
+            .max(120);
+
+        for idx in 0..HOME_FOLDER_COUNT {
+            let rect = Self::home_folder_rect(inner, idx);
+            let folder = self.state.home_folders[idx];
+
+            canvas.fill_rounded_rect_with_border(rect, RADIUS, theme.panel_alt, theme.border, 1);
+
+            // Icon — TGA preferred, UiSymbol fallback
+            let icon_rect = Rect::new(rect.x + 6, rect.y + 7, 34, 34);
+            if let Some(tga) = home_folder_tga(idx) {
+                canvas.draw_icon(&tga, icon_rect);
+            } else {
+                let sym = home_folder_symbol(idx);
+                canvas.draw_ui_symbol(rect.x + 10, rect.y + 10, sym, theme.accent);
+            }
+
+            // Name and path hint — no "Missing" labels on startup
+            let text_x = rect.x + 46;
+            sf_draw(
+                canvas,
+                folder.name,
+                text_x,
+                rect.y + 8,
+                &TextStyle::new(FontRole::UiRegular, theme.text),
+            );
+            // Show a shortened path if there's room
+            let _ = card_w; // used for layout calculation above
+            sf_draw(
+                canvas,
+                folder.path.as_str(),
+                text_x,
+                rect.y + 24,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        }
+    }
+
+    /// Draw the Volumes section; returns the y coordinate directly below it.
+    fn draw_home_volumes(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect) -> i32 {
+        let title_y =
+            inner.y + 36 + 18 + HOME_GRID_ROWS as i32 * (HOME_CARD_H + HOME_CARD_GAP) as i32 + 12;
+        sf_vcenter(
+            canvas,
+            "Volumes",
+            inner.x,
+            title_y,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        let mut y = title_y + 18;
+
+        if self.state.volume_count == 0 {
+            let card = Rect::new(inner.x, y + 4, inner.w, 44);
+            canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
+            canvas.draw_ui_symbol(inner.x + 12, card.y + 14, UiSymbol::Volume, theme.text_dim);
+            sf_vcenter(
+                canvas,
+                "No mounted volumes detected",
+                inner.x + 30,
+                card.y,
+                card.h,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            return card.bottom() + 8;
+        }
+
+        for idx in 0..self.state.volume_count {
+            let volume = self.state.volume_entries[idx];
+            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
+            y += DriveCard::ROW_H as i32 + 6;
+
+            DriveCard::new(rect, volume.name_str())
+                .with_layout(DriveCardLayout::Row)
+                .with_mount_path(volume.path.as_str())
+                .with_font(&FONT_UI_REG)
+                .draw(canvas, theme);
+        }
+
+        y
+    }
+
+    fn draw_home_network(&self, canvas: &mut Canvas, theme: &Theme, inner: Rect, y: i32) {
+        if y >= inner.bottom() - 36 {
+            return;
+        }
+        sf_vcenter(
+            canvas,
+            "Network",
+            inner.x,
+            y + 4,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        let card = Rect::new(inner.x, y + 22, inner.w, 40);
+        canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.draw_ui_symbol(inner.x + 12, card.y + 12, UiSymbol::Network, theme.text_dim);
+        sf_vcenter(
+            canvas,
+            "No network shares available",
+            inner.x + 30,
+            card.y,
+            card.h,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+    }
+
+    fn draw_volumes_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        sf_vcenter(
+            canvas,
+            "Volumes",
+            inner.x,
+            inner.y,
+            20,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        sf_vcenter(
+            canvas,
+            "Mounted filesystems and drives",
+            inner.x,
+            inner.y + 20,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        let mut y = inner.y + 44;
+        for idx in 0..self.state.volume_count {
+            let volume = self.state.volume_entries[idx];
+            let rect = Rect::new(inner.x, y, inner.w, DriveCard::ROW_H);
+            y += DriveCard::ROW_H as i32 + 8;
+            DriveCard::new(rect, volume.name_str())
+                .with_layout(DriveCardLayout::Row)
+                .with_mount_path(volume.path.as_str())
+                .with_font(&FONT_UI_REG)
+                .draw(canvas, theme);
+        }
+
+        if self.state.volume_count == 0 {
+            let empty_card = Rect::new(inner.x, y, inner.w, 80);
+            canvas.fill_rounded_rect_with_border(
+                empty_card,
+                RADIUS,
+                theme.panel_alt,
+                theme.border,
+                1,
+            );
+            canvas.draw_ui_symbol(
+                inner.x + (inner.w as i32 - 16) / 2,
+                y + 16,
+                UiSymbol::Volume,
+                theme.text_dim,
+            );
+            sf_centered(
+                canvas,
+                Rect::new(inner.x, y + 34, inner.w, 18),
+                "No mounted volumes detected",
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            sf_centered(
+                canvas,
+                Rect::new(inner.x, y + 52, inner.w, 14),
+                "Storage devices appear here when connected",
+                &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+            );
+        }
+    }
+
+    fn draw_network_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        sf_vcenter(
+            canvas,
+            "Network",
+            inner.x,
+            inner.y,
+            20,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+        sf_vcenter(
+            canvas,
+            "Network locations and shares",
+            inner.x,
+            inner.y + 20,
+            14,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        let card = Rect::new(inner.x, inner.y + 44, inner.w, 90);
+        canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel_alt, theme.border, 1);
+        canvas.draw_ui_symbol(
+            inner.x + (inner.w as i32 - 16) / 2,
+            card.y + 14,
+            UiSymbol::Network,
+            theme.text_dim,
+        );
+        sf_centered(
+            canvas,
+            Rect::new(inner.x, card.y + 34, inner.w, 16),
+            "No network mounts",
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        sf_centered(
+            canvas,
+            Rect::new(inner.x, card.y + 52, inner.w, 14),
+            "Network shares appear here when available",
+            &TextStyle::new(FontRole::UiSmall, theme.text_muted),
+        );
+    }
+
+    fn draw_directory_main(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let left = main.x.max(0);
+        let top = main.y.max(0);
+        let right = main.right().min(canvas.width as i32);
+        let bottom = main.bottom().min(canvas.height as i32);
+        if right <= left || bottom <= top {
+            return;
+        }
+        let start = top as usize * canvas.stride as usize + left as usize;
+        let mut clip = Canvas::new(
+            &mut canvas.pixels[start..],
+            canvas.stride,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        );
+        self.draw_directory_main_content(
+            &mut clip,
+            theme,
+            Rect::new(main.x - left, main.y - top, main.w, main.h),
+        );
+    }
+
+    fn draw_directory_main_content(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        if self.grid_view {
+            sf_vcenter(
+                canvas,
+                if self.state.error_len != 0 {
+                    self.state.error_str()
+                } else {
+                    "Icons · F6: Details"
+                },
+                inner.x,
+                inner.y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            self.draw_directory_grid(canvas, theme, main);
+            return;
+        }
+
+        // ── Column header row ──────────────────────────────────────────────
+        let (name_w, type_w, size_w, mod_w) = Self::details_columns(inner.w);
+        let type_x = inner.x + ICON_SLOT as i32 + 6 + name_w as i32;
+        let size_x = type_x + type_w as i32;
+        let mod_x = size_x + size_w as i32;
+
+        let header_rect = Rect::new(inner.x, inner.y, inner.w, COL_HEADER_H);
+        canvas.fill_rounded_rect(header_rect, RADIUS, theme.panel_alt);
+        canvas.hbar(
+            inner.x,
+            inner.y + COL_HEADER_H as i32 - 1,
+            inner.w,
+            1,
+            theme.accent.darken(80),
+        );
+
+        let header_y = inner.y;
+        let name_header_x = inner.x + ICON_SLOT as i32 + 6;
+        sf_vcenter(
+            canvas,
+            "Name",
+            name_header_x,
+            header_y,
+            COL_HEADER_H,
+            &TextStyle::new(FontRole::UiSmall, theme.text),
+        );
+        if type_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Type",
+                type_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+        if size_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Size",
+                size_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+        if mod_w > 0 {
+            sf_vcenter(
+                canvas,
+                "Modified",
+                mod_x + 8,
+                header_y,
+                COL_HEADER_H,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+        }
+
+        // ── Error message ──────────────────────────────────────────────────
+        if self.state.error_len != 0 {
+            sf_vcenter(
+                canvas,
+                self.state.error_str(),
+                inner.x,
+                inner.y + COL_HEADER_H as i32 + 4,
+                14,
+                &TextStyle::new(FontRole::UiSmall, theme.danger),
+            );
+        }
+
+        // ── Rows / empty state ─────────────────────────────────────────────
+        self.draw_directory_rows(canvas, theme, main);
+    }
+
+    fn grid_columns(main: Rect) -> usize {
+        (main.inset(PAD).w.saturating_sub(12) / GRID_W).max(1) as usize
+    }
+    fn grid_visible(&self) -> core::ops::Range<usize> {
+        let main = self.body_layout().1;
+        let cols = Self::grid_columns(main);
+        let first = self.main_scroll.offset_y.max(0) as usize / GRID_H as usize * cols;
+        let count = (Self::main_scroll_region(main).h as usize / GRID_H as usize + 2) * cols;
+        first.min(self.state.entry_count)..(first + count).min(self.state.entry_count)
+    }
+    fn schedule_grid(&mut self) {
+        // view() synchronizes navigation before this runs. Ticks must not submit
+        // entries from a new directory under the old directory generation.
+        if !self.grid_view
+            || self.state.view_mode != ViewMode::Directory
+            || self.prev_view_mode != self.state.view_mode
+            || !path_matches(self.prev_path.as_str(), self.state.current_path.as_str())
+        {
+            return;
+        }
+        for idx in self.grid_visible() {
+            let main = self.body_layout().1;
+            let tile = self.row_rect(main, idx, self.main_scroll.offset_y);
+            let region = Self::main_scroll_region(main);
+            if tile.bottom() <= region.y || tile.y >= region.bottom() {
+                continue;
+            }
+            let entry = self.state.entries[idx];
+            if entry.file_type == FT_FILE
+                && (is_image_name(entry.name_bytes()) || preview::pdf::supports(entry.name_bytes()))
+            {
+                if let Some(path) = self.state.current_path.join(entry_name_str(&entry)) {
+                    self.thumbnails
+                        .request_grid(path.as_str().as_bytes(), entry.size);
+                }
+            }
+        }
+    }
+    fn draw_directory_grid(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let region = Self::main_scroll_region(main);
+        for idx in self.grid_visible() {
+            let tile = self.row_rect(main, idx, self.main_scroll.offset_y);
+            let left = tile.x.max(region.x).max(0);
+            let top = tile.y.max(region.y).max(0);
+            let right = tile.right().min(region.right()).min(canvas.width as i32);
+            let bottom = tile.bottom().min(region.bottom()).min(canvas.height as i32);
+            if right <= left || bottom <= top {
+                continue;
+            }
+            let start = top as usize * canvas.stride as usize + left as usize;
+            let stride = canvas.stride;
+            let mut clipped = Canvas::new(
+                &mut canvas.pixels[start..],
+                stride,
+                (right - left) as u32,
+                (bottom - top) as u32,
+            );
+            let tile = Rect::new(tile.x - left, tile.y - top, tile.w, tile.h);
+            let selected = self.state.selected_rows[idx];
+            if selected {
+                clipped.fill_rounded_rect(
+                    tile.inset(3),
+                    RADIUS,
+                    if self.window_focused {
+                        theme.chrome.selection
+                    } else {
+                        theme.chrome.selection_inactive
+                    },
+                );
+            }
+            let entry = self.state.entries[idx];
+            let icon_w = 72.min(tile.w.saturating_sub(8));
+            let bounds = Rect::new(
+                tile.x + (tile.w.saturating_sub(icon_w) / 2) as i32,
+                tile.y + 8,
+                icon_w,
+                72,
+            );
+            let path = self.state.current_path.join(entry_name_str(&entry));
+            let ready = path.as_ref().and_then(|p| {
+                self.thumbnails
+                    .grid_image(p.as_str().as_bytes(), entry.size)
+            });
+            if let Some(ready) = ready {
+                let (w, h) = sunlight_ui::image::simg::fit_dimensions(
+                    ready.image.width,
+                    ready.image.height,
+                    bounds.w,
+                    bounds.h,
+                );
+                draw_argb_image(
+                    &mut clipped,
+                    &ready.image,
+                    Rect::new(
+                        bounds.x + (bounds.w - w) as i32 / 2,
+                        bounds.y + (bounds.h - h) as i32 / 2,
+                        w,
+                        h,
+                    ),
+                );
+            } else if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+                clipped.draw_icon(&icon, bounds);
+            } else {
+                clipped.draw_ui_symbol_centered(bounds, UiSymbol::File, theme.text_dim);
+            }
+            self.draw_filename(
+                &mut clipped,
+                Rect::new(
+                    tile.x + 4,
+                    tile.y + 84,
+                    tile.w.saturating_sub(8),
+                    2 * sf_lh(FontRole::UiSmall),
+                ),
+                entry_name_str(&entry),
+                2,
+                theme.text,
+            );
+        }
+        if self.state.entry_count == 0 {
+            sf_centered(
+                canvas,
+                region,
+                "This folder is empty",
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+        }
+    }
+
+    fn details_columns(width: u32) -> (u32, u32, u32, u32) {
+        let modified = if width >= 620 { MOD_W } else { 0 };
+        let kind = if width >= 380 { TYPE_W } else { 0 };
+        let size = if width >= 220 { SIZE_W } else { 0 };
+        (
+            width.saturating_sub(ICON_SLOT + 6 + kind + size + modified + 12),
+            kind,
+            size,
+            modified,
+        )
+    }
+
+    fn draw_directory_rows(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let region = Self::main_scroll_region(main);
+        let left = region.x.max(0);
+        let top = region.y.max(0);
+        let right = region.right().min(canvas.width as i32);
+        let bottom = region.bottom().min(canvas.height as i32);
+        if right <= left || bottom <= top {
+            return;
+        }
+        let start = top as usize * canvas.stride as usize + left as usize;
+        let mut clip = Canvas::new(
+            &mut canvas.pixels[start..],
+            canvas.stride,
+            (right - left) as u32,
+            (bottom - top) as u32,
+        );
+        self.draw_directory_rows_clipped(
+            &mut clip,
+            theme,
+            Rect::new(main.x - left, main.y - top, main.w, main.h),
+        );
+    }
+
+    fn draw_directory_rows_clipped(&self, canvas: &mut Canvas, theme: &Theme, main: Rect) {
+        let inner = main.inset(PAD);
+        let list_top = inner.y + COL_HEADER_H as i32;
+        let list_h = inner.bottom() - list_top;
+        if list_h <= 0 {
+            return;
+        }
+
+        let (name_w, type_w, size_w, mod_w) = Self::details_columns(inner.w);
+        let type_x = inner.x + ICON_SLOT as i32 + 6 + name_w as i32;
+        let size_x = type_x + type_w as i32;
+        let mod_x = size_x + size_w as i32;
+
+        let entry_count = self.state.entry_count;
+        let scroll = self.main_scroll.offset_y;
+
+        // ── Empty state ────────────────────────────────────────────────────
+        if entry_count == 0 {
+            let empty_y = list_top + (list_h as i32) / 2 - 28;
+            let icon_x = inner.x + (inner.w as i32 - 20) / 2;
+            canvas.draw_ui_symbol(icon_x, empty_y, UiSymbol::Folder, theme.text_dim);
+            sf_centered(
+                canvas,
+                Rect::new(inner.x, empty_y + 22, inner.w, 20),
+                "This folder is empty",
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            return;
+        }
+
+        // Compute visible row range with one extra row of overscan to prevent
+        // visual gaps during wheel scrolls.
+        let first_visible = (scroll as u32 / ROW_H) as usize;
+        let visible_count = (list_h as u32 / ROW_H) as usize + 1;
+        let last_visible = (first_visible + visible_count).min(entry_count);
+
+        // Column widths for row separator
+        let row_full_w = inner.w;
+
+        for idx in first_visible..last_visible {
+            let entry = self.state.entries[idx];
+            let row_y = list_top + (idx as u32 * ROW_H) as i32 - scroll;
+            let row = Rect::new(inner.x, row_y, row_full_w, ROW_H);
+            let selected = self.state.selected_rows[idx];
+
+            // Skip rows fully outside the clip area (top of header or below pane)
+            if row.bottom() <= list_top || row.y >= inner.bottom() {
+                continue;
+            }
+
+            let fill = if selected {
+                if self.window_focused {
+                    theme.chrome.selection
+                } else {
+                    theme.chrome.selection_inactive
+                }
+            } else if idx % 2 == 0 {
+                theme.chrome.window_bg
+            } else {
+                theme.chrome.card_bg
+            };
+            canvas.fill_rect(row, fill);
+
+            // Selected accent bar on left edge
+            if selected && self.window_focused {
+                let bar_h = ROW_H.saturating_sub(8).max(16);
+                let bar = Rect::new(
+                    row.x + 2,
+                    row_y + (ROW_H as i32 - bar_h as i32) / 2,
+                    3,
+                    bar_h,
+                );
+                canvas.fill_rounded_rect(bar, 2, theme.accent);
+            }
+
+            let font_lh = sf_lh(FontRole::UiRegular) as i32;
+            let text_y = row_y + (ROW_H as i32 - font_lh) / 2;
+
+            // Icon
+            let icon_y = row_y + (ROW_H as i32 - 24) / 2;
+            let icon_rect = Rect::new(row.x + 8, icon_y, 24, 24);
+            if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+                canvas.draw_icon(&icon, icon_rect);
+            } else {
+                let sym_x = row.x + (ICON_SLOT as i32 - 10) / 2;
+                let sym_y = row_y + (ROW_H as i32 - 12) / 2;
+                canvas.draw_ui_symbol(sym_x, sym_y, UiSymbol::File, theme.text_dim);
+            }
+
+            let text_x = row.x + ICON_SLOT as i32 + 8;
+            let name_color = if selected {
+                theme.accent_hover
+            } else {
+                theme.text
+            };
+            self.draw_filename(
+                canvas,
+                Rect::new(
+                    text_x,
+                    text_y,
+                    name_w.saturating_sub(8),
+                    sf_lh(FontRole::UiRegular),
+                ),
+                entry_name_str(&entry),
+                1,
+                name_color,
+            );
+
+            let type_label = match entry.file_type {
+                FT_DIR => "Directory",
+                FT_FILE => file_type_label(entry.name_bytes(), mime_for_name(entry.name_bytes())),
+                _ => "Other",
+            };
+            if type_w > 0 {
+                self.draw_filename(
+                    canvas,
+                    Rect::new(
+                        type_x + 8,
+                        text_y,
+                        type_w.saturating_sub(16),
+                        sf_lh(FontRole::UiRegular),
+                    ),
+                    type_label,
+                    1,
+                    theme.text_dim,
+                );
+            }
+
+            if size_w > 0 {
+                if entry.file_type == FT_DIR {
+                    sf_right(
+                        canvas,
+                        Rect::new(size_x, row_y, size_w, ROW_H),
+                        "--",
+                        &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+                        8,
+                    );
+                } else {
+                    let mut scratch = [0u8; 16];
+                    let len = write_size(entry.size, &mut scratch);
+                    let size_text = core::str::from_utf8(&scratch[..len]).unwrap_or("--");
+                    sf_right(
+                        canvas,
+                        Rect::new(size_x, row_y, size_w, ROW_H),
+                        size_text,
+                        &TextStyle::new(FontRole::UiRegular, theme.text),
+                        8,
+                    );
+                }
+            }
+            if mod_w > 0 {
+                sf_draw(
+                    canvas,
+                    "--",
+                    mod_x + 8,
+                    text_y,
+                    &TextStyle::new(FontRole::UiRegular, theme.text_dim),
+                );
+            }
+
+            // Subtle row separator
+            if idx + 1 < entry_count {
+                canvas.hbar(
+                    row.x + ICON_SLOT as i32 + 4,
+                    row_y + ROW_H as i32 - 1,
+                    row.w.saturating_sub(ICON_SLOT + 8),
+                    1,
+                    theme.border.darken(32),
+                );
+            }
+        }
+    }
+
+    fn draw_details_pane(&self, canvas: &mut Canvas, theme: &Theme, details: Rect) {
+        canvas.fill_rounded_rect_with_border(details, RADIUS, theme.panel_alt, theme.border, 1);
+
+        let inner = details.inset(PAD);
+        let preview_w = DETAILS_PREVIEW_W.min((inner.h - 8) * 2 / 3);
+        let preview_x = inner.right() - preview_w as i32;
+        let left_area = Rect::new(
+            inner.x,
+            inner.y,
+            inner.w.saturating_sub(preview_w + 12),
+            inner.h,
+        );
+        let preview_area = Rect::new(preview_x, inner.y, preview_w, inner.h);
+
+        match self.state.view_mode {
+            ViewMode::Directory => {
+                if let Some(idx) = self.state.selected_row {
+                    if idx < self.state.entry_count {
+                        let entry = self.state.entries[idx];
+                        self.draw_file_details(canvas, theme, left_area, preview_area, entry);
+                        return;
+                    }
+                }
+                self.draw_folder_summary(canvas, theme, left_area, preview_area);
+            }
+            ViewMode::Home | ViewMode::Volumes | ViewMode::Network => {
+                self.draw_folder_summary(canvas, theme, left_area, preview_area);
+            }
+        }
+    }
+
+    /// Draw one property row: label in dim text, value in regular text.
+    fn draw_prop_row(
+        canvas: &mut Canvas,
+        x: i32,
+        y: i32,
+        label_w: u32,
+        label: &str,
+        value: &str,
+        value_role: FontRole,
+        theme: &Theme,
+    ) -> i32 {
+        let lh = sf_lh(FontRole::UiSmall) as i32;
+        sf_draw(
+            canvas,
+            label,
+            x,
+            y + 1,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+        sf_draw(
+            canvas,
+            value,
+            x + label_w as i32 + 8,
+            y + 1,
+            &TextStyle::new(value_role, theme.text),
+        );
+        y + lh + 4
+    }
+
+    fn draw_folder_summary(&self, canvas: &mut Canvas, theme: &Theme, left: Rect, preview: Rect) {
+        let lh_rg = sf_lh(FontRole::UiRegular) as i32;
+        let label_w = 80u32;
+
+        let folder_name = self
+            .state
+            .current_path
+            .as_str()
+            .rsplit('/')
+            .next()
+            .unwrap_or("/");
+
+        let mut y = left.y + 4;
+
+        // Title row: folder name in accent
+        sf_draw(
+            canvas,
+            folder_name,
+            left.x,
+            y,
+            &TextStyle::new(FontRole::UiMedium, theme.accent),
+        );
+        y += lh_rg + 8;
+
+        y = Self::draw_prop_row(
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Type",
+            "Directory",
+            FontRole::UiSmall,
+            theme,
+        );
+
+        y = Self::draw_prop_row(
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Path",
+            self.state.current_path.as_str(),
+            FontRole::MonoRegular,
+            theme,
+        );
+
+        let mut buf = [0u8; 48];
+        let mut len = 0;
+        len += write_usize(&mut buf[len..], self.state.entry_count);
+        len += write_to_buf(&mut buf[len..], b" items");
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            y = Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Items",
+                s,
+                FontRole::UiSmall,
+                theme,
+            );
+        }
+
+        len = 0;
+        len += write_usize(&mut buf[len..], self.state.file_count);
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            y = Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Files",
+                s,
+                FontRole::UiSmall,
+                theme,
+            );
+        }
+
+        len = 0;
+        len += write_usize(&mut buf[len..], self.state.folder_count);
+        if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+            y = Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Directories",
+                s,
+                FontRole::UiSmall,
+                theme,
+            );
+        }
+
+        if let Some(selected_count) = self.state.selected_row.map(|_| {
+            self.state
+                .selected_rows
+                .iter()
+                .filter(|selected| **selected)
+                .count()
+        }) {
+            if selected_count > 0 {
+                len = 0;
+                len += write_usize(&mut buf[len..], selected_count);
+                if let Ok(s) = core::str::from_utf8(&buf[..len]) {
+                    Self::draw_prop_row(
+                        canvas,
+                        left.x,
+                        y,
+                        label_w,
+                        "Selected",
+                        s,
+                        FontRole::UiSmall,
+                        theme,
+                    );
+                }
+            }
+        }
+
+        // Preview icon (right side)
+        let icon_size = preview.h.min(64);
+        let icon_x = preview.x + (preview.w as i32 - icon_size as i32) / 2;
+        let icon_y = preview.y + (preview.h as i32 - icon_size as i32) / 2;
+        if let Some(icon) = self.mime_icons.folder.or(self.mime_icons.inode_directory) {
+            canvas.draw_icon(&icon, Rect::new(icon_x, icon_y, icon_size, icon_size));
+        } else {
+            canvas.draw_ui_symbol_centered(
+                Rect::new(icon_x, icon_y, icon_size, icon_size),
+                UiSymbol::Folder,
+                theme.accent,
+            );
+        }
+    }
+
+    fn draw_file_details(
+        &self,
+        canvas: &mut Canvas,
+        theme: &Theme,
+        left: Rect,
+        preview: Rect,
+        entry: DirEntry,
+    ) {
+        let lh_rg = sf_lh(FontRole::UiRegular) as i32;
+        let label_w = 80u32;
+
+        let name_bytes = entry.name_bytes();
+        if let Ok(name) = core::str::from_utf8(name_bytes) {
+            sf_draw(
+                canvas,
+                name,
+                left.x,
+                left.y + 4,
+                &TextStyle::new(FontRole::UiMedium, theme.accent),
+            );
+        }
+        let mut y = left.y + 4 + lh_rg + 8;
+
+        let mime = mime_for_name(name_bytes);
+        let type_label = file_type_label(name_bytes, mime);
+        y = Self::draw_prop_row(
+            canvas,
+            left.x,
+            y,
+            label_w,
+            "Type",
+            type_label,
+            FontRole::UiSmall,
+            theme,
+        );
+
+        // Path
+        let entry_path = if let Ok(name) = core::str::from_utf8(name_bytes) {
+            self.state.current_path.join(name)
+        } else {
+            None
+        };
+        if let Some(ep) = entry_path {
+            y = Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Path",
+                ep.as_str(),
+                FontRole::MonoRegular,
+                theme,
+            );
+        }
+
+        // Size
+        let mut size_buf = [0u8; 16];
+        let size_len = write_size(entry.size, &mut size_buf);
+        if let Ok(s) = core::str::from_utf8(&size_buf[..size_len]) {
+            y = Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Size",
+                s,
+                FontRole::UiSmall,
+                theme,
+            );
+        }
+
+        // Image dimensions
+        if is_image_name(name_bytes) && self.preview_src_w > 0 && self.preview_src_h > 0 {
+            let mut dim_buf = [0u8; 32];
+            let mut dlen = 0;
+            dlen += write_usize(&mut dim_buf[dlen..], self.preview_src_w as usize);
+            dlen += write_to_buf(&mut dim_buf[dlen..], b"x");
+            dlen += write_usize(&mut dim_buf[dlen..], self.preview_src_h as usize);
+            if let Ok(s) = core::str::from_utf8(&dim_buf[..dlen]) {
+                y = Self::draw_prop_row(
+                    canvas,
+                    left.x,
+                    y,
+                    label_w,
+                    "Dimensions",
+                    s,
+                    FontRole::UiSmall,
+                    theme,
+                );
+            }
+
+            let format_label = match self.thumbnails.preview.as_ref().map_or(0, |p| p.format) {
+                1 => "SIMG v2",
+                2 => "PNG",
+                3 => "JPEG",
+                5 => "Document",
+                _ => "TGA",
+            };
+            Self::draw_prop_row(
+                canvas,
+                left.x,
+                y,
+                label_w,
+                "Format",
+                format_label,
+                FontRole::UiSmall,
+                theme,
+            );
+        }
+
+        // Preview (right side)
+        if is_image_name(name_bytes) || preview::pdf::supports(name_bytes) {
+            let icon_inset = preview.inset(4);
+            if let Some(ready) = &self.thumbnails.preview {
+                let (w, h) = sunlight_ui::image::simg::fit_dimensions(
+                    ready.image.width,
+                    ready.image.height,
+                    icon_inset.w,
+                    icon_inset.h,
+                );
+                let dst = Rect::new(
+                    icon_inset.x + (icon_inset.w - w) as i32 / 2,
+                    icon_inset.y + (icon_inset.h - h) as i32 / 2,
+                    w,
+                    h,
+                );
+                draw_argb_image(canvas, &ready.image, dst);
+            } else {
+                if let Some(icon) = self.mime_icons.image_generic {
+                    let sz = icon_inset.h.min(64);
+                    let ix = icon_inset.x + (icon_inset.w as i32 - sz as i32) / 2;
+                    let iy = icon_inset.y + (icon_inset.h as i32 - sz as i32) / 2;
+                    canvas.draw_icon(&icon, Rect::new(ix, iy, sz, sz));
+                } else {
+                    canvas.draw_ui_symbol_centered(icon_inset, UiSymbol::Pictures, theme.accent);
+                }
+            }
+        } else {
+            // File icon on right
+            let sz = preview.h.min(64);
+            let ix = preview.x + (preview.w as i32 - sz as i32) / 2;
+            let iy = preview.y + (preview.h as i32 - sz as i32) / 2;
+            if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+                canvas.draw_icon(&icon, Rect::new(ix, iy, sz, sz));
+            } else {
+                canvas.draw_ui_symbol_centered(
+                    Rect::new(ix, iy, sz, sz),
+                    UiSymbol::File,
+                    theme.accent,
+                );
+            }
+        }
+    }
+
+    fn draw_status(&self, canvas: &mut Canvas, theme: &Theme, status: Rect) {
+        canvas.fill_rounded_rect_with_border(status, RADIUS, theme.panel_alt, theme.border, 1);
+
+        let mut count_buf = [0u8; 24];
+        let count_len = write_count(
+            self.state.entry_count,
+            self.state.folder_count,
+            self.state.file_count,
+            &mut count_buf,
+        );
+        let count_text = core::str::from_utf8(&count_buf[..count_len]).unwrap_or("0 items");
+        sf_vcenter(
+            canvas,
+            count_text,
+            status.x + 12,
+            status.y,
+            STATUS_H,
+            &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+        );
+
+        let summary = if self.state.error_len != 0 {
+            self.state.error_str()
+        } else if self.status_msg_len != 0 {
+            self.status_text()
+        } else {
+            ""
+        };
+        let summary_color = if self.state.error_len != 0 || self.status_is_error {
+            theme.danger
+        } else {
+            theme.text_dim
+        };
+        if !summary.is_empty() {
+            // Separator dot
+            let dot_x =
+                status.x + 24 + sun_font::measure_text(count_text, FontRole::UiSmall).w as i32;
+            sf_vcenter(
+                canvas,
+                "\u{2022}",
+                dot_x,
+                status.y,
+                STATUS_H,
+                &TextStyle::new(FontRole::UiSmall, theme.border),
+            );
+            sf_vcenter(
+                canvas,
+                summary,
+                dot_x + 14,
+                status.y,
+                STATUS_H,
+                &TextStyle::new(FontRole::UiSmall, summary_color),
+            );
+        }
+
+        // Selected indicator on the right
+        if self.state.selected_row.is_some() {
+            let count = self
+                .state
+                .selected_rows
+                .iter()
+                .filter(|selected| **selected)
+                .count();
+            let sel_text = format!("{} item(s) selected", count);
+            let sel_w = sun_font::measure_text(&sel_text, FontRole::UiSmall).w as i32;
+            sf_vcenter(
+                canvas,
+                &sel_text,
+                status.right() - sel_w - 10,
+                status.y,
+                STATUS_H,
+                &TextStyle::new(FontRole::UiSmall, theme.accent),
+            );
+        }
+    }
+
+    // ── Context menu + Properties drawing ────────────────────────────────
+
+    fn draw_context_menu(&self, canvas: &mut Canvas, theme: &Theme, menu: ContextMenu) {
+        let r = menu.menu_rect();
+        canvas.fill_rounded_rect_with_border(r, RADIUS, theme.panel, theme.border, 1);
+        let items = Self::context_menu_items(menu.target);
+        for (i, &item) in items.iter().enumerate() {
+            let ir = menu.item_rect(i);
+            let hovered = menu.hovered == Some(i);
+            if hovered {
+                canvas.fill_rect(ir, theme.accent);
+            }
+            let color = if hovered { theme.bg } else { theme.text };
+            sf_vcenter(
+                canvas,
+                Self::context_menu_item_label(item),
+                ir.x + 12,
+                ir.y,
+                ir.h,
+                &TextStyle::new(FontRole::UiRegular, color),
+            );
+        }
+    }
+
+    /// Centered dialog card rect; height is derived from the row count so the
+    /// layout (used by both sizing and drawing) stays in sync.
+    fn properties_rect(props: &PropertiesState) -> Rect {
+        let count = props.rows().1 as u32;
+        // top_block = top pad + title + icon row + gap above rows
+        let top_block = PROP_PAD as u32 + PROP_TITLE_H + PROP_ICON_ROW_H + 6;
+        let bottom_block = 12 + PROP_BTN_H + 14; // gap + button + bottom pad
+        let h = top_block + count * PROP_ROW_H + bottom_block;
+        let x = (WIN_W as i32 - DIALOG_W as i32) / 2;
+        let y = ((WIN_H as i32 - h as i32) / 2).max(24);
+        Rect::new(x, y, DIALOG_W, h)
+    }
+
+    fn properties_close_rect(card: Rect) -> Rect {
+        let bw = 96;
+        Rect::new(
+            card.x + (card.w as i32 - bw) / 2,
+            card.bottom() - PROP_BTN_H as i32 - 14,
+            bw as u32,
+            PROP_BTN_H,
+        )
+    }
+
+    fn draw_properties(&self, canvas: &mut Canvas, theme: &Theme, props: PropertiesState) {
+        let card = Self::properties_rect(&props);
+        canvas.fill_rounded_rect_with_border(card, RADIUS, theme.panel, theme.accent, 2);
+
+        let pad = PROP_PAD;
+        let title_y = card.y + pad;
+        sf_draw(
+            canvas,
+            "Properties",
+            card.x + pad,
+            title_y,
+            &TextStyle::new(FontRole::UiMedium, theme.accent),
+        );
+
+        // Icon + name row. Reuse the central MIME icon resolver via a
+        // synthetic DirEntry so icon selection is never duplicated.
+        let icon_top = title_y + PROP_TITLE_H as i32;
+        let icon_rect = Rect::new(card.x + pad, icon_top, 40, 40);
+        let mut entry = DirEntry::zeroed();
+        let nb = props.name_bytes();
+        let nl = nb.len().min(entry.name.len());
+        entry.name[..nl].copy_from_slice(&nb[..nl]);
+        entry.name_len = nl as u8;
+        entry.file_type = if props.kind == PropertiesKind::Folder {
+            FT_DIR
+        } else {
+            FT_FILE
+        };
+        if let Some(icon) = self.mime_icons.icon_for_entry(entry) {
+            canvas.draw_icon(&icon, icon_rect);
+        } else {
+            let sym = if props.kind == PropertiesKind::Folder {
+                UiSymbol::Folder
+            } else {
+                UiSymbol::File
+            };
+            canvas.draw_ui_symbol_centered(icon_rect, sym, theme.accent);
+        }
+
+        let name_max_w = (card.right() - pad - (icon_rect.right() + 8)) as u32;
+        let name = core::str::from_utf8(props.name_bytes()).unwrap_or("");
+        let name_fit = fit_text_prefix(name, FontRole::UiMedium, name_max_w);
+        sf_vcenter(
+            canvas,
+            name_fit,
+            icon_rect.right() + 8,
+            icon_top,
+            40,
+            &TextStyle::new(FontRole::UiMedium, theme.text),
+        );
+
+        // Separator + rows.
+        let sep_y = icon_top + PROP_ICON_ROW_H as i32;
+        let sep_len = (card.w as i32 - 2 * pad) as u32;
+        canvas.hline(card.x + pad, sep_y, sep_len, theme.border);
+
+        let value_x = card.x + pad + PROP_LABEL_W as i32;
+        let value_w = (card.right() - pad - value_x) as u32;
+        let (rows, count) = props.rows();
+        let mut ry = sep_y + 6;
+        for i in 0..count {
+            sf_draw(
+                canvas,
+                rows[i].label,
+                card.x + pad,
+                ry,
+                &TextStyle::new(FontRole::UiSmall, theme.text_dim),
+            );
+            let fit = fit_text_prefix(rows[i].value_str(), FontRole::UiSmall, value_w);
+            sf_draw(
+                canvas,
+                fit,
+                value_x,
+                ry,
+                &TextStyle::new(FontRole::UiSmall, theme.text),
+            );
+            ry += PROP_ROW_H as i32;
+        }
+
+        // Close button reuses the toolbar pill style.
+        draw_pill(
+            canvas,
+            theme,
+            Self::properties_close_rect(card),
+            "Close",
+            None,
+            false,
+            false,
+        );
+    }
+}
+
+impl App for FilesApp {
+    fn view(&mut self, canvas: &mut Canvas, theme: &Theme) {
+        if self.client_bounds.size() != Size::new(canvas.width, canvas.height) {
+            let _ = self.set_client_bounds(canvas.width, canvas.height);
+        } else {
+            let _ = self.ensure_layout();
+        }
+        // WindowGlass root: leave unused pixels transparent for compositor glass.
+        canvas.clear_transparent(self.layout.root);
+        let (toolbar, _body, details, status) = self.root_layout();
+        let (sidebar, main) = self.body_layout();
+
+        // Update scroll geometry before drawing — content sizes are driven by
+        // the current view mode and directory state.
+        {
+            let sidebar_inner = sidebar.inset(PAD);
+            self.sidebar_scroll
+                .set_viewport(sidebar_inner.w, sidebar_inner.h);
+            let sidebar_content_h = Self::sidebar_content_height();
+            self.sidebar_scroll.content_h = sidebar_content_h;
+            self.sidebar_scroll.clamp();
+        }
+        {
+            self.sync_main_scroll();
+
+            // Reset main-list scroll when the directory or view mode changes
+            let current_path = self.state.current_path;
+            let same_dir = path_matches(current_path.as_str(), self.prev_path.as_str());
+            if !same_dir || self.state.view_mode != self.prev_view_mode {
+                self.filename_tooltip = None;
+                self.main_scroll.scroll_to_y(0);
+                self.thumbnails.directory_changed();
+                self.update_preview_for_selection();
+            }
+            self.main_scroll.clamp();
+
+            self.prev_path = current_path;
+            self.prev_view_mode = self.state.view_mode;
+        }
+
+        self.schedule_grid();
+        self.draw_toolbar(canvas, theme, toolbar);
+        self.draw_sidebar(canvas, theme, sidebar);
+        self.draw_main(canvas, theme, main);
+        self.draw_details_pane(canvas, theme, details);
+        self.draw_status(canvas, theme, status);
+
+        // Scrollbars draw over content (painted last within their region so
+        // they stay above the clipped content).  We draw them after all
+        // content layers so they stay on top.
+        self.draw_scrollbars(canvas, theme, sidebar, main);
+        self.draw_filename_tooltip(canvas, theme);
+
+        // Overlays draw last so they sit above all other content.
+        if let Some(menu) = self.context_menu {
+            self.draw_context_menu(canvas, theme, menu);
+        }
+        if let Some(props) = self.properties {
+            self.draw_properties(canvas, theme, props);
+        }
+    }
+
+    fn update(&mut self, event: Event) -> bool {
+        let tooltip_cleared = if !matches!(event, Event::MouseMove { .. } | Event::Tick) {
+            self.filename_tooltip.take().is_some()
+        } else {
+            false
+        };
+        let thumbnail_changed = if matches!(event, Event::Tick) {
+            self.thumbnails.poll()
+        } else {
+            false
+        };
+        if let Some(preview) = &self.thumbnails.preview {
+            self.preview_src_w = preview.width;
+            self.preview_src_h = preview.height;
+        }
+
+        if matches!(event, Event::Tick) {
+            self.schedule_grid();
+            return thumbnail_changed;
+        }
+        if let Event::KeyPress { ctrl, shift, .. } = event {
+            self.ctrl_down = ctrl;
+            self.shift_down = shift;
+        }
+        if let Event::FocusChanged { focused: false } = event {
+            self.ctrl_down = false;
+            self.shift_down = false;
+        }
+        const KEY_ESC: u8 = 0x01;
+        const KEY_X: u8 = 0x2D;
+        const KEY_C: u8 = 0x2E;
+        const KEY_ENTER: u8 = 0x1C;
+        const KEY_LEFT: u8 = 0x4B;
+        const KEY_UP: u8 = 0x48;
+        const KEY_DOWN: u8 = 0x50;
+        const KEY_V: u8 = 0x2F;
+        const KEY_PAGE_UP: u8 = 0x49;
+        const KEY_PAGE_DOWN: u8 = 0x51;
+        const KEY_HOME: u8 = 0x47;
+        const KEY_END: u8 = 0x4F;
+
+        if let Event::FocusChanged { focused } = event {
+            let mut changed = false;
+            if self.window_focused != focused {
+                self.window_focused = focused;
+                changed = true;
+            }
+            if focused && self.properties.is_none() {
+                changed |= self.refresh_directory();
+            }
+            if !focused {
+                changed |= self.pressed_scrollbar.take().is_some();
+                changed |= self.sidebar_scroll.end_drag();
+                changed |= self.main_scroll.end_drag();
+                self.sidebar_scroll.hovered = false;
+                self.main_scroll.hovered = false;
+            }
+            return changed;
+        }
+
+        // Properties dialog is modal-lite: while open it swallows every event
+        // (including right-clicks) until the user closes it. This also keeps
+        // stale selection state from leaking through while the dialog is up.
+        if self.properties.is_some() {
+            return match event {
+                Event::Click { x, y } => self.handle_properties_click(x, y),
+                Event::Key('\n')
+                | Event::KeyPress {
+                    keycode: KEY_ENTER,
+                    pressed: true,
+                    ..
+                }
+                | Event::KeyPress {
+                    keycode: KEY_ESC,
+                    pressed: true,
+                    ..
+                } => {
+                    self.properties = None;
+                    true
+                }
+                _ => false,
+            };
+        }
+
+        // While a context menu is open it grabs pointer + keyboard input so
+        // underlying rows and scroll regions never see those events.
+        if self.context_menu.is_some() {
+            return match event {
+                Event::Click { x, y } => self.handle_context_menu_click(x, y),
+                Event::MouseMove { x, y } => self.update_menu_hover(x, y),
+                Event::Key('\n')
+                | Event::KeyPress {
+                    keycode: KEY_ENTER,
+                    pressed: true,
+                    ..
+                } => self.activate_hovered_menu_item(),
+                Event::KeyPress {
+                    keycode: KEY_ESC,
+                    pressed: true,
+                    ..
+                } => {
+                    self.context_menu = None;
+                    true
+                }
+                _ => false,
+            };
+        }
+
+        if let Some(redraw) = self.handle_scroll_pointer_event(event) {
+            return redraw || tooltip_cleared;
+        }
+
+        // Track sidebar hover for visual feedback (must be before the click handler
+        // since it fires on mouse-move, not click).
+        if let Event::MouseMove { x, y } = event {
+            let tooltip_changed = self.hover_filename(x, y);
+            let (sidebar_rect, _) = self.body_layout();
+            let new_hover =
+                Self::hit_test_sidebar(sidebar_rect, x, y, self.sidebar_scroll.offset_y);
+            if self.hovered_sidebar != new_hover {
+                self.hovered_sidebar = new_hover;
+                return true;
+            }
+            return tooltip_changed;
+        }
+
+        // Right-click opens (or repositions) the context menu. Checked before
+        // the menu-grab below so a second right-click moves/replaces the menu.
+        if let Event::MouseDown { x, y, button } = event {
+            if button == 1 {
+                return self.handle_right_click(x, y);
+            }
+        }
+
+        let changed = match event {
+            Event::Click { x, y } => {
+                debug_log("[FILES] mouse_down x=");
+                log_i32(x);
+                debug_log(" y=");
+                log_i32(y);
+                debug_log("\n");
+
+                let (_toolbar, _body, _details, _) = self.root_layout();
+                let (sidebar, main) = self.body_layout();
+                let (_, _, up, _, _) = self.toolbar_layout();
+                if self.state.view_mode == ViewMode::Directory {
+                    if let Some(mode) = self.view_toggle().hit_test(sunlight_ui::Point::new(x, y)) {
+                        return self.set_grid_view(mode == 0);
+                    }
+                }
+                if up.contains(sunlight_ui::Point::new(x, y)) {
+                    debug_log("[FILES] hit_test up_button\n");
+                    return self.state.update(Message::NavigateUp);
+                }
+
+                // Breadcrumb click in Directory mode
+                if self.state.view_mode == ViewMode::Directory {
+                    let (_, _, _, _, breadcrumb) = self.toolbar_layout();
+                    if breadcrumb.contains(sunlight_ui::Point::new(x, y)) {
+                        if let Some(target) = Self::hit_test_breadcrumb(
+                            breadcrumb,
+                            x,
+                            self.state.current_path.as_str(),
+                        ) {
+                            debug_log("[FILES] hit_test breadcrumb\n");
+                            return self.state.navigate_to(target);
+                        }
+                    }
+                }
+                if let Some(idx) =
+                    Self::hit_test_sidebar(sidebar, x, y, self.sidebar_scroll.offset_y)
+                {
+                    debug_log("[FILES] hit_test sidebar idx=");
+                    log_usize(idx);
+                    debug_log(" label=\"");
+                    debug_log(State::sidebar_label(idx));
+                    debug_log("\"\n");
+                    debug_log("[FILES] sidebar_item_click idx=");
+                    log_usize(idx);
+                    debug_log(" label=\"");
+                    debug_log(State::sidebar_label(idx));
+                    debug_log("\"\n");
+                    return if idx == 0 {
+                        self.state.update(Message::ShowHome)
+                    } else {
+                        self.state.update(Message::SelectSidebar(idx))
+                    };
+                }
+                match self.state.view_mode {
+                    ViewMode::Home => {
+                        let inner = main.inset(PAD);
+                        for idx in 0..HOME_FOLDER_COUNT {
+                            if Self::home_folder_rect(inner, idx)
+                                .contains(sunlight_ui::Point::new(x, y))
+                            {
+                                debug_log("[FILES] hit_test home_folder idx=");
+                                log_usize(idx);
+                                debug_log("\n");
+                                return self.state.update(Message::OpenHomeFolder(idx));
+                            }
+                        }
+                        for idx in 0..self.state.volume_count {
+                            let rect = Self::home_volume_rect(inner, idx);
+                            if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                debug_log("[FILES] hit_test home_volume idx=");
+                                log_usize(idx);
+                                debug_log("\n");
+                                return self.state.update(Message::OpenHomeVolume(idx));
+                            }
+                        }
+                        debug_log("[FILES] hit_test none (home view)\n");
+                    }
+                    ViewMode::Volumes => {
+                        // Click on DriveCard in full volumes view.
+                        // Use row_y for layout cursor; outer y remains the click coordinate.
+                        let inner = main.inset(PAD);
+                        let mut row_y = inner.y + 42;
+                        for idx in 0..self.state.volume_count {
+                            let rect = Rect::new(inner.x, row_y, inner.w, DriveCard::ROW_H);
+                            row_y += DriveCard::ROW_H as i32 + 6;
+                            if rect.contains(sunlight_ui::Point::new(x, y)) {
+                                debug_log("[FILES] hit_test volume_card idx=");
+                                log_usize(idx);
+                                debug_log("\n");
+                                return self.state.update(Message::OpenHomeVolume(idx));
+                            }
+                        }
+                        debug_log("[FILES] hit_test none (volumes view)\n");
+                    }
+                    ViewMode::Network => {}
+                    ViewMode::Directory => {
+                        if let Some(idx) = self.hit_test_row(
+                            main,
+                            x,
+                            y,
+                            self.state.entry_count,
+                            self.main_scroll.offset_y,
+                        ) {
+                            debug_log("[FILES] hit_test directory_row idx=");
+                            log_usize(idx);
+                            debug_log("\n");
+                            return self.handle_directory_click(idx);
+                        }
+                        debug_log("[FILES] hit_test none (directory view)\n");
+                        let changed = self.state.clear_row_selection();
+                        self.update_preview_for_selection();
+                        self.reset_row_click_state();
+                        return changed;
+                    }
+                }
+                false
+            }
+            Event::Key('\n') => self.activate_selected(),
+            Event::KeyPress {
+                keycode: KEY_ESC,
+                pressed: true,
+                ..
+            } => {
+                sunlight_ui::request_close();
+                true
+            }
+            Event::KeyPress {
+                keycode: KEY_LEFT,
+                pressed: true,
+                alt: false,
+                ..
+            } if self.grid_view && self.state.view_mode == ViewMode::Directory => {
+                let changed = self.change_row_selection(-1);
+                self.ensure_selected_visible();
+                changed
+            }
+            Event::KeyPress {
+                keycode: 0x4D,
+                pressed: true,
+                ..
+            } if self.grid_view && self.state.view_mode == ViewMode::Directory => {
+                let changed = self.change_row_selection(1);
+                self.ensure_selected_visible();
+                changed
+            }
+            Event::KeyPress {
+                keycode: KEY_LEFT,
+                pressed: true,
+                ..
+            } => {
+                let changed = self.state.update(Message::NavigateUp);
+                self.update_preview_for_selection();
+                self.reset_row_click_state();
+                changed
+            }
+            Event::KeyPress {
+                keycode: KEY_ENTER,
+                pressed: true,
+                ..
+            } => self.activate_selected(),
+            Event::KeyPress {
+                keycode: KEY_X,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.copy_selected_file_list(true),
+            Event::KeyPress {
+                keycode: 0x40,
+                pressed: true,
+                ..
+            } => self.toggle_view(),
+            Event::KeyPress {
+                keycode: 0x3F,
+                pressed: true,
+                ..
+            } => self.refresh_directory(),
+            Event::KeyPress {
+                keycode: 0x31,
+                pressed: true,
+                ctrl: true,
+                shift: true,
+                ..
+            } => self.create_item(true),
+            Event::KeyPress {
+                keycode: 0x1E,
+                pressed: true,
+                ctrl: true,
+                ..
+            } if self.state.view_mode == ViewMode::Directory => {
+                self.state.selected_rows[..self.state.entry_count].fill(true);
+                self.state.selected_row = if self.state.entry_count > 0 {
+                    Some(0)
+                } else {
+                    None
+                };
+                self.update_preview_for_selection();
+                true
+            }
+            Event::KeyPress {
+                keycode: KEY_C,
+                pressed: true,
+                ctrl: true,
+                shift: true,
+                ..
+            } => self.copy_selected_path_text(),
+            Event::KeyPress {
+                keycode: KEY_C,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.copy_selected_file_list(false),
+            Event::KeyPress {
+                keycode: KEY_UP,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_by(-((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32))
+                } else {
+                    let changed = self.change_row_selection(if self.grid_view {
+                        -(Self::grid_columns(self.body_layout().1) as isize)
+                    } else {
+                        -1
+                    });
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_DOWN,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_by((SIDEBAR_ITEM_H + SIDEBAR_ITEM_GAP) as i32)
+                } else {
+                    let changed = self.change_row_selection(if self.grid_view {
+                        Self::grid_columns(self.body_layout().1) as isize
+                    } else {
+                        1
+                    });
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_PAGE_UP,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.page_up()
+                } else {
+                    let mut changed = self.main_scroll.page_up();
+                    let visible = if self.grid_view {
+                        self.main_scroll.offset_y as usize / GRID_H as usize
+                            * Self::grid_columns(self.body_layout().1)
+                    } else {
+                        self.main_scroll.offset_y as usize / ROW_H as usize
+                    };
+                    let target = visible.min(self.state.entry_count.saturating_sub(1));
+                    if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
+                        changed |= self.select_item(target);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_PAGE_DOWN,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.page_down()
+                } else {
+                    let mut changed = self.main_scroll.page_down();
+                    let visible = if self.grid_view {
+                        self.main_scroll.offset_y as usize / GRID_H as usize
+                            * Self::grid_columns(self.body_layout().1)
+                    } else {
+                        self.main_scroll.offset_y as usize / ROW_H as usize
+                    };
+                    let target = visible.min(self.state.entry_count.saturating_sub(1));
+                    if self.state.entry_count > 0 && self.state.selected_row != Some(target) {
+                        changed |= self.select_item(target);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_HOME,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll.scroll_to_y(0)
+                } else {
+                    let mut changed = self.main_scroll.scroll_to_y(0);
+                    if self.state.entry_count > 0 {
+                        changed |= self.select_item(0);
+                    }
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_END,
+                pressed: true,
+                ..
+            } => {
+                if self.scroll_focus == ScrollFocus::Sidebar {
+                    self.sidebar_scroll
+                        .scroll_to_y(self.sidebar_scroll.max_offset_y())
+                } else {
+                    let last = self.state.entry_count.saturating_sub(1);
+                    let mut changed = self
+                        .main_scroll
+                        .scroll_to_y(self.main_scroll.max_offset_y());
+                    if self.state.entry_count > 0 {
+                        changed |= self.select_item(last);
+                    }
+                    self.ensure_selected_visible();
+                    changed
+                }
+            }
+            Event::KeyPress {
+                keycode: KEY_V,
+                pressed: true,
+                ctrl: true,
+                ..
+            } => self.paste_from_clipboard(),
+            Event::Tick => thumbnail_changed,
+            _ => false,
+        };
+        changed || tooltip_cleared
+    }
+
+    fn window_event(&mut self, event: WindowEvent) -> bool {
+        let WindowEvent::Resized { width, height } = event;
+        let changed = self.set_client_bounds(width, height);
+        if changed {
+            debug_log("[FILES-RESIZE] client=");
+            log_usize(width as usize);
+            debug_log("x");
+            log_usize(height as usize);
+            debug_log(" sidebar=");
+            log_usize(self.layout.sidebar.w as usize);
+            debug_log(" content=");
+            log_usize(self.layout.main.w as usize);
+            debug_log("x");
+            log_usize(self.layout.main.h as usize);
+            debug_log(" path=");
+            log_usize(self.layout.breadcrumb.w as usize);
+            debug_log(" info=");
+            log_usize(self.layout.details.w as usize);
+            debug_log("x");
+            log_usize(self.layout.details.h as usize);
+            debug_log("\n");
+        }
+        changed
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pure functions
+// ---------------------------------------------------------------------------
+
+/// Determine the home path from the environment — no filesystem probing.
+/// Trusts the HOME env var; falls back to /root then /.
+fn detect_home_path() -> PathBuf {
+    if let Some(home) = env::getenv(b"HOME") {
+        if let Some(path) = PathBuf::from_str(home) {
+            return path;
+        }
+    }
+    PathBuf::from_str("/root").unwrap_or_else(PathBuf::root)
+}
+
+/// Build the home folder model — paths only, no presence probing.
+/// The OS is responsible for creating standard user directories; the file
+/// manager assumes they exist and surfaces an error only if navigation fails.
+fn build_home_folders(home_path: PathBuf) -> [HomeFolder; HOME_FOLDER_COUNT] {
+    let names: [&'static str; HOME_FOLDER_COUNT] = [
+        "Desktop",
+        "Documents",
+        "Downloads",
+        "Pictures",
+        "Music",
+        "Videos",
+    ];
+    let mut folders = [HomeFolder::placeholder(); HOME_FOLDER_COUNT];
+    let mut i = 0usize;
+    while i < HOME_FOLDER_COUNT {
+        folders[i] = HomeFolder {
+            name: names[i],
+            path: home_path.join(names[i]).unwrap_or_else(PathBuf::root),
+        };
+        i += 1;
+    }
+    folders
+}
+
+fn build_volumes(out: &mut [VolumeEntry; MAX_ENTRIES]) -> usize {
+    let mut count = 0usize;
+
+    if count < out.len() {
+        out[count] = make_volume("Root Filesystem", PathBuf::root());
+        count += 1;
+    }
+
+    if let Some(boot) = PathBuf::from_str("/boot") {
+        if libc::stat(boot.as_str().as_bytes()).is_ok() && count < out.len() {
+            out[count] = make_volume("Boot", boot);
+            count += 1;
+        }
+    }
+
+    let mut mounts = [DirEntry::zeroed(); MAX_ENTRIES];
+    if let Ok(found) = libc::read_dir(b"/mnt", &mut mounts) {
+        let n = found.min(MAX_ENTRIES);
+        mounts[..n].sort_by(compare_entries);
+        let mut i = 0usize;
+        while i < n && count < out.len() {
+            let entry = mounts[i];
+            i += 1;
+            if entry.file_type != FT_DIR {
+                continue;
+            }
+            let name = core::str::from_utf8(entry.name_bytes()).unwrap_or("");
+            if name.is_empty() {
+                continue;
+            }
+            if let Some(path) = PathBuf::from_str("/mnt").and_then(|b| b.join(name)) {
+                out[count] = make_volume(name, path);
+                count += 1;
+            }
+        }
+    }
+
+    count
+}
+
+fn make_volume(name: &str, path: PathBuf) -> VolumeEntry {
+    let mut entry = VolumeEntry::empty();
+    let bytes = name.as_bytes();
+    let len = bytes.len().min(entry.name.len());
+    entry.name[..len].copy_from_slice(&bytes[..len]);
+    entry.name_len = len;
+    entry.path = path;
+    entry
+}
+
+fn path_matches(current: &str, base: &str) -> bool {
+    current == base
+        || (current.starts_with(base) && current.as_bytes().get(base.len()) == Some(&b'/'))
+}
+
+fn home_folder_symbol(idx: usize) -> UiSymbol {
+    match idx {
+        0 => UiSymbol::Desktop,
+        1 => UiSymbol::Documents,
+        2 => UiSymbol::Downloads,
+        3 => UiSymbol::Pictures,
+        4 => UiSymbol::Music,
+        5 => UiSymbol::Videos,
+        _ => UiSymbol::Folder,
+    }
+}
+
+fn compare_entries(a: &DirEntry, b: &DirEntry) -> Ordering {
+    let a_dir = a.file_type == FT_DIR;
+    let b_dir = b.file_type == FT_DIR;
+    match (a_dir, b_dir) {
+        (true, false) => Ordering::Less,
+        (false, true) => Ordering::Greater,
+        _ => cmp_ascii_ci(a.name_bytes(), b.name_bytes()),
+    }
+}
+
+fn cmp_ascii_ci(a: &[u8], b: &[u8]) -> Ordering {
+    let len = a.len().min(b.len());
+    for i in 0..len {
+        let la = a[i].to_ascii_lowercase();
+        let lb = b[i].to_ascii_lowercase();
+        match la.cmp(&lb) {
+            Ordering::Equal => continue,
+            ord => return ord,
+        }
+    }
+    a.len().cmp(&b.len())
+}
+
+fn entry_name_str(entry: &DirEntry) -> &str {
+    core::str::from_utf8(entry.name_bytes()).unwrap_or("?")
+}
+
+fn write_to_buf(out: &mut [u8], data: &[u8]) -> usize {
+    let len = data.len().min(out.len());
+    out[..len].copy_from_slice(&data[..len]);
+    len
+}
+
+fn write_usize(out: &mut [u8], val: usize) -> usize {
+    let mut n = val;
+    let mut buf = [0u8; 20];
+    let mut i = 0;
+    if n == 0 {
+        buf[0] = b'0';
+        i = 1;
+    } else {
+        while n > 0 {
+            buf[i] = b'0' + (n % 10) as u8;
+            n /= 10;
+            i += 1;
+        }
+        buf[..i].reverse();
+    }
+    let len = i.min(out.len());
+    out[..len].copy_from_slice(&buf[..len]);
+    len
+}
+
+fn write_size(size: u64, out: &mut [u8; 16]) -> usize {
+    if size < 1024 {
+        return write_number(size, out, b" B");
+    }
+    if size < 1024 * 1024 {
+        return write_number(size / 1024, out, b" KiB");
+    }
+    write_number(size / (1024 * 1024), out, b" MiB")
+}
+
+fn write_count(items: usize, folders: usize, files: usize, out: &mut [u8; 24]) -> usize {
+    let mut pos = 0usize;
+    pos += write_number(items as u64, &mut out[pos..], b" items");
+    if pos < out.len() {
+        out[pos] = b' ';
+        pos += 1;
+    }
+    pos += write_number(folders as u64, &mut out[pos..], b" folders,");
+    if pos < out.len() {
+        out[pos] = b' ';
+        pos += 1;
+    }
+    pos += write_number(files as u64, &mut out[pos..], b" files");
+    pos.min(out.len())
+}
+
+fn write_number(value: u64, out: &mut [u8], suffix: &[u8]) -> usize {
+    let mut n = value;
+    let mut tmp = [0u8; 20];
+    let mut len = 0usize;
+    if n == 0 {
+        tmp[len] = b'0';
+        len += 1;
+    } else {
+        while n > 0 {
+            tmp[len] = b'0' + (n % 10) as u8;
+            len += 1;
+            n /= 10;
+        }
+    }
+    let mut pos = 0usize;
+    for i in (0..len).rev() {
+        if pos >= out.len() {
+            return pos;
+        }
+        out[pos] = tmp[i];
+        pos += 1;
+    }
+    for &byte in suffix {
+        if pos >= out.len() {
+            return pos;
+        }
+        out[pos] = byte;
+        pos += 1;
+    }
+    pos
+}
+
+/// Empty static byte slice used as the MIME value for folders.
+const EMPTY_BYTES: &[u8] = b"";
+
+/// Parse width/height/bpp from an image header.
+/// Supports SIMG v2, TGA type-2, PNG, and JPEG.
+/// Reads only the header — never decodes pixels.
+fn tga_header_dims(buf: &[u8]) -> Option<(u32, u32, u8)> {
+    if buf.starts_with(b"\x89PNG\r\n\x1a\n") || buf.starts_with(b"\xff\xd8\xff") {
+        let (w, h) = sunlight_ui::image::inspect_image_dimensions(buf).ok()?;
+        return Some((w, h, 32));
+    }
+    if buf.len() >= 4 && buf[0..4] == *b"SIMG" {
+        if buf.len() < 36 {
+            return None;
+        }
+        if u16::from_le_bytes([buf[4], buf[5]]) != 2 {
+            return None;
+        }
+        let w = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
+        let h = u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]);
+        if w == 0 || h == 0 {
+            return None;
+        }
+        // Canonical v2 is BGRA8.
+        return Some((w, h, 32));
+    }
+    if buf.len() < 18 || buf[2] != 2 {
+        return None;
+    }
+    let bpp = buf[16];
+    if bpp != 24 && bpp != 32 {
+        return None;
+    }
+    let w = u16::from_le_bytes([buf[12], buf[13]]) as u32;
+    let h = u16::from_le_bytes([buf[14], buf[15]]) as u32;
+    if w == 0 || h == 0 {
+        return None;
+    }
+    Some((w, h, bpp))
+}
+
+/// Compact image-format label derived from the file extension.
+fn image_format_compact(name: &[u8]) -> &'static str {
+    if ends_with_ignore_ascii_case(name, b".simg") {
+        "SIMG"
+    } else if ends_with_ignore_ascii_case(name, b".tga") {
+        "TGA"
+    } else if ends_with_ignore_ascii_case(name, b".png") {
+        "PNG"
+    } else if ends_with_ignore_ascii_case(name, b".jpg")
+        || ends_with_ignore_ascii_case(name, b".jpeg")
+    {
+        "JPEG"
+    } else {
+        "Image"
+    }
+}
+
+/// Human-readable label for a default-app path returned by `sun_open::app_for_mime`.
+/// Keeps the Properties dialog from leaking raw binary paths.
+fn opener_label(app: &[u8]) -> &'static str {
+    match app {
+        b"/bin/light-lens" => "Light Lens",
+        b"/bin/sunlight-edit" => "Sunlight Edit",
+        b"/bin/sunlight-docview" => "Document Viewer",
+        _ => "Default application",
+    }
+}
+
+/// Read up to `out.len()` bytes from the start of `path`. Returns bytes read
+/// (0 on any failure). Used to peek at an image header without disturbing the
+/// preview pane's own buffer or decoding the whole file.
+fn read_file_head(path: &[u8], out: &mut [u8]) -> usize {
+    let fd = match libc::open(path) {
+        Ok(f) => f,
+        Err(_) => return 0,
+    };
+    let mut total = 0usize;
+    while total < out.len() {
+        let n = libc::read(fd, &mut out[total..]).unwrap_or(0);
+        if n == 0 {
+            break;
+        }
+        total += n;
+    }
+    let _ = libc::close(fd);
+    total
+}
+
+/// Longest char-boundary prefix of `text` whose vector-font width fits `max_w`.
+/// Guarantees no text overflows its column. Never panics on UTF-8 boundaries.
+fn fit_text_prefix(text: &str, role: FontRole, max_w: u32) -> &str {
+    if sun_font::measure_text(text, role).w <= max_w {
+        return text;
+    }
+    let bytes = text.as_bytes();
+    let mut best = 0usize;
+    let mut i = 0usize;
+    while i < bytes.len() {
+        i += 1;
+        while i < bytes.len() && !text.is_char_boundary(i) {
+            i += 1;
+        }
+        if sun_font::measure_text(&text[..i], role).w <= max_w {
+            best = i;
+        } else {
+            break;
+        }
+    }
+    &text[..best]
+}
+
+fn draw_pill(
+    canvas: &mut Canvas,
+    theme: &Theme,
+    rect: Rect,
+    text: &str,
+    icon: Option<UiSymbol>,
+    active: bool,
+    disabled: bool,
+) {
+    let fill = if disabled {
+        theme.panel_alt
+    } else if active {
+        theme.accent
+    } else {
+        theme.panel
+    };
+    let border = if active {
+        theme.accent_hover
+    } else {
+        theme.border
+    };
+    let color = if disabled {
+        theme.text_dim
+    } else if active {
+        theme.bg
+    } else {
+        theme.text
+    };
+    canvas.fill_rounded_rect_with_border(rect, RADIUS, fill, border, 1);
+    if let Some(sym) = icon {
+        canvas.draw_ui_symbol(rect.x + 8, rect.y + 9, sym, color);
+        sf_vcenter(
+            canvas,
+            text,
+            rect.x + 22,
+            rect.y,
+            rect.h,
+            &TextStyle::new(FontRole::UiSmall, color),
+        );
+    } else {
+        sf_centered(
+            canvas,
+            rect,
+            text,
+            &TextStyle::new(FontRole::UiSmall, color),
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Entry point — window is opened BEFORE state init to show UI immediately
+// ---------------------------------------------------------------------------
+
+#[cfg(not(test))]
+fn application_main(_argc: u64, _argv: *const *const u8, envp: *const *const u8) -> ! {
+    sunlight_libc::launch_trace::init_from_argv(_argc, _argv);
+    let trace = launch_trace::current().unwrap_or(LaunchTrace::new(0, LaunchSource::Unknown, 0));
+    launch_trace::log_phase_now(
+        trace,
+        "app=files",
+        "app_main_started",
+        Some(sunlight_ipc::getpid()),
+    );
+    env::init(envp);
+    if cfg!(feature = "document-thumbnail-smoke") {
+        let path = b"/tmp/files-thumbnail-fixture.pdf";
+        let result = (|| -> Option<()> {
+            let fd =
+                libc::open_with_flags(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC).ok()?;
+            let written = libc::write_all(
+                fd,
+                include_bytes!("../../sunlight-docserv/tests/fixtures/sample.pdf"),
+            );
+            let closed = libc::close(fd);
+            if written.is_err() || closed.is_err() {
+                return None;
+            }
+            let mut provider = thumbnails::Thumbnails::new();
+            provider.request(Some(path));
+            let deadline = monotonic_millis().saturating_add(30_000);
+            while monotonic_millis() < deadline {
+                provider.poll();
+                if let Some(preview) = &provider.preview {
+                    if preview.image.width == 128
+                        && preview.image.height == 128
+                        && preview
+                            .image
+                            .pixels
+                            .iter()
+                            .any(|&p| p & 0xff == 204 && (p >> 16) & 0xff < 30)
+                    {
+                        debug_log("[FILES] native PDF thumbnail worker OK\n");
+                        return Some(());
+                    }
+                    return None;
+                }
+                process_yield();
+            }
+            None
+        })();
+        ProcessExit::exit(if result.is_some() { 0 } else { 1 });
+    }
+
+    // Open the window first so the compositor can begin displaying the
+    // skeleton UI while the app model initialises.
+    let mut window = match Window::connect_with_material(
+        WindowConfig {
+            width: WIN_W,
+            height: WIN_H,
+            title: "Sunlight Files",
+            decoration: sunlight_ui::WindowDecoration::Normal,
+        },
+        WindowMaterial::WindowGlass,
+    ) {
+        Some(w) => w,
+        None => {
+            debug_log("[FILES] failed to connect window\n");
+            loop {
+                process_yield();
+            }
+        }
+    };
+
+    // Lightweight model init — no filesystem probing, no IPC beyond env.
+    let mut app = FilesApp::new();
+    let mut args = [""; libc::MAX_ARGS];
+    let count = unsafe { libc::crt0::collect_utf8_args(_argc, _argv, &mut args, libc::MAX_PATH) };
+    if let Some(path) = args[1..count.max(1)]
+        .iter()
+        .find(|arg| arg.starts_with('/'))
+    {
+        if let Some(path) = PathBuf::from_str(path) {
+            app.state.navigate_to(path);
+        }
+    }
+    window.run(&mut app);
+    ProcessExit::exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn directory_fixture(count: usize) -> FilesApp {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.prev_view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        app.prev_path = app.state.current_path;
+        app.ensure_layout();
+        for i in 0..count {
+            let name = format!("entry_{i}");
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_DIR;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = count;
+        app.state.selected_rows = alloc::vec![false; count];
+        app.sync_main_scroll();
+        app
+    }
+
+    fn key(keycode: u8) -> Event {
+        Event::KeyPress {
+            keycode,
+            pressed: true,
+            super_key: false,
+            ctrl: false,
+            alt: false,
+            shift: false,
+            extended: false,
+        }
+    }
+
+    #[test]
+    fn toolbar_and_f6_switch_shared_model_and_keep_selection_visible() {
+        let mut app = directory_fixture(100);
+        app.state.selected_row = Some(75);
+        app.state.selected_rows[75] = true;
+        app.state.selected_rows[76] = true;
+        let paths = app.selected_paths().unwrap();
+        let entries = app.state.entries.as_ptr();
+        let dir = app.state.current_path;
+        app.last_clicked_row = Some(75);
+        app.last_click_at = 10;
+        let details = app.view_toggle().item_rect(1);
+        assert!(app.update(Event::Click {
+            x: details.x + 5,
+            y: details.y + 5
+        }));
+        assert!(!app.grid_view);
+        assert_eq!(app.last_clicked_row, None);
+        assert!(!app.update(Event::Click {
+            x: details.x + 5,
+            y: details.y + 5
+        }));
+        assert!(app.update(key(0x40)));
+        assert!(app.grid_view);
+        assert_eq!(app.state.entries.as_ptr(), entries);
+        assert_eq!(app.state.current_path.as_str(), dir.as_str());
+        assert_eq!(app.state.selected_row, Some(75));
+        assert_eq!(app.selected_paths().unwrap(), paths);
+        let tile = app.row_rect(app.layout.main, 75, app.main_scroll.offset_y);
+        let region = FilesApp::main_scroll_region(app.layout.main);
+        assert!(tile.y >= region.y && tile.bottom() <= region.bottom());
+        assert!(app.layout.search.right() <= app.layout.view_toggle.x);
+        assert!(app.layout.breadcrumb.right() <= app.layout.search.x);
+    }
+
+    #[test]
+    fn switching_reuses_exact_thumbnail_buffer() {
+        let mut app = directory_fixture(1);
+        app.state.entries[0].file_type = FT_FILE;
+        app.thumbnails.seed_grid(
+            b"/pictures/entry_0",
+            0,
+            thumbnails::Preview {
+                image: alloc::sync::Arc::new(sunlight_ui::image::RgbaImage {
+                    width: 1,
+                    height: 1,
+                    pixels: alloc::vec![0xffff0000],
+                }),
+                width: 1,
+                height: 1,
+                format: 2,
+            },
+        );
+        let image = app
+            .thumbnails
+            .grid_image(b"/pictures/entry_0", 0)
+            .unwrap()
+            .image
+            .clone();
+        app.toggle_view();
+        app.schedule_grid(); // Details never schedules grid work.
+        app.toggle_view();
+        assert!(alloc::sync::Arc::ptr_eq(
+            &image,
+            &app.thumbnails
+                .grid_image(b"/pictures/entry_0", 0)
+                .unwrap()
+                .image
+        ));
+    }
+
+    #[test]
+    fn directional_navigation_changes_with_layout_and_shift_selection_survives() {
+        let mut app = directory_fixture(40);
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(0));
+        app.state.select_row(0);
+        let cols = FilesApp::grid_columns(app.layout.main);
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(cols));
+        app.update(key(0x4d));
+        assert_eq!(app.state.selected_row, Some(cols + 1));
+        app.toggle_view();
+        app.update(key(0x50));
+        assert_eq!(app.state.selected_row, Some(cols + 2));
+        app.update(key(0x48));
+        assert_eq!(app.state.selected_row, Some(cols + 1));
+        app.shift_down = true;
+        app.handle_directory_click(cols + 4);
+        let selected = app.state.selected_rows.clone();
+        app.toggle_view();
+        assert_eq!(app.state.selected_rows, selected);
+    }
+
+    #[test]
+    fn enter_after_switch_uses_existing_open_handler() {
+        let mut app = directory_fixture(2);
+        // An invalid UTF-8 entry tests dispatch without launching a host process.
+        app.state.entries[1].file_type = FT_FILE;
+        app.state.entries[1].name[0] = 0xff;
+        app.state.entries[1].name_len = 1;
+        app.state.select_row(1);
+        for grid in [false, true] {
+            app.set_grid_view(grid);
+            app.update(key(0x1c));
+            assert_eq!(app.state.selected_row, Some(1));
+            assert_eq!(app.state.error_str(), "Invalid file name");
+        }
+    }
+
+    #[test]
+    fn resize_columns_narrow_cells_and_empty_views() {
+        let mut app = directory_fixture(100);
+        app.state.select_row(75);
+        let wide_cols = FilesApp::grid_columns(app.layout.main);
+        app.set_client_bounds(800, 620);
+        assert!(FilesApp::grid_columns(app.layout.main) < wide_cols);
+        let tile = app.row_rect(app.layout.main, 75, app.main_scroll.offset_y);
+        let region = FilesApp::main_scroll_region(app.layout.main);
+        assert!(tile.y >= region.y && tile.bottom() <= region.bottom());
+        for width in [0, 30, 100, 220, 380, 620, 900] {
+            let main = Rect::new(0, 0, width, 400);
+            let tile = app.row_rect(main, 0, 0);
+            assert!(tile.w <= main.inset(PAD).w);
+            let (name, kind, size, modified) = FilesApp::details_columns(width);
+            assert!(name + kind + size + modified <= width);
+        }
+        let mut empty = directory_fixture(0);
+        let mut pixels = alloc::vec![0; 960*620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        for grid in [true, false, true] {
+            empty.set_grid_view(grid);
+            empty.draw_directory_main(&mut canvas, &Theme::sunlight_dark(), empty.layout.main);
+            assert!(!empty.change_row_selection(1));
+        }
+    }
+
+    #[test]
+    fn measured_filename_layout_and_cache_are_bounded() {
+        let app = directory_fixture(1);
+        let font = VecFont(FontRole::UiSmall);
+        assert!(84 + 2 * font.line_height() <= GRID_H);
+        for name in [
+            "a.png",
+            "a_medium_filename.png",
+            "verylongfilenamethathasnospacesandmultipledots.tar.gz",
+            "نام_فایل_بسیار_طولانی.png",
+            "mixed_نام_123.png",
+            "👩🏽‍💻e\u{301}_long_name.png",
+        ] {
+            for width in [0, 1, 24, 80, 120] {
+                let l = LabelLayout::new(name, width, 2, &font);
+                assert!(l.line_count <= 2);
+                assert!(l.widths.iter().all(|w| *w <= width));
+            }
+        }
+        let mut pixels = alloc::vec![0; 100*100];
+        let mut canvas = Canvas::new(&mut pixels, 100, 100, 100);
+        let rect = Rect::new(10, 10, 60, 36);
+        app.draw_filename(
+            &mut canvas,
+            rect,
+            "unchanged.txt",
+            2,
+            sunlight_ui::theme::Color(0xffffffff),
+        );
+        let ptr = app.label_cache.borrow()[0].layout.lines[0].as_ptr();
+        app.draw_filename(
+            &mut canvas,
+            rect,
+            "unchanged.txt",
+            2,
+            sunlight_ui::theme::Color(0xffffffff),
+        );
+        assert_eq!(app.label_cache.borrow()[0].layout.lines[0].as_ptr(), ptr);
+        for i in 0..500 {
+            app.draw_filename(
+                &mut canvas,
+                rect,
+                &format!("filename_{i}"),
+                2,
+                sunlight_ui::theme::Color(0xffffffff),
+            );
+        }
+        assert_eq!(app.label_cache.borrow().len(), 128);
+    }
+
+    #[test]
+    fn mixed_file_rows_and_grid_never_paint_outside_directory_bounds() {
+        let mut app = directory_fixture(6);
+        for (i, name) in [
+            "a.txt",
+            "very_long_image_name_with_underscores_and_extra_words.png",
+            "فارسی_نام_بسیار_طولانی.png",
+            "👩🏽‍💻e\u{301}_filename.jpg",
+            "multiple.dots.archive.tar.gz",
+            "nospacesabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let e = &mut app.state.entries[i];
+            e.name.fill(0);
+            e.name[..name.len()].copy_from_slice(name.as_bytes());
+            e.name_len = name.len() as u8;
+            e.file_type = if i == 0 { FT_DIR } else { FT_FILE };
+            e.size = 1024 * i as u64;
+        }
+        for grid in [true, false] {
+            app.set_grid_view(grid);
+            app.main_scroll.offset_y = 10;
+            let main = Rect::new(20, 20, 90, 160);
+            let mut pixels = alloc::vec![0xff123456; 200 * 200];
+            let mut canvas = Canvas::new(&mut pixels, 200, 200, 200);
+            app.draw_directory_main(&mut canvas, &Theme::sunlight_dark(), main);
+            for y in 0..200 {
+                for x in 0..200 {
+                    if !main.contains(sunlight_ui::Point::new(x, y)) {
+                        assert_eq!(canvas.pixels[(y * 200 + x) as usize], 0xff123456);
+                    }
+                }
+            }
+            app.main_scroll.offset_y = 0;
+            let tile = app.row_rect(app.layout.main, 1, 0);
+            app.hover_filename(tile.x + 10, tile.y + 10);
+            let tooltip = app.filename_tooltip.as_ref().unwrap();
+            assert_eq!(
+                tooltip.lines.concat(),
+                entry_name_str(&app.state.entries[1])
+            );
+            app.filename_tooltip = None;
+        }
+    }
+
+    #[test]
+    #[ignore = "Writes host framebuffer previews; run explicitly for visual review"]
+    fn write_layout_previews() {
+        use std::io::Write;
+        let names = [
+            "Folder",
+            "01_solar_blossom.simg",
+            "my_very_long_image_filename_that_wraps_with_ellipsis.simg",
+            "نام_فایل_بسیار_طولانی.png",
+            "👩🏽‍💻_e\u{301}_photograph.jpg",
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdef.png",
+            "archive.multiple.dots.tar.gz",
+            "short.txt",
+        ];
+        let mut app = directory_fixture(names.len());
+        for (i, name) in names.iter().enumerate() {
+            let e = &mut app.state.entries[i];
+            e.name.fill(0);
+            e.name[..name.len()].copy_from_slice(name.as_bytes());
+            e.name_len = name.len() as u8;
+            e.file_type = if i == 0 { FT_DIR } else { FT_FILE };
+            e.size = (i as u64 + 1) * 1024;
+            if (1..=5).contains(&i) {
+                let asset = std::fs::read(format!(
+                    "{}/../docs/images/Samples/01_solar_blossom.simg",
+                    env!("CARGO_MANIFEST_DIR")
+                ))
+                .unwrap();
+                let image = sunlight_ui::image::simg::decode(&asset).unwrap();
+                let preview = thumbnails::Preview {
+                    image: alloc::sync::Arc::new(sunlight_ui::image::simg::scale_fit(
+                        &image, 128, 128,
+                    )),
+                    width: image.width,
+                    height: image.height,
+                    format: 1,
+                };
+                let path = app.state.current_path.join(name).unwrap();
+                app.thumbnails
+                    .seed_grid(path.as_str().as_bytes(), e.size, preview);
+            }
+        }
+        app.state.select_row(0);
+        let folder = format!(
+            "{}/../target/files-phase12-evidence",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::create_dir_all(&folder).unwrap();
+        for (width, height) in [(960, 620), (800, 500)] {
+            app.set_client_bounds(width, height);
+            for grid in [true, false] {
+                app.set_grid_view(grid);
+                let mut pixels = alloc::vec![0; (width*height) as usize];
+                let mut canvas = Canvas::new(&mut pixels, width, width, height);
+                app.view(&mut canvas, &Theme::sunlight_dark());
+                let mode = if grid { "grid" } else { "details" };
+                let mut file =
+                    std::fs::File::create(format!("{folder}/host-{mode}-{width}.ppm")).unwrap();
+                write!(file, "P6\n{width} {height}\n255\n").unwrap();
+                let bytes: Vec<u8> = canvas
+                    .pixels
+                    .iter()
+                    .flat_map(|p| [(*p >> 16) as u8, (*p >> 8) as u8, *p as u8])
+                    .collect();
+                file.write_all(&bytes).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn grid_renders_each_files_own_thumbnail() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        let _ = app.set_client_bounds(960, 620);
+        let _ = app.ensure_layout();
+        for (name, color) in [("red.png", 0xffff0000), ("green.png", 0xff00ff00)] {
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_FILE;
+            entry.size = 4;
+            app.state.entries.push(entry);
+            let path = app.state.current_path.join(name).unwrap();
+            app.thumbnails.seed_grid(
+                path.as_str().as_bytes(),
+                4,
+                thumbnails::Preview {
+                    image: alloc::sync::Arc::new(sunlight_ui::image::RgbaImage {
+                        width: 1,
+                        height: 1,
+                        pixels: alloc::vec![color],
+                    }),
+                    width: 1,
+                    height: 1,
+                    format: 2,
+                },
+            );
+        }
+        app.state.entry_count = 2;
+        app.state.selected_rows = alloc::vec![true, false];
+        let mut pixels = alloc::vec![0; 960 * 620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        let main = app.body_layout().1;
+        app.draw_directory_grid(&mut canvas, &Theme::sunlight_dark(), main);
+        for (idx, color) in [0xffff0000, 0xff00ff00].into_iter().enumerate() {
+            let tile = app.row_rect(main, idx, 0);
+            assert_eq!(
+                canvas.pixels[(tile.y + 44) as usize * 960 + (tile.x + 64) as usize],
+                color
+            );
+            assert_eq!(
+                app.hit_test_row(main, tile.x + 64, tile.y + 44, 2, 0),
+                Some(idx)
+            );
+        }
+        assert!(app.state.selected_rows[0]);
+    }
+
+    #[test]
+    fn thumbnail_paths_are_lexically_normalized() {
+        assert_eq!(
+            PathBuf::from_str("//pictures/./sub/../image.png")
+                .unwrap()
+                .as_str(),
+            "/pictures/image.png"
+        );
+        assert_eq!(
+            PathBuf::from_str("/../../pictures").unwrap().as_str(),
+            "/pictures"
+        );
+    }
+    #[test]
+    fn grid_geometry_hit_testing_scroll_and_details() {
+        let mut app = FilesApp::new();
+        let main = Rect::new(0, 0, 540, 400);
+        let cols = FilesApp::grid_columns(main);
+        assert!(cols > 1);
+        for idx in 0..1000 {
+            let tile = app.row_rect(main, idx, 0);
+            if FilesApp::main_scroll_region(main)
+                .contains(sunlight_ui::Point::new(tile.x + 10, tile.y + 10))
+            {
+                assert_eq!(
+                    app.hit_test_row(main, tile.x + 10, tile.y + 10, 1000, 0),
+                    Some(idx)
+                );
+            }
+            assert_eq!(tile.w, GRID_W);
+            assert_eq!(tile.h, GRID_H);
+        }
+        let tile = app.row_rect(main, cols * 10, GRID_H as i32 * 10);
+        assert_eq!(
+            app.hit_test_row(main, tile.x + 10, tile.y + 10, 1000, GRID_H as i32 * 10),
+            Some(cols * 10)
+        );
+        assert!(app.hit_test_row(main, 10, 0, 1000, 0).is_none());
+        app.grid_view = false;
+        assert_eq!(app.row_rect(main, 3, 0).h, ROW_H);
+    }
+    #[test]
+    fn grid_viewport_scheduler_ignores_non_images_and_offscreen() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.prev_view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/pictures").unwrap();
+        app.prev_path = app.state.current_path;
+        let _ = app.set_client_bounds(960, 620);
+        let _ = app.ensure_layout();
+        for i in 0..500 {
+            let name = if i % 2 == 0 {
+                format!("{i}.png")
+            } else {
+                format!("{i}.txt")
+            };
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            entry.file_type = FT_FILE;
+            entry.size = 100;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = 500;
+        app.state.selected_rows = alloc::vec![false; 500];
+        assert!(app.grid_visible().end < 100);
+        app.main_scroll.offset_y = GRID_H as i32 * 10;
+        assert!(app.grid_visible().start > 0);
+        app.schedule_grid(); // unavailable worker keeps icons, without UI filesystem reads
+        let mut pixels = alloc::vec![0; 960 * 620];
+        let mut canvas = Canvas::new(&mut pixels, 960, 960, 620);
+        app.draw_directory_grid(&mut canvas, &Theme::sunlight_dark(), app.body_layout().1);
+    }
+
+    #[test]
+    fn thumbnail_rendering_preserves_alpha_and_clipped_coordinates() {
+        let image = sunlight_ui::image::RgbaImage {
+            width: 2,
+            height: 1,
+            pixels: alloc::vec![0xffff0000, 0x800000ff],
+        };
+        for (width, height) in [(8, 4), (16, 8), (4, 2)] {
+            let mut pixels = alloc::vec![0xff000000; (width * height) as usize];
+            let mut canvas = Canvas::new(&mut pixels, width, width, height);
+            draw_argb_image(&mut canvas, &image, Rect::new(0, 0, width, height));
+            assert_eq!(canvas.pixels[0], 0xffff0000);
+            assert_eq!(canvas.pixels[(width - 1) as usize], 0xff000080);
+        }
+        let mut pixels = [0xff000000; 4];
+        let mut canvas = Canvas::new(&mut pixels, 4, 4, 1);
+        draw_argb_image(&mut canvas, &image, Rect::new(-4, 0, 8, 1));
+        assert_eq!(canvas.pixels, &[0xff000080; 4]);
+    }
+
+    #[test]
+    fn repeated_empty_files_models_release_preview_state() {
+        for _ in 0..100 {
+            let mut app = FilesApp::new();
+            app.state.view_mode = ViewMode::Directory;
+            app.update_preview_for_selection();
+            assert!(app.thumbnails.preview.is_none());
+            assert_eq!(app.state.entry_count, 0);
+        }
+    }
+
+    #[test]
+    fn file_selection_builds_shared_clipboard_paths_and_survives_right_click() {
+        let mut app = FilesApp::new();
+        app.state.view_mode = ViewMode::Directory;
+        app.state.current_path = PathBuf::from_str("/home/user").unwrap();
+        for name in ["first.txt", "Folder with spaces"] {
+            let mut entry = DirEntry::zeroed();
+            entry.name[..name.len()].copy_from_slice(name.as_bytes());
+            entry.name_len = name.len() as u8;
+            app.state.entries.push(entry);
+        }
+        app.state.entry_count = 2;
+        app.state.selected_rows = alloc::vec![true, true];
+        app.state.selected_row = Some(0);
+        app.open_context_menu(20, 20, ContextTarget::Row(1));
+        assert_eq!(
+            app.selected_paths().unwrap(),
+            ["/home/user/first.txt", "/home/user/Folder with spaces"]
+        );
+        app.state.clear_row_selection();
+        assert!(app.selected_paths().is_err());
+        app.state.select_row(1);
+        assert_eq!(
+            app.selected_paths().unwrap(),
+            ["/home/user/Folder with spaces"]
+        );
+    }
+
+    #[test]
+    fn major_regions_track_client_width_and_height() {
+        for (width, height) in [(800, 600), (1024, 700), (1280, 800)] {
+            let layout = FilesApp::compute_layout(Rect::new(0, 0, width, height));
+            assert_eq!(layout.root, Rect::new(0, 0, width, height));
+            assert_eq!(layout.toolbar.w, width);
+            assert_eq!(layout.details.w, width);
+            assert_eq!(layout.status.w, width);
+            assert_eq!(layout.status.bottom(), height as i32);
+            assert_eq!(layout.sidebar.h, layout.body.h);
+            assert_eq!(layout.main.h, layout.body.h);
+        }
+    }
+
+    #[test]
+    fn sidebar_stays_fixed_while_content_and_path_fill_grow() {
+        let narrow = FilesApp::compute_layout(Rect::new(0, 0, 800, 600));
+        let wide = FilesApp::compute_layout(Rect::new(0, 0, 1280, 600));
+        assert_eq!(narrow.sidebar.w, SIDEBAR_W);
+        assert_eq!(wide.sidebar.w, SIDEBAR_W);
+        assert_eq!(wide.main.w - narrow.main.w, 480);
+        assert_eq!(wide.breadcrumb.w - narrow.breadcrumb.w, 480);
+        assert_eq!(narrow.search.w, SEARCH_W);
+        assert_eq!(wide.search.w, SEARCH_W);
+    }
+
+    #[test]
+    fn shrink_recomputes_instead_of_retaining_old_geometry() {
+        let initial = FilesApp::compute_layout(Rect::new(0, 0, WIN_W, WIN_H));
+        let shorter = FilesApp::compute_layout(Rect::new(0, 0, 800, 500));
+        assert_ne!(shorter.main, initial.main);
+        assert!(shorter.main.w < initial.main.w);
+        assert!(shorter.main.h < initial.main.h);
+        assert!(shorter.details.h >= DETAILS_MIN_H);
+        assert!(shorter.details.h <= DETAILS_H);
+        assert_eq!(shorter.details.w, 800);
+    }
+
+    #[test]
+    fn repeated_files_layout_is_identical() {
+        let bounds = Rect::new(0, 0, 1024, 700);
+        assert_eq!(
+            FilesApp::compute_layout(bounds),
+            FilesApp::compute_layout(bounds)
+        );
+    }
+}
+
+#[cfg(all(not(test), feature = "native-svg", target_os = "sunlightos"))]
+fn main() {
+    let (argc, argv, envp) = sunlight_libc::std_runtime::startup_args();
+    application_main(argc, argv, envp);
+}

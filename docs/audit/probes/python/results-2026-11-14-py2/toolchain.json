@@ -1,0 +1,22 @@
+{
+  "clang --version": {
+    "exit": 0,
+    "output": "clang version 23.1.4\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /usr/bin\n"
+  },
+  "ld.lld --version": {
+    "exit": 0,
+    "output": "LLD 23.1.4 (compatible with GNU linkers)\n"
+  },
+  "llvm-ar --version": {
+    "exit": 0,
+    "output": "LLVM (http://llvm.org/):\n  LLVM version 23.1.4\n  Optimized build.\n"
+  },
+  "rustc --version": {
+    "exit": 0,
+    "output": "rustc 1.98.0-nightly (8954863c8 2026-06-05)\n"
+  },
+  "qemu-system-x86_64 --version": {
+    "exit": 0,
+    "output": "QEMU emulator version 11.1.2\nCopyright (c) 2003-2026 Fabrice Bellard and the QEMU Project developers\n"
+  }
+}

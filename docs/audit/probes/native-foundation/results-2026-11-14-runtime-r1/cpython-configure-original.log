@@ -1,0 +1,7 @@
+$ /tmp/sunlight-r1-cpython/Python-3.13.0/configure --build=x86_64-pc-linux-gnu --host=x86_64-unknown-sunlightos --with-build-python=/tmp/sunlight-r1-cpython/build-host/python --disable-shared --without-ensurepip --with-pkg-config=no
+cwd=/tmp/sunlight-r1-cpython/cross-original
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... Invalid configuration 'x86_64-unknown-sunlightos': OS 'sunlightos' not recognized
+configure: error: /bin/sh /tmp/sunlight-r1-cpython/Python-3.13.0/config.sub x86_64-unknown-sunlightos failed
+
+exit=1

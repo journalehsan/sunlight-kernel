@@ -1,0 +1,55 @@
+{
+  "status": "BLOCKED",
+  "POSIX": {
+    "stat": "BLOCKED",
+    "lstat": "BLOCKED",
+    "fstat": "BLOCKED"
+  },
+  "native_subset": {
+    "status": "PASS",
+    "cpus": {
+      "1": {
+        "exit": 0,
+        "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "2": {
+        "exit": 0,
+        "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "4": {
+        "exit": 0,
+        "stdout": "PY5 native subset PASS: rename/unlink descriptor identity, mount getdents, cwd divergence, invalid paths; POSIX metadata/realpath BLOCKED\n",
+        "stderr": "",
+        "pass_": true
+      }
+    },
+    "scenarios": [
+      "regular file",
+      "directory",
+      "root/mounted tmpfs",
+      "missing path",
+      "relative open versus rejected path stat",
+      "rejected dot/repeated/trailing/empty paths",
+      "fd after rename",
+      "fd after unlink nlinks0",
+      "closed fd EBADF",
+      "mounted getdents compatibility consumer"
+    ],
+    "ABI": "24-byte native subset only; no POSIX struct stat was added"
+  },
+  "existing_concurrency": "PY4 repeated native fstat alongside writer; overlap not forced. See per-CPU py4-filesystem results. No atomic multi-field metadata snapshot claim beyond VFS lock.",
+  "not_run": [
+    "symlink",
+    "dangling symlink",
+    "non-root permission failure",
+    "forced concurrent rename/unlink/fd-close schedules",
+    "persistent FAT",
+    "POSIX timestamps/dev/inode",
+    "path changes during realpath"
+  ],
+  "logs": "filesystem-test.c; validated-functional-cpu-{1,2,4}/"
+}

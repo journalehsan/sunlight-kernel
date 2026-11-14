@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_key_delete.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_key_delete.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/api-probes/pthread_key_delete.c:2:44: error: use of undeclared identifier 'pthread_key_delete'
+    2 | void * volatile required_symbol = (void *)&pthread_key_delete;
+      |                                            ^~~~~~~~~~~~~~~~~~
+1 error generated.
+
+exit=1

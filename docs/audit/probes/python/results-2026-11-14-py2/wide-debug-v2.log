@@ -1,0 +1,5 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/wide-debug-v2
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'locale=C.UTF-8 mb=4\nn=13 errno=0 out=202020202061ceb120202020\n'

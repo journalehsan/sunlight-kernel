@@ -1,0 +1,75 @@
+{
+  "status": "PARTIAL",
+  "implementation": "sunlight-files/src/main.rs; tools/build.sh:102 uses tools/build_svg_apps.sh",
+  "trace": "UI -> private PathBuf -> libc::file_ops::read_directory -> read_dir_from syscall148 -> KERNEL_VFS -> backend; properties -> native StatPath61; file-open resolver is MIME/application selection sun_open, not VFS canonicalization",
+  "operations": [
+    {
+      "operation": "navigation",
+      "contract": "navigate_to sets current_path to supplied PathBuf only after load_directory succeeds; failures display generic Cannot read folder.",
+      "source": "sunlight-files/src/main.rs:1322,1355",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "breadcrumb/parent",
+      "contract": "String component display/hit-test and parent truncation; no authoritative reverse walk.",
+      "source": "sunlight-files/src/main.rs:713,2345,2900",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "normalization",
+      "contract": "PathBuf::set trims whitespace, prepends root even to relative text, removes empty/dot/dotdot lexically. join appends bytes and rejects NUL; these are UI path conventions.",
+      "source": "sunlight-files/src/main.rs:588",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "properties/type",
+      "contract": "Native stat subset; size, type, uid/gid, mode, nlinks; unavailable marks metadata_valid false. Directory entry type and size can become stale.",
+      "source": "sunlight-files/src/main.rs:455,2707",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "symlink representation/open",
+      "contract": "Only FT_FILE/FT_DIR. No link icon identity, target metadata, canonical target or cycle rejection algorithm. Opening regular file uses sun_open::open_path to choose an application.",
+      "source": "sunlight-files/src/main.rs:1256,1289; sunlight-libc/src/sun_open.rs",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "copy/move",
+      "contract": "Shared file_ops::transfer plans only file/dir, bounded8192 nodes and depth64; exclusive copies, no-replace atomic rename for moves; unsupported file types rejected; no link-preserving policy.",
+      "source": "sunlight-libc/src/file_ops.rs:109,151,194",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "mounts",
+      "contract": "Lists /mnt and known volumes; ordinary native VFS routing. ReadDir checks target directory Read; ancestor Execute semantics not established.",
+      "source": "sunlight-files/src/main.rs:4964; kernel/src/arch/x86_64/syscall.rs:9208",
+      "native_evidence": "NOT_RUN"
+    },
+    {
+      "operation": "cache",
+      "contract": "Directory entries are snapshots, properties have metadata_valid, thumbnails compare stat before/after; no atomic inode/canonical guarantee.",
+      "source": "sunlight-files/src/thumbnails.rs:609,631",
+      "native_evidence": "NOT_RUN"
+    }
+  ],
+  "questions": {
+    "opens_symlink_target": "BLOCKED: native backend has no symlink",
+    "distinguishes_link": "No native link type",
+    "separate_target_metadata": "No",
+    "final_canonical_target": "No",
+    "permissions": "Existing final-entry checks remain; ancestor search absent; do not claim POSIX preservation",
+    "mount_crossings": "Source-supported; native UI navigation NOT_RUN",
+    "invalid_or_cyclic_links": "No native links; invalid directory errors surfaced, not POSIX error taxonomy"
+  },
+  "tests": [
+    {
+      "source": "sunlight-files/src/main.rs:5775",
+      "assertion": "Explicitly lexical normalization only"
+    },
+    {
+      "source": "sunlight-libc/src/file_ops.rs tests",
+      "assertion": "Host fixture backend; not native symlink semantics"
+    }
+  ],
+  "native_ui": "NOT_RUN: no real compositor/click-driven Files comparison was performed; host source extraction must not qualify this."
+}

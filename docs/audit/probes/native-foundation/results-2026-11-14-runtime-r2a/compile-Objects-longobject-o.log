@@ -1,0 +1,186 @@
+$ make -j1 Objects/longobject.o
+cwd=/tmp/sunlight-r2a-cpython/cross-final
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/longobject.o /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:5:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/Python.h:118:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pythread.h:105:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/cpython/pythread.h:37:5: error: unknown type name 'pthread_key_t'
+   37 |     NATIVE_TSS_KEY_T _key;
+      |     ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/cpython/pythread.h:18:33: note: expanded from macro 'NATIVE_TSS_KEY_T'
+   18 | #   define NATIVE_TSS_KEY_T     pthread_key_t
+      |                                 ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:11:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:8:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pythread.h:66:9: error: unknown type name 'pthread_condattr_t'; did you mean 'pthread_attr_t'?
+   66 |         pthread_condattr_t *ptr;
+      |         ^~~~~~~~~~~~~~~~~~
+      |         pthread_attr_t
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:21:3: note: 'pthread_attr_t' declared here
+   21 | } pthread_attr_t;
+      |   ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:53:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_attr_t'?
+   53 |     PyCOND_T cond;
+      |     ^~~~~~~~
+      |     pthread_attr_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:21:3: note: 'pthread_attr_t' declared here
+   21 | } pthread_attr_t;
+      |   ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_ceval_state.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_gil.h:58:5: error: unknown type name 'pthread_cond_t'; did you mean 'pthread_attr_t'?
+   58 |     PyCOND_T switch_cond;
+      |     ^~~~~~~~
+      |     pthread_attr_t
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_condvar.h:22:18: note: expanded from macro 'PyCOND_T'
+   22 | #define PyCOND_T pthread_cond_t
+      |                  ^
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:21:3: note: 'pthread_attr_t' declared here
+   21 | } pthread_attr_t;
+      |   ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:8:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:17:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/clinic/longobject.c.h:28:22: error: initializer element is not a compile-time constant
+   28 |         .ob_item = { &_Py_ID(base), },
+      |                      ^~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/clinic/longobject.c.h:138:10: error: use of undeclared identifier 'SSIZE_MAX'
+  138 |     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_modsupport.h:34:8: note: expanded from macro '_PyArg_CheckPositional'
+   34 |     ((!_Py_ANY_VARARGS(max) && (min) <= (nargs) && (nargs) <= (max)) \
+      |        ^~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/pycore_modsupport.h:32:36: note: expanded from macro '_Py_ANY_VARARGS'
+   32 | #define _Py_ANY_VARARGS(n) ((n) == PY_SSIZE_T_MAX)
+      |                                    ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:17:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/clinic/longobject.c.h:296:22: error: initializer element is not a compile-time constant
+  296 |         .ob_item = { &_Py_ID(length), &_Py_ID(byteorder), &_Py_ID(signed), },
+      |                      ^~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/clinic/longobject.c.h:407:22: error: initializer element is not a compile-time constant
+  407 |         .ob_item = { &_Py_ID(bytes), &_Py_ID(byteorder), &_Py_ID(signed), },
+      |                      ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:144:28: error: use of undeclared identifier 'SSIZE_MAX'
+  144 |     if (size > (Py_ssize_t)MAX_LONG_DIGITS) {
+      |                            ^~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:137:7: note: expanded from macro 'MAX_LONG_DIGITS'
+  137 |     ((PY_SSIZE_T_MAX - offsetof(PyLongObject, long_value.ob_digit))/sizeof(digit))
+      |       ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:424:12: error: call to undeclared function 'ldexp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  424 |     frac = ldexp(frac, (expo-1) % PyLong_SHIFT + 1);
+      |            ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:607:22: error: use of undeclared identifier 'SSIZE_MAX'
+  607 |     if (x <= (size_t)PY_SSIZE_T_MAX) {
+      |                      ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:610:31: error: use of undeclared identifier 'SSIZE_MAX'
+  610 |     else if (sign < 0 && x == PY_ABS_SSIZE_T_MIN) {
+      |                               ^~~~~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:447:44: note: expanded from macro 'PY_ABS_SSIZE_T_MIN'
+  447 | #define PY_ABS_SSIZE_T_MIN      (0-(size_t)PY_SSIZE_T_MIN)
+      |                                            ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:137:26: note: expanded from macro 'PY_SSIZE_T_MIN'
+  137 | #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
+      |                          ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:611:16: error: use of undeclared identifier 'SSIZE_MAX'
+  611 |         return PY_SSIZE_T_MIN;
+      |                ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:137:26: note: expanded from macro 'PY_SSIZE_T_MIN'
+  137 | #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
+      |                          ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:881:32: error: use of undeclared identifier 'SSIZE_MAX'
+  881 |     if (numsignificantbytes > (PY_SSIZE_T_MAX - PyLong_SHIFT) / 8) {
+      |                                ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:2340:23: error: use of undeclared identifier 'SSIZE_MAX'
+ 2340 |         if (size_a > (PY_SSIZE_T_MAX - 3) / PyLong_SHIFT) {
+      |                       ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:2566:19: error: use of undeclared identifier 'SSIZE_MAX'
+ 2566 |     if (digits > (PY_SSIZE_T_MAX - (PyLong_SHIFT - 1)) / bits_per_char) {
+      |                   ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:2757:32: error: call to undeclared function 'log'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2757 |         log_base_BASE[base] = (log((double)base) /
+      |                                ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:2778:27: error: use of undeclared identifier 'SSIZE_MAX'
+ 2778 |     if (fsize_z > (double)MAX_LONG_DIGITS) {
+      |                           ^~~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:137:7: note: expanded from macro 'MAX_LONG_DIGITS'
+  137 |     ((PY_SSIZE_T_MAX - offsetof(PyLongObject, long_value.ob_digit))/sizeof(digit))
+      |       ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Objects/longobject.c:3425:20: error: use of undeclared identifier 'SSIZE_MAX'
+ 3425 |     if (a_size >= (PY_SSIZE_T_MAX - 1) / PyLong_SHIFT + 1 &&
+      |                    ^~~~~~~~~~~~~~
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pyport.h:128:27: note: expanded from macro 'PY_SSIZE_T_MAX'
+  128 | #   define PY_SSIZE_T_MAX SSIZE_MAX
+      |                           ^~~~~~~~~
+fatal error: too many errors emitted, stopping now [-ferror-limit=]
+5 warnings and 20 errors generated.
+make: *** [Makefile:3005: Objects/longobject.o] Error 1
+
+exit=2

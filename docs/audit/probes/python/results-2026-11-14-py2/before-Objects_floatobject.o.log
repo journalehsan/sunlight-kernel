@@ -1,0 +1,94 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:9:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:645:11: error: call to undeclared function 'fmod'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  645 |     mod = fmod(vx, wx);
+      |           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:656:15: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  656 |         mod = copysign(0.0, wx);
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:665:12: error: call to undeclared function 'fmod'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  665 |     *mod = fmod(vx, wx);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:684:16: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  684 |         *mod = copysign(0.0, wx);
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:688:21: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  688 |         *floordiv = floor(div);
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:695:21: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  695 |         *floordiv = copysign(0.0, vx / wx); /* zero w/ sign of vx/wx */
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:778:25: error: call to undeclared function 'fmod'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  778 |         int iw_is_odd = DOUBLE_IS_ODD_INTEGER(iw);
+      |                         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:731:35: note: expanded from macro 'DOUBLE_IS_ODD_INTEGER'
+  731 | #define DOUBLE_IS_ODD_INTEGER(x) (fmod(fabs(x), 2.0) == 1.0)
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:783:39: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  783 |                                       copysign(0.0, iv) : 0.0);
+      |                                       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:788:25: error: call to undeclared function 'fmod'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  788 |         int iw_is_odd = DOUBLE_IS_ODD_INTEGER(iw);
+      |                         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:731:35: note: expanded from macro 'DOUBLE_IS_ODD_INTEGER'
+  731 | #define DOUBLE_IS_ODD_INTEGER(x) (fmod(fabs(x), 2.0) == 1.0)
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:803:19: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  803 |         if (iw != floor(iw)) {
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:814:25: error: call to undeclared function 'fmod'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  814 |         negate_result = DOUBLE_IS_ODD_INTEGER(iw);
+      |                         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:731:35: note: expanded from macro 'DOUBLE_IS_ODD_INTEGER'
+  731 | #define DOUBLE_IS_ODD_INTEGER(x) (fmod(fabs(x), 2.0) == 1.0)
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:837:10: error: call to undeclared function 'pow'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  837 |     ix = pow(iv, iw);
+      |          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:891:10: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  891 |     o = (floor(x) == x) ? Py_True : Py_False;
+      |          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:924:30: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  924 |     return PyLong_FromDouble(floor(x));
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:938:30: error: call to undeclared function 'ceil'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  938 |     return PyLong_FromDouble(ceil(x));
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:1079:19: error: call to undeclared function 'round'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1079 |         rounded = round(x);
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:1244:13: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1244 |         if (copysign(1.0, x) == -1.0)
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:1586:38: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1586 |     for (i=0; i<300 && float_part != floor(float_part) ; i++) {
+      |                                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:2059:17: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2059 |         sign = (copysign(1.0, x) == -1.0);
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/floatobject.c:2074:17: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2074 |         sign = (copysign(1.0, x) == -1.0);
+      |                 ^
+5 warnings and 20 errors generated.

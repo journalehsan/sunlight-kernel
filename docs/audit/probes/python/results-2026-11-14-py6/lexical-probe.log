@@ -1,0 +1,6 @@
+cwd="/tmp" input="." shell="/tmp" files="."
+cwd="/tmp" input=".." shell="/" files=".."
+cwd="/" input="/tmp//./../tmp" shell="/tmp" files="/tmp//./../tmp"
+cwd="/tmp" input="missing/../x" shell="/tmp/x" files="missing/../x"
+cwd="/tmp" input="relative" shell="/tmp/relative" files="relative"
+cwd="/tmp" input=" /tmp " shell="/tmp/ /tmp " files=" /tmp "

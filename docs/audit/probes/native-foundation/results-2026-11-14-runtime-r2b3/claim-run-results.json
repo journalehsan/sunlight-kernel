@@ -1,0 +1,61 @@
+[
+  {
+    "name": "handle-claim-build",
+    "command": [
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/build-handle-claim.py"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "handle-claim-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "handle-claim-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "handle-claim-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-4"
+    ],
+    "exit": 0
+  }
+]

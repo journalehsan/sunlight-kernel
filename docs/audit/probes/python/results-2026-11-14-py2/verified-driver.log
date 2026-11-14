@@ -1,0 +1,37 @@
+START verified-locked
+END verified-locked 0
+START verified-condvar-build
+END verified-condvar-build 0
+START verified-libc-build
+END verified-libc-build 0
+START verified-exit-build
+END verified-exit-build 0
+START verified-heap-build
+END verified-heap-build 0
+START verified-admission-build
+END verified-admission-build 0
+START verified-pthread-tsd-once-build
+END verified-pthread-tsd-once-build 0
+START verified-pthread-tsd-exit-race-build
+END verified-pthread-tsd-exit-race-build 0
+START verified-pthread-once-recursive-build
+END verified-pthread-once-recursive-build 0
+START verified-strerror-threads-build
+END verified-strerror-threads-build 0
+START verified-condvar-timeout-build
+END verified-condvar-timeout-build 0
+START verified-string-guard-build
+END verified-string-guard-build 0
+START verified-header-abi-build
+END verified-header-abi-build 0
+START verified-exit-controls-build
+END verified-exit-controls-build 0
+START verified-lifecycle-build
+END verified-lifecycle-build 0
+START verified-exit-matrix-build
+END verified-exit-matrix-build 0
+START verified-functional-cpu-1
+END verified-functional-cpu-1 1
+START verified-legacy-cpu-1
+END verified-legacy-cpu-1 0
+START verified-functional-cpu-2

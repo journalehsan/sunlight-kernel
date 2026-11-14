@@ -1,0 +1,40 @@
+{
+  "status": "BLOCKED",
+  "probes": [
+    {
+      "feature": "condvar",
+      "exit": 1,
+      "status": "BLOCKED",
+      "evidence": "cpython-blocker-condvar.log"
+    },
+    {
+      "feature": "strncpy",
+      "exit": 1,
+      "status": "BLOCKED",
+      "evidence": "cpython-blocker-strncpy.log"
+    },
+    {
+      "feature": "_Exit",
+      "exit": 1,
+      "status": "BLOCKED",
+      "evidence": "cpython-blocker-_Exit.log"
+    }
+  ],
+  "assessment": {
+    "native_group_lifecycle": "Existing functional lifecycle qualified 1/2/4; deterministic terminal race open",
+    "IPC_capability": "Legacy borrower RPC and endpoint authority qualified; authenticated channel continuity open",
+    "shared_memory": "Post-owner native scenario blocked at authority prerequisite",
+    "forced_termination": "Selected live/retained owner controls PASS; W6 unqualified",
+    "thread_cleanup": "Functional TLS/once and reaping PASS; detached autonomous reclamation excluded; exact TLS/futex race schedules remain unqualified",
+    "session_PTY": "Host controls PASS; retained-owner native guest NOT_RUN"
+  },
+  "remaining_blockers": [
+    "pthread condition variables",
+    "strncpy",
+    "_Exit",
+    "remaining platform/header gaps",
+    "detached autonomous reclamation",
+    "unqualified TLS/futex races"
+  ],
+  "interpreter_build": "NOT_RUN; no stubs, CPython functionality or port added"
+}

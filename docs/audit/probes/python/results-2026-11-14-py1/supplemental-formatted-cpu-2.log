@@ -1,0 +1,13 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/supplemental-formatted-cpu-2
+Building isolated native C guest (5 ELFs, 2 CPUs)
+Booting disposable TCG guest
+condvar-timeout: PASS exit=0 expected=0
+guest condvar-timeout stdout: b'PY1 signal/timeout stress PASS wakes=23 timeouts=37; exact race UNQUALIFIED\n'
+string-guard: PASS exit=0 expected=0
+guest string-guard stdout: b'PY1 strncpy guard-page PASS\n'
+owner-exit-0: PASS exit=0 expected=0
+guest owner-exit-0 stdout: b'PY1 initial owner immediate group exit\n'
+owner-exit-37: PASS exit=37 expected=37
+guest owner-exit-37 stdout: b'PY1 initial owner immediate group exit\n'
+owner-exit-255: PASS exit=255 expected=255
+guest owner-exit-255 stdout: b'PY1 initial owner immediate group exit\n'

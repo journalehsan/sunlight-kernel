@@ -1,0 +1,67 @@
+{
+  "overall": "PARTIAL",
+  "complete": false,
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "reason": "Incoming state, exact CPython 3.13.0 identity, locked build and clean complete 180-object baseline reproduced"
+    },
+    "G2": {
+      "status": "BLOCKED",
+      "reason": "POSIX metadata and authoritative canonical-path contracts missing; native subset tests do not close this gate"
+    },
+    "G3": {
+      "status": "PARTIAL",
+      "reason": "Native group identity and existing exit regressions tested; required signals and orphan-parent lifecycle incomplete"
+    },
+    "G4": {
+      "status": "BLOCKED",
+      "reason": "Secure service exists; required nonblocking readiness/error contract absent"
+    },
+    "G5": {
+      "status": "PARTIAL",
+      "reason": "C-locale langinfo completed; mutable environment, calendar execution and buffered modes unresolved"
+    },
+    "G6": {
+      "status": "PASS",
+      "reason": "Full identical configured set retried, exact commands and diagnostics preserved; compilation itself remains FAIL"
+    },
+    "G7": {
+      "status": "PASS",
+      "reason": "Final-source 1/2/4 CPU native language/lifecycle/functional regression and supported TCP matrix"
+    },
+    "G8": {
+      "status": "PASS",
+      "reason": "Scoped delta security review and final incoming/source/patch integrity; inherited security qualifications preserved"
+    }
+  },
+  "compilation": {
+    "configured": 180,
+    "attempted": 180,
+    "passed": 165,
+    "failed": 15,
+    "unattempted": 0,
+    "object_set_unchanged": true,
+    "newly_successful": [
+      "Modules/_localemodule.o",
+      "Python/sysmodule.o"
+    ]
+  },
+  "static_link": "NOT_RUN",
+  "native_interpreter": "NOT_RUN",
+  "python_operational": false,
+  "regressions": "PASS",
+  "evidence": "docs/audit/probes/python/results-2026-11-14-py4",
+  "report": "docs/runtime/python-py4-native-platform-contracts.md",
+  "remaining_blockers": [
+    "Authoritative POSIX metadata and component resolver",
+    "Required asynchronous/group signal architecture",
+    "Secure nonblocking ready-or-EAGAIN random API",
+    "Mutable environment ownership/inheritance",
+    "Calendar/time ABI and execution",
+    "Full/line stdio buffering and cleanup",
+    "Remaining mimalloc abort/syscall platform integration"
+  ],
+  "no_commit": true,
+  "no_push": true
+}

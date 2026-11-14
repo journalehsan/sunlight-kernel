@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "INITIAL PTHREAD_EXIT WITH LIVE BORROWER\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

@@ -41,8 +41,15 @@ mod sched {
         pub foreground: crate::foreground::Foreground,
         pub pending_call: Option<Call>,
         pub finished: bool,
+        pub retained_group: bool,
     }
     impl Process {
+        pub fn process_lifetime_live(&self) -> bool {
+            !self.finished || self.retained_group
+        }
+        pub fn retained_native_group_live(&self) -> bool {
+            self.finished && self.retained_group
+        }
         pub fn is_exiting(&self) -> bool {
             self.finished
         }
@@ -52,8 +59,18 @@ mod sched {
         pub processes: Vec<Process>,
         pub wakes: Vec<usize>,
         pub cancelled_calls: Vec<usize>,
+        pub terminations: Vec<usize>,
     }
     impl Scheduler {
+        pub fn terminate_process_by_pid(&mut self, pid: usize, _: i32, _: &str) -> bool {
+            let Some(p) = self.processes.iter_mut().find(|p| p.pid == pid) else {
+                return false;
+            };
+            p.finished = true;
+            p.retained_group = false;
+            self.terminations.push(pid);
+            true
+        }
         pub fn wake_for_signal(&mut self, pid: usize) {
             self.wakes.push(pid);
         }
@@ -74,6 +91,7 @@ fn process(pid: usize, member: u64) -> sched::Process {
         },
         pending_call: None,
         finished: false,
+        retained_group: false,
     }
 }
 
@@ -218,4 +236,36 @@ fn full_session_teardown_reaches_idle_and_reparented_members() {
     assert_eq!(s.processes[1].foreground.forced_exit, Some(129));
     assert_eq!(s.processes[2].foreground.forced_exit, None);
     assert_eq!(s.wakes, [10, 11]);
+}
+
+#[test]
+fn retained_owner_session_termination_uses_exact_session_generation() {
+    let mut owner = process(42, 0);
+    owner.finished = true;
+    owner.retained_group = true;
+    owner.foreground.session_owner = true;
+    owner.foreground.owned = 99;
+    owner.foreground.session_broker = 1;
+    owner.foreground.session = 2;
+    owner.foreground.generation = 3;
+    let mut child = process(43, 99);
+    child.foreground.session_broker = 1;
+    child.foreground.session = 2;
+    child.foreground.generation = 3;
+    let mut unrelated = process(44, 0);
+    unrelated.foreground.session_broker = 1;
+    unrelated.foreground.session = 2;
+    unrelated.foreground.generation = 4;
+    let mut s = sched::Scheduler::default();
+    s.processes = vec![owner, child, unrelated];
+    s.terminate_session(1, 2, 4, 9);
+    assert!(s.processes[0].retained_group);
+    assert!(s.terminations.is_empty());
+    assert!(s.processes[1].foreground.forced_exit.is_none());
+    s.processes[2].foreground.forced_exit = None;
+    s.terminate_session(1, 2, 3, 9);
+    assert_eq!(s.terminations, vec![42]);
+    assert!(!s.processes[0].retained_group);
+    assert_eq!(s.processes[1].foreground.forced_exit, Some(137));
+    assert!(s.processes[2].foreground.forced_exit.is_none());
 }

@@ -1,0 +1,27 @@
+{
+  "version": "3.13.0",
+  "fresh_CPython_configure": "NOT_RUN",
+  "fresh_CPython_compile": "NOT_RUN",
+  "prior_observations": {
+    "source": "results-2026-11-14-runtime-r2b1/validation-summary.json",
+    "configure": "PASS",
+    "compile": "FAIL: unknown pthread_condattr_t, pthread_cond_t and undeclared strncpy",
+    "interpreter_link": "NOT_RUN",
+    "execution": "NOT_RUN"
+  },
+  "production_source_delta": [],
+  "current_source_assessment": {
+    "initial_thread_pthread_exit": "BLOCKED: owner kills live workers",
+    "detached_reclamation": "PARTIAL: retained until next create; overflow remains source-confirmed",
+    "TLS": "generation-tagged isolation and controlled callback/delete/reuse supported; exact API-internal races UNQUALIFIED",
+    "once": "functional publication/abandonment and fast path pass; precise registration races UNQUALIFIED",
+    "condition_variables": "absent; no implementation or stubs added",
+    "libc_gaps": [
+      "strncpy",
+      "_Exit declaration/export",
+      "time/header integration from historical CPython diagnostics"
+    ]
+  },
+  "impact": "no CPython capability advanced; lifecycle closure must precede condvars",
+  "next_milestone": "approved native group lifetime/thread-only exit work, deterministic reaper admission and once-integrated test hooks; then condvar design milestone"
+}

@@ -1,0 +1,200 @@
+{
+  "status": "UNQUALIFIED",
+  "group_integrated": {
+    "shootdown uncertainty": "NOT_RUN",
+    "interrupted retirement": "NOT_RUN",
+    "partial SHM unmap": "NOT_RUN",
+    "cleanup versus final exit": "NOT_RUN",
+    "concurrent revocation": "NOT_RUN",
+    "backing after last view": "NOT_RUN"
+  },
+  "standalone_controls": {
+    "scope": "existing 2-CPU retirement controls; NOT a native thread-group W9 witness",
+    "guests": [
+      {
+        "mode": 0,
+        "cpus": 2,
+        "scope": "normal MM-2D; local replacement receipts; remote munmap ACK injection; zero-view final backing",
+        "status": "PASS",
+        "checks": {
+          "complete_normal_gate": true,
+          "zero_capacity_atomic": true,
+          "last_slot": true,
+          "durable_shared_handoff": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/fi0.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/pilot-fi0-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "fcaf19bc27f6837b82102fda49de202bb0fe43f0b33de780acde3101f506274d",
+        "iso_sha256": "83cfb48e581d1ae7dc6123f06677dd878493259de658623de3877fd0567d3c98",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "1a8322bcdaf46403e00b27084b12b7b39735c5ac65681cbbf3cfc1ac46eeafd3",
+        "reason": "markers",
+        "host_terminated": true,
+        "elapsed_seconds": 19.28468324500136,
+        "frames": [],
+        "acknowledgments": []
+      },
+      {
+        "mode": 2,
+        "cpus": 2,
+        "scope": "anonymous munmap terminal containment",
+        "status": "PASS",
+        "checks": {
+          "expected_terminal_failure": true,
+          "complete_receipt": true,
+          "exact_retention": true,
+          "quarantined_owner": true,
+          "withdrawn_identity": true,
+          "icr_budget": true,
+          "no_success_marker": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/fi2.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/pilot-fi2-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "caa1500f8c7e1c6bfefb95a3e860465419af6ff16f5eae8d57dc41da4075a67f",
+        "iso_sha256": "cb1cbadc174a94ac89ed42d0009b36a329c06418fe09e32233cf272e48005d78",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "5c14e27bbe57fedd2041aa35bc836b27e01bd737f27a7c3033551d8224b64ebe",
+        "reason": "panic",
+        "host_terminated": true,
+        "elapsed_seconds": 19.381293293990893,
+        "frames": [
+          [
+            "137439412224",
+            "274235392",
+            "true",
+            "117486288",
+            "false",
+            "0",
+            "0"
+          ]
+        ],
+        "acknowledgments": [
+          [
+            "274137088",
+            "22",
+            "109",
+            "2",
+            "0",
+            "Quarantined"
+          ]
+        ]
+      },
+      {
+        "mode": 3,
+        "cpus": 2,
+        "scope": "anonymous munmap terminal containment",
+        "status": "PASS",
+        "checks": {
+          "expected_terminal_failure": true,
+          "complete_receipt": true,
+          "exact_retention": true,
+          "quarantined_owner": true,
+          "withdrawn_identity": true,
+          "icr_budget": true,
+          "no_success_marker": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/fi3.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/retirement-controls/pilot-fi3-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "7e9a58f6f9d20c8740e40a22ce6b91d032b7d4c7487a1c9c7bacb3d3d6cc88ea",
+        "iso_sha256": "480cb7aff277ed0e686881e0e10c5c8b1e6f987b249780472072cc175cbb598c",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "a31e2e58c2630eff18dd86795a884beef19dec3a63eaeded52d749abecc2bf6d",
+        "reason": "panic",
+        "host_terminated": true,
+        "elapsed_seconds": 20.949138844007393,
+        "frames": [
+          [
+            "137439412224",
+            "274235392",
+            "true",
+            "117486288",
+            "false",
+            "0",
+            "0"
+          ]
+        ],
+        "acknowledgments": [
+          [
+            "274137088",
+            "22",
+            "109",
+            "2",
+            "0",
+            "Quarantined"
+          ]
+        ]
+      }
+    ]
+  },
+  "scope": "Existing 2-CPU synthetic VM/retirement controls, not the borrower SHM workload",
+  "policy": "Retain exact retirement owner, backing and quota on uncertainty; fail stop/quarantine. Timeout or process disappearance cannot qualify reclamation.",
+  "source_references": [
+    "kernel/src/memory/retirement.rs",
+    "kernel/src/memory/tlb.rs",
+    "kernel/src/memory/shared.rs:367",
+    "kernel/src/process/address_space.rs:1696"
+  ]
+}

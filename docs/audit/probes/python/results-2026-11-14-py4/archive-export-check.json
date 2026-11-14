@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "counts": {
+    "getpid": 1,
+    "getppid": 1,
+    "gettid": 1,
+    "nl_langinfo": 1,
+    "_Exit": 1,
+    "_exit": 1
+  },
+  "command": [
+    "llvm-nm",
+    "--defined-only",
+    "-g",
+    "target/native-c/sysroot/lib/libsunlight_native_c.a"
+  ]
+}

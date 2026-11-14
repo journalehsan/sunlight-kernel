@@ -1,0 +1,462 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:4:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:8:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:478:13: error: incomplete definition of type 'struct tm'
+  478 |     SET(0, p->tm_year + 1900);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:479:13: error: incomplete definition of type 'struct tm'
+  479 |     SET(1, p->tm_mon + 1);         /* Want January == 1 */
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:480:13: error: incomplete definition of type 'struct tm'
+  480 |     SET(2, p->tm_mday);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:481:13: error: incomplete definition of type 'struct tm'
+  481 |     SET(3, p->tm_hour);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:482:13: error: incomplete definition of type 'struct tm'
+  482 |     SET(4, p->tm_min);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:483:13: error: incomplete definition of type 'struct tm'
+  483 |     SET(5, p->tm_sec);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:484:14: error: incomplete definition of type 'struct tm'
+  484 |     SET(6, (p->tm_wday + 6) % 7); /* Want Monday == 0 */
+      |             ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:485:13: error: incomplete definition of type 'struct tm'
+  485 |     SET(7, p->tm_yday + 1);        /* Want January, 1 == 1 */
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:486:13: error: incomplete definition of type 'struct tm'
+  486 |     SET(8, p->tm_isdst);
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:455:44: note: forward declaration of 'struct tm'
+  455 | tmtotuple(time_module_state *state, struct tm *p
+      |                                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:514:17: error: call to undeclared function 'time'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  514 |         whent = time(NULL);
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:528:15: error: variable has incomplete type 'struct tm'
+  528 |     struct tm buf;
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:528:12: note: forward declaration of 'struct tm'
+  528 |     struct tm buf;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:13: error: incomplete definition of type 'struct tm'
+  552 |     return p->tm_sec + p->tm_min*60 + p->tm_hour*3600 + p->tm_yday*86400 +
+      |            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:25: error: incomplete definition of type 'struct tm'
+  552 |     return p->tm_sec + p->tm_min*60 + p->tm_hour*3600 + p->tm_yday*86400 +
+      |                        ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:40: error: incomplete definition of type 'struct tm'
+  552 |     return p->tm_sec + p->tm_min*60 + p->tm_hour*3600 + p->tm_yday*86400 +
+      |                                       ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:552:58: error: incomplete definition of type 'struct tm'
+  552 |     return p->tm_sec + p->tm_min*60 + p->tm_hour*3600 + p->tm_yday*86400 +
+      |                                                         ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:553:11: error: incomplete definition of type 'struct tm'
+  553 |         (p->tm_year-70)*31536000 + ((p->tm_year-69)/4)*86400 -
+      |          ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:553:39: error: incomplete definition of type 'struct tm'
+  553 |         (p->tm_year-70)*31536000 + ((p->tm_year-69)/4)*86400 -
+      |                                      ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:554:12: error: incomplete definition of type 'struct tm'
+  554 |         ((p->tm_year-1)/100)*86400 + ((p->tm_year+299)/400)*86400;
+      |           ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:554:41: error: incomplete definition of type 'struct tm'
+  554 |         ((p->tm_year-1)/100)*86400 + ((p->tm_year+299)/400)*86400;
+      |                                        ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:547:15: note: forward declaration of 'struct tm'
+  547 | timegm(struct tm *p)
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:572:15: error: variable has incomplete type 'struct tm'
+  572 |     struct tm buf;
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:572:12: note: forward declaration of 'struct tm'
+  572 |     struct tm buf;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:584:19: error: variable has incomplete type 'struct tm'
+  584 |         struct tm local = buf;
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:572:12: note: forward declaration of 'struct tm'
+  572 |     struct tm buf;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:587:9: error: call to undeclared function 'strftime'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  587 |         strftime(zone, sizeof(zone), "%Z", &buf);
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:614:30: error: invalid application of 'sizeof' to an incomplete type 'struct tm'
+  614 |     memset((void *) p, '\0', sizeof(struct tm));
+      |                              ^     ~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:623:33: error: incomplete definition of type 'struct tm'
+  623 |                           &y, &p->tm_mon, &p->tm_mday,
+      |                                ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:623:45: error: incomplete definition of type 'struct tm'
+  623 |                           &y, &p->tm_mon, &p->tm_mday,
+      |                                            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:29: error: incomplete definition of type 'struct tm'
+  624 |                           &p->tm_hour, &p->tm_min, &p->tm_sec,
+      |                            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:42: error: incomplete definition of type 'struct tm'
+  624 |                           &p->tm_hour, &p->tm_min, &p->tm_sec,
+      |                                         ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:624:54: error: incomplete definition of type 'struct tm'
+  624 |                           &p->tm_hour, &p->tm_min, &p->tm_sec,
+      |                                                     ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:29: error: incomplete definition of type 'struct tm'
+  625 |                           &p->tm_wday, &p->tm_yday, &p->tm_isdst))
+      |                            ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:42: error: incomplete definition of type 'struct tm'
+  625 |                           &p->tm_wday, &p->tm_yday, &p->tm_isdst))
+      |                                         ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:625:55: error: incomplete definition of type 'struct tm'
+  625 |                           &p->tm_wday, &p->tm_yday, &p->tm_isdst))
+      |                                                      ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:633:6: error: incomplete definition of type 'struct tm'
+  633 |     p->tm_year = y - 1900;
+      |     ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:634:6: error: incomplete definition of type 'struct tm'
+  634 |     p->tm_mon--;
+      |     ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:635:6: error: incomplete definition of type 'struct tm'
+  635 |     p->tm_wday = (p->tm_wday + 1) % 7;
+      |     ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:635:20: error: incomplete definition of type 'struct tm'
+  635 |     p->tm_wday = (p->tm_wday + 1) % 7;
+      |                   ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:636:6: error: incomplete definition of type 'struct tm'
+  636 |     p->tm_yday--;
+      |     ~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:610:17: note: forward declaration of 'struct tm'
+  610 |          struct tm *p, const char *format)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:703:12: error: incomplete definition of type 'struct tm'
+  703 |     if (buf->tm_mon == -1)
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:704:12: error: incomplete definition of type 'struct tm'
+  704 |         buf->tm_mon = 0;
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:705:17: error: incomplete definition of type 'struct tm'
+  705 |     else if (buf->tm_mon < 0 || buf->tm_mon > 11) {
+      |              ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:705:36: error: incomplete definition of type 'struct tm'
+  705 |     else if (buf->tm_mon < 0 || buf->tm_mon > 11) {
+      |                                 ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:709:12: error: incomplete definition of type 'struct tm'
+  709 |     if (buf->tm_mday == 0)
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:710:12: error: incomplete definition of type 'struct tm'
+  710 |         buf->tm_mday = 1;
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:711:17: error: incomplete definition of type 'struct tm'
+  711 |     else if (buf->tm_mday < 0 || buf->tm_mday > 31) {
+      |              ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:711:37: error: incomplete definition of type 'struct tm'
+  711 |     else if (buf->tm_mday < 0 || buf->tm_mday > 31) {
+      |                                  ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:715:12: error: incomplete definition of type 'struct tm'
+  715 |     if (buf->tm_hour < 0 || buf->tm_hour > 23) {
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:715:32: error: incomplete definition of type 'struct tm'
+  715 |     if (buf->tm_hour < 0 || buf->tm_hour > 23) {
+      |                             ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:719:12: error: incomplete definition of type 'struct tm'
+  719 |     if (buf->tm_min < 0 || buf->tm_min > 59) {
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:719:31: error: incomplete definition of type 'struct tm'
+  719 |     if (buf->tm_min < 0 || buf->tm_min > 59) {
+      |                            ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:723:12: error: incomplete definition of type 'struct tm'
+  723 |     if (buf->tm_sec < 0 || buf->tm_sec > 61) {
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:723:31: error: incomplete definition of type 'struct tm'
+  723 |     if (buf->tm_sec < 0 || buf->tm_sec > 61) {
+      |                            ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:729:12: error: incomplete definition of type 'struct tm'
+  729 |     if (buf->tm_wday < 0) {
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:733:12: error: incomplete definition of type 'struct tm'
+  733 |     if (buf->tm_yday == -1)
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:734:12: error: incomplete definition of type 'struct tm'
+  734 |         buf->tm_yday = 0;
+      |         ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:735:17: error: incomplete definition of type 'struct tm'
+  735 |     else if (buf->tm_yday < 0 || buf->tm_yday > 365) {
+      |              ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:735:37: error: incomplete definition of type 'struct tm'
+  735 |     else if (buf->tm_yday < 0 || buf->tm_yday > 365) {
+      |                                  ~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:677:16: note: forward declaration of 'struct tm'
+  677 | checktm(struct tm* buf)
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:983:26: error: incomplete definition of type 'struct tm'
+  983 |         wday_name[timeptr->tm_wday],
+      |                   ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:984:25: error: incomplete definition of type 'struct tm'
+  984 |         mon_name[timeptr->tm_mon],
+      |                  ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:985:16: error: incomplete definition of type 'struct tm'
+  985 |         timeptr->tm_mday, timeptr->tm_hour,
+      |         ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:985:34: error: incomplete definition of type 'struct tm'
+  985 |         timeptr->tm_mday, timeptr->tm_hour,
+      |                           ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:986:16: error: incomplete definition of type 'struct tm'
+  986 |         timeptr->tm_min, timeptr->tm_sec,
+      |         ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:986:33: error: incomplete definition of type 'struct tm'
+  986 |         timeptr->tm_min, timeptr->tm_sec,
+      |                          ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:987:23: error: incomplete definition of type 'struct tm'
+  987 |         1900 + timeptr->tm_year);
+      |                ~~~~~~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:970:17: note: forward declaration of 'struct tm'
+  970 | _asctime(struct tm *timeptr)
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:994:15: error: variable has incomplete type 'struct tm'
+  994 |     struct tm buf;
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:994:12: note: forward declaration of 'struct tm'
+  994 |     struct tm buf;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1001:21: error: call to undeclared function 'time'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1001 |         time_t tt = time(NULL);
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1025:15: error: variable has incomplete type 'struct tm'
+ 1025 |     struct tm buf;
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1025:12: note: forward declaration of 'struct tm'
+ 1025 |     struct tm buf;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1373:12: error: call to undeclared function 'py_clock'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1373 |     return py_clock(state, tp, info);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1764:5: error: call to undeclared function 'tzset'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1764 |     tzset();
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1766:25: error: use of undeclared identifier 'timezone'
+ 1766 |     ADD_INT("timezone", _Py_timezone);
+      |                         ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:49:24: note: expanded from macro '_Py_timezone'
+   49 | #  define _Py_timezone timezone
+      |                        ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1770:24: error: use of undeclared identifier 'timezone'
+ 1770 |     ADD_INT("altzone", _Py_timezone-3600);
+      |                        ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:49:24: note: expanded from macro '_Py_timezone'
+   49 | #  define _Py_timezone timezone
+      |                        ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1772:25: error: use of undeclared identifier 'daylight'
+ 1772 |     ADD_INT("daylight", _Py_daylight);
+      |                         ^~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:50:24: note: expanded from macro '_Py_daylight'
+   50 | #  define _Py_daylight daylight
+      |                        ^~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1786:35: error: use of undeclared identifier 'tzname'
+ 1786 |     otz0 = PyUnicode_DecodeLocale(_Py_tzname[0], "surrogateescape");
+      |                                   ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:51:22: note: expanded from macro '_Py_tzname'
+   51 | #  define _Py_tzname tzname
+      |                      ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:1790:35: error: use of undeclared identifier 'tzname'
+ 1790 |     otz1 = PyUnicode_DecodeLocale(_Py_tzname[1], "surrogateescape");
+      |                                   ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/timemodule.c:51:22: note: expanded from macro '_Py_tzname'
+   51 | #  define _Py_tzname tzname
+      |                      ^~~~~~
+12 warnings and 72 errors generated.

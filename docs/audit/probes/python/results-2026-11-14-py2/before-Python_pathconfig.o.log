@@ -1,0 +1,47 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:5:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:176:24: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  176 |             cch += 1 + wcslen(config->module_search_paths.items[i]);
+      |                        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:185:13: error: call to undeclared function 'wcscpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  185 |             wcscpy(p, config->module_search_paths.items[i]);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:186:17: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  186 |             p = wcschr(p, L'\0');
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:186:15: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+  186 |             p = wcschr(p, L'\0');
+      |               ^ ~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:381:28: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  381 |     int have_module_arg = (wcscmp(argv0, L"-m") == 0);
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:402:13: error: call to undeclared function 'wcslen'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  402 |         n = wcslen(path0);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:476:13: error: call to undeclared function 'wcsrchr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  476 |         p = wcsrchr(path0, SEP);
+      |             ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pathconfig.c:476:11: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+  476 |         p = wcsrchr(path0, SEP);
+      |           ^ ~~~~~~~~~~~~~~~~~~~
+5 warnings and 8 errors generated.

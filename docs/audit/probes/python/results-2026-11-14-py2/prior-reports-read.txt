@@ -1,0 +1,538 @@
+# Native runtime R1: reproducibility and CPython 3.13.0 probe
+
+Date: 2026-11-14. Revision: `f6b5ccb24d3ef2d2077eaada148a9208e3e2c738`, branch `main`.
+
+## 1. Executive summary and independent gates
+
+**R1 COMPLETE for its controlled repair/validation scope. CPython is not operational.** The canonical locked native C build passes repeatedly after a three-line local-package lockfile repair. All 94 existing native suite cases passed in a fresh 2-vCPU SunlightOS guest: 73 C cases and 21 C++ cases. Supplemental heap/ABI and existing TCP loopback/poll guest tests passed. Static C++ ABI validation also passed.
+
+A genuine pinned CPython 3.13.0 cross-configure used the actual native driver and a locally built matching 3.13.0 build interpreter. Unmodified upstream rejects the platform; disposable platform-recognition experiments reached real compiler/linker feature checks and stopped at C99 math. No target interpreter was built, linked or executed. Compiler/linker-observed gaps and source-inferred requirements are recorded separately.
+
+| Gate | Status | Acceptance evidence |
+|---|---|---|
+| G1 locked native C build | PASS | Initial failure reproduced; reviewed offline graph repair; canonical command passed in suite, C++ preparation and two final repetitions. |
+| G2 native C suite | PASS | All 73 existing C cells build/link/guest/acceptance PASS on 2 CPUs; extra heap/ABI and TCP loopback PASS. |
+| G3 native C++ ABI regression | PASS | All 21 C++ guest cells PASS on 2 CPUs; target ABI/archive/unwind/vendor checks PASS. |
+| G4 pthread/condvar analysis | PASS | Implementation, public API, Rust PAL and native futex/scheduler reviewed; design and race tests below. No implementation changes. |
+| G5 pinned valid cross-configure attempted | PASS | Exact 3.13.0 host interpreter; SunlightOS host triplet and native static toolchain; original and isolated experimental attempts retained. Configure itself FAIL. |
+| G6 actual compatibility inventory | PASS | JSON separates configure compiler/linker diagnostics, standalone native fragments, source analysis, stubs and UNKNOWN semantics. Bounded discovery, not exhaustive port requirements. |
+| G7 final source integrity | PASS | Final hash comparison permits only native-C lock repair and new R1 report/evidence; initial audit unchanged; repeated final locked command succeeds. |
+
+Evidence root, abbreviated **E** below:
+`docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/`.
+Machine summaries: `E/test-result-summary.json`, `E/source-integrity-manifest.json`, `E/cpython-compatibility-inventory.json`.
+
+## 2. Initial source state and historical evidence
+
+Initial tracked tree was clean; the only existing untracked path reported by Git was `docs/runtime/`, containing the previous readiness audit. Its contents were hashed before modification and preserved. No relevant source/dependency edits were in progress in the baseline. `E/initial-source.json` records revision, branch, status and SHA-256 of tracked and nonignored untracked files before the repair. The final comparison checks these original files, not just Git status; this also protects the untracked audit.
+
+Read `docs/runtime/native-compatibility-cpython-readiness-audit.md`, its runner failure evidence under `/tmp/sunlight-runtime-audit-20261114`, and referenced native-foundation/AF_UNIX suite CSVs and audit documentation. Prior results remain historical. The present suite reruns the historical fixture sources; `historical=True` in the runner CSV describes fixture provenance, **not historical execution**. Every R1 PASS here is a fresh execution against the repaired source state.
+
+The previous failing command was reproduced literally, with a new output directory:
+
+```sh
+python3 tools/native-c/guest.py --suite --cpus 2 --timeout 180 \
+  --out docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/initial-suite
+```
+
+The runner invokes `bash tools/build_native_c.sh`, then `bash tools/build_native_cxx.sh`, builds C/C++ fixtures with `tools/native-c/{cc,cxx}.py`, builds isolated support/kernel images, creates a disposable ISO and runs QEMU TCG. The native C command is:
+
+```sh
+bash tools/build_native_std.sh build --manifest-path tools/native-c/Cargo.toml \
+  --target-dir "$PWD/target/native-c" --release --locked
+```
+
+The wrapper prepares pinned Rust std and appends the SunlightOS JSON target, `-Z build-std=std,panic_abort`, `-Z build-std-features=` and `-Z json-target-spec`. Exact per-case commands and exit codes are retained in the runner build/ELF/kernel/ISO/QEMU logs.
+
+## 3. Locked build root cause
+
+Initial runner exit: **1**; nested Cargo exit: **101**, before fixture linking or guest execution. `E/initial-suite/build-runtime.log` contains complete merged stdout/stderr and exit status. Diagnostic: Cargo cannot update `tools/native-c/Cargo.lock` under `--locked`.
+
+`tools/native-c/Cargo.toml` owns an independent `[workspace]`; it is not resolved against root `Cargo.lock`. Its only dependency is path `sunlight-libc` with feature `native-c`, which depends on path `sunlight-ipc`. All three manifests already have version `0.2.7279-alpha.2`. The native C lock retained `0.2.7254-alpha.2` for all three. The mismatch is present in committed sources, not caused by an existing user edit.
+
+An isolated disposable directory `/tmp/sunlight-r1-lock-1qqs0g3l` copied `tools/native-c`, `sunlight-libc`, and `ipc`. `cargo generate-lockfile --offline --manifest-path .../tools/native-c/Cargo.toml` resolved that graph without touching the checkout. Its entire diff is `E/lock-proposed.diff`.
+
+Investigated alternatives: no added/removed workspace package records, no dependency-edge changes, no registry/Git dependencies or version upgrades, no target-specific dependency sections in this graph, unchanged lock format 4 accepted by installed Cargo 1.98 nightly. Root workspace membership is immaterial to the isolated native manifest. Target build-std dependencies are separately supplied by the pinned overlay; they did not require additions to this lock. Necessity and sufficiency are demonstrated by the exact locked failure before and success after.
+
+## 4. Applied repair and reproducibility limits
+
+Only production build-input change: three version records in `tools/native-c/Cargo.lock`, `0.2.7254-alpha.2` → `0.2.7279-alpha.2`. Package names and edges remain identical; no external packages changed. `E/Cargo.lock.proposed` and `E/source-diff.patch` preserve proposed/applied forms. Runtime behavior, headers, ABI, target specification, manifests and toolchain configuration were not edited.
+
+The suite's original locked build passed. The C++ static checker repeated the same runtime build. After supplemental tests, `bash tools/build_native_c.sh` passed twice (`E/final-locked-build{,-repeat}.log`). This establishes repeated locked command success for this source/toolchain. It does not claim a hermetic toolchain download, bit-identical clean-room ISO rebuild or another Cargo version's behavior. Rust overlay preparation requires rustc revision `8954863c8`; root rust-toolchain says nightly, so retain the recorded toolchain rather than treating any future nightly as interchangeable.
+
+## 5. Native C validation matrix
+
+Common state: baseline revision plus the reviewed lock repair; exact hashes in source-integrity manifest. Clang 23.1.4, LLD 23.1.4; native archive built with rustc `1.98.0-nightly (8954863c8 2026-06-05)` / Cargo `1.98.0-nightly (0b1123a48)`, Rust LLVM 22.1.6. Driver selects `x86_64-unknown-none-elf`, static SysV x86-64/SSE2, no red zone/PIC/PIE/stack protector, freestanding, compiler builtin headers plus native headers only, native crt0/archive and `tools/native-c/user-space.ld`. No Linux personality or host libc. QEMU 11.1.2 TCG, `-cpu max`, 2048 MiB, **2 CPUs**. No 4-CPU or hardware claim.
+
+`E/final-suite/results.csv` and enriched `E/test-result-summary.json` retain all individual cells, source/compiler commands, build/link/guest results, expected/observed exits and assertions. All 73 C cells: **PASS**. Assertions returning nonzero fail the runner; cases with output contracts additionally compare stdout/stderr. Reaping/resource counters are checked. A boot-only observation is never used as PASS.
+
+| Area | Fresh native result | Observed fixture scope |
+|---|---|---|
+| Entry, exit, startup and callbacks | PASS | `entry`, `exit`, `atexit`, callback order/register/capacity/raw-exit and exit-cleanup. |
+| stdin/stdout/stderr | PASS | `write`, `stdout`, `stdio-full`, write short/zero/error cases; exact output and fixture input. Tmpfs descriptors, not interactive tty acceptance. |
+| Heap | PASS, bounded | Existing exit-cleanup/dlfcn and C++ allocation fixtures; supplemental `heap-abi.c` checks malloc alignment, calloc zeroing, realloc growth/shrink preservation and free. No exhaustion/conformance claim. |
+| Files and errno | PASS | `stdio`, `stdio-full`, `open-unlink`, write errors, directory contracts; open/read/write/fseek/close and selected errno paths. |
+| Time and sleep | PASS | clock, time clocks/errors/zero/sleep; no wall-clock adjustment or realtime condvar claim. |
+| pthread lifecycle/mutex/TLS | PASS | pthread and basic/exit/detached/attr; worker counter synchronization, returned values, private TLS, declared pthread ABI checks. |
+| TCP/socket/poll | PASS, bounded | Suite checks descriptor/error/lifecycle semantics; additional existing TCP loopback/poll runner exercises real guest service transport and reports `tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0`. External TCP NOT_RUN. |
+| Math | PASS, bounded | math and math-contract exercise advertised sqrt/fabs/SSE subset; no full C99 libm claim. |
+| Static linking and C ABI | PASS, bounded | Suite ELF checks plus pthread ABI fixture. Supplemental `-O0` probe crosses register/stack arguments (8 integers, 9 doubles) and aggregate return; guest prints `R1 heap and SysV ABI PASS`. No universal ABI conformance claim. |
+| Remaining suite contracts | PASS | wchar, locale/langinfo, signal, mmap, entropy, dirent, termios, dlfcn, epoll/poll; each limited to fixture assertions. |
+
+Supplemental commands/logs: `E/heap-abi-build.log`, `E/heap-abi-guest/`, `E/tcp-loopback/{poll-summary.json,guest/}`. TCP invocation was `python3 tools/native-c/run_poll_tcp.py --mode loopback --cpus 2 --timeout 180 --skip-build --out E/tcp-loopback`. It builds existing service/client fixtures and uses the normal native guest runner. NIC capture is not evidence of external TCP for guest-internal loopback.
+
+Initial suite: BLOCKED at build; build/link/guest after that point NOT_RUN. No failed current-source guest assertions and no UNQUALIFIED PASS results were found. Unsupported condvars/key/cancellation were not implemented or called as a purported passing test.
+
+## 6. Native C++ ABI regression matrix
+
+`python3 tools/native-c/tests/run_cxx_runtime.py --out E/cxx-abi` passed target-only archive/symbol ownership, vendored libc++abi/libunwind integrity, C++14/17/20 header probes, final ELF/frame inspection, required exception/guard exports and absence of unresolved symbols, dynamic interpreter or NEEDED entries. The preserved bare historical archive-free command intentionally LINK_FAILs as its negative control; the configured driver links the same source. It is not a current runtime regression.
+
+Architecture: static x86-64 SysV/Itanium C++ ABI, target-built LLVM vendor libc++abi/libunwind, native C archive, custom `sunlight-cxx` headers/runtime, `.init_array`, unwind sections and TLS. Compiler version does not change the vendored LLVM provenance; those hashes are checked separately.
+
+| ABI area | Fresh 2-CPU guest evidence | Result |
+|---|---|---|
+| Global/static constructors and destruction | cpp-runtime, cpp-runtime-native, cxx-runtime-execution; local-static basic/order/nested output and destructor order | PASS |
+| Thread-safe local initialization | concurrent/retry plus basic/nested/order; recursive initialization expected termination 134 | PASS |
+| C++ allocation/deallocation | wrapped malloc/free counters, string and exception storage; expected allocation/overflow/null failure termination | PASS |
+| Exceptions/stack unwinding | typed exception classes, unwind cleanup, uncaught/destructor/worker/storage termination paths | PASS |
+| RTTI/dynamic_cast | exception-class and runtime-execution assertions | PASS |
+| C/C++ interactions | extern-C native allocator/pthread/write and runtime wrappers | PASS |
+| Threads/lifecycle/TLS | cpp-runtime and runtime-execution lifecycle/TLS destructor assertions in supported std::thread wrapper | PASS |
+| Bounded string/output | cxx-string/backend and cxx-output/backend exact output | PASS |
+
+All **21** C++ guest cells PASS. The suite's supported lifecycle paths do not establish arbitrary raw pthread C++ TLS destruction. Tests are not full libc++/libstdc++ coverage: custom string/output/nullary thread support and ABI archives do not provide general containers, filesystem or standard synchronization headers. No C++ production semantics changed.
+
+## 7. pthread and condition-variable assessment
+
+Sources: `sunlight-libc/include/pthread.h`, `src/{pthread,thread,tls}.rs`; `tools/native-std/prepare.py`, native PAL futex/TLS overlays; `sunlight-cxx/src/lifecycle.cpp`; `kernel/src/arch/x86_64/syscall.rs:3043`, `kernel/src/sched/mod.rs:2104`, `kernel/src/process/mod.rs:410`.
+
+* create allocates a control block, stack and TLS, spawns the native borrower thread and publishes its opaque handle. join waits on a state futex, claims the join, waits for native thread reaping (syscall 156), then releases mappings. self uses TLS control identity; the initial thread has a stable sentinel identity. equal compares handles.
+* detach is supported; reclamation is lazy on later create/join, with a bounded 64-slot deferred queue and a documented capacity-exhaustion leak until process exit. General resource exhaustion and all concurrent misuse are not qualified by the fixtures.
+* mutex uses an atomic u32, acquire CAS, futex wait/retry and release store/wake-one. Only basic normal mutex semantics; attributes ignored by init, destroy returns success, no ownership/robust/recursive/errorcheck or timed mutex contract.
+* **C pthread condition variables are fully absent** in the inspected header/exports, not just unexported or declared stubs. Compiler fragments confirm missing condvar declarations. Rust std selects its own native-futex condvar backend; that is another API, not an available pthread compatibility layer. C++ guards similarly do not export pthread condvars.
+* pthread keys/get/set/destructor API and pthread_once are absent from public C declarations and native export inventory. Existing Rust PAL keys and C++ thread-local destructor lists have distinct contracts. CPython `Python/thread_pthread.h` uses pthread key APIs; its `Python/condvar.h` and GIL backend use condvars. These are source-inferred dependency edges backed by direct declaration/export probes, not a completed CPython thread-object compile.
+* pthread_exit publishes the return value and invokes native thread exit. There is no POSIX cancellation/cleanup handler contract, general pthread key destructor iteration or timed condition wait. Do not infer these from Rust/C++ cleanup.
+
+### Smallest correct approach, analysis only
+
+For process-private condvars, a userspace waiter queue plus existing native futexes can support a correct ordinary wait/signal/broadcast without a new syscall. Use an internal condvar lock and a persistent per-waiter atomic notification word; register the waiter while the caller still owns the external mutex. Only after publishing registration release the external mutex, then compare-and-wait on the notification word. A signal serialized by the internal lock chooses and marks one eligible waiter before wake; broadcast marks/wakes all currently eligible waiters. A wake before actual futex registration is retained in the word, so compare-before-sleep rejects sleeping. This avoids the lost notification window without requiring a kernel atomic-unlock-and-wait syscall. A bare unlock-then-register implementation is incorrect.
+
+The kernel's syscall 155 validates/alignment-checks the u32 and checks its expected value while holding the scheduler lock, registers address-space identity/address/deadline and blocks under the same lock. Wake is serialized by that lock, supports bounded counts, and uses the same identity. Deadline is absolute monotonic ns; finite-expiry completion returns 2, value mismatch 1, wake 0; the PAL consumes the completion receipt. Timeout, unmap cancellation and exit detach registrations through scheduler/process lifecycle machinery. These are source findings, not new SMP stress results.
+
+Waiters must tolerate spurious wakes and always reacquire the external mutex before returning, including timeout/error. Under the internal lock arbitrate signal versus timeout, detach once, and maintain object/node lifetime through the last kernel wake. Use owned heap waiter nodes/reference discipline if asynchronous termination can outlive a waiter stack; do not leave stack pointers in a queue that survives unmapping. Process teardown and external thread death need explicit lifetime/abandonment design, not an assumption that pthread_exit runs from inside a blocked wait.
+
+Lock order: caller mutex → short internal queue lock for registration/signaling; release internal lock before blocking; completion removes under internal lock and releases it before reacquiring caller mutex. Never block holding internal queue lock, and avoid holding it over allocation or unrelated runtime locks. Wake while lifetime remains protected, with release/acquire notification ordering. Define destroy-with-waiters EBUSY and safe object lifetime; fairness is not promised. Sequence-counter-only broadcast designs need wraparound and signal-selection analysis; a per-waiter queue is easier to specify correctly for signal-one versus broadcast.
+
+Monotonic condattr waits can use the native absolute deadline directly. Default POSIX realtime absolute waits require an evidenced realtime-to-monotonic policy, overflow checking and rechecking clock changes; a one-time conversion is not sufficient to claim full realtime adjustment semantics. Existing clock_gettime is a foundation, not proof. Cancellation is absent; a first bounded backend can explicitly exclude cancellation, but must not advertise full POSIX cancellation semantics. Kernel process cleanup alone does not reclaim a userspace condvar queue correctly.
+
+Required R2 native race tests on 2 and 4 CPUs: forced interleavings before/after queue insertion, mutex unlock and futex entry; signal-before-sleep; one signal with many waiters; broadcast; repeated predicate loops/spurious wakes; timeout-vs-signal winners; mutex reacquisition on timeout; already-expired/overflow deadlines and supported clock changes; object reuse/destroy-busy; repeated create/join/detach; blocked waiter termination/unmap and memory reclamation; TLS key destructor iteration/repopulation and once concurrent/reentrant policy. Record bounded completion and waiter/heap/reap counters, not just final prints.
+
+## 8. CPython 3.13.0 origin, interpreter and cross-configure
+
+Pinned archive: [official CPython 3.13.0 release](https://www.python.org/downloads/release/python-3130/) and `https://www.python.org/ftp/python/3.13.0/Python-3.13.0.tar.xz`. Downloaded only after no matching local source/interpreter was found in the inspected locations. SHA-256 `086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d`; MD5 `726e5b829fcf352326874c1ae599abaa` matches the official release page. SHA-256 matches the downloaded official Sigstore bundle message digest. The bundle is retained, but certificate/signature trust was not independently verified; do not interpret this as a full Sigstore authentication ceremony. Source patchlevel and matching build interpreter report exactly **3.13.0 final**.
+
+Disposable source/build roots: `/tmp/sunlight-r1-cpython/`. Host build used upstream `configure --without-ensurepip`, `make -j8 python`, both successful. This host executable is build tooling only. [Upstream cross-build documentation](https://docs.python.org/3.13/using/configure.html#cross-compiling-options) requires matching build/host Python versions; the extracted fixed release's configure logic and version output are retained in evidence. No newer CPython was substituted.
+
+Cross command (full absolute command in `E/configure-environment.json`):
+
+```sh
+CC="python3 $PWD/tools/native-c/cc.py" CFLAGS=-O2 LDFLAGS=-static \
+AR=llvm-ar RANLIB=llvm-ranlib CONFIG_SITE=/dev/null PKG_CONFIG=/bin/false \
+/tmp/sunlight-r1-cpython/Python-3.13.0/configure \
+ --build=x86_64-pc-linux-gnu --host=x86_64-unknown-sunlightos \
+ --with-build-python=/tmp/sunlight-r1-cpython/build-host/python \
+ --disable-shared --without-ensurepip --with-pkg-config=no
+```
+
+The build triplet is Linux because build tools execute on the host. The **host/target program triplet is SunlightOS**, with the driver's LLVM freestanding ELF target and native sysroot. Autoconf does not require a separate `--target` for this program build. No host headers/libraries or Linux compatibility personality are substituted. No cross cache values or config.site answers were fabricated. No forced HAVE macros, platform cache or ABI-size assumptions were supplied.
+
+| Attempt | Result and interpretation |
+|---|---|
+| Unmodified upstream | FAIL exit 1: config.sub does not recognize sunlightos. Upstream platform integration issue, not missing libc function evidence. |
+| config.sub recognition only | FAIL exit 1: cross build not supported for x86_64-unknown-sunlightos. |
+| Disposable platform recognition | FAIL exit 1 after extensive compiler/linker checks: C99-compatible libm required; immediate acosh check cannot find separate `-lm`. This alone does not prove acosh missing. |
+| Minimized recognition patch + `--with-libm=` | FAIL exit 1: acosh/asinh link successfully from native archive, **atanh undefined**; same C99 libm fatal gate. `--with-libm=` changes library naming, not a cache assertion or added math implementation. |
+
+`E/cpython-platform-experimental.patch` records the first executed recognition experiment; it also inserted inactive host-recognition arms into compiler-selection branches. `E/cpython-platform-proposed.patch` minimizes the proposal to config.sub and the two cross-host platform-recognition cases and was used in the final no-libm attempt. Neither patch touched repository production sources. A future upstream-quality patch should update configure.ac and regenerate configure consistently; these diagnostic generated-script patches are not a port.
+
+## 9. Compiler/linker compatibility and actual gaps
+
+Full diagnostics: `E/cpython-configure-{original,config-sub,platform,no-libm}{,-config}.log` where applicable. `E/configure-observed-gaps.json` includes exact diagnostic line numbers from the platform attempt; `E/configure-observed-gaps.txt` is the complete explicit header/symbol/library list from that attempt. The final no-libm log additionally demonstrates atanh. `E/api-probes.json` and per-fragment logs distinguish native header parsing, declarations, archive exports and static address linking. `E/math-probes.json` has separate no-`-lm` address links. These are not falsely labeled CPython object compilation or guest semantics.
+
+Observed core/public-header gaps include **assert.h, inttypes.h** (Clang's forwarding header cannot find a target inttypes.h), **sys/types.h, ctype.h, sys/stat.h, fcntl.h, sys/time.h, sched.h, semaphore.h, setjmp.h**. Some are unconditional public API headers; others are conditional backend/module requirements. Configure also probes numerous other-platform/optional headers (Linux, Windows, Bluetooth, database, networking, process, terminal, resource headers). Missing optional headers are not all first-interpreter blockers. `ac_nonexistent.h` is an intentional compiler negative control and excluded from requirements.
+
+Actual missing C declarations/exports observed in bounded fragments include pthread_cond_*, pthread_key_create/delete/get/setspecific, pthread_once, pthread_attr_setstacksize, getenv/setenv/unsetenv, abort, setvbuf, snprintf, getpid, fork, execv, pipe, dup and selected wchar conversion APIs. `getenv_bytes`/Rust getenv helpers do not export the required C getenv ABI. **lseek is exported but undeclared in the tested unistd.h inclusion**, so link availability through that header is UNKNOWN in the fragment, not a missing implementation claim. Header declarations and archive/link availability are separate inventory fields.
+
+Configure's actual undefined-symbol list includes, among many conditional features, access/chdir/chmod, stat/fstat/lstat families, exec/fork/wait families, readv/writev, clock_getres/settime/nanosleep variants, pthread_sigmask and TLS-related candidates, and socket resolver/optional process/terminal APIs. Consult the exact JSON/text inventory rather than treating this paragraph as an exhaustive minimum. `main` from a compiler identification check is excluded from requirement gaps. A failed feature test may also fail on a prerequisite header: those failures alone do not prove every tested symbol absent.
+
+The final no-libm attempt establishes atanh as a real undefined symbol. Independent address links also fail for **frexp, lgamma, modf**. Most other probed math names resolve as weak compiler_builtins exports (for example acosh/asinh/cos/tgamma), even though native math.h advertises only a narrow sqrt/fabs subset. `E/archive-symbol-provenance.log` identifies archive object ownership. Address resolution does not validate function prototypes, numeric accuracy, errno/fenv behavior or a supported public libm ABI. Do not silently expose or certify those incidental exports.
+
+Separate-library checks for `-lpthread`, `-lm`, optional libraries and several other-OS libraries must be distinguished from unavailable functions in the monolithic native archive. In particular pthread_detach resolves in configure despite lack of a separate pthread archive. Rust build-std and the native C archive satisfy some symbols that are absent from public C headers. This is why documentation-only missing-API inference would be misleading.
+
+`E/cpython-compatibility-inventory.json` classifies each discovered requirement as VERIFIED/PARTIAL/STUB/MISSING/UNKNOWN with subsystem, source references, native locations, header/link availability, runtime evidence, confidence, severity and next action. VERIFIED header entries mean successful header parsing only, with explicit evidence; they never imply runtime verification. Source behavior entries preserve ENOSYS stubs (kill/sigprocmask), Rust-versus-pthread distinctions and unknown bootstrap imports. Critical interpreter threading/public-header requirements are separated from optional extension and other-platform feature candidates. There is no readiness percentage.
+
+## 10. Minimal static interpreter feasibility
+
+Target configure did not finish and produced no final target Makefile/pyconfig.h. Minimal target interpreter build/link: **BLOCKED**; target interpreter guest execution: **NOT_RUN**. No Linux-host pyconfig.h was reused as a target config, and no unsupported HAVE values were forced to reach a pretend link. Host Python's successful execution proves only build-tool availability.
+
+A static native interpreter remains **unproven**. Immediate dependency classes: toolchain/platform recognition and archive naming; libc headers/C99 math/public symbols; threads/condvars/keys; filesystem metadata and import layout; time semantics; signals (linked ENOSYS stubs); memory allocation/mapping semantics; optional shared-module loading. Encoding/bootstrap packaging and platform-selected missing requirements remain UNKNOWN until configure and real object compilation advance. Dynamic loading and broad optional modules need not block a deliberately static/frozen first interpreter.
+
+## 11. Final source integrity and evidence inventory
+
+`E/source-integrity-manifest.json` compares every original source hash with final state, records final revision/branch/status, authorized differences, added R1 deliverables, generated-output areas and test-source fingerprint. `E/test-result-summary.json` attaches that fingerprint, revision, compiler/linker/target/CPU and evidence to each test. Original files other than the three-line lock repair are unchanged, including the prior untracked audit. No source drift was detected between the repaired tests and final build. Documentation/evidence additions are not executable build inputs; no PASS was transferred from a different runtime source state.
+
+| Category | Inventory |
+|---|---|
+| Existing modifications | No tracked changes; existing untracked docs/runtime audit preserved byte-for-byte. |
+| R1-authorized modifications | tools/native-c/Cargo.lock three local package versions; this new report; new isolated E tree containing logs, JSON, diagnostic scripts/fixture, proposed patches and input copies. |
+| Build-generated artifacts | Existing build infrastructure writes target/native-c, target/native-cxx, target/native-std, guest/support/kernel outputs and disposable guest ISOs; evidence-local ELF/object/map/frame outputs; /tmp disposable lock and CPython source/build trees. These are not production-source repairs. Preexisting ignored target contents were not a clean-build baseline. |
+| Unrelated source drift | None detected by baseline hash/Git comparison. |
+
+Runner-created .gitignore files keep guest binaries/images out of Git; E also ignores standalone ELF/object/archive products. They remain available locally. No earlier evidence directory was overwritten. No reset, clean, stash, checkout, commit, push, privileged disk/mount operation or production runtime change was performed.
+
+Relevant negative evidence remains intact: original locked rejection; expected historical bare C++ LINK_FAIL; upstream triplet rejection; platform rejection; failed configure checks; absent library diagnostics; final atanh failure; standalone failed headers/declarations/links.
+
+## 12. Remaining blockers and R2 recommendation
+
+Recommend **R2: minimal CPython 3.13 platform/header and threading contract**, driven by this inventory rather than general POSIX expansion:
+
+1. Define minimal static interpreter configuration and accepted platform patch; rerun configure without separate-lib assumptions and without invented cache answers. Resolve the demonstrated C99 math/header/public C ABI blockers only as selected by that build. Preserve incidental compiler-builtins versus supported ABI distinctions.
+2. Implement process-private pthread condvar/timed wait and key/TLS destructor requirements with explicit lifecycle, clock and cancellation limits. Run the native race tests above on 2/4 CPUs before GIL/bootstrap claims. pthread_once only if selected source requires it; absence is inventoried, not automatically a CPython hard blocker.
+3. Advance real target object compilation and static link; update inventory from actual undefined symbols. Package/freeze bootstrap encodings and minimal import path. Only after link success attempt guest `-c 'print(1)'`, error/exit/repeated startup and thread tests.
+
+External networking, full C++ standard libraries, general process APIs, dynamic extension loading and pip remain separate goals unless the chosen minimal build proves a dependency. R1 restores a reproducible native runtime validation baseline; it does not complete a CPython port.
+# Native runtime R2A: headers, libm and CPython compile probe
+
+Date: 2026-11-14. Revision `f6b5ccb24d3ef2d2077eaada148a9208e3e2c738`, branch `main`.
+
+**R2A COMPLETE for the authorized header/libm milestone. CPython is not built or operational.** All seven acceptance gates pass. CPython 3.13.0 now completes cross-configure with the actual native driver and matching build interpreter. Actual core compilation stops at unsupported pthread TLS/condition-variable types and APIs. No threading implementation, kernel or scheduler production code changed.
+
+Evidence root (**E**):
+`docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/`.
+Authoritative final runs have `acceptance` in their names. Earlier iterations remain diagnostic evidence.
+
+| Gate | Status | Evidence and boundary |
+|---|---|---|
+| G1 baseline and R1 locked build | PASS | `initial-source.json`, `baseline-locked-build.log`; R1 source/evidence inspected and existing changes preserved. |
+| G2 standard headers | PASS | `acceptance-focused/focused-results.json`; C11/C++17 parsing, type sizes/alignments/signedness, all PRI/SCN macro types, native conversions, assertion success/disabled/failure and ctype behavior. |
+| G3 targeted libm | PASS | 17,342 native reference vectors, errno/signgam and SSE domain/pole flag checks; double and float variants. Long-double ABI inspected and deliberately unsupported. |
+| G4 existing regressions | PASS | `acceptance-suite/`: 73 C + 21 C++; `acceptance-cxx-abi/`, `acceptance-heap-abi-guest/`, `acceptance-tcp/`. |
+| G5 CPython configure | PASS | `cross-acceptance-result.json`: exit 0, fresh directory, real toolchain, isolated R1 recognition patch and three evidenced negative cache answers. |
+| G6 real compilation | PASS | `acceptance-compile-results.json`: five explicit object targets and `make -j1 python` attempted; all exit 2 with actual compiler diagnostics. Successful compilation is not the gate requirement. |
+| G7 inventory and integrity | PASS | `cpython-compatibility-inventory.json`, `source-integrity-manifest.json`, `validation-summary.json`; no unexpected original-file changes or deletion. |
+
+## Baseline, ownership and reproducibility
+
+Read both previous runtime reports and inspected R1's machine summaries, source manifest, toolchain, CPython origin/environment, symbol probes and platform patches. Initial state already included the R1 three-version native-C lock repair plus untracked R1 evidence and runtime reports. These are user-owned baseline content, not R2A repairs. `initial-source.json` hashes tracked and nonignored untracked files before changes. No reset, clean, stash, checkout, commit or push was performed.
+
+The literal existing build, `bash tools/build_native_c.sh`, passed before implementation, through acceptance-suite preparation, and after all validation (`final-locked-repeat.log`). It invokes:
+
+```sh
+bash tools/build_native_std.sh build --manifest-path tools/native-c/Cargo.toml \
+  --target-dir "$PWD/target/native-c" --release --locked
+```
+
+This demonstrates repeated locked builds with the retained installed toolchain and existing build cache. It does not claim a clean-room, bit-reproducible artifact or a different nightly's compatibility.
+
+`toolchain.json` records rustc 1.98.0-nightly revision `8954863c8`, Cargo 1.98 nightly, Clang/LLD 23.1.4, QEMU 11.1.2, full versions and target/driver/linker-script contents and hashes. C/C++ use static `x86_64-unknown-none-elf`, SysV LP64, SSE2, no red zone/PIC/PIE, freestanding Clang resource headers plus `sunlight-libc/include`, native startup/archive and linker script. No host libc or Linux personality is linked. The Rust JSON target remains unchanged. Guest runs use QEMU TCG, two CPUs, 2048 MiB, isolated images and the existing runner's output/exit/reaping checks.
+
+The authoritative public headers belong to `sunlight-libc/include`; `tools/build_native_c.sh` symlinks them into its sysroot. Native exports come from `sunlight-libc` in `libsunlight_native_c.a`. R1 established genuine absent exports for atanh/frexp/lgamma/modf, rather than merely a missing separate `-lm`. Its provenance and this run's `archive-symbols.log` distinguish strong C wrappers from incidental weak compiler-builtins exports. CPython continues to use `--with-libm=` because math resides in the monolithic native archive.
+
+## Header implementation and ABI
+
+* `assert.h`: single evaluation, no evaluation under NDEBUG, reinclusion after NDEBUG changes, C11 static_assert alias, C++ inclusion, expression/file/line/function diagnostic, and callback-free abnormal process termination with status 134. Native SIGABRT delivery is unsupported; no abort API is fabricated. Failure never resumes execution. C and C++ failure fixtures verify stderr, no post-assert output and no atexit callback.
+* `inttypes.h`: every signed/unsigned PRI and SCN family for fixed, least, fast, max and pointer integer types; intmax integration, imaxdiv_t, imaxabs, imaxdiv, strtoimax/strtoumax and wide equivalents. Conversion implements C11 base 2–36/autodetection, whitespace/signs, hex prefixes, end pointers, saturation/ERANGE, invalid-base EINVAL, and success preserving errno. INTMAX_MIN absolute value, invalid division and invalid pointers retain C's undefined-input boundary. SCN macros are usable format strings; this does not provide a scanf implementation.
+* `sys/types.h`: one owner for ssize_t/off_t/time_t/clock_t (signed long, size/alignment 8), pid_t (signed int, 4/4), mode_t/uid_t/gid_t/nlink_t (unsigned int, 4/4), dev_t/ino_t (unsigned long, 8/8). These define a public native LP64 ABI, not a reinterpretation of the kernel's private Stat wire structure. time.h, unistd.h and sys/mman.h now consume those definitions. No pthread placeholder types or option/version claims were added.
+* Transitive `ctype.h`: 12 byte-classification and two case-conversion exports. ASCII classes match the supported C and UTF-8 locales; multibyte characters are handled by wchar decoding, not byte ctype. EOF is handled correctly.
+* Supporting headers: limits.h gains native SSIZE_MAX; errno.h gains EDOM, ERANGE and EBUSY; math.h gains tested additions, classification macros, and correctly typed existing log/ldexp exports used by CPython longobject.c. The older math subset has no general errno guarantee; a global math_errhandling contract is deliberately not advertised.
+
+Compile-time ABI assertions cover sizes, alignment, signedness and intmax compatibility. Clang format checking validates all 154 PRI/SCN/type combinations separately in C11 and C++17, including native int_fast16_t == short. The runtime fixture validates integer boundaries, prefixes, no-conversion/end-pointer behavior, overflow, wide conversions, division and actual formatted output. `acceptance-focused` retains every command, source, object/link log and native result. No Linux host headers are used by these probes.
+
+## libm reuse and numerical validation
+
+Pinned Rust libm **0.2.16** algorithms were already available under the R1 native-std compiler-builtins source tree. They are now vendored under `sunlight-libc/vendor/libm`, with upstream license notices and per-file provenance retained. Numerical sources, build.rs and configure.rs are unchanged. Cargo.toml removes only the test-only registry no-panic dependency; the provenance note is new. `libm-vendor-integrity.json` and the final manifest verify the upstream file hashes. libm is an optional local dependency enabled only by native-c. Lock changes add that dependency and disambiguate existing registry libm users; they do not upgrade those users.
+
+New strong C exports adapt the Rust tuple results to C output pointers and supply errno for atanh domain/poles and lgamma poles/finite overflow:
+`atanh`, `atanhf`, `frexp`, `frexpf`, `modf`, `modff`, `lgamma`, `lgammaf`, `lgamma_r`, `lgammaf_r`, plus signgam. The reentrant variants do not update shared signgam; ordinary lgamma variants do. Shared signgam requires caller synchronization. Direct float reentrant C ABI execution is not separately qualified; its algorithm path is exercised through lgammaf and the inventory marks that distinction PARTIAL.
+
+long double is **x87 extended, 64-bit mantissa, 16-byte storage/alignment**, not double. atanhl/frexpl/lgammal/modfl remain absent; no lossy wrappers or misleading declarations were introduced. Actual isolated native link failures are in `missing-symbol-links.json`. No observed core translation unit selects these variants.
+
+The independent oracle is host Python math/glibc libm, not the vendored Rust library. Deterministic seed 20261114 generates hex-encoded expected results retained in `math-vectors.h`; the native target computes and compares results. `numerical-reference.json` records generation, counts and tolerances:
+
+| Function | Native vectors | Acceptance |
+|---|---:|---|
+| atanh / atanhf | 1,820 each | at most 4 double/float ULP; double tiny/subnormal and zero exact; NaN/infinity classification separate |
+| lgamma / lgammaf | 2,021 each | absolute error ≤ 8e-14 / 4e-6 times max(1, abs(reference)); zeros/classification exact; double reentrant signs checked where defined |
+| frexp / frexpf | 2,415 each | exact fractions and finite exponents, including normalization of subnormals and signed zero |
+| modf / modff | 2,415 each | exact fractional/integer output, signed fractional zero, infinity and NaN classification |
+
+**All 17,342 vectors pass.** Inputs cover both signs, zero, smallest subnormal/normal values, finite magnitudes, infinities, quiet NaN, atanh boundaries/adjacent values/out-of-domain, lgamma negative intervals/poles/large values and modf large integral values. Additional checks demonstrate domain/pole/overflow errno, errno preservation on representative successes, signgam changes and SSE invalid/divide-by-zero flags for atanh. No public fenv API, alternate-rounding guarantee, underflow-errno guarantee, signaling-NaN qualification or full libm conformance is claimed. Existing log/ldexp declarations get bounded native value/ABI checks; their general semantics remain PARTIAL.
+
+## Regression results and iterations
+
+Final legacy results: **73/73 C and 21/21 C++ PASS**, individually retained in `acceptance-suite/results.csv` and JSON. No legacy case was skipped or excluded. Historical fixture provenance labels do not mean historical execution: these are fresh final-source executions. The existing C++ target checker passes exception/unwind, RTTI, static guard/init, archive ownership, required exports, ELF/frame and vendor-integrity checks. Its historical archive-free LINK_FAIL is an intentional negative control.
+
+Supplemental heap/ABI prints `R1 heap and SysV ABI PASS`. TCP loopback prints `tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0`; all poll-summary checks pass. This is native loopback, not external network validation.
+
+Keep new cases separate: six focused guest scenarios (math, C headers, C++ headers, ctype, C assertion failure, C++ assertion failure) all PASS. Math contains the vectors above; ctype compares 257 valid inputs × 14 functions against host byte-classification results. Two format-type compile checks and their builds/links are additional checks, not legacy guest cases. The negative assertion cases correctly exit 134. An additional device probe demonstrated ENOENT for /dev/ptmx and /dev/ptc.
+
+Retained early failures: an unnecessary nested Cargo workspace in the first vendor manifest blocked guest preparation and was removed; a C++ command incorrectly left `-x c++` active for archive inputs and was corrected to object compilation followed by linking; the initial math oracle incorrectly demanded a particular gamma sign at negative integer poles, where the sign is undefined. Its expected/result infinities already agreed. Corrected tests omit that undefined sign requirement and pass. These are not silently excluded legacy failures. Final acceptance runs include all corrections.
+
+## CPython configure and actual compilation
+
+Archive identity is unchanged from R1: upstream CPython **3.13.0**, SHA-256
+`086de5882e3cb310d4dca48457522e2e48018ecd43da9cdf827f6a0759efb07d`.
+A fresh extraction at `/tmp/sunlight-r2a-cpython/Python-3.13.0` was compared against the actual R1 source: only configure and config.sub differed from pristine, exactly matching R1's minimized recognition patch after application. `cpython-source.json` records this comparison. The patch is retained in E and touches only disposable CPython sources; no upstream changes are hidden. The matching R1 host build interpreter still reports 3.13.0 final.
+
+Final build directory: `/tmp/sunlight-r2a-cpython/cross-acceptance`. Exact command/environment, Makefile, pyconfig.h, config.status, full stdout/stderr and config.log are retained with `cross-acceptance` prefixes. The command uses `--build=x86_64-pc-linux-gnu --host=x86_64-unknown-sunlightos --with-build-python=/tmp/sunlight-r1-cpython/build-host/python --disable-shared --without-ensurepip --with-pkg-config=no --with-libm=`, CC set to the native driver, CFLAGS=-O2, LDFLAGS=-static, native llvm-ar/ranlib and CONFIG_SITE=/dev/null. A separate --target is not needed for this Autoconf program build; the compiler's program ABI is the native SunlightOS target.
+
+Three explicit cache answers are negative and evidenced: POSIX semaphores disabled because the header/implementation are absent (overriding upstream's optimistic cross default); /dev/ptmx and /dev/ptc absent, demonstrated in the native device probe. No unsupported pthread/shared-loading/fork/signal feature was forced to yes. `configure-cache.json` records all cache values and separates upstream cross-run assumptions, whose native semantics remain UNKNOWN, from explicit answers. A successful configure does not validate those runtime assumptions or promise optional module builds.
+
+Initial R2A configure passed mandatory C99 math, then asked for /dev/ptmx cross evidence. After obtaining native evidence, fresh configure completed; it completed again on final source. Header checks now find inttypes.h and sys/types.h; the initial isolated real CPython unit compile found missing ctype.h, subsequently implemented and tested. Remaining unsupported optional libraries/modules are visible in config.log and remain separate from the first core blocker.
+
+Actual `make -j1` attempts targeted Programs/python.o, Python/pyctype.o, Python/pymath.o, Python/thread.o, Objects/longobject.o and python. All failed reproducibly at real compilation. First serial target: **Programs/python.c**, including `Include/cpython/pythread.h:37`, reports **unknown type pthread_key_t**. thread.c additionally demonstrates missing pthread_condattr_t/pthread_cond_t and condition-variable declarations. No fake type or function was added. Earlier isolated compile probes used only the actual incomplete configure definitions, clearly labeled; final diagnostics use the genuine completed target pyconfig.h and generated Makefile.
+
+Other observed findings: missing strerror declaration and actual link symbol (**libc API gap**); incomplete/conflicting struct timespec visibility in the pthread-selected backend (**CPython platform integration / header integration**, not a demonstrated wire ABI mismatch); longobject's static keyword initializer diagnostics (**UNKNOWN**, possibly secondary to earlier missing pthread types). Missing SSIZE_MAX, EBUSY and log/ldexp declarations found in earlier real unit attempts were repaired within header scope and disappear from final diagnostics. No interpreter link was reached, so there is no interpreter unresolved-symbol list to invent. Isolated missing-symbol links are labeled separately. Target interpreter execution is **NOT_RUN**.
+
+## Inventory, integrity and next milestone
+
+`cpython-compatibility-inventory.json` carries forward all R1 requirements and adds the relevant new headers/types/math and actual unit diagnostics (505 entries, including historical duplicates). Each entry records compile, link, native execution, implementation, confidence, remaining blocker and evidence. Historical R1 evidence is retained separately. Header-only R1 VERIFIED classifications are conservatively PARTIAL unless native R2A behavior now supports the stated contract. VERIFIED means bounded demonstrated native behavior, not exhaustive standards coverage. Optional dependencies and source-inferred requirements are not represented as actual first-core failures.
+
+Original-source differences are limited to the libc manifest/module registration, the scoped header changes and two dependency locks. New production files are four public headers, three Rust support modules and the pinned libm vendor tree. The existing R1 lock repair is preserved. All prior R1 reports/evidence and kernel/scheduler/pthread production files remain byte-identical. Two historical `.threading-evidence/.../Cargo.lock` symlinks resolve to the root Cargo.lock: their followed-content hashes change with the authorized dependency lock addition, but the symlink targets and link objects are unchanged. This alias effect is explicit in the integrity manifest, not an unrelated evidence edit. Generated binaries/images stay in ignored build/evidence areas. No commit or push.
+
+Recommended **R2B**: implement and qualify actual pthread key/TLS destructor and process-private condvar/timed-wait contracts, with clock/lifetime/race tests and an explicit once policy if selected; then repeat the same core compilation. Resolve the independently observed strerror and time-header/platform integration gaps without hiding unsupported APIs. Reassess secondary compiler diagnostics after threading types are real. Continue toward a minimal static core link with preserved unresolved-symbol diagnostics, then attempt native interpreter execution only when linking succeeds. Shared modules, optional third-party libraries and pip remain later scope.
+# Native runtime R2B.5: security and retirement qualification
+
+Date: 2026-11-14. **Verdict: PARTIAL. R2B.5 is not COMPLETE.**
+Revision `f6b5ccb24d3ef2d2077eaada148a9208e3e2c738`, branch `main`, pre-existing dirty worktree.
+No production corrections, commit or push. No condition variables, autonomous detached reclamation or CPython implementation.
+
+Evidence root (**E**): `docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/`.
+`validation-summary.json` is the gate assessment; `cpu-matrix.json` records each CPU scope.
+All results below are fresh R2B.5 executions except where explicitly described as prior source/report review.
+
+| Gate | Status | Evidence boundary |
+|---|---|---|
+| G1 baseline/integrity | PASS | Locked runtime rebuild; rebuilt inherited fixture ELFs; lifecycle 17/17 on 1/2/4; full original-file integrity check |
+| G2 terminal race | UNQUALIFIED | No deterministic final-exit/forced-termination overlap witness |
+| G3 IPC/capability | PARTIAL | Real legacy RPC, task authority and endpoint closure; authenticated channel continuity unexecuted |
+| G4 borrower SHM | BLOCKED | All nine native attempts rejected at allocation authority prerequisite |
+| G5 integrated retirement faults | UNQUALIFIED | Existing standalone memory controls only; no borrower-created backing/fault integration |
+| G6 native PTY/session | NOT_RUN | Host tests pass; retained-owner terminal/session scenario absent |
+| G7 identity/churn | PARTIAL | Existing group churn and stale endpoint-token operations; stale group/session/channel generation reuse absent |
+| G8 security/progress | PARTIAL | Host and scoped native controls pass; integrated security/fault/race gaps remain |
+| G9 native regressions | PASS | Fresh language/lifecycle/heap/TLS/ABI and supported TCP matrix |
+| G10 final assessment | PASS | Integrity, limitations, report, machine-readable results and CPython assessment recorded |
+
+## Baseline, preservation and source binding
+
+Inspected the R2B.3/R2B.4 reports, R2B.4 validation and recheck summaries, source integrity maps,
+retained-authority design and recorded failures. Reviewed threading T2R, KFP-2A.2 persistent
+retirement, KFP-2A.6 and 2A.6D contention/cleanup boundaries, restricted-retirement and authenticated
+membership contracts, and the terminal per-tab lifecycle documentation. Older document claims
+are historical contracts/limitations, not fresh runtime results.
+
+`source-baseline.json` records all 63,705 existing regular files and 5,638 symlink targets exposed
+by Git's tracked/nonignored inventory. It includes the original uncommitted implementation,
+lockfiles, vendored sources and earlier evidence. `baseline-worktree.log` records incoming status.
+`source-integrity.json` compares the complete original inventory at final assessment. Generated,
+ignored build products are outside that inventory. Git HEAD alone does not identify this dirty source.
+
+`run-validation.py` records exact commands, return codes, source hashes and durations. It rebuilds
+the native archive with `--locked`, compiles R2B.4 `lifecycle.c` and R2B.3 `exit-matrix.c` into fresh
+R2B.5 target paths, then runs the matrix. The first attempt incorrectly looked for the exit fixture
+under R2B.4; compiler failure and the successful preceding build are retained in `attempt-01/`.
+The corrected attempt does not overwrite it. This is installed-toolchain rebuild reproducibility,
+not a clean-room or bit-identical build claim.
+
+Per-guest folders retain invocation, kernel build/hash, ELF hashes, ISO build, serial, stdout/stderr,
+resource receipts and assessor results. `validated-source.json`, the full baseline, and final unchanged
+source bind these to the same production source. New fixture revisions have distinct ELF paths and
+attempt sources; an earlier fixture's PASS is never substituted for a later fixture.
+
+## Identities and authority scopes
+
+| Identity | Authority and lifetime | Evidence limit |
+|---|---|---|
+| Process | PID plus `foreground.incarnation`; grant recipients additionally bind VM generation | Numeric PID alone is not authentication; `RecipientIdentity::of` is an exact tuple |
+| Thread | Independent Process PID/incarnation; runtime pthread token is a separate nonwrapping public handle | Native guest logs print TIDs and kernel handoff observations print incarnations |
+| Native group | Retained original Process, exact `AddressSpaceIdentity` root/generation; terminal receipt under SCHEDULER | No separately allocated group ID; same root without generation is insufficient |
+| VM | Physical root plus generation and generation-qualified ledger handle | Ordinary handoff logs expose generation, not the physical root; no root value is invented |
+| Session | PTY broker publication/session/generation; Account `SessionRef(id,epoch)` has separate owner/issuer authorization | Neither a PTY number nor Account SessionRef alone authorizes an operation |
+| IPC endpoint | Opaque token, broker rights, endpoint ID and owner PID; receive/destroy additionally require current owner | Legacy `Endpoint` has no standalone generation field; token tests do not prove numeric endpoint-generation reuse |
+| Restricted channel | Handle token/generation, exact recipient/issuer tuples, Account session and role checks | Existing VM-exclusivity gate excludes unreaped shared-VM peers; it is preserved |
+| SHM backing | Broker token/object and retained physical frame list; immutable process/session quota receipt | Creator task, quota payer and final reclaimer are distinct; no backing was allocated by new attempts |
+| Mapping/view | VM identity plus VA/extent, ledger kind/backing; task-local `(token,base,size)` tracking | Shared VM does not imply two thread-local copies of the page table or independent mappings |
+| Cleanup owner | Group terminal receipt; each task's pending cleanup and pin/reap state; broker backing/view lifetime; retirement slot/generation | Group terminal publication does not imply completed physical reclamation |
+
+Source anchors: `kernel/src/process/mod.rs:434`, `kernel/src/sched/native_group.rs:43`,
+`kernel/src/sched/mod.rs:2084`, `kernel/src/capability/delivery.rs:3`,
+`kernel/src/capability/mod.rs:1153`, `kernel/src/capability/mod.rs:1606`,
+`kernel/src/capability/channel_native.rs:28`, `kernel/src/memory/shared.rs:54`,
+`kernel/src/memory/retirement.rs:37`, and `kernel/src/process/foreground.rs:142`.
+
+Affected production paths inspected include thread admission/publication, both native spawn ABIs,
+task-only and group exit, external/pending fatal termination, parent wait/liveness, owner resolution,
+endpoint broker/queue closure, SHM create/map/free/exit cleanup, shared quota, shared ledger, page
+unmap/root reclaim, retirement/TLB mailbox/ACK handling, session scanning and physical reaping.
+No existing task authority guard was generalized to group liveness.
+
+## W6: final exit versus forced termination
+
+**UNQUALIFIED.** W6-A/B/C have no controlled native race execution. W6-D repeated terminal
+requests and W6-E stale-generation requests after reuse are NOT_RUN. Fresh normal final-borrower
+exit and forced retained-owner termination pass on 1/2/4, but use independent groups without the
+required competing invocation intervals. They are controls, not the requested W6-A/B witnesses.
+
+`begin_native_group_exit` stores its first receipt before nested sibling termination and endpoint
+callbacks. Both final-thread paths and forced termination reach it under SCHEDULER. The inherited
+syscall156 observer reports handoff quiescence; it provides no independent external contender or
+precommit suspension. A scheduler-held pause awaiting another lifecycle operation would create a
+lock dependency cycle. No such pause, IF-disabled rendezvous, production split or new wait was added.
+
+A safe future coordinator needs separately authenticated actor/subject identities, independently
+observable invocation intervals, owned resumable continuations outside lifecycle guards, identity
+revalidation on resume, actual terminal/cleanup decisions and independent resource receipts.
+This run did not construct that mechanism. The source serialization argument is not a proof that
+all future coordinators are impossible and is not accepted as race qualification. Cleanup-winner,
+refund and quarantine fields remain absent, rather than inferred from one terminal log line.
+
+## W8: native IPC continuity and task authority
+
+**PARTIAL.** `ipc-v2-cpu-{1,2,4}/` passes actual guest assertions:
+
+1. Borrower A creates its own endpoint and SEND_ONLY derivation before initial-owner exit.
+2. Borrower B completes a request/reply exchange with A before the owner exits.
+3. The owner exits via pthread_exit. Each borrower performs syscall156; the kernel records the
+   original task Finished and physically quiescent before that borrower's subsequent progress.
+4. A second real request/reply exchange succeeds with the existing tokens after owner exit.
+5. B's attempts to destroy A's owner endpoint, destroy via SEND_ONLY, and receive on A's endpoint
+   fail. Same-rights SEND_ONLY derivation returns the existing token, as the broker specifies.
+6. A exits. B waits for syscall156 to acknowledge A physically Reaped, then checks old endpoint
+   derivation rejection. B creates a fresh endpoint, rejects old-token destruction against it,
+   verifies fresh-token derivation and performs authorized destruction.
+7. Final group retirement reports owner frames=0, descriptors=0, stack=0 and balanced runner
+   resource classes/handles/names. One group terminal trace is recorded in each guest.
+
+These are legacy task-owned capabilities in an ordinary unprivileged native group, not authenticated
+Account/restricted-channel qualification. No original-owner endpoint is reclassified as group-owned.
+A and B share memory containing the bearer token; they do not gain each other's receive/destroy
+ownership. No separate channel generation or numeric endpoint-ID reuse was exercised. Endpoint and
+capability global census/refund counts and controlled cleanup contention remain unmeasured.
+
+The initial IPC fixture incorrectly expected rederiving SEND_ONLY to fail. All 1/2/4 failures remain
+in `ipc-cpu-*/`, with `ipc-continuity-attempt-01.c`. Actual `CapabilityBroker::derive` permits equal
+rights and reuses an existing matching token (`capability/mod.rs:1038`); the endpoint_bind comment is
+stricter than that implementation. The corrected fixture preserves all receive/destroy denials and
+runs separately in `ipc-v2-*`. No privilege escalation or production defect was demonstrated.
+
+Authenticated channels require exact participant identities and a live authorized Account session.
+`channel_vm_exclusive` rejects an owner with an unreaped same-VM peer. Survival does not justify
+bypassing that gate or extending a dead task's `is_exiting` authority. This milestone does not change
+that policy to make a thread-group continuity scenario pass.
+
+## W9: borrower-created SHM and integrated faults
+
+**BLOCKED at allocation authorization.** `resources-cpu-{1,2,4}/` preserves nine failed executions:
+explicit view cleanup, creator exit retaining a peer view, and forced termination with views,
+on every supported CPU count. All establish owner exit and successful post-owner IPC, then exit91
+at the borrower-allocation assertion. None reaches map, read/write, revocation or backing retirement.
+
+The root cause is the runner's authority context: `native_c_guest.rs:152` explicitly leaves ordinary
+headless cases at uid1000 without Account membership or system allocation. Only network fixtures
+opt into system allocation for their transport. Native thread creation preserves the parent's fields
+(`syscall.rs:2910`). `alloc_shared_region` rejects absent Account membership when `system_allocation`
+is false (`shared.rs:89`). This rejection is the existing security policy, not a lifetime defect.
+The network flag was not repurposed to grant this resource fixture authority. No trust/session flags
+or synthetic authenticated memberships were installed.
+
+Actual VM model: group members have one root/generation and shared region ledger/bump. SHM syscalls
+operate on `current_process_mut`; their `mapped_shared` and `owned_shared` lists remain task-local.
+An explicit map would create another view/VA within that same VM, not another address space merely
+because another thread called it. Creator identity, broker backing owner and original quota payer
+remain distinct. These are inspected source contracts; new successful mappings are NOT_RUN.
+
+Group-integrated delivery uncertainty, partial unmap, interrupted retirement, concurrent revocation,
+cleanup/final-exit contention and last-view release/refund are **NOT_RUN / UNQUALIFIED**. Standalone
+retirement controls in `retirement-controls/` retain their own exact PTE, owner, sequence, target/ACK,
+PMM retention/release/reuse and expected-stop assessments. They do not qualify this group workload.
+The current per-control results are in `retirement-faults.json`; no timeout, disappearance, host test
+or source audit is promoted to safe integrated reclamation.
+
+## W7: session and PTY
+
+**Native retained-owner scenario NOT_RUN.** Existing PTY host tests pass 11/11 and actual foreground
+scan host adapter passes 8/8. The first host command used a missing top-level manifest path; the
+corrected `services/pty_server/Cargo.toml` execution has a separate log. Those host models do not
+execute real terminal tabs or the production scheduler reaper.
+
+The headless C runner captures VFS streams and does not start pty_server, bind an authenticated
+foreground controller, or create terminal tabs. The existing PTY liveness runner executes shell
+stream scenarios and has no retained-owner borrower payload. No integrated runner was supplied.
+All requested owner-exit I/O, foreground membership, final borrower, forced group, tab teardown and
+stale-session-generation guest scenarios remain NOT_RUN. Source inspection shows exact-session
+matching and retained-owner handling, and borrower publication clears session_owner/owned scope;
+it does not establish live PTY closure or absence of lingering session records.
+
+## W10, resource accounting and forward progress
+
+**PARTIAL.** The 17-case lifecycle suite includes ten sequential two-borrower groups on each of
+1/2/4 CPUs. Serial logs show Finished/Reaped transitions, borrower slot reuse and new VM generations.
+Post-owner progress and one terminal trace per group are independently parsed in `lifecycle-witnesses.json`.
+New IPC guests reject stale endpoint tokens while a fresh endpoint remains usable.
+
+This does not test a generation-qualified operation against a reused process/group/session/channel
+identity. Ordinary kill(pid,sig) and thread-reaped(TID) are numeric APIs. The generation-qualified kill
+extension requires an active manager and checks target VM generation (`syscall.rs:10895`, `:392`).
+No manager actor or stale-generation successor fixture was created. Matching numbers are never
+accepted as sufficient identity evidence.
+
+The runner's balanced resources are RamFsFileData, UserPrivate and PageTable frame classes, VFS
+handles and temporary names. Owner reap independently checks PMM-owned frames=0, FD table empty,
+cleanup pending cleared and kernel stack absent. SharedMemory frames, all capability/endpoint rows,
+quota refund multiplicity, sessions, total heap and group/VM census are not part of that complete
+measurement. No claim of system-wide zero growth follows from the existing bounded churn.
+
+Reviewed order: SCHEDULER precedes PMM/broker and serialized shootdown; retirement metadata sections
+are bounded and do not acquire outer locks or wait for peers. Group receipt publication precedes
+callbacks. Reaping checks pins, current/queued/core ownership, borrower Reaped and VM active mask
+before root reclamation. Shared free verifies the actual backing/PTE and waits for synchronous
+invalidation before reference removal; uncertain cleanup retains backing/fails stop. Persistent
+retirement obligations block root reclaim. Real cross-CPU activation, NMI/IPI uncertainty and exact
+callback/cleanup overlap remain broader proof obligations. No new lock, spin, wait, capacity increase,
+security relaxation or production FastLane enablement was introduced.
+
+## Fresh native regression matrix and CPython
+
+| CPUs | Lifecycle | C | C++ | Heap/ABI | TLS/once | Legacy IPC | TCP loopback |
+|---|---:|---:|---:|---|---|---|---|
+| 1 | 17/17 | 73/73 | 21/21 | PASS | 4/4 | PASS | NOT_RUN |
+| 2 | 17/17 | 73/73 | 21/21 | PASS | 4/4 | PASS | PASS |
+| 4 | 17/17 | 73/73 | 21/21 | PASS | 4/4 | PASS | PASS |
+| 12 | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN | NOT_RUN |
+
+The native guest runner supports only 1/2/4; TCP supports 2/4. No unsupported cell was relabeled.
+C++ includes expected fatal cases, unwinding, RTTI and static initialization. Retained-owner admission,
+pthread ABI and C++ ABI/vendor checks pass. Kernel host tests pass 212/212, IPC host tests 97/97,
+scheduler host controls and production kernel check pass. Security host controls are supplemental,
+not native terminal-race/PTY/fault execution. Raw warnings remain in build logs.
+
+CPython remains **BLOCKED**. Fresh strict compile probes fail for pthread condition variables,
+strncpy and _Exit (`cpython-blocker-*.log`). No full interpreter build was attempted. Existing
+platform/header gaps, detached autonomous reclamation and unqualified TLS/futex schedules remain
+explicit blockers. Functional native lifecycle/security progress is not interpreter readiness.
+
+## Changes and next milestone
+
+Only this report and fresh R2B.5 evidence/fixture/runner/assessment files were added. All incoming
+source/evidence files and symlink targets remain unchanged. No reproducible production correctness
+defect was established, so no production repair was made. Failed attempts remain available.
+
+Recommended next milestone: **R2B.5 continuation: authenticated fixture and safe contender coordination**.
+First provide the normal authenticated launch/session chain for the borrower workload without
+policy bypasses, and a validated resumable terminal-contender observer outside scheduler guards.
+Then execute W6-A–E and real PTY/session teardown, authorized borrower SHM/view/revocation with
+independent backing/quota receipts, integrated uncertainty and bounded full resource/identity reuse.
+Keep restricted-channel VM exclusivity and task authority explicit; any changed contract needs its
+own demonstrated defect and review. Retain the current PARTIAL verdict until every acceptance gate
+has the required native evidence. Condvar, detached reclamation and CPython remain separate work.

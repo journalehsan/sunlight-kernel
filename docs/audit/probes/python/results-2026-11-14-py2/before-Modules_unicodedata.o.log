@@ -1,0 +1,4 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/unicodedata.c:1329:9: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1329 |         sprintf(buffer, "CJK UNIFIED IDEOGRAPH-%X", code);
+      |         ^
+1 error generated.

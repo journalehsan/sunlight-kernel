@@ -1,0 +1,12 @@
+[
+  "sunlight-libc/include/locale.h",
+  "sunlight-libc/include/stdio.h",
+  "sunlight-libc/include/stdlib.h",
+  "sunlight-libc/include/time.h",
+  "sunlight-libc/include/unistd.h",
+  "sunlight-libc/src/locale.rs",
+  "sunlight-libc/src/stdio.rs",
+  "sunlight-libc/src/termination.rs",
+  "sunlight-libc/src/time.rs",
+  "sunlight-libc/src/wchar.rs"
+]

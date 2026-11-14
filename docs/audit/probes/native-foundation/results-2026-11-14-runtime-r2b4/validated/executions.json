@@ -1,0 +1,225 @@
+[
+  {
+    "name": "locked-final",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 0.16422952900757082,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 58.509630665997975,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 68.52626570599386,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/lifecycle-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 58.4516244730039,
+    "source_matches": true
+  },
+  {
+    "name": "regression-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "1",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 104.42298356100218,
+    "source_matches": true
+  },
+  {
+    "name": "regression-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 109.05763426801423,
+    "source_matches": true
+  },
+  {
+    "name": "regression-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/regression-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 82.03303523300565,
+    "source_matches": true
+  },
+  {
+    "name": "tcp-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tcp-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 18.357250938017387,
+    "source_matches": true
+  },
+  {
+    "name": "tcp-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/tcp-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 19.36238530301489,
+    "source_matches": true
+  },
+  {
+    "name": "pthread-abi",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_pthread.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/pthread-abi"
+    ],
+    "exit": 0,
+    "seconds": 1.8206879589997698,
+    "source_matches": true
+  },
+  {
+    "name": "kernel-host",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "-p",
+      "sunlight-kernel",
+      "--lib"
+    ],
+    "exit": 0,
+    "seconds": 4.126133731973823,
+    "source_matches": true
+  },
+  {
+    "name": "ipc-host",
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "-p",
+      "sunlight-ipc",
+      "--lib"
+    ],
+    "exit": 0,
+    "seconds": 0.2142903820204083,
+    "source_matches": true
+  },
+  {
+    "name": "scheduler-host",
+    "command": [
+      "python3",
+      "tools/test_scheduler_host.py"
+    ],
+    "exit": 0,
+    "seconds": 4.222435575007694,
+    "source_matches": true
+  },
+  {
+    "name": "production-check",
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "--offline",
+      "-p",
+      "sunlight-kernel",
+      "--bin",
+      "sunlight-kernel"
+    ],
+    "exit": 0,
+    "seconds": 1.418808362010168,
+    "source_matches": true
+  }
+]

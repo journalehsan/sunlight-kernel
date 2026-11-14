@@ -1,0 +1,60 @@
+{
+  "status": "PARTIAL",
+  "baseline": {
+    "status": "FAIL",
+    "log": "fat-unlink-before.log",
+    "observed_replacement_bytes": "BAD",
+    "expected": "new",
+    "source": "source-baseline.json"
+  },
+  "witnesses": {
+    "FAT-1": {
+      "status": "PASS",
+      "scope": "Host aliases and native rejected old reads; replacement bytes checked"
+    },
+    "FAT-2": {
+      "status": "PASS",
+      "scope": "Host and native rejected writes; replacement bytes checked"
+    },
+    "FAT-3": {
+      "status": "PASS",
+      "scope": "Regular-file source rename retains handle I/O; directory subset separately qualified"
+    },
+    "FAT-4": {
+      "status": "PARTIAL",
+      "scope": "Destination handle revoked, source handle reads own bytes after replacement; guest extended object identity unavailable"
+    },
+    "FAT-5": {
+      "status": "NOT_RUN",
+      "scope": "No forced unlink/read-write overlap"
+    },
+    "FAT-6": {
+      "status": "NOT_RUN",
+      "scope": "No forced concurrent close/unlink"
+    },
+    "FAT-7": {
+      "status": "PARTIAL",
+      "scope": "Host name/slot reuse plus inherited local-generation exhaustion test; native internal generation exhaustion not injected"
+    },
+    "FAT-8": {
+      "status": "PASS",
+      "scope": "Native duplicated descriptor rejects stale write and closes correctly"
+    },
+    "FAT-9": {
+      "status": "PARTIAL",
+      "scope": "Host zero open-count and clean unmount; native zero leaked fds/frames. No deferred storage model or cluster accounting at final close"
+    },
+    "FAT-10": {
+      "status": "PARTIAL",
+      "scope": "Host flush failure after deletion forces mount fail-stop and preserves valid close; arbitrary native I/O interruption NOT_RUN"
+    }
+  },
+  "host": "final/vfs-host-final.log",
+  "raw_accounting": "fat-accounting.json",
+  "native": [
+    "final/fat-native-cpu-1",
+    "final/fat-native-cpu-2",
+    "final/fat-native-cpu-4"
+  ],
+  "scope": "Passing witnesses prove replacement contents for exercised cases, not every concurrent/error schedule. Backend entry locations and generations are internal; no native identity ABI was fabricated."
+}

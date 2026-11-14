@@ -1,0 +1,363 @@
+[
+  {
+    "behavior": "per-thread values / NULL",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "delete-before-exit handshake",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "stale generation / reuse",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent create-delete churn",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent deletion with get/set",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "normal return destructors",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "explicit pthread_exit destructors",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "four destructor passes",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "destructor reentrant create/set/delete",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "detached destructor without join",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "80 create/join churn",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "128-key exhaustion",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "12-caller once publication / 120000 completed calls",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "nested distinct controls",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "initializer pthread_exit / surviving retry",
+    "cpus": 1,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-1/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "per-thread values / NULL",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "delete-before-exit handshake",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "stale generation / reuse",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent create-delete churn",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent deletion with get/set",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "normal return destructors",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "explicit pthread_exit destructors",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "four destructor passes",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "destructor reentrant create/set/delete",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "detached destructor without join",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "80 create/join churn",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "128-key exhaustion",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "12-caller once publication / 120000 completed calls",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "nested distinct controls",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "initializer pthread_exit / surviving retry",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-2/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "per-thread values / NULL",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "delete-before-exit handshake",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "stale generation / reuse",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent create-delete churn",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "concurrent deletion with get/set",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "normal return destructors",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "explicit pthread_exit destructors",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "four destructor passes",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "destructor reentrant create/set/delete",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "detached destructor without join",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "80 create/join churn",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "128-key exhaustion",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "12-caller once publication / 120000 completed calls",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "nested distinct controls",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "initializer pthread_exit / surviving retry",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "final2/acceptance-focused-4/results.json",
+    "boundary": "bounded assertion-based native functional test; stress is not exhaustive interleaving proof"
+  },
+  {
+    "behavior": "already-running destructor / delete / reuse / release / join witness",
+    "cpus": 2,
+    "status": "PASS",
+    "evidence": "exit-race-guest-2/results.json"
+  },
+  {
+    "behavior": "already-running destructor / delete / reuse / release / join witness",
+    "cpus": 4,
+    "status": "PASS",
+    "evidence": "exit-race-guest-4/results.json"
+  },
+  {
+    "behavior": "initial-owner pthread_exit retains live borrowers",
+    "cpus": 2,
+    "status": "FAIL",
+    "gate": "G2 PARTIAL",
+    "evidence": "final2/owner-exit-observation/serial.log"
+  },
+  {
+    "behavior": "recursive same-control once",
+    "cpus": 2,
+    "status": "PASS",
+    "boundary": "bounded no-completion interval and independent thread progress; eternal noncompletion not experimentally proven",
+    "evidence": "recursion-guest-2/results.json"
+  },
+  {
+    "behavior": "exact already-registered futex waiter at initializer abandonment",
+    "status": "UNQUALIFIED",
+    "reason": "started flags and sleeps do not establish kernel waiter state"
+  },
+  {
+    "behavior": "exact wake-before-registration and spurious-wake schedules",
+    "status": "UNQUALIFIED",
+    "reason": "source reasoning, no deterministic guest interleaving witness"
+  },
+  {
+    "behavior": "zero per-thread metadata retention before process termination",
+    "status": "UNQUALIFIED",
+    "reason": "process reaping is observed; detached queue remains lazy/bounded"
+  },
+  {
+    "behavior": "12-CPU native matrix",
+    "status": "NOT_RUN",
+    "reason": "existing runner supports only 1/2/4 CPUs"
+  }
+]

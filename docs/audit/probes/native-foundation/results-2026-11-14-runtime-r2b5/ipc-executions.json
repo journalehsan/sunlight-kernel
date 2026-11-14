@@ -1,0 +1,36 @@
+[
+  {
+    "cpu": 1,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "150",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-cpu-1"
+    ],
+    "exit": 1,
+    "seconds": 27.75266666500829
+  },
+  {
+    "cpu": 4,
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "150",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-cpu-4"
+    ],
+    "exit": 1,
+    "seconds": 27.918958579015452
+  }
+]

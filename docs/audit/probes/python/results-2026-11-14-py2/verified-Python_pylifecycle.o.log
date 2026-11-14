@@ -1,0 +1,62 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:5:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:106:36: warning: initializer-string for character array is too long, array size is 8 but initializer has size 9 (including the null terminating character); did you mean to use the 'nonstring' attribute? [-Wunterminated-string-initialization]
+  106 | = _PyRuntimeState_INIT(_PyRuntime, _Py_Debug_Cookie);
+      |                                    ^~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:47:26: note: expanded from macro '_Py_Debug_Cookie'
+   47 | #define _Py_Debug_Cookie "xdebugpy"
+      |                          ^~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:266:9: error: call to undeclared function 'setenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  266 |     if (setenv("LC_CTYPE", newloc, 1)) {
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:266:9: note: did you mean 'getenv'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdlib.h:12:7: note: 'getenv' declared here
+   12 | char *getenv(const char *name);
+      |       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:2760:28: error: variable has incomplete type 'struct stat'
+ 2760 |     struct _Py_stat_struct sb;
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:2760:12: note: forward declaration of 'struct stat'
+ 2760 |     struct _Py_stat_struct sb;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:2762:9: error: use of undeclared identifier 'S_IFDIR'
+ 2762 |         S_ISDIR(sb.st_mode)) {
+      |         ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:3032:9: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3032 |         abort();
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pylifecycle.c:3491:24: error: use of undeclared identifier 'SA_ONSTACK'
+ 3491 |     context.sa_flags = SA_ONSTACK;
+      |                        ^~~~~~~~~~
+6 warnings and 5 errors generated.

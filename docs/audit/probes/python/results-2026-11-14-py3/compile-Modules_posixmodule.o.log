@@ -1,0 +1,266 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE_BUILTIN -c /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c -o Modules/posixmodule.o
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:16:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:26:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:276:52: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  276 | PyAPI_FUNC(int) _PyTime_localtime(time_t t, struct tm *tm);
+      |                                                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_time.h:281:49: warning: declaration of 'struct tm' will not be visible outside of this function [-Wvisibility]
+  281 | PyAPI_FUNC(int) _PyTime_gmtime(time_t t, struct tm *tm);
+      |                                                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2608:41: error: incomplete definition of type 'struct stat'
+ 2608 |     SET_ITEM(0, PyLong_FromLong((long)st->st_mode));
+      |                                       ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2613:58: error: incomplete definition of type 'struct stat'
+ 2613 |     static_assert(sizeof(unsigned long long) >= sizeof(st->st_ino),
+      |                                                        ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2615:47: error: incomplete definition of type 'struct stat'
+ 2615 |     SET_ITEM(1, PyLong_FromUnsignedLongLong(st->st_ino));
+      |                                             ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2616:35: error: incomplete definition of type 'struct stat'
+ 2616 |     SET_ITEM(2, _PyLong_FromDev(st->st_dev));
+      |                                 ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2618:41: error: incomplete definition of type 'struct stat'
+ 2618 |     SET_ITEM(3, PyLong_FromLong((long)st->st_nlink));
+      |                                       ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2623:35: error: incomplete definition of type 'struct stat'
+ 2623 |     SET_ITEM(4, _PyLong_FromUid(st->st_uid));
+      |                                 ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2624:35: error: incomplete definition of type 'struct stat'
+ 2624 |     SET_ITEM(5, _PyLong_FromGid(st->st_gid));
+      |                                 ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2626:49: error: incomplete definition of type 'struct stat'
+ 2626 |     static_assert(sizeof(long long) >= sizeof(st->st_size),
+      |                                               ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2628:39: error: incomplete definition of type 'struct stat'
+ 2628 |     SET_ITEM(6, PyLong_FromLongLong(st->st_size));
+      |                                     ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2647:43: error: incomplete definition of type 'struct stat'
+ 2647 |     if (fill_time(module, v, 7, 10, 13, st->st_atime, ansec) < 0) {
+      |                                         ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2650:43: error: incomplete definition of type 'struct stat'
+ 2650 |     if (fill_time(module, v, 8, 11, 14, st->st_mtime, mnsec) < 0) {
+      |                                         ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2653:43: error: incomplete definition of type 'struct stat'
+ 2653 |     if (fill_time(module, v, 9, 12, 15, st->st_ctime, cnsec) < 0) {
+      |                                         ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2589:42: note: forward declaration of 'struct stat'
+ 2589 | _pystat_fromstructstat(PyObject *module, STRUCT_STAT *st)
+      |                                          ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2717:17: error: variable has incomplete type 'struct stat'
+ 2717 |     STRUCT_STAT st;
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2717:5: note: forward declaration of 'struct stat'
+ 2717 |     STRUCT_STAT st;
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2736:18: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2736 |         result = FSTAT(path->fd, &st);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:527:17: note: expanded from macro 'FSTAT'
+  527 | #  define FSTAT fstat
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:2760:18: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 2760 |         result = STAT(path->narrow, &st);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:525:16: note: expanded from macro 'STAT'
+  525 | #  define STAT stat
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:3256:18: error: call to undeclared function 'access'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3256 |         result = access(path->narrow, mode);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:3391:18: error: call to undeclared function 'chdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 3391 |         result = chdir(path->narrow);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:4159:15: error: call to undeclared function 'getcwd'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 4159 |         cwd = getcwd(buf, buflen);
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:4159:15: note: did you mean 'getc'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdio.h:40:5: note: 'getc' declared here
+   40 | int getc(FILE *stream);
+      |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:4159:13: error: incompatible integer to pointer conversion assigning to 'char *' from 'int' [-Wint-conversion]
+ 4159 |         cwd = getcwd(buf, buflen);
+      |             ^ ~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5679:18: error: call to undeclared function 'mkdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 5679 |         result = mkdir(path->narrow, mode);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5850:14: error: call to undeclared function 'rename'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 5850 |     result = rename(src->narrow, dst->narrow);
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:5960:18: error: call to undeclared function 'rmdir'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 5960 |         result = rmdir(path->narrow);
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:6451:12: error: call to undeclared function 'utime'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 6451 |     return utime(path, time);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:10639:16: error: variable has incomplete type 'struct tms'
+ 10639 |     struct tms process;
+       |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:10639:12: note: forward declaration of 'struct tms'
+ 10639 |     struct tms process;
+       |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:10642:15: error: call to undeclared function 'times'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 10642 |     elapsed = times(&process);
+       |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11234:15: error: call to undeclared function 'dup2'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 11234 |         res = dup2(fd, fd2);
+       |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11953:17: error: variable has incomplete type 'struct stat'
+ 11953 |     STRUCT_STAT st;
+       |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11953:5: note: forward declaration of 'struct stat'
+ 11953 |     STRUCT_STAT st;
+       |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:11959:15: error: call to undeclared function 'fstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 11959 |         res = FSTAT(fd, &st);
+       |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:527:17: note: expanded from macro 'FSTAT'
+  527 | #  define FSTAT fstat
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:12954:9: error: call to undeclared function 'setenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 12954 |     if (setenv(name_string, value_string, 1)) {
+       |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:12954:9: note: did you mean 'getenv'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/stdlib.h:12:7: note: 'getenv' declared here
+   12 | char *getenv(const char *name);
+      |       ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:12997:5: error: call to undeclared function 'unsetenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 12997 |     unsetenv(PyBytes_AS_STRING(name));
+       |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:14540:5: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 14540 |     abort();
+       |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15595:17: error: variable has incomplete type 'struct stat'
+ 15595 |     STRUCT_STAT st;
+       |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15595:5: note: forward declaration of 'struct stat'
+ 15595 |     STRUCT_STAT st;
+       |     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:528:30: note: expanded from macro 'STRUCT_STAT'
+  528 | #  define STRUCT_STAT struct stat
+      |                              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15628:22: error: call to undeclared function 'stat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 15628 |             result = STAT(path, &st);
+       |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:525:16: note: expanded from macro 'STAT'
+  525 | #  define STAT stat
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15631:22: error: call to undeclared function 'lstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 15631 |             result = LSTAT(path, &st);
+       |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:526:17: note: expanded from macro 'LSTAT'
+  526 | #  define LSTAT lstat
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15797:70: error: use of undeclared identifier 'S_IFDIR'
+ 15797 |     return DirEntry_test_mode(defining_class, self, follow_symlinks, S_IFDIR);
+       |                                                                      ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:15815:70: error: use of undeclared identifier 'S_IFREG'
+ 15815 |     return DirEntry_test_mode(defining_class, self, follow_symlinks, S_IFREG);
+       |                                                                      ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/posixmodule.c:16251:65: error: no member named 'd_ino' in 'struct dirent'
+ 16251 |                                              name_len, direntp->d_ino
+       |                                                        ~~~~~~~  ^
+7 warnings and 37 errors generated.

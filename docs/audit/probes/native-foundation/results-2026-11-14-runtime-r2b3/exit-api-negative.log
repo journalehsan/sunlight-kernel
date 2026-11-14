@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c -o /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-api.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c:2:18: error: call to undeclared function '_Exit'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+    2 | int main(void) { _Exit(0); }
+      |                  ^
+1 error generated.
+
+exit=1

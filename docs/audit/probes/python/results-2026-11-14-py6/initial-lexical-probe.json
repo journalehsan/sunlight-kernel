@@ -1,0 +1,16 @@
+{
+  "status": "FAIL",
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/lexical-source-extract.rs",
+    "-o",
+    "/home/ehsantor/Projects/sunlightos-kernel/target/py6-lexical-probe"
+  ],
+  "source_hashes": {
+    "sunshell/src/main.rs": "398b64d05872518078c9d9d291fc95ca4e1ea1ba7d39ea5977aa6703cb842d0f",
+    "sunlight-files/src/main.rs": "b963c1f736dd24eb46551ccf3f68e9cf0687a0f123a27b2843a728a36fe1e686"
+  },
+  "scope": "Host execution of exact lexical source slices, not UI/native lookup or canonicalization",
+  "stdout": "cwd=\"/tmp\" input=\".\" shell=\"/tmp\" files=\".\"\ncwd=\"/tmp\" input=\"..\" shell=\"/\" files=\"..\"\ncwd=\"/\" input=\"/tmp//./../tmp\" shell=\"/tmp\" files=\"/tmp//./../tmp\"\ncwd=\"/tmp\" input=\"missing/../x\" shell=\"/tmp/x\" files=\"missing/../x\"\ncwd=\"/tmp\" input=\"relative\" shell=\"/tmp/relative\" files=\"relative\"\ncwd=\"/tmp\" input=\" /tmp \" shell=\"/tmp/ /tmp \" files=\" /tmp \"\n"
+}

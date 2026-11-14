@@ -1,0 +1,12 @@
+["python3", "tools/native-c/guest.py", "--cases", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/final/tls-cases.json", "--cpus", "2", "--timeout", "180", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/final/tls-cpu-2"]
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/final/tls-cpu-2
+Building isolated native C guest (4 ELFs, 2 CPUs)
+Booting disposable TCG guest
+pthread-tsd-once: PASS exit=0 expected=0
+guest pthread-tsd-once stdout: b'TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n'
+pthread-tsd-exit-race: PASS exit=0 expected=0
+guest pthread-tsd-exit-race stdout: b'in-flight destructor delete/reuse witness PASS\n'
+pthread-once-recursive: PASS exit=0 expected=0
+guest pthread-once-recursive stdout: b'recursive once: no completion in bounded window; independent thread progressed\n'
+strerror-threads: PASS exit=0 expected=0
+guest strerror-threads stdout: b'strerror all 40 supported numbers across four threads PASS\n'

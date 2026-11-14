@@ -1,0 +1,25 @@
+{
+  "status": "PARTIAL",
+  "stat": "BLOCKED: mandatory identity/time/link/permission provenance unavailable across backends",
+  "lstat": "BLOCKED: no native link object or no-follow contract",
+  "fstat": "BLOCKED as POSIX: existing24-byte handle-backed native subset retained; FAT object lifetime FAIL",
+  "realpath": {
+    "status": "PASS",
+    "mechanism": "C -> shared libc resolve_path -> syscall179 -> permission/capability-checked component walk -> backend metadata",
+    "scope": "Existing representable File/Directory objects in current global namespace; not a symlink or full POSIX filesystem qualification",
+    "allocation": "NULL uses exact-size libc malloc result; caller frees with free",
+    "caller_buffer": "PATH_MAX256 including NUL required. C interface cannot inspect caller allocation capacity; copies at most256 bytes after successful full lookup",
+    "errno": "ENOENT, ENOTDIR, EACCES, EINVAL, ENAMETOOLONG and allocation ENOMEM mappings; not a complete bad-pointer/mount-fault qualification",
+    "header_abi": "realpath-header-abi.json: 6 C/C++ feature-profile checks",
+    "limitations": [
+      "No symlink objects",
+      "Textual cwd is not a pinned directory",
+      "FAT VFS enumeration exposes at most64 bytes per component",
+      "Nested mounts under case-insensitive parent spellings not qualified",
+      "No stale canonical result authorization guarantee"
+    ]
+  },
+  "readlink": "NOT_RUN; not implemented",
+  "symlink": "NOT_RUN; not implemented",
+  "ABI": "Existing size24/alignment8 native metadata unchanged; no synthetic POSIX layout"
+}

@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=101 owner=100 mode=1\nW alive actor=1 tid=102 owner=100 mode=1\nW initial pthread_exit owner=100 workers=2\nW tls actor=3 tid=100\nW progress actor=1 tid=102 after-owner-query\nW progress actor=0 tid=101 after-owner-query\nW tls actor=1 tid=101\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=102\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

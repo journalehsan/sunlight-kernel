@@ -1,0 +1,8 @@
+{
+  "py2-format": {
+    "exit": 0,
+    "stdout": "PY2 FORMAT PASS oracle=1780\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

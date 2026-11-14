@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-handle-claim.elf --cpus 4 --timeout 120 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-4
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/handle-claim-cpu-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'CLAIM round=0 target=0x2 tid=101 joiner=0x3 joining=1 target=live detach=EINVAL second_join=EINVAL\nCLAIM round=31 target=0x40 tid=163 joiner=0x41 joining=1 target=live detach=EINVAL second_join=EINVAL\nCLAIM 32 native reserved-join overlaps; exactly one join owner; registry controls=0 after each round\n'
+
+exit=0

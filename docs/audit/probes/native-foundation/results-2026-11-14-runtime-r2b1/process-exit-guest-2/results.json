@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "PROCESS EXIT WITHOUT TSD CLEANUP\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

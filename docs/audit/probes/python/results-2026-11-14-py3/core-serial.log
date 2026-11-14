@@ -1,0 +1,50 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Objects/obmalloc.o /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c:5:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_object.h:13:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_emscripten_trampoline.h:4:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c:22:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/static.c:23:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  880 |     return realpath(fname,resolved_name);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:880:12: error: incompatible integer to pointer conversion returning 'int' from a function with result type 'char *' [-Wint-conversion]
+  880 |     return realpath(fname,resolved_name);
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:883:19: error: call to undeclared function 'realpath'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  883 |     char* rname = realpath(fname, NULL);
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:883:11: error: incompatible integer to pointer conversion initializing 'char *' with an expression of type 'int' [-Wint-conversion]
+  883 |     char* rname = realpath(fname, NULL);
+      |           ^       ~~~~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/alloc.c:962:7: error: call to undeclared function 'abort'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  962 |       abort();  // cannot throw in plain C, use abort
+      |       ^
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/obmalloc.c:22:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/static.c:37:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/prim/prim.c:22:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/mimalloc/prim/unix/prim.c:56:12: fatal error: 'sys/syscall.h' file not found
+   56 |   #include <sys/syscall.h>
+      |            ^~~~~~~~~~~~~~~
+4 warnings and 6 errors generated.
+make: *** [Makefile:3003: Objects/obmalloc.o] Error 1

@@ -1,0 +1,37 @@
+{
+  "status": "BLOCKED",
+  "implementation": "Absent; no declaration-only or lexical-normalization substitute added",
+  "sources": [
+    "sunlight-fs/src/path.rs:validate_absolute",
+    "sunlight-fs/src/vfs.rs:resolve_mount/handle_path",
+    "kernel/src/arch/x86_64/syscall.rs:resolve_current_path/sys_stat_path"
+  ],
+  "findings": [
+    "Absolute paths only in VFS; dot/dot-dot and trailing slash rejected",
+    "Cwd prefix expansion exists for some syscalls and is not authoritative component canonicalization",
+    "Handle path retrieval exists but does not provide permission-checked component traversal; do not assume it proves canonicality under rename or mount changes",
+    "No native symlink resolution/readlink loop detection",
+    "Adding POSIX metadata and canonical traversal affects all backends and path authorization and requires an independent VFS milestone"
+  ],
+  "required_behavior": {
+    "absolute": "BLOCKED",
+    "relative_cwd": "BLOCKED",
+    "dot_dotdot": "BLOCKED",
+    "repeated_separators": "BLOCKED",
+    "mount_traversal": "BLOCKED",
+    "existing_path_validation": "BLOCKED",
+    "error_propagation": "BLOCKED",
+    "symlink_resolution": "BLOCKED",
+    "loop_detection": "BLOCKED",
+    "caller_buffer": "BLOCKED",
+    "NULL_allocation": "BLOCKED",
+    "concurrent_changes": "BLOCKED"
+  },
+  "subset_native_rejection_evidence": [
+    "filesystem-test.c",
+    "validated-functional-cpu-1/results.json",
+    "validated-functional-cpu-2/results.json",
+    "validated-functional-cpu-4/results.json"
+  ],
+  "security": "Canonicalization is not race-free authorization. Keep atomic opening and path observation distinct."
+}

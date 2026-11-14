@@ -1,0 +1,138 @@
+[
+  {
+    "command": [
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-x",
+      "c",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-c-base.log"
+  },
+  {
+    "command": [
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_POSIX_C_SOURCE=200809L",
+      "-x",
+      "c",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-c-posix.log"
+  },
+  {
+    "command": [
+      "clang",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_GNU_SOURCE",
+      "-x",
+      "c",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-c-gnu.log"
+  },
+  {
+    "command": [
+      "clang++",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-cxx-base.log"
+  },
+  {
+    "command": [
+      "clang++",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_POSIX_C_SOURCE=200809L",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-cxx-posix.log"
+  },
+  {
+    "command": [
+      "clang++",
+      "--target=x86_64-unknown-none-elf",
+      "-ffreestanding",
+      "-nostdinc",
+      "-isystem",
+      "/usr/lib/clang/23/include",
+      "-I",
+      "sunlight-libc/include",
+      "-std=c++17",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-D_GNU_SOURCE",
+      "-x",
+      "c++",
+      "-fsyntax-only",
+      "-"
+    ],
+    "status": "PASS",
+    "log": "realpath-abi-cxx-gnu.log"
+  }
+]

@@ -656,6 +656,7 @@ version = "0.2.7279-alpha.2"
 edition = "2021"
 
 [dependencies]
+libm = { path = "vendor/libm", default-features = false, optional = true }
 sunlight-ipc = { path = "../ipc" }
 
 [features]
@@ -679,6 +680,6 @@ dynamic-heap-128m = ["dynamic-heap"]
 # Link the native Rust std platform ABI and startup entry point.
 native-std = ["dynamic-heap"]
 # C main-return/exit callbacks; keep Rust's raw std exit contract unchanged.
-native-c = ["native-std"]
+native-c = ["native-std", "dep:libm"]
 
 [lib]

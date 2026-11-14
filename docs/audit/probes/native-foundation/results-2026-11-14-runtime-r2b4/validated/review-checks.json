@@ -1,0 +1,16 @@
+{
+  "changed_file_whitespace": {
+    "command": "git diff --check -- kernel ipc/src/lib.rs sunlight-libc/src/lib.rs sunlight-libc/src/sys.rs tools/native-c/guest.py tools/foreground-scope-proof.rs",
+    "exit": 0
+  },
+  "new_adapter_and_host_fixture_format": {
+    "command": "rustfmt --edition 2021 --check kernel/src/sched/native_group.rs tools/foreground-scope-proof.rs",
+    "exit": 0
+  },
+  "baseline_relative_rollback_check": {
+    "command": "git apply --reverse --check docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/r2b4-only.patch",
+    "exit": 0,
+    "mutated_worktree": false
+  },
+  "note": "Recorded from the completed tool calls; rollback was checked, never applied."
+}

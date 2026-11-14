@@ -1,0 +1,47 @@
+START acceptance-locked
+END acceptance-locked 0
+START acceptance-format-build
+END acceptance-format-build 0
+START acceptance-stream-build
+END acceptance-stream-build 0
+START acceptance-wide-build
+END acceptance-wide-build 0
+START acceptance-header-build
+END acceptance-header-build 0
+START acceptance-math-declarations-build
+END acceptance-math-declarations-build 0
+START acceptance-condvar-build
+END acceptance-condvar-build 0
+START acceptance-libc-build
+END acceptance-libc-build 0
+START acceptance-exit-build
+END acceptance-exit-build 0
+START acceptance-heap-build
+END acceptance-heap-build 0
+START acceptance-admission-build
+END acceptance-admission-build 0
+START acceptance-pthread-tsd-once-build
+END acceptance-pthread-tsd-once-build 0
+START acceptance-pthread-tsd-exit-race-build
+END acceptance-pthread-tsd-exit-race-build 0
+START acceptance-pthread-once-recursive-build
+END acceptance-pthread-once-recursive-build 0
+START acceptance-strerror-threads-build
+END acceptance-strerror-threads-build 0
+START acceptance-condvar-timeout-build
+END acceptance-condvar-timeout-build 0
+START acceptance-string-guard-build
+END acceptance-string-guard-build 0
+START acceptance-header-abi-build
+END acceptance-header-abi-build 0
+START acceptance-exit-controls-build
+END acceptance-exit-controls-build 0
+START acceptance-lifecycle-build
+END acceptance-lifecycle-build 0
+START acceptance-exit-matrix-build
+END acceptance-exit-matrix-build 0
+START acceptance-functional-cpu-1
+END acceptance-functional-cpu-1 1
+START acceptance-legacy-cpu-1
+END acceptance-legacy-cpu-1 0
+START acceptance-functional-cpu-2

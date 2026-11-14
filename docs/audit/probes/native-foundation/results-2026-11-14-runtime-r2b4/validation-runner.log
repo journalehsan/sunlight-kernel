@@ -1,0 +1,7 @@
+START locked-final
+END locked-final 0
+START lifecycle-cpu-1
+END lifecycle-cpu-1 0
+START lifecycle-cpu-2
+END lifecycle-cpu-2 0
+START lifecycle-cpu-4

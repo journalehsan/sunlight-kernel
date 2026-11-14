@@ -1,0 +1,31 @@
+{
+  "overall": "R2A COMPLETE; CPython NOT BUILT",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS"
+  },
+  "source_changes": [
+    ".threading-evidence/t4a/clippy/initial-tree-completion/Cargo.lock",
+    ".threading-evidence/t4a/clippy/initial-tree/Cargo.lock",
+    "Cargo.lock",
+    "sunlight-libc/Cargo.toml",
+    "sunlight-libc/include/errno.h",
+    "sunlight-libc/include/limits.h",
+    "sunlight-libc/include/math.h",
+    "sunlight-libc/include/sys/mman.h",
+    "sunlight-libc/include/time.h",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/lib.rs",
+    "tools/native-c/Cargo.lock"
+  ],
+  "new_production_files": 173,
+  "legacy_C": 73,
+  "legacy_Cxx": 21,
+  "focused_guest_cases": 6,
+  "math_vectors": 17342
+}

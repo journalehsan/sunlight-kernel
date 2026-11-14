@@ -1,0 +1,5 @@
+{
+  "source": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/fat-fixture.img",
+  "sha256": "858e903770e71347b02b30fd047b9cd508d708f0ae95059babc92c15d578b35d",
+  "contract": "Disposable fixture copy; no existing VM or ordinary disk attached"
+}

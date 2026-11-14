@@ -1,0 +1,7 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/readline_tokenizer.c:115:42: error: use of undeclared identifier 'BUFSIZ'
+  115 |     if ((tok->buf = (char *)PyMem_Malloc(BUFSIZ)) == NULL) {
+      |                                          ^~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Parser/tokenizer/readline_tokenizer.c:120:27: error: use of undeclared identifier 'BUFSIZ'
+  120 |     tok->end = tok->buf + BUFSIZ;
+      |                           ^~~~~~
+2 errors generated.

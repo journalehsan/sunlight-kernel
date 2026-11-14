@@ -602,74 +602,14 @@ impl PathBuf {
     }
 
     fn set(&mut self, text: &str) -> bool {
-        let bytes = text.as_bytes();
-        let mut start = 0usize;
-        let mut end = bytes.len();
-        while start < end && bytes[start].is_ascii_whitespace() {
-            start += 1;
-        }
-        while end > start && bytes[end - 1].is_ascii_whitespace() {
-            end -= 1;
-        }
-        if start >= end {
-            self.buf[0] = b'/';
-            self.len = 1;
-            return true;
-        }
-        // Canonical paths always start with '/'. Always write it first regardless
-        // of whether the source started with '/'. Without this, set("/root") would
-        // produce "root" (no leading slash) because the branch was skipped but the
-        // component loop then wrote at offset 0 without a separator.
-        if PATH_LEN == 0 {
+        // Preserve the user's path until VFS checks existence and traversal.
+        // In particular, whitespace and components before '..' are meaningful.
+        let text = if text.is_empty() { "/" } else { text };
+        if text.len() >= PATH_LEN || text.as_bytes().contains(&0) {
             return false;
         }
-        self.buf[0] = b'/';
-        let mut written = 1usize;
-        let mut i = start;
-        let mut saw_component = false;
-        while i < end {
-            while i < end && bytes[i] == b'/' {
-                i += 1;
-            }
-            let comp_start = i;
-            while i < end && bytes[i] != b'/' {
-                i += 1;
-            }
-            if i > comp_start {
-                match &bytes[comp_start..i] {
-                    b"." => continue,
-                    b".." => {
-                        while written > 1 && self.buf[written - 1] != b'/' {
-                            written -= 1;
-                        }
-                        if written > 1 {
-                            written -= 1;
-                        }
-                        saw_component = written > 1;
-                        continue;
-                    }
-                    _ => {}
-                }
-                if saw_component && written < PATH_LEN {
-                    self.buf[written] = b'/';
-                    written += 1;
-                }
-                saw_component = true;
-                for &b in &bytes[comp_start..i] {
-                    if written >= PATH_LEN {
-                        return false;
-                    }
-                    self.buf[written] = b;
-                    written += 1;
-                }
-            }
-        }
-        if written == 0 {
-            self.buf[0] = b'/';
-            self.len = 1;
-        } else {
-            self.len = written;
-        }
+        self.buf[..text.len()].copy_from_slice(text.as_bytes());
+        self.len = text.len();
         true
     }
 
@@ -1320,6 +1260,27 @@ impl State {
     }
 
     fn navigate_to(&mut self, target: PathBuf) -> bool {
+        let input = if target.as_str().starts_with('/') {
+            alloc::string::String::from(target.as_str())
+        } else {
+            alloc::format!(
+                "{}/{}",
+                self.current_path.as_str().trim_end_matches('/'),
+                target.as_str()
+            )
+        };
+        let mut output = [0u8; PATH_LEN];
+        let target = match libc::resolve_directory_path(input.as_bytes(), &mut output)
+            .ok()
+            .and_then(|n| core::str::from_utf8(&output[..n]).ok())
+            .and_then(PathBuf::from_str)
+        {
+            Some(path) => path,
+            None => {
+                self.set_error("Folder unavailable or access denied");
+                return false;
+            }
+        };
         debug_log("[FILES] navigate_start path=\"");
         debug_log(target.as_str());
         debug_log("\"\n");
@@ -5772,17 +5733,19 @@ mod tests {
     }
 
     #[test]
-    fn thumbnail_paths_are_lexically_normalized() {
+    fn path_storage_preserves_components_until_vfs_lookup() {
         assert_eq!(
             PathBuf::from_str("//pictures/./sub/../image.png")
                 .unwrap()
                 .as_str(),
-            "/pictures/image.png"
+            "//pictures/./sub/../image.png"
         );
         assert_eq!(
             PathBuf::from_str("/../../pictures").unwrap().as_str(),
-            "/pictures"
+            "/../../pictures"
         );
+        assert_eq!(PathBuf::from_str("  name  ").unwrap().as_str(), "  name  ");
+        assert!(PathBuf::from_str("/bad\0name").is_none());
     }
     #[test]
     fn grid_geometry_hit_testing_scroll_and_details() {

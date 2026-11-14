@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "command": [
+    "rustc",
+    "--edition=2021",
+    "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py5/lexical-source-extract.rs",
+    "-o",
+    "/home/ehsantor/Projects/sunlightos-kernel/target/py5-lexical-probe"
+  ],
+  "source_hashes": {
+    "sunshell/src/main.rs": "325b215cb30a035548788ff984a3bee9665090f3e3bb077f613da96044da7d34",
+    "sunlight-files/src/main.rs": "641d3470454bb3b38102067b0dbd519da7b035a13320899be8ff685585c64d68"
+  },
+  "scope": "Host execution of exact lexical source slices, not UI/native lookup or canonicalization",
+  "stdout": "cwd=\"/tmp\" input=\".\" shell=\"/tmp\" files=\"/\"\ncwd=\"/tmp\" input=\"..\" shell=\"/\" files=\"/\"\ncwd=\"/\" input=\"/tmp//./../tmp\" shell=\"/tmp\" files=\"/tmp\"\ncwd=\"/tmp\" input=\"missing/../x\" shell=\"/tmp/x\" files=\"/x\"\ncwd=\"/tmp\" input=\"relative\" shell=\"/tmp/relative\" files=\"/relative\"\ncwd=\"/tmp\" input=\" /tmp \" shell=\"/tmp/ /tmp \" files=\"/tmp\"\n"
+}

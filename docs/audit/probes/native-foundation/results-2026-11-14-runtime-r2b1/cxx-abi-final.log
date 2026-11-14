@@ -1,0 +1,4 @@
+$ python3 tools/native-c/tests/run_cxx_runtime.py --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b1/cxx-abi-final
+Target ABI/unwind ownership, upstream integrity, final ELF/frame inspection PASS. Original command LINK_FAIL; configured historical native ELF linked. Local static guard ABI linked with target-built implementation. Runtime requires both guest configurations.
+
+exit=0

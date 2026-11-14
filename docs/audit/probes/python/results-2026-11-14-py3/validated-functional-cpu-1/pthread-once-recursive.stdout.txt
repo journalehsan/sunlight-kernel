@@ -1,0 +1,1 @@
+recursive once: no completion in bounded window; independent thread progressed

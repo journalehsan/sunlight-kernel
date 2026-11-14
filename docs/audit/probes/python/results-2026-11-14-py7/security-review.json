@@ -1,0 +1,47 @@
+{
+  "status": "PARTIAL",
+  "verified": [
+    "Pre-removal revocation covers case and separator aliases by short-entry location",
+    "Source rename rebinds all matching live handles; destination handles revoked",
+    "Truncate/extension refresh per-operation cluster/size to avoid stale cluster reads",
+    "Generation exhaustion remains fail-closed",
+    "Revoked handles retain close ownership; mount teardown remains Busy until final backend close",
+    "Mutation errors fail-stop mounted adapter; no new locks, waits, IPC or scheduler changes",
+    "No fabricated metadata or FAT symlink representation"
+  ],
+  "unqualified": [
+    "Deterministic read/unlink and close/unlink schedules",
+    "Arbitrary native I/O failure and interruption during raw FAT retirement",
+    "Exact cluster accounting and exactly-once release on backend partial failure",
+    "Mount/case-alias/permission races and global VFS lock latency"
+  ],
+  "remaining_source_findings": [
+    {
+      "severity": "high",
+      "source": "kernel/src/arch/x86_64/syscall.rs:6574",
+      "issue": "Descriptor-relative path reconstruction is not retained object resolution; namespace TOCTOU remains"
+    },
+    {
+      "severity": "high",
+      "source": "sunlight-fs/src/vfs.rs user_metadata",
+      "issue": "FAT ownership policy depends on spelling; case-insensitive aliases need common authoritative policy resolution"
+    },
+    {
+      "severity": "high",
+      "source": "sunlight-fat/src/fat/write.rs",
+      "issue": "Raw mutations are not transactional; recovery of partially freed or aliased chains is not implemented"
+    },
+    {
+      "severity": "medium",
+      "source": "sunlight-fs/src/vfs.rs authenticated_open",
+      "issue": "FAT fstat still uses authenticated pathname lookup, not an independently retained object"
+    },
+    {
+      "severity": "medium",
+      "source": "sunlight-fs/src/vfs.rs rename",
+      "issue": "Directory rename conservatively revokes unrelated existing FAT handles"
+    }
+  ],
+  "known_reproduced_replacement_write": "Blocked by final positive host/native witnesses when those cells pass; historical failure retained",
+  "integrity": "PASS"
+}

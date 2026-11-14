@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "baseline_comparison_changed": [],
+  "numerical_and_support_files_checked": 164,
+  "pinned_upstream_differences_excluding_manifest": [],
+  "raw_R2A_manifest_comparison": "FAIL",
+  "raw_R2A_differences": [
+    "Cargo.toml"
+  ],
+  "packaging_exception": "Existing documented removal of test-only no-panic dependency; diff retained. No vendor changes in R2B.3. Raw hash mismatch is not suppressed.",
+  "manifest_diff": "--- pinned-upstream/Cargo.toml\n+++ vendored/Cargo.toml\n@@ -15,9 +15,6 @@\n edition = \"2021\"\n rust-version = \"1.67\"\n \n-[dev-dependencies]\n-# FIXME(msrv): switch to `no-panic.workspace` when possible\n-no-panic = \"0.1.36\"\n \n [features]\n default = [\"arch\"]\n@@ -52,3 +49,4 @@\n \n [package.metadata.docs.rs]\n features = [\"unstable-float\"]\n+\n",
+  "prior_raw_failure": "R2B.2 libm-vendor-check.json already records Cargo.toml mismatch"
+}

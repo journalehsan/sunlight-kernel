@@ -1,0 +1,73 @@
+{
+  "status": "PASS",
+  "revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+  "branch": "main",
+  "baseline_file_count": 60056,
+  "symlink_count": 5638,
+  "changed_from_baseline": [
+    "ipc/src/lib.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "kernel/src/process/foreground.rs",
+    "kernel/src/process/mod.rs",
+    "kernel/src/sched/mod.rs",
+    "kernel/src/sched/thread_admission.rs",
+    "sunlight-libc/src/lib.rs",
+    "sunlight-libc/src/sys.rs",
+    "tools/foreground-scope-proof.rs",
+    "tools/native-c/guest.py"
+  ],
+  "expected_changed": [
+    "ipc/src/lib.rs",
+    "kernel/src/arch/x86_64/syscall.rs",
+    "kernel/src/process/foreground.rs",
+    "kernel/src/process/mod.rs",
+    "kernel/src/sched/mod.rs",
+    "kernel/src/sched/thread_admission.rs",
+    "sunlight-libc/src/lib.rs",
+    "sunlight-libc/src/sys.rs",
+    "tools/foreground-scope-proof.rs",
+    "tools/native-c/guest.py"
+  ],
+  "new_kernel_file": {
+    "kernel/src/sched/native_group.rs": "52cd659ad2025832bb2910cef04d786b0ef68b61892baf5d3d4d60b625fd1d88"
+  },
+  "missing": [],
+  "symlink_changes": [],
+  "earlier_dirty_libc_bytes_preserved_by_inverse_patch": true,
+  "validated_source_matches": true,
+  "all_execution_source_matches": true,
+  "current_source_sha256": {
+    "ipc/src/lib.rs": "07e59265d8be6abbfd3e4a5a1a33a5dc5d454dd361ca24b4a25409ceb319b866",
+    "kernel/src/arch/x86_64/syscall.rs": "5a0440552154b283572611e07bde04ba59ef7f294aeb0da7118176bda288fdf3",
+    "kernel/src/process/foreground.rs": "a0f0cdeb2b47cc9f9a9d0e30dde538c94a62c525099901a74b07cf85757f1b3e",
+    "kernel/src/process/mod.rs": "d81ec23f4f13abdd3adc24bac729df8f0b17982410dc83d8884cd4e26387465c",
+    "kernel/src/sched/mod.rs": "c68d4148171387554504f902375ecde0ac471fba2b6ec1b370412f654c2fcca9",
+    "kernel/src/sched/thread_admission.rs": "5a97dcba070bb2579990f75b29c21b299b16c0d040497abc2e8a00ae19cb9aed",
+    "sunlight-libc/src/lib.rs": "952cfeff682d63650d9acfddaf4917239caf0824a1e8d34438b7aed0d2a2a5a1",
+    "sunlight-libc/src/sys.rs": "a597091da615d83490090ae1d199ea6fa6fd911e61b62dbb5e89378627477b1e",
+    "tools/foreground-scope-proof.rs": "1acf9d9b4e6c6a52e125be148d760112e729678940c9da1f49fe9422ba9e210c",
+    "tools/native-c/guest.py": "a94bcb425cf455cbb9eab0c1ee8213aeecb6dd61e4eec4ee58f271e6602c2ef1",
+    "kernel/src/sched/native_group.rs": "52cd659ad2025832bb2910cef04d786b0ef68b61892baf5d3d4d60b625fd1d88"
+  },
+  "test_source_sha256": {
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/migration-decision.md": "52067cdbec1412eab8feaba63a6d3155df1e43a08369e96934268db974fd0744",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c": "0e070c6acf3822762fc2d89be30771382ff5466bd6d27ec1f3d47807d45b498f",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/run-validation.py": "7cc5dec8c793b2e786ef70d2276c1957e85ad54afbd8d7fb0b9b571c3b6ddf9d",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/retained-admission.c": "8e1928ceb73bb607907f648e93979a55cfd2d100b5dc1ad12f50947b40e64820",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/run-supplemental.py": "0da82a1328ca1fb1d642e16093f23d2a71faf3b0de24cddb14e1dadc974ab32f",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/ownership-before-after.md": "b116955329c9f1953bdf05e808d2bffd058c08719353e457195bf186bdb2e6e9",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/run-retirement-controls.py": "e03a2cb48da199187151527404a5a14a895ad5e106b98652e8017e2cf08edfc2",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/run-tls-regressions.py": "f1608392f5c1d16a73495647166d8270956a8d727547eb40e0bf360d314c106a",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/assess.py": "15f84a94212041bea8c7ccdc40b8e18cfee5f88f5eea2e013bdf49bd5d82861e",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/write-report.py": "3a467c426ad8ae794e77da665ac9f2f823c0dc182c61c1e61bce31af800999bf",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/run-relinked.py": "04a46c57990608c8ce75e784025c3d6ff9537c5bdd5d7e96fb94488bbfd91c60"
+  },
+  "full_status": "final-worktree.log",
+  "no_commit_or_push": true,
+  "earlier_pilot_matrix": "Intermediate source only; never substituted for validated/ guests",
+  "remaining_integrity_scope": "Content hashes and symlink targets; no clean-room or bit-identical rebuild claim",
+  "revision_unchanged": true,
+  "branch_unchanged": true,
+  "image_verification": "PASS",
+  "baseline_relative_patch": "r2b4-only.patch"
+}

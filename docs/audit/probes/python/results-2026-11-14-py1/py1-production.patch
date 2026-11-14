@@ -1,0 +1,516 @@
+--- a/sunlight-libc/src/string.rs
++++ b/sunlight-libc/src/string.rs
+@@ -550,3 +550,85 @@
+         0
+     }
+ }
++
++/// Copy at most n bytes and pad the remaining destination with zeroes.
++/// The caller provides disjoint valid source and destination regions.
++#[cfg_attr(
++    all(not(test), any(target_os = "none", target_os = "sunlightos")),
++    no_mangle
++)]
++pub unsafe extern "C" fn strncpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8 {
++    let mut ended = false;
++    for i in 0..n {
++        let byte = if ended { 0 } else { src.add(i).read() };
++        ended |= byte == 0;
++        dest.add(i).write(byte);
++    }
++    dest
++}
++
++#[cfg_attr(
++    all(not(test), any(target_os = "none", target_os = "sunlightos")),
++    no_mangle
++)]
++pub unsafe extern "C" fn strcpy(dest: *mut u8, src: *const u8) -> *mut u8 {
++    let mut i = 0;
++    loop {
++        let b = src.add(i).read();
++        dest.add(i).write(b);
++        if b == 0 {
++            return dest;
++        }
++        i += 1;
++    }
++}
++#[cfg_attr(
++    all(not(test), any(target_os = "none", target_os = "sunlightos")),
++    no_mangle
++)]
++pub unsafe extern "C" fn strcspn(src: *const u8, reject: *const u8) -> usize {
++    let mut i = 0;
++    while src.add(i).read() != 0 {
++        let mut j = 0;
++        while reject.add(j).read() != 0 {
++            if src.add(i).read() == reject.add(j).read() {
++                return i;
++            }
++            j += 1;
++        }
++        i += 1;
++    }
++    i
++}
++#[cfg_attr(
++    all(not(test), any(target_os = "none", target_os = "sunlightos")),
++    no_mangle
++)]
++pub unsafe extern "C" fn strpbrk(src: *const u8, accept: *const u8) -> *mut u8 {
++    let i = strcspn(src, accept);
++    if src.add(i).read() == 0 {
++        core::ptr::null_mut()
++    } else {
++        src.add(i) as *mut u8
++    }
++}
++#[cfg_attr(
++    all(not(test), any(target_os = "none", target_os = "sunlightos")),
++    no_mangle
++)]
++pub unsafe extern "C" fn strstr(src: *const u8, needle: *const u8) -> *mut u8 {
++    let mut i = 0;
++    loop {
++        let mut j = 0;
++        while needle.add(j).read() != 0 && src.add(i + j).read() == needle.add(j).read() {
++            j += 1;
++        }
++        if needle.add(j).read() == 0 {
++            return src.add(i) as *mut u8;
++        }
++        if src.add(i).read() == 0 {
++            return core::ptr::null_mut();
++        }
++        i += 1;
++    }
++}
+--- a/sunlight-libc/src/inttypes.rs
++++ b/sunlight-libc/src/inttypes.rs
+@@ -146,3 +146,9 @@
+     // not supported; assert has no successful return or atexit path.
+     crate::std_runtime::sl_std_exit(134)
+ }
++
++// The native ABI has 64-bit long, long long and intmax_t.
++#[no_mangle]
++pub unsafe extern "C" fn strtol(s: *const c_char, end: *mut *mut c_char, base: i32) -> i64 {
++    parse(s, end, base, true) as i64
++}
+--- a/sunlight-libc/src/termination.rs
++++ b/sunlight-libc/src/termination.rs
+@@ -134,3 +134,10 @@
+         assert_eq!(crate::errno::get_errno(), crate::errno::EINVAL);
+     }
+ }
++
++/// Immediate native process-group termination, bypassing atexit and stdio.
++#[cfg(all(not(test), feature = "native-c", target_os = "sunlightos"))]
++#[no_mangle]
++pub unsafe extern "C" fn _Exit(status: i32) -> ! {
++    crate::std_runtime::sl_std_exit(status)
++}
+--- a/sunlight-libc/src/lib.rs
++++ b/sunlight-libc/src/lib.rs
+@@ -965,3 +965,6 @@
+ 
+ #[cfg(all(feature = "native-c", target_os = "sunlightos"))]
+ pub mod ctype;
++
++#[cfg(all(feature = "native-c", target_os = "sunlightos"))]
++pub mod condvar;
+--- a/sunlight-libc/include/stdlib.h
++++ b/sunlight-libc/include/stdlib.h
+@@ -9,6 +9,7 @@
+ /* Creates a mode-0600 read/write file. Replace six trailing X characters in
+  * a writable NUL-terminated template. Caller must close and unlink the file. */
+ int mkstemp(char *path_template);
++long strtol(const char *s, char **end, int base);
+ void *malloc(size_t size);
+ void *calloc(size_t count, size_t size);
+ void *realloc(void *ptr, size_t size);
+@@ -20,8 +21,10 @@
+ int atexit(void (*function)(void));
+ #ifdef __cplusplus
+ [[noreturn]] void exit(int status);
++[[noreturn]] void _Exit(int status);
+ #else
+ _Noreturn void exit(int status);
++_Noreturn void _Exit(int status);
+ #endif
+ #ifdef __cplusplus
+ }
+--- a/sunlight-libc/include/unistd.h
++++ b/sunlight-libc/include/unistd.h
+@@ -19,6 +19,7 @@
+  * Arbitrary bad non-NULL user memory retains the native generic EIO result. */
+ int isatty(int fd);
+ int close(int fd);
++off_t lseek(int fd, off_t offset, int whence);
+ ssize_t read(int fd, void *buffer, size_t count);
+ ssize_t write(int fd, const void *buffer, size_t count);
+ #ifdef __cplusplus
+--- a/sunlight-libc/include/string.h
++++ b/sunlight-libc/include/string.h
+@@ -6,6 +6,12 @@
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
++
++char *strcpy(char *dest, const char *src);
++size_t strcspn(const char *src, const char *reject);
++char *strpbrk(const char *src, const char *accept);
++char *strstr(const char *src, const char *needle);
++char *strncpy(char *dest, const char *src, size_t n);
+ 
+ void *memcpy(void *dest, const void *src, size_t n);
+ void *memmove(void *dest, const void *src, size_t n);
+--- a/sunlight-libc/include/pthread.h
++++ b/sunlight-libc/include/pthread.h
+@@ -11,8 +11,8 @@
+  * never wrap or reuse; stale join/detach returns EINVAL. Tokens must never be
+  * dereferenced. The pointer-sized opaque ABI is unchanged.
+  *
+- * Not provided: cancellation, scheduling/affinity attributes, condition
+- * variables, robust mutexes, and joining the initial thread. */
++ * Not provided: cancellation, scheduling/affinity attributes, robust mutexes, and joining the initial thread. */
++#include <bits/time.h>
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -47,6 +47,28 @@
+ 
+ #define PTHREAD_MUTEX_INITIALIZER { 0 }
+ 
++/* Process-private only. Storage must remain live until all concurrent callers
++ * return; destroy returns EBUSY while waiters (including reacquisition) exist.
++ * Cancellation, process sharing and concurrent reinitialization are unsupported. */
++typedef struct {
++    pthread_mutex_t __gate;
++    unsigned int __dead;
++    void *__head;
++    int __clock;
++} pthread_cond_t;
++typedef struct { int __clock; } pthread_condattr_t;
++#define PTHREAD_COND_INITIALIZER { { 0 }, 0, 0, 0 }
++int pthread_cond_init(pthread_cond_t *, const pthread_condattr_t *);
++int pthread_cond_destroy(pthread_cond_t *);
++int pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *);
++int pthread_cond_timedwait(pthread_cond_t *, pthread_mutex_t *, const struct timespec *);
++int pthread_cond_signal(pthread_cond_t *);
++int pthread_cond_broadcast(pthread_cond_t *);
++int pthread_condattr_init(pthread_condattr_t *);
++int pthread_condattr_destroy(pthread_condattr_t *);
++int pthread_condattr_setclock(pthread_condattr_t *, clockid_t);
++int pthread_condattr_getclock(const pthread_condattr_t *, clockid_t *);
++
+ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                    void *(*start_routine)(void *), void *arg);
+ int pthread_join(pthread_t thread, void **retval);
+--- /dev/null
++++ b/sunlight-libc/src/condvar.rs
+@@ -0,0 +1,270 @@
++//! Process-private condition variables with intrusive, stack-owned wait records.
++//!
++//! The gate protects the list and its lifetime, never the blocking wait or the
++//! caller's mutex reacquisition. Registration precedes releasing that mutex.
++//! Each waiter has its own one-shot futex word, avoiding sequence-counter ABA.
++//! A signal marks and wakes one unnotified record under the gate. Timeout and
++//! removal serialize with notification; a notification winning that serialization
++//! returns success. Records remain listed through mutex reacquisition, so destroy
++//! cannot succeed while a waiter still uses the condition variable.
++//!
++//! As with pthread objects generally, storage must remain valid through every
++//! concurrent API invocation. Reinitializing a live object is not supported.
++use crate::pthread::{pthread_mutex_lock, pthread_mutex_unlock, PthreadMutex};
++use crate::sys;
++use crate::time::{clock_gettime, Timespec};
++use core::ptr;
++use core::sync::atomic::{AtomicU32, Ordering};
++
++const EINVAL: i32 = 22;
++const EBUSY: i32 = 16;
++const ETIMEDOUT: i32 = 110;
++
++#[repr(C)]
++pub struct Cond {
++    gate: PthreadMutex,
++    dead: u32,
++    head: *mut Waiter,
++    clock: i32,
++}
++#[repr(C)]
++pub struct Attr {
++    clock: i32,
++}
++struct Waiter {
++    notified: AtomicU32,
++    next: *mut Waiter,
++}
++
++fn aligned<T>(p: *const T) -> bool {
++    !p.is_null() && (p as usize) % core::mem::align_of::<T>() == 0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_condattr_init(a: *mut Attr) -> i32 {
++    if !aligned(a) {
++        return EINVAL;
++    }
++    (*a).clock = 0;
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_condattr_destroy(a: *mut Attr) -> i32 {
++    if !aligned(a) || !(0..=1).contains(&(*a).clock) {
++        return EINVAL;
++    }
++    (*a).clock = -1;
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_condattr_setclock(a: *mut Attr, clock: i32) -> i32 {
++    if !aligned(a) || !(0..=1).contains(&(*a).clock) || !(0..=1).contains(&clock) {
++        return EINVAL;
++    }
++    (*a).clock = clock;
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_condattr_getclock(a: *const Attr, clock: *mut i32) -> i32 {
++    if !aligned(a) || !aligned(clock) || !(0..=1).contains(&(*a).clock) {
++        return EINVAL;
++    }
++    *clock = (*a).clock;
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_init(c: *mut Cond, a: *const Attr) -> i32 {
++    if !aligned(c) || (!a.is_null() && (!aligned(a) || !(0..=1).contains(&(*a).clock))) {
++        return EINVAL;
++    }
++    crate::pthread::pthread_mutex_init(ptr::addr_of_mut!((*c).gate), ptr::null());
++    (*c).dead = 0;
++    (*c).head = ptr::null_mut();
++    (*c).clock = if a.is_null() { 0 } else { (*a).clock };
++    0
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_destroy(c: *mut Cond) -> i32 {
++    if !aligned(c) {
++        return EINVAL;
++    }
++    let gate = ptr::addr_of_mut!((*c).gate);
++    let r = pthread_mutex_lock(gate);
++    if r != 0 {
++        return r;
++    }
++    let result = if (*c).dead != 0 {
++        EINVAL
++    } else if !(*c).head.is_null() {
++        EBUSY
++    } else {
++        (*c).dead = 1;
++        0
++    };
++    pthread_mutex_unlock(gate);
++    result
++}
++unsafe fn notify(c: *mut Cond, all: bool) -> i32 {
++    if !aligned(c) {
++        return EINVAL;
++    }
++    let gate = ptr::addr_of_mut!((*c).gate);
++    let r = pthread_mutex_lock(gate);
++    if r != 0 {
++        return r;
++    }
++    let result = if (*c).dead != 0 {
++        EINVAL
++    } else {
++        let mut node = (*c).head;
++        while !node.is_null() {
++            if (*node).notified.load(Ordering::Relaxed) == 0 {
++                (*node).notified.store(1, Ordering::Release);
++                sys::native_futex(ptr::addr_of!((*node).notified).cast(), 1, 1, 0);
++                if !all {
++                    break;
++                }
++            }
++            node = (*node).next;
++        }
++        0
++    };
++    pthread_mutex_unlock(gate);
++    result
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_signal(c: *mut Cond) -> i32 {
++    notify(c, false)
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_broadcast(c: *mut Cond) -> i32 {
++    notify(c, true)
++}
++
++unsafe fn now(clock: i32) -> Result<u64, i32> {
++    let mut t = Timespec {
++        tv_sec: 0,
++        tv_nsec: 0,
++    };
++    if clock_gettime(clock, &mut t) != 0 {
++        return Err(EINVAL);
++    }
++    ns(t)
++}
++fn ns(t: Timespec) -> Result<u64, i32> {
++    if t.tv_sec < 0 || !(0..1_000_000_000).contains(&t.tv_nsec) {
++        return Err(EINVAL);
++    }
++    (t.tv_sec as u64)
++        .checked_mul(1_000_000_000)
++        .and_then(|n| n.checked_add(t.tv_nsec as u64))
++        .filter(|n| *n != u64::MAX)
++        .ok_or(EINVAL)
++}
++unsafe fn wait(c: *mut Cond, m: *mut PthreadMutex, absolute: Option<Timespec>) -> i32 {
++    if !aligned(c) || !aligned(m) {
++        return EINVAL;
++    }
++    let limit = match absolute {
++        Some(t) => match if (0..1_000_000_000).contains(&t.tv_nsec) && t.tv_sec < 0 {
++            Ok(0)
++        } else {
++            ns(t)
++        } {
++            Ok(n) => Some(n),
++            Err(e) => return e,
++        },
++        None => None,
++    };
++    let gate = ptr::addr_of_mut!((*c).gate);
++    let r = pthread_mutex_lock(gate);
++    if r != 0 {
++        return r;
++    }
++    if (*c).dead != 0 {
++        pthread_mutex_unlock(gate);
++        return EINVAL;
++    }
++    let clock = (*c).clock;
++    let mut node = Waiter {
++        notified: AtomicU32::new(0),
++        next: (*c).head,
++    };
++    (*c).head = &mut node;
++    // The caller holds m. Any notifier correctly using m cannot pass this
++    // registration before we release m. Our private futex compares before park.
++    pthread_mutex_unlock(m);
++    pthread_mutex_unlock(gate);
++    let mut result = 0;
++    while node.notified.load(Ordering::Acquire) == 0 {
++        let deadline = if let Some(limit) = limit {
++            let current = match now(clock) {
++                Ok(n) => n,
++                Err(e) => {
++                    result = e;
++                    break;
++                }
++            };
++            if current >= limit {
++                result = ETIMEDOUT;
++                break;
++            }
++            // Re-read realtime after each bounded sleep; never freeze a wall
++            // clock deadline into an unbounded monotonic wait.
++            let remaining = if clock == 0 {
++                (limit - current).min(100_000_000)
++            } else {
++                limit - current
++            };
++            match now(1).and_then(|n| {
++                n.checked_add(remaining)
++                    .filter(|v| *v != u64::MAX)
++                    .ok_or(EINVAL)
++            }) {
++                Ok(n) => n,
++                Err(e) => {
++                    result = e;
++                    break;
++                }
++            }
++        } else {
++            u64::MAX
++        };
++        let r = sys::native_futex(ptr::addr_of!(node.notified).cast(), 0, 0, deadline);
++        if r > 2 {
++            result = EINVAL;
++            break;
++        }
++        // Wake, compare mismatch, timeout and spurious wake all recheck state.
++    }
++    let reacquire = pthread_mutex_lock(m);
++    pthread_mutex_lock(gate);
++    if node.notified.load(Ordering::Acquire) != 0 {
++        result = 0;
++    }
++    let mut link = ptr::addr_of_mut!((*c).head);
++    while *link != ptr::addr_of_mut!(node) {
++        link = ptr::addr_of_mut!((**link).next);
++    }
++    *link = node.next;
++    pthread_mutex_unlock(gate);
++    if reacquire != 0 {
++        reacquire
++    } else {
++        result
++    }
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_wait(c: *mut Cond, m: *mut PthreadMutex) -> i32 {
++    wait(c, m, None)
++}
++#[no_mangle]
++pub unsafe extern "C" fn pthread_cond_timedwait(
++    c: *mut Cond,
++    m: *mut PthreadMutex,
++    t: *const Timespec,
++) -> i32 {
++    if !aligned(t) {
++        return EINVAL;
++    }
++    wait(c, m, Some(*t))
++}
+--- a/sunlight-libc/include/time.h
++++ b/sunlight-libc/include/time.h
+@@ -3,13 +3,7 @@
+ /* Narrow native x86-64 LP64 slice, available with base, POSIX or GNU feature
+  * macros. No POSIX version/option or CPU-time-clock support is advertised. */
+ #include <sys/types.h>
+-typedef int clockid_t;
+-struct timespec {
+-    time_t tv_sec;
+-    long tv_nsec;
+-};
+-#define CLOCK_REALTIME 0
+-#define CLOCK_MONOTONIC 1
++#include <bits/time.h>
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+--- /dev/null
++++ b/sunlight-libc/include/bits/time.h
+@@ -0,0 +1,13 @@
++#ifndef SUNLIGHT_BITS_TIME_H
++#define SUNLIGHT_BITS_TIME_H
++/* Shared native LP64 clock ABI. long is exactly the time_t declared by
++ * sys/types.h. Keep this header independent of compiler resource headers so
++ * pthread.h remains usable by the existing bare C++ ABI probes. */
++typedef int clockid_t;
++struct timespec {
++    long tv_sec;
++    long tv_nsec;
++};
++#define CLOCK_REALTIME 0
++#define CLOCK_MONOTONIC 1
++#endif

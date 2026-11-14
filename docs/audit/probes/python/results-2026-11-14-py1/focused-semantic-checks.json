@@ -1,0 +1,29 @@
+[
+  {
+    "cpus": 1,
+    "exact_exit_output_checked": true,
+    "guard_page_checked": true,
+    "timeout_outcomes_checked": true,
+    "evidence": [
+      "verified-functional-cpu-1/results.json"
+    ]
+  },
+  {
+    "cpus": 2,
+    "exact_exit_output_checked": true,
+    "guard_page_checked": true,
+    "timeout_outcomes_checked": true,
+    "evidence": [
+      "verified-functional-cpu-2/results.json"
+    ]
+  },
+  {
+    "cpus": 4,
+    "exact_exit_output_checked": true,
+    "guard_page_checked": true,
+    "timeout_outcomes_checked": true,
+    "evidence": [
+      "verified-functional-cpu-4/results.json"
+    ]
+  }
+]

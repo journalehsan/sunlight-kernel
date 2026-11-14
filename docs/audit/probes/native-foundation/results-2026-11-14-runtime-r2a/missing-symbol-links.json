@@ -1,0 +1,32 @@
+[
+  {
+    "symbol": "atanhl",
+    "link_exit": 1,
+    "evidence": "atanhl-link.log",
+    "scope": "synthetic declaration link availability; no header or native behavior claim"
+  },
+  {
+    "symbol": "lgammal",
+    "link_exit": 1,
+    "evidence": "lgammal-link.log",
+    "scope": "synthetic declaration link availability; no header or native behavior claim"
+  },
+  {
+    "symbol": "frexpl",
+    "link_exit": 1,
+    "evidence": "frexpl-link.log",
+    "scope": "synthetic declaration link availability; no header or native behavior claim"
+  },
+  {
+    "symbol": "modfl",
+    "link_exit": 1,
+    "evidence": "modfl-link.log",
+    "scope": "synthetic declaration link availability; no header or native behavior claim"
+  },
+  {
+    "symbol": "strerror",
+    "link_exit": 1,
+    "evidence": "strerror-link.log",
+    "scope": "synthetic declaration link availability; no header or native behavior claim"
+  }
+]

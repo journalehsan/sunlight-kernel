@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "scope": "checks recorded native outcomes and extraction consistency; no new runtime coverage",
+  "checks": [
+    "initial exit negative witness validated CPU 1",
+    "initial exit negative witness validated CPU 2",
+    "initial exit negative witness validated CPU 4",
+    "four detached waves and explicit sweep validated CPU 1",
+    "four detached waves and explicit sweep validated CPU 2",
+    "four detached waves and explicit sweep validated CPU 4",
+    "TLS coordination and distinct kernel identities validated CPU 1",
+    "TLS coordination and distinct kernel identities validated CPU 2",
+    "TLS coordination and distinct kernel identities validated CPU 4",
+    "94 individual regressions validated",
+    "baseline regular-file and tracked-symlink integrity validated",
+    "private-queue symbol binding and final ELF hash validated"
+  ]
+}

@@ -1,0 +1,4 @@
+['/tmp/sunlight-r1-cpython/build-host/python', '-VV']
+Python 3.13.0 (main, Nov 14 2026, 13:06:50) [GCC 16.2.1 20260810]
+
+exit=0

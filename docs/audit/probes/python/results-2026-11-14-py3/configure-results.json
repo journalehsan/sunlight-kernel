@@ -1,0 +1,28 @@
+{
+  "command": [
+    "/tmp/sunlight-py1-cpython/Python-3.13.0/configure",
+    "--build=x86_64-pc-linux-gnu",
+    "--host=x86_64-unknown-sunlightos",
+    "--with-build-python=/tmp/sunlight-r1-cpython/build-host/python",
+    "--disable-shared",
+    "--without-ensurepip",
+    "--with-pkg-config=no",
+    "--with-libm=",
+    "--disable-test-modules"
+  ],
+  "cwd": "/tmp/sunlight-py3-cpython/cross-static",
+  "exit": 0,
+  "status": "PASS",
+  "manifest": "configure-manifest.json",
+  "configured_object_count": 180,
+  "unchanged_object_set": true,
+  "matching_build_python": "/tmp/sunlight-r1-cpython/build-host/python",
+  "source_version": "CPython 3.13.0 final",
+  "recognition_patch": "inherited-platform-recognition.patch",
+  "new_source_changes": false,
+  "setup_local": "Retained PY-2 Modules/Setup.local without changes",
+  "feature_changes": [
+    "Native setvbuf and clock_getres now detected with implemented contracts."
+  ],
+  "cache_policy": "Inherited evidence-backed no-semaphore and no-/dev/ptmx,/dev/ptc cache; no unsupported function forced to yes."
+}

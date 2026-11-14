@@ -1,0 +1,4143 @@
+{
+  "overall": "R1 COMPLETE",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS"
+  },
+  "existing_suite": {
+    "total": 94,
+    "C": 73,
+    "Cxx": 21,
+    "build": "PASS",
+    "link": "PASS",
+    "guest": "PASS",
+    "acceptance": "PASS"
+  },
+  "native_tests": [
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "entry",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "253302317d386392383c0086579228635cf12c8be58f3a9bc3cc872cf4274887",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/entry.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/entry.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/entry.c",
+          "sha256": "5f37c022a7977b8744bd078fc3b0f58b8774499ca289d9786850ce1eba41f217"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-entry.log",
+        "final-suite/elf-entry.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "write",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9d8957a0a2d6b7935b874320977086ab0220cba06b94c1432312f599ea6f0d1d",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/write.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/write.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/write.c",
+          "sha256": "31f76e0b2031064bf96b0c991120c52662d6acf4f136e77f0ac5385b0fe44b68"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "[NATIVE-C] write OK\n",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-write.log",
+        "final-suite/elf-write.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "exit",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "23",
+      "expected_exit": "23",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "df42859e0f3a2823ece332b827b282501a095e1a8f2f323eea5d9da45a4cd276",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/exit.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/exit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/exit.c",
+          "sha256": "525534f99661e9e360ec742cdcac5ae823df313aa8315598f1362f80ebf780d9"
+        }
+      ],
+      "observed": {
+        "exit": 23,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-exit.log",
+        "final-suite/elf-exit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "e5024aaa2e7950d2256de0205516beff3da8f8e85fa4821eaa8bbb34ec392494",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/atexit.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/atexit.c",
+          "sha256": "dae7cb900c85ba03e68d70050bcc58952f792116fd9077cca34e14e5f5f1ff33"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "atexit OK\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit.log",
+        "final-suite/elf-atexit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "clock",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ef36c6a074c2adf632d93210edab386e789e276c168159b463a174bcedd26ce7",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/clock.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/clock.c",
+          "sha256": "eee7fb2d2111f4799e69eedb698e836cf6c5546539843f1b92f5f88ebb7c0a2a"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-clock.log",
+        "final-suite/elf-clock.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dirent",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "722786f4a5efadc2df2a25502068c2674547fa00b848dbb58d736841ca920b18",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dirent.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dirent.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dirent.c",
+          "sha256": "b77440b252b906b6190de25a6ac0ffb686f88eaa292a146cd529783c5a376bb8"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dirent.log",
+        "final-suite/elf-dirent.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dlfcn",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "77ded21f6a98615a718d115a0d21aed30397727139271d48f27ec21bdc1dfdcc",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dlfcn.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/dlfcn.c",
+          "sha256": "ff5e3d6930cf1a10bf72af7946e3d396eb56dc556291f5328f316113328598e6"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dlfcn.log",
+        "final-suite/elf-dlfcn.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-service-before",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-service-before.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "rand service: requests=0 bytes=0\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-service-before.log",
+        "final-suite/elf-random-service-before.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "getrandom",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "4d8003c14a7842c5cd6003f4a8ecda96c35caf0b3ce1336d658b46147bc41e39",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/getrandom.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/getrandom.c",
+          "sha256": "00f337b1a796f90005aa8d65569deef53d4bc8c722322a639a17637aa7b0c5f1"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-getrandom.log",
+        "final-suite/elf-getrandom.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-service-after",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-service-after.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "rand service: requests=1 bytes=16\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-service-after.log",
+        "final-suite/elf-random-service-after.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "langinfo",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "58bafe76cb84f499f340069dc5311bae584b5c994fa39172104b503168d5864f",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/langinfo.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/langinfo.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/langinfo.c",
+          "sha256": "4e3efb53a172666505159e95e1b7f557c2a093a62e706fafc5eae3ef44babb2d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-langinfo.log",
+        "final-suite/elf-langinfo.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "locale",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "82c8ab7bc4d21d09add9b731f3fa36f2986e4f5d269a5597358f35a89566283e",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/locale.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/locale.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/locale.c",
+          "sha256": "c2634d0aa8bcc412d9af689358b058bba1e9075c215cb4f051ebf465ae00f140"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-locale.log",
+        "final-suite/elf-locale.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "math",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8d4f58d40b811884553c4ed5207075ca240cf962435f4ed692972903686a664c",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/math.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/math.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/math.c",
+          "sha256": "50b362bbac72b4a16a66aed9ece0a13e43bb8c87786d99ec57cf08a23c28feff"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-math.log",
+        "final-suite/elf-math.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "mmap",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "fd0468aaa10aa603cb4d8fe90d6546d04af7d017d36820234f528f27634115fd",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/mmap.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/mmap.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/mmap.c",
+          "sha256": "0ed89b83751ec28faaefdc76240659f7de78c4af73a6638dbc927bbd3aac4224"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-mmap.log",
+        "final-suite/elf-mmap.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "poll_select",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "733326ae231a1de40cc2aaa4b93f6ac4ca9e1fec8b5e705f47c6cdb906254772",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/poll_select.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/poll_select.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/poll_select.c",
+          "sha256": "4c3148d0a7c2c7823c5d17dcc1c3d793215305f05e4fa3c14a1523c1b297dc9d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-poll_select.log",
+        "final-suite/elf-poll_select.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "299f4a6cf2611f1abb3e7df8399fc0f58eed898d74e14f92e40d85a78c98f0b2",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/pthread.c",
+          "sha256": "a73c817cb4f35239c56e4026a670a6f994f3c2967e6eebfdedcd6ba3d4790957"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread.log",
+        "final-suite/elf-pthread.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "658dcffd466dd2e14a45dbef19eacb1efc1a4c831795fb52a6b013752cb43e99",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/signal.c",
+          "sha256": "3896e25a18cd1d9dccae4beb497a752860ef3a45d5230e42683924cb2b52bbe1"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal.log",
+        "final-suite/elf-signal.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "socket",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "0c503df9cd91b7915a66863ab1a14d34154078ebc7309506fd6710f53a519548",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/socket.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/socket.c",
+          "sha256": "421b99bd0f9151ddd815e584dfaf77d5ae18a11bc95d9e9640ee6ebd346f2fe3"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-socket.log",
+        "final-suite/elf-socket.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "stdio",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "f0fc6567f6ce30513dd93184f34a14061ec6383c53277b73d5c2cb9be1865706",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/stdio.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/stdio.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/stdio.c",
+          "sha256": "105f4cab407f09f49dda4adda159982adebcd606c2553a395a41f779741321db"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-stdio.log",
+        "final-suite/elf-stdio.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "string",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9006d709b1d1481ce7579e0529b775d98ba973b057b50c7eccb380b6580fe17b",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/string.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/string.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/string.c",
+          "sha256": "ad7ba0f61a3e36110a7cd803420ef20181dfa57b26db7e7ff56a6a521f1e2a56"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-string.log",
+        "final-suite/elf-string.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "termios",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5f87004da05b60f1d871e108a038fd0158c74a29cf13958cea4066e59c01eb89",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/termios.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/termios.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/termios.c",
+          "sha256": "cbcd515c1f32895681c02afd52eab7dae20c913c9bfbf0aac0a38fb9b66801ab"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-termios.log",
+        "final-suite/elf-termios.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "wchar",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "cd8ba3241ecc3540ae9cfe38f891e674d03361915dd62de700bab73e9538d129",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/wchar.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/wchar.c",
+          "sha256": "551b4610bc69fa6929b62d3b4b741337de7de2b9226e9f20494c395db1d6b75c"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-wchar.log",
+        "final-suite/elf-wchar.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cpp-runtime",
+      "historical": "True",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "33ef0be77aed60def843fe73e5912d0803ce5beac05b499de77d2b95a5319221",
+      "fixture_origin": "historical",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cpp-runtime.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp",
+          "sha256": "6de2fb45e998caf973f0f02f904155b4082a8ca74c87d1bd4f373c242a1e19e3"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "exception OK\nTLS OK\nstatic initialization OK\natexit OK\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cpp-runtime.log",
+        "final-suite/elf-cpp-runtime.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "termios-terminal-identity",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "0f086f1075aaa5d20e6678b66ebbd07f7acd2e3ee53c06ee81e81c8cb08247e4",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/termios.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/termios-terminal-identity.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/termios.c",
+          "sha256": "12e6e7678074cad58c7e59a009ae402c41906979619be52d5a01f5592f2170a6"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-termios-terminal-identity.log",
+        "final-suite/elf-termios-terminal-identity.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-output",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "cef2d186faf926909ceba97f64d46a0021bae3b2a2cefa8798394c62f2776f08",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-output.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-output.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-output.cpp",
+          "sha256": "b2a5240d257881bb445b1b426d6fa18df2ed699f513b0bd365ed427fd8cf5bf5"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "output 0 1 -9223372036854775808 9223372036854775807 18446744073709551615 18446744073709551615\nbounds -32768 32767 65535 -2147483648 2147483647 4294967295 -9223372036854775808 9223372036854775807 0\nABC\n",
+        "stderr": "stderr\nclog\n",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-output.log",
+        "final-suite/elf-cxx-output.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-backend",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "b7c992dc4209077d4fd06ffe7d95eaa20f0433a69fa16f38cbe640b4d7c590a3",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=write /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-backend.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-backend.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-backend.cpp",
+          "sha256": "70670046ea08dfd9149923cd561c1920ec9121804dc7325204eff934105fa6e1"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "partial\nabxy",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-backend.log",
+        "final-suite/elf-cxx-backend.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-exception-class",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9ec75c61f69536abea86293083cda4666c5ccfdcbd707b525d1009d0699dd7c6",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-exception-class.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-exception-class.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-exception-class.cpp",
+          "sha256": "3ea87ddaf70173fb233376504c392c60c421e077e2bc9749530c96cd68a0773f"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-exception-class.log",
+        "final-suite/elf-cxx-exception-class.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cpp-runtime-native",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "33ef0be77aed60def843fe73e5912d0803ce5beac05b499de77d2b95a5319221",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cpp-runtime-native.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp",
+          "sha256": "6de2fb45e998caf973f0f02f904155b4082a8ca74c87d1bd4f373c242a1e19e3"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "exception OK\nTLS OK\nstatic initialization OK\natexit OK\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cpp-runtime-native.log",
+        "final-suite/elf-cpp-runtime-native.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-runtime-execution",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ae6888d36d405dc664c006186d8e1482c9693c3d98ad896fe08128bae16b069d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-runtime-execution.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp",
+          "sha256": "1a84b9f10c90cbb67baa2460c933222d0c3394c8e3553858f44cd82083bf331c"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-runtime-execution.log",
+        "final-suite/elf-cxx-runtime-execution.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-runtime-uncaught",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ae6888d36d405dc664c006186d8e1482c9693c3d98ad896fe08128bae16b069d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-runtime-uncaught.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp",
+          "sha256": "1a84b9f10c90cbb67baa2460c933222d0c3394c8e3553858f44cd82083bf331c"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-runtime-uncaught.log",
+        "final-suite/elf-cxx-runtime-uncaught.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-runtime-destructor",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ae6888d36d405dc664c006186d8e1482c9693c3d98ad896fe08128bae16b069d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-runtime-destructor.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp",
+          "sha256": "1a84b9f10c90cbb67baa2460c933222d0c3394c8e3553858f44cd82083bf331c"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-runtime-destructor.log",
+        "final-suite/elf-cxx-runtime-destructor.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-runtime-worker",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ae6888d36d405dc664c006186d8e1482c9693c3d98ad896fe08128bae16b069d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-runtime-worker.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp",
+          "sha256": "1a84b9f10c90cbb67baa2460c933222d0c3394c8e3553858f44cd82083bf331c"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-runtime-worker.log",
+        "final-suite/elf-cxx-runtime-worker.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-runtime-storage",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ae6888d36d405dc664c006186d8e1482c9693c3d98ad896fe08128bae16b069d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free -Wl,--wrap=pthread_create /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-runtime-storage.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-runtime-execution.cpp",
+          "sha256": "1a84b9f10c90cbb67baa2460c933222d0c3394c8e3553858f44cd82083bf331c"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-runtime-storage.log",
+        "final-suite/elf-cxx-runtime-storage.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-basic",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-basic.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "basic:OK\nbasic:D\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-basic.log",
+        "final-suite/elf-cxx-local-static-basic.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-concurrent",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-concurrent.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "concurrent:OK\nconcurrent:D\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-concurrent.log",
+        "final-suite/elf-cxx-local-static-concurrent.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-retry",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-retry.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "retry:OK\nretry:D\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-retry.log",
+        "final-suite/elf-cxx-local-static-retry.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-nested",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-nested.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "nested:OK\nouter:D\ninner:D\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-nested.log",
+        "final-suite/elf-cxx-local-static-nested.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-order",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-order.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "order:OK\nsecond:D\nfirst:D\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-order.log",
+        "final-suite/elf-cxx-local-static-order.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-local-static-recursive",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "521460e8aba0ec6143151ce700a3f9220f267144486e0855d0294849a2d3a66d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-local-static-recursive.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-local-static.cpp",
+          "sha256": "15287e7341ff3a3bceb434173d5bfe1795e9e0fc366af2cda488a310400aee64"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "recursive:armed\n",
+        "stderr": "__cxa_guard_acquire detected recursive initialization: do you have a function-local static variable whose initialization depends on that function?",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-local-static-recursive.log",
+        "final-suite/elf-cxx-local-static-recursive.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-string",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "fb138676fe57d5e332b82607a06e826ffff483b117b7f9f2493613967a5a3a4b",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc,--wrap=free /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-string.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string.cpp",
+          "sha256": "06ad5f7f7d52a35fc53d8d6ac2f4b062042facd4c05ef548208d144f31b0f91c"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "string:A\u0000B:42\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-string.log",
+        "final-suite/elf-cxx-string.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-string-backend",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8974245892e6f358297dd1c015c6b5620c0f83583634e9d4ea5d0d1c89a2a6e8",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=write /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-backend.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-string-backend.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-backend.cpp",
+          "sha256": "5756df9f4692d31fbe9cbcbe4c5f0c9946a3b04f6fa0ac5a6d8f52b8319fd3e2"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "A\u0000BCDzeer",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-string-backend.log",
+        "final-suite/elf-cxx-string-backend.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-string-allocation",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "b9007afb2adce96d1fbadbb3b3a7216bb2b9a5dcdc3de5cd2564bd89c83d3157",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-string-allocation.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp",
+          "sha256": "3b2ee03bfd042a345ff6f80231941e4214708f4bd0f0902db4d9001685a02745"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-string-allocation.log",
+        "final-suite/elf-cxx-string-allocation.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-string-overflow",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "b9007afb2adce96d1fbadbb3b3a7216bb2b9a5dcdc3de5cd2564bd89c83d3157",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-string-overflow.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp",
+          "sha256": "3b2ee03bfd042a345ff6f80231941e4214708f4bd0f0902db4d9001685a02745"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-string-overflow.log",
+        "final-suite/elf-cxx-string-overflow.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "cxx-string-null",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "134",
+      "expected_exit": "134",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "b9007afb2adce96d1fbadbb3b3a7216bb2b9a5dcdc3de5cd2564bd89c83d3157",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cxx.py -Wall -Wextra -Werror -Wl,--wrap=malloc /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/cxx-string-null.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/cxx-string-failure.cpp",
+          "sha256": "3b2ee03bfd042a345ff6f80231941e4214708f4bd0f0902db4d9001685a02745"
+        }
+      ],
+      "observed": {
+        "exit": 134,
+        "stdout": "armed\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-cxx-string-null.log",
+        "final-suite/elf-cxx-string-null.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "wchar-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "3bfd5dc9bf313c1c90244613bc518c130f5b37d93efbb898ceefb253f4370177",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-contract.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/wchar-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/wchar-contract.c",
+          "sha256": "f06b3fa29f09cb932a80344a05f1902b27155bbac77e8786f61d81988cebc971"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-wchar-contract.log",
+        "final-suite/elf-wchar-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "termios-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "0f086f1075aaa5d20e6678b66ebbd07f7acd2e3ee53c06ee81e81c8cb08247e4",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/termios.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/termios-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/termios.c",
+          "sha256": "12e6e7678074cad58c7e59a009ae402c41906979619be52d5a01f5592f2170a6"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-termios-contract.log",
+        "final-suite/elf-termios-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dlfcn-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "ddfec264ecd16a904a632be888806410c98745f882ab2e244c013a9522446db1",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dlfcn.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dlfcn-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dlfcn.c",
+          "sha256": "991d9bb46b6562a757e09486e48004490776b64b662f486425b772a6ebd52561"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dlfcn-contract.log",
+        "final-suite/elf-dlfcn-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "epoll-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "46b61eadb9ca3d68e4f4753f1eedd681f748c4c73558749babcfc1757d3c56d1",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/epoll-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll.c",
+          "sha256": "d88a6318b39a122b4d4fbf76175176fcba6eb17fd6792e298be46ba0c0ea8467"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-epoll-contract.log",
+        "final-suite/elf-epoll-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread-basic",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9b7afb710de3b6e00326a7c13bf11d224de4982dc0f214badc176862de7151bd",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread-basic.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c",
+          "sha256": "ff7960cc0291ce1dfdbe0162ca188e0f6a945501865fa50c12f76515328f891b"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread-basic.log",
+        "final-suite/elf-pthread-basic.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread-exit",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9b7afb710de3b6e00326a7c13bf11d224de4982dc0f214badc176862de7151bd",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread-exit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c",
+          "sha256": "ff7960cc0291ce1dfdbe0162ca188e0f6a945501865fa50c12f76515328f891b"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread-exit.log",
+        "final-suite/elf-pthread-exit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread-detached",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9b7afb710de3b6e00326a7c13bf11d224de4982dc0f214badc176862de7151bd",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread-detached.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c",
+          "sha256": "ff7960cc0291ce1dfdbe0162ca188e0f6a945501865fa50c12f76515328f891b"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread-detached.log",
+        "final-suite/elf-pthread-detached.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread-attr",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9b7afb710de3b6e00326a7c13bf11d224de4982dc0f214badc176862de7151bd",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread-attr.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread.c",
+          "sha256": "ff7960cc0291ce1dfdbe0162ca188e0f6a945501865fa50c12f76515328f891b"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread-attr.log",
+        "final-suite/elf-pthread-attr.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "inet-socket-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "eba187afa53b018b679a6aa18b804f9f134c8e8d755350c2f4003039ba73291a",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/inet-socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/inet-socket-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/inet-socket.c",
+          "sha256": "8bc1954996a5165c1ec8c4a0a9d0c4f90047b4d2691f07bca2b94a33dbd4f7c6"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-inet-socket-contract.log",
+        "final-suite/elf-inet-socket-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "inet-socket-reap",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "eba187afa53b018b679a6aa18b804f9f134c8e8d755350c2f4003039ba73291a",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/inet-socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/inet-socket-reap.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/inet-socket.c",
+          "sha256": "8bc1954996a5165c1ec8c4a0a9d0c4f90047b4d2691f07bca2b94a33dbd4f7c6"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-inet-socket-reap.log",
+        "final-suite/elf-inet-socket-reap.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "epoll-lifecycle",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "cd4127ba6a3e53b5ab7791c076759eee83b56805407449479fbdebe5854d49f6",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll-lifecycle.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/epoll-lifecycle.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/epoll-lifecycle.c",
+          "sha256": "723e945b1fb7d4a76e234dcf9be4fd83b9f6564065c1166e980f23cdce28d1aa"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-epoll-lifecycle.log",
+        "final-suite/elf-epoll-lifecycle.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "d0b4026b4335396861ccce7b0dc0d5c0f00b1a16e39af91d0bb79683ce13629d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c",
+          "sha256": "9d680f6807959e73fd01a0be13a260bed552cf52ba8f2452305ecffaa5f5182e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal-contract.log",
+        "final-suite/elf-signal-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal-fatal",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "138",
+      "expected_exit": "138",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "d0b4026b4335396861ccce7b0dc0d5c0f00b1a16e39af91d0bb79683ce13629d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal-fatal.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c",
+          "sha256": "9d680f6807959e73fd01a0be13a260bed552cf52ba8f2452305ecffaa5f5182e"
+        }
+      ],
+      "observed": {
+        "exit": 138,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal-fatal.log",
+        "final-suite/elf-signal-fatal.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal-forged",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "139",
+      "expected_exit": "139",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "d0b4026b4335396861ccce7b0dc0d5c0f00b1a16e39af91d0bb79683ce13629d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal-forged.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c",
+          "sha256": "9d680f6807959e73fd01a0be13a260bed552cf52ba8f2452305ecffaa5f5182e"
+        }
+      ],
+      "observed": {
+        "exit": 139,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal-forged.log",
+        "final-suite/elf-signal-forged.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal-handler-exit",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "31",
+      "expected_exit": "31",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "d0b4026b4335396861ccce7b0dc0d5c0f00b1a16e39af91d0bb79683ce13629d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal-handler-exit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c",
+          "sha256": "9d680f6807959e73fd01a0be13a260bed552cf52ba8f2452305ecffaa5f5182e"
+        }
+      ],
+      "observed": {
+        "exit": 31,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal-handler-exit.log",
+        "final-suite/elf-signal-handler-exit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "signal-bad-stack",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "139",
+      "expected_exit": "139",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "d0b4026b4335396861ccce7b0dc0d5c0f00b1a16e39af91d0bb79683ce13629d",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/signal-bad-stack.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/signal.c",
+          "sha256": "9d680f6807959e73fd01a0be13a260bed552cf52ba8f2452305ecffaa5f5182e"
+        }
+      ],
+      "observed": {
+        "exit": 139,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-signal-bad-stack.log",
+        "final-suite/elf-signal-bad-stack.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "pthread-abi",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9af4442888e92a1f748d7eb065a3883d125f947ed6ada6aaef59f66f03a59562",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/pthread-abi.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-abi.c",
+          "sha256": "7a08e2cbc2fa68d29d9771aecb66871aba8c9018606077e879aba193154823e1"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-pthread-abi.log",
+        "final-suite/elf-pthread-abi.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "poll-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "349efdcc3dbf27a86dd56c096edf620764c46aabcb653dbd6d91c387fa1fda45",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/poll-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll.c",
+          "sha256": "f498a298b893430962a7f5f7a9481d42ed7ab39275a5408cdc80ed58f007f9bf"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-poll-contract.log",
+        "final-suite/elf-poll-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "poll-socket-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "c82dd35ec5e80d4134461696b96b87925a9417db8bff58d8ab4a7cc9a35fd59a",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll-socket.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/poll-socket-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/poll-socket.c",
+          "sha256": "108d6f6e343b9f39abbfc88462dfb1978f17e9d3a576c24a13636e33aeddc83d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-poll-socket-contract.log",
+        "final-suite/elf-poll-socket-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "math-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5d34848cf250e645d6719f97caeb808b4bc9cac759403640827a0d3db0ca247a",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/math.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/math-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/math.c",
+          "sha256": "fa05a02cf17ae71b38c6bd0307427060f190aacb5471aa18d16e4b9a9576e691"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-math-contract.log",
+        "final-suite/elf-math-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "locale-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "447036d2a053c895f02834435368c7324032f4a656fd2e67ea90047c7ac53400",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/locale-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale.c",
+          "sha256": "4261bfda9d04cf30374b5af1755699590903d3ef996b5beabfdcf073db12c851"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-locale-contract.log",
+        "final-suite/elf-locale-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "locale-environment",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "447036d2a053c895f02834435368c7324032f4a656fd2e67ea90047c7ac53400",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/locale-environment.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/locale.c",
+          "sha256": "4261bfda9d04cf30374b5af1755699590903d3ef996b5beabfdcf073db12c851"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-locale-environment.log",
+        "final-suite/elf-locale-environment.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "langinfo-contract",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "9b7ec68557c0f0b03ef80498cb19411cefcc30275ca3deed8e04e04b13019432",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/langinfo.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/langinfo-contract.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/langinfo.c",
+          "sha256": "876ee91d900e703425841b5bf83f64a502672279658fd3ee633df43e3a4ea50f"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-langinfo-contract.log",
+        "final-suite/elf-langinfo-contract.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "stdout",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "b71544b027406cb18fdda59aed9e0f4ca8fbcebef4aef02a92455b1d27d95ed5",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/stdout.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/stdout.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/stdout.c",
+          "sha256": "97b5aec5c818ccb5f11d9e9797f3d96b9a6ff30126cdb8d66c40965654d2355e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "[NATIVE-C] stdout OK\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-stdout.log",
+        "final-suite/elf-stdout.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "stdio-full",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "3727b0cf940c7c0301646668d7ef6fa8e03ef77dfd6a6a780f7a82bf6db1de0e",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/stdio.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/stdio-full.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/stdio.c",
+          "sha256": "2862a4caa7c69ae1e7292c31e42c484a654643b737276b05d2c8d604e16ce52e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "stdio: native -42 42 0x2a -1234567890 7 %\nstdio: puts\n!\nstdio: vprintf V\nstdio: file PASS; tmpfile PASS\n",
+        "stderr": "stdio: stderr 0007\n",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-stdio-full.log",
+        "final-suite/elf-stdio-full.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "open-unlink",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "c8db2cf0f1ceae7229057a8a076a16a0de82363856b98827da247bcbfa81f47f",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/open-unlink.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/open-unlink.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/open-unlink.c",
+          "sha256": "9629ca945f0e5184645a407becf26d6ab11d7d2e26c6e2d698bb6d873193d51b"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-open-unlink.log",
+        "final-suite/elf-open-unlink.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "exit-cleanup",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5dc9daf4f0d23f8eee0580abffce9968553dc0b1dd46db735259aee643757801",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/exit-cleanup.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/exit-cleanup.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/exit-cleanup.c",
+          "sha256": "87be9096b4584efb50960ba1a02bbc3b9c40068c9d8837a1cad33d6d926a39fc"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-exit-cleanup.log",
+        "final-suite/elf-exit-cleanup.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "write-basic",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/write-basic.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "write OK\n",
+        "stderr": "stderr OK\n",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-write-basic.log",
+        "final-suite/elf-write-basic.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "write-zero",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/write-zero.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-write-zero.log",
+        "final-suite/elf-write-zero.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "write-short",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/write-short.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-write-short.log",
+        "final-suite/elf-write-short.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "write-errors",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/write-errors.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-write-errors.log",
+        "final-suite/elf-write-errors.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit-order",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit-order.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "CBA",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit-order.log",
+        "final-suite/elf-atexit-order.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit-register",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit-register.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "BCA",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit-register.log",
+        "final-suite/elf-atexit-register.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit-capacity",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit-capacity.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit-capacity.log",
+        "final-suite/elf-atexit-capacity.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit-exit",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "27",
+      "expected_exit": "27",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit-exit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 27,
+        "stdout": "A",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit-exit.log",
+        "final-suite/elf-atexit-exit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "atexit-raw-exit",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "29",
+      "expected_exit": "29",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f4a23cb891609d6b6def9fc84d0e2bae510bee827aefb1d07fe424ae8e2f671",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/atexit-raw-exit.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/unistd.c",
+          "sha256": "ec1a5b0d403ace013ca3eefeb3671dade026fdc200f1c1668890c937dd4ffa04"
+        }
+      ],
+      "observed": {
+        "exit": 29,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-atexit-raw-exit.log",
+        "final-suite/elf-atexit-raw-exit.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-basic",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-basic.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-basic.log",
+        "final-suite/elf-random-basic.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-zero",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-zero.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-zero.log",
+        "final-suite/elf-random-zero.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-errors",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-errors.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-errors.log",
+        "final-suite/elf-random-errors.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "random-guards",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5cc4843e726c93f9c5e5838ec183c902b6388c3ee0b804ac375b21d848ddd844",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/random-guards.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/random.c",
+          "sha256": "7b34773e6e983dec975013ddff8b8cb6ac5be04bd4ee66769d39f3637c0a2c6e"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-random-guards.log",
+        "final-suite/elf-random-guards.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "time-clocks",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f7799d890d4accb8fff0a7ab7a2a7c9318c870b90f3cce567f1933e2cd29990",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/time-clocks.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c",
+          "sha256": "d902113e49e2f5a562c540149e5ddd3b7d7abb768d32b29ab4fc239ee9ac6b4d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "time: clocks realtime=1794648976.000000000 monotonic=71.740000000\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-time-clocks.log",
+        "final-suite/elf-time-clocks.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "time-errors",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f7799d890d4accb8fff0a7ab7a2a7c9318c870b90f3cce567f1933e2cd29990",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/time-errors.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c",
+          "sha256": "d902113e49e2f5a562c540149e5ddd3b7d7abb768d32b29ab4fc239ee9ac6b4d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-time-errors.log",
+        "final-suite/elf-time-errors.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "time-zero",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f7799d890d4accb8fff0a7ab7a2a7c9318c870b90f3cce567f1933e2cd29990",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/time-zero.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c",
+          "sha256": "d902113e49e2f5a562c540149e5ddd3b7d7abb768d32b29ab4fc239ee9ac6b4d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-time-zero.log",
+        "final-suite/elf-time-zero.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "time-sleep",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "8f7799d890d4accb8fff0a7ab7a2a7c9318c870b90f3cce567f1933e2cd29990",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/time-sleep.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/time.c",
+          "sha256": "d902113e49e2f5a562c540149e5ddd3b7d7abb768d32b29ab4fc239ee9ac6b4d"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "time: sleep requested_ns=1 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=1000000 elapsed_ns=10000000 rem=unchanged\ntime: sleep requested_ns=25000000 elapsed_ns=30000000 rem=unchanged\ntime: sleep requested_ns=1000000001 elapsed_ns=1010000000 rem=unchanged\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-time-sleep.log",
+        "final-suite/elf-time-sleep.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "mman-subset",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5a87837368a7149c902e4c30166e8968446ed35aa13134e010e5d32ebfc22ce2",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/mman-subset.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c",
+          "sha256": "a6f5ddf1d469fa2477f977974eeedf767b0f754a82e5c327c95d904f20632e99"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-mman-subset.log",
+        "final-suite/elf-mman-subset.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "mman-fixed",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5a87837368a7149c902e4c30166e8968446ed35aa13134e010e5d32ebfc22ce2",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/mman-fixed.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c",
+          "sha256": "a6f5ddf1d469fa2477f977974eeedf767b0f754a82e5c327c95d904f20632e99"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-mman-fixed.log",
+        "final-suite/elf-mman-fixed.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "mman-bounds",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "5a87837368a7149c902e4c30166e8968446ed35aa13134e010e5d32ebfc22ce2",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/mman-bounds.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/mman.c",
+          "sha256": "a6f5ddf1d469fa2477f977974eeedf767b0f754a82e5c327c95d904f20632e99"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-mman-bounds.log",
+        "final-suite/elf-mman-bounds.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dirent-root",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "10a2c432bb47fbd6ce409683f865df280a874aea66b837cba995abf588ee4322",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dirent-root.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c",
+          "sha256": "78d14ea15f631cf2483e3cd652859146c4e25678a5fb7247107b8c586a582295"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dirent-root.log",
+        "final-suite/elf-dirent-root.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dirent-errors",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "10a2c432bb47fbd6ce409683f865df280a874aea66b837cba995abf588ee4322",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dirent-errors.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c",
+          "sha256": "78d14ea15f631cf2483e3cd652859146c4e25678a5fb7247107b8c586a582295"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dirent-errors.log",
+        "final-suite/elf-dirent-errors.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "probe": "dirent-entries",
+      "historical": "False",
+      "build": "PASS",
+      "guest_run": "PASS",
+      "acceptance": "PASS",
+      "exit": "0",
+      "expected_exit": "0",
+      "detail": "exit/output/reap/physical-frame checks",
+      "sha256": "10a2c432bb47fbd6ce409683f865df280a874aea66b837cba995abf588ee4322",
+      "fixture_origin": "focused native fixture",
+      "runtime_result": "PASS",
+      "failure_classification": null,
+      "build_command": "$ /usr/bin/python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Wall -Wextra -Werror /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/final-suite/dirent-entries.elf",
+      "fixture_sources": [
+        {
+          "path": "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/dirent.c",
+          "sha256": "78d14ea15f631cf2483e3cd652859146c4e25678a5fb7247107b8c586a582295"
+        }
+      ],
+      "observed": {
+        "exit": 0,
+        "stdout": "",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "final-suite/build-dirent-entries.log",
+        "final-suite/elf-dirent-entries.log",
+        "final-suite/serial.log",
+        "final-suite/results.json"
+      ]
+    }
+  ],
+  "supplemental": [
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "name": "heap-abi",
+      "build": "PASS",
+      "link": "PASS",
+      "guest": "PASS",
+      "observed": {
+        "exit": 0,
+        "stdout": "R1 heap and SysV ABI PASS\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "heap-abi-guest/serial.log",
+        "heap-abi-guest/results.json"
+      ]
+    },
+    {
+      "source_revision": "f6b5ccb24d3ef2d2077eaada148a9208e3e2c738",
+      "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8",
+      "source_state": "reviewed native Cargo.lock repair; all other original files match baseline",
+      "compiler": "clang 23.1.4",
+      "linker": "LLD 23.1.4",
+      "rustc": "1.98.0-nightly 8954863c8",
+      "target": "native SunlightOS JSON / x86_64-unknown-none-elf; static SysV x86-64 SSE2",
+      "cpus": 2,
+      "execution": "native SunlightOS QEMU TCG",
+      "historical_result": false,
+      "name": "tcp-loopback",
+      "build": "PASS",
+      "link": "PASS",
+      "guest": "PASS",
+      "observed": {
+        "exit": 0,
+        "stdout": "tcp-poll: PASS socket_live=0 listener_live=0 stream_live=0\n",
+        "stderr": "",
+        "pass_": true
+      },
+      "evidence": [
+        "tcp-loopback/guest/serial.log",
+        "tcp-loopback/guest/results.json"
+      ]
+    }
+  ],
+  "initial_failure": {
+    "runner_exit": 1,
+    "cargo_exit": 101,
+    "classification": "BLOCKED",
+    "link": "NOT_RUN",
+    "guest": "NOT_RUN",
+    "source": "initial-source.json"
+  },
+  "cpython": {
+    "reference": "3.13.0",
+    "build_python": "3.13.0 host tooling only",
+    "original_configure": "FAIL upstream platform rejection",
+    "experimental_configure": "FAIL C99 math atanh unresolved after separate libm removed",
+    "minimal_target_interpreter_build": "BLOCKED",
+    "target_interpreter_link": "BLOCKED",
+    "target_interpreter_guest": "NOT_RUN"
+  },
+  "source_integrity": "PASS",
+  "cxx_target_validation": {
+    "result": "PASS",
+    "execution": "target object/archive inspection, not host runtime",
+    "evidence": "cxx-abi-runner.log",
+    "source_fingerprint_sha256": "a33c317ebf9bde0aaa59e49f92fc8f2f0dd38c8a34d84d3cbbdd45ceff90dac8"
+  }
+}

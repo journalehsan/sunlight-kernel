@@ -1,0 +1,7 @@
+$ python3 tools/native-c/cc.py docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/math-probes/frexp.c -o docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/math-probes/frexp.elf
+ld.lld: error: undefined symbol: frexp
+>>> referenced by frexp.c
+>>>               /tmp/frexp-1487cb.o:(requirement)
+clang: error: linker command failed with exit code 1 (use -v to see invocation)
+
+exit=1

@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "R1 heap and SysV ABI PASS\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "status": "BLOCKED",
+  "implementation": "Unchanged native synchronous subset",
+  "sources": [
+    "sunlight-libc/src/signal.rs",
+    "sunlight-libc/include/signal.h",
+    "kernel/src/arch/x86_64/syscall.rs:sys_native_signal/native_signal_enter",
+    "kernel/src/process/native_signal.rs"
+  ],
+  "supported": [
+    "Initial-thread SIGUSR1/2 disposition, raise, default termination, ignore",
+    "Same-signal coalesced pending raise during handler",
+    "Validated executable handler/trampoline and user stack; restored saved GPR/FP/FS state"
+  ],
+  "not_implemented": [
+    "SIGINT SIGTERM SIGPIPE SIGALRM native process-directed delivery",
+    "Process/thread-directed kill semantics",
+    "Masks and sigprocmask",
+    "Asynchronous pending state per thread/group",
+    "EINTR and interrupted waits/SA_RESTART",
+    "Alternate-stack/fatal fault handler semantics",
+    "Worker signal delivery and cross-signal nesting"
+  ],
+  "negative_behavior": "kill/sigprocmask fail ENOSYS; unsupported registration/raise fail EINVAL; workers/cross-signal nesting fail ENOSYS",
+  "native_validation": "Existing full suite signal case covers registration, delivery, pending, default/ignore, context restoration and worker rejection. New py4-contracts case verifies process kill/masking rejection.",
+  "kernel_review": "A real async signal change requires generation-qualified target selection, per-group/per-thread pending/masks, validated return frames and interruptible-wait coordination outside unsafe locks. This is an independent kernel milestone; no scheduler delivery changes added.",
+  "evidence": [
+    "contracts-test.c",
+    "tools/native-c/tests/signal.c",
+    "validated-legacy-cpu-1/results.json",
+    "validated-legacy-cpu-2/results.json",
+    "validated-legacy-cpu-4/results.json"
+  ]
+}

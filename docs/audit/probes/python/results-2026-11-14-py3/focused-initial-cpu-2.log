@@ -1,0 +1,9 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py3/focused-initial-cpu-2
+Building isolated native C guest (3 ELFs, 2 CPUs)
+Booting disposable TCG guest
+py3-contracts: PASS exit=0 expected=0
+guest py3-contracts stdout: b'PY3 CONTRACTS PASS bulk-conversion locale stream-policy resolution strncpy concurrency\n'
+py3-exit: PASS exit=38 expected=38
+guest py3-exit stdout: b'PY3 worker _exit(38)\n'
+py3-filesystem: PASS exit=0 expected=0
+guest py3-filesystem stdout: b'PY3 NATIVE METADATA SUBSET PASS; POSIX stat/realpath BLOCKED\n'

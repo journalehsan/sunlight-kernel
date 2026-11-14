@@ -1,0 +1,19 @@
+{
+  "hashes": {
+    "docs/audit/probes/python/results-2026-11-14-py2/configure-pyconfig.h": "df111816dd3b024d9d1eedcc99ba9873a13c91af509d40c553f0d93c3e844bb0",
+    "docs/audit/probes/python/results-2026-11-14-py2/format-oracle.h": "e09f2a21b84dde5cc11757ebfeb08adeaaa7e12843db51391042c61386dbf9e7",
+    "docs/audit/probes/python/results-2026-11-14-py2/format-test.c": "6114cd0572553680f0e55206ac8de9accdf8e80a6c9feaa2e3b593cf8e2e95fb",
+    "docs/audit/probes/python/results-2026-11-14-py2/stream-test.c": "686e09d365a0ca58ae92c5468bd334b6de8b8393e7d46b396479a5e47c3a4e30",
+    "docs/audit/probes/python/results-2026-11-14-py2/wide-test.c": "d8307f833cc255abc5a08cfae0be40538310d5c308bd339db5673bc93b2c8c05",
+    "docs/audit/probes/python/results-2026-11-14-py2/header-test.cpp": "561754e101e2ea86d351e787896cb4980d25a459da0b9b51ada0cea26cc18f98",
+    "docs/audit/probes/python/results-2026-11-14-py2/stream-test-initial.c": "3790c58a119b82e26a90ec5c2cdadd06c53063ee5757ad7060d7ba6834ae63e1",
+    "docs/audit/probes/python/results-2026-11-14-py2/wide-test-initial.c": "343fe9e8391d5b12eca225267b081eb292c0b36cc5b1348eae3a0cb0224af7d5",
+    "docs/audit/probes/python/results-2026-11-14-py2/configure-final-pyconfig.h": "9c8c5490f24fc82576e5c78bfd5a1874bfec580bcb2caf95f65964b5fbc270f7",
+    "docs/audit/probes/python/results-2026-11-14-py2/math-declarations-test.c": "b21277a2174fa2413a53af710387e5932bd576e6293f91b7620c8ad91ecd3b6f",
+    "docs/audit/probes/python/results-2026-11-14-py2/configure-verified-pyconfig.h": "9c8c5490f24fc82576e5c78bfd5a1874bfec580bcb2caf95f65964b5fbc270f7",
+    "docs/audit/probes/python/results-2026-11-14-py2/wide-debug.c": "a3365531a846c3a349acd630e92141eeaef882163226bbacf90188afd7ae844b",
+    "docs/audit/probes/python/results-2026-11-14-py2/wide-test-before-padding-fix.c": "8d94d81139a04b29988e91406e8b089d2a1ee36bd7869da182a84d8c4ca6f07a",
+    "docs/audit/probes/python/results-2026-11-14-py2/configure-qualified-pyconfig.h": "9c8c5490f24fc82576e5c78bfd5a1874bfec580bcb2caf95f65964b5fbc270f7"
+  },
+  "note": "Captured at final assessment. Final fixture build commands and guest embedding logs are preserved; this is not a pre-edit fixture snapshot."
+}

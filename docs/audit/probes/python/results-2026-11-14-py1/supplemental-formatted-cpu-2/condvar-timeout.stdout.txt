@@ -1,0 +1,1 @@
+PY1 signal/timeout stress PASS wakes=23 timeouts=37; exact race UNQUALIFIED

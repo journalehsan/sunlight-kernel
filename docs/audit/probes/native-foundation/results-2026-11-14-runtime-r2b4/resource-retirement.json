@@ -1,0 +1,1940 @@
+{
+  "status": "PARTIAL",
+  "normal_and_forced": [
+    {
+      "case": "initial",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "multiple",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "224",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 1,
+      "status": "PASS",
+      "resources": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "initial",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "multiple",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "269",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 2,
+      "status": "PASS",
+      "resources": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "initial",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "0",
+        "exit": "0",
+        "stdout": "173",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "0",
+          "exit": "0",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "multiple",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "1",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "1",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "forced-after-owner",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "2",
+        "exit": "137",
+        "stdout": "269",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "2",
+          "exit": "137",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-0",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "3",
+        "exit": "17",
+        "stdout": "70",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "3",
+          "exit": "17",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-1",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "4",
+        "exit": "23",
+        "stdout": "68",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "4",
+          "exit": "23",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-2",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "5",
+        "exit": "29",
+        "stdout": "84",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "5",
+          "exit": "29",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "exit-3",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "6",
+        "exit": "137",
+        "stdout": "72",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "6",
+          "exit": "137",
+          "user_frames": "1294",
+          "page_tables": "11",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-0",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "7",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "7",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-1",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "8",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "8",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-2",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "9",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "9",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-3",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "10",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "10",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-4",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "11",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "11",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-5",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "12",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "12",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-6",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "13",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "13",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-7",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "14",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "14",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-8",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "15",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "15",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    },
+    {
+      "case": "churn-9",
+      "cpus": 4,
+      "status": "PASS",
+      "resources": {
+        "case": "16",
+        "exit": "0",
+        "stdout": "328",
+        "stderr": "0",
+        "clean": "1",
+        "file_before": "0",
+        "file_after": "0",
+        "private_before": "1036",
+        "private_after": "1036",
+        "pt_before": "16",
+        "pt_after": "16",
+        "handles_before": "0",
+        "handles_after": "0",
+        "names_before": "2",
+        "names_after": "2"
+      },
+      "owner_reap": [
+        {
+          "case": "16",
+          "exit": "0",
+          "user_frames": "1808",
+          "page_tables": "12",
+          "owned_frames": "0",
+          "fds": "0",
+          "stack": "0"
+        }
+      ],
+      "limitation": "Physical frames, descriptor handles, stacks and task Reaped; no full heap/ledger-slot census or group-specific retirement fault"
+    }
+  ],
+  "existing_native_controls": {
+    "scope": "existing 2-CPU retirement controls; NOT a native thread-group W9 witness",
+    "guests": [
+      {
+        "mode": 0,
+        "cpus": 2,
+        "scope": "normal MM-2D; local replacement receipts; remote munmap ACK injection; zero-view final backing",
+        "status": "PASS",
+        "checks": {
+          "complete_normal_gate": true,
+          "zero_capacity_atomic": true,
+          "last_slot": true,
+          "durable_shared_handoff": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/fi0.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/pilot-fi0-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "a739961fca0199fc4c17896ac27f10da3e9a358d9d3c4f8b91c5d176abc63255",
+        "iso_sha256": "661854c28eb294ff70dc857c999d6d04f5dcc0ad3a68f6aaf110eca859018c29",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "9c0829310a00b5eca247c8552988fc2388b000cfe8d30cf517019f8a213884d0",
+        "reason": "markers",
+        "host_terminated": true,
+        "elapsed_seconds": 79.13579933400615,
+        "frames": [],
+        "acknowledgments": []
+      },
+      {
+        "mode": 2,
+        "cpus": 2,
+        "scope": "anonymous munmap terminal containment",
+        "status": "PASS",
+        "checks": {
+          "expected_terminal_failure": true,
+          "complete_receipt": true,
+          "exact_retention": true,
+          "quarantined_owner": true,
+          "withdrawn_identity": true,
+          "icr_budget": true,
+          "no_success_marker": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/fi2.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/pilot-fi2-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "2333329cbf79e943b64d6722ff35b5e364f1442eaf46dc1cb16abd8ad2973be1",
+        "iso_sha256": "39bcab4b4b3c3c83d5243216afdffeee83d3c8f5efc2e5d326d430ab3d4b7897",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "980c5bb0b3dd3f62f6177be7f4a730ab799ab4c3088d2341f821b7f189ab4559",
+        "reason": "panic",
+        "host_terminated": true,
+        "elapsed_seconds": 29.20416051900247,
+        "frames": [
+          [
+            "137439412224",
+            "274235392",
+            "true",
+            "117486288",
+            "false",
+            "0",
+            "0"
+          ]
+        ],
+        "acknowledgments": [
+          [
+            "274137088",
+            "22",
+            "109",
+            "2",
+            "0",
+            "Quarantined"
+          ]
+        ]
+      },
+      {
+        "mode": 3,
+        "cpus": 2,
+        "scope": "anonymous munmap terminal containment",
+        "status": "PASS",
+        "checks": {
+          "expected_terminal_failure": true,
+          "complete_receipt": true,
+          "exact_retention": true,
+          "quarantined_owner": true,
+          "withdrawn_identity": true,
+          "icr_budget": true,
+          "no_success_marker": true
+        },
+        "command": [
+          "qemu-system-x86_64",
+          "-accel",
+          "tcg,thread=multi",
+          "-cpu",
+          "max",
+          "-smp",
+          "2",
+          "-m",
+          "1024",
+          "-cdrom",
+          "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/fi3.iso",
+          "-serial",
+          "file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/validated/retirement-controls/pilot-fi3-2.serial.log",
+          "-display",
+          "none",
+          "-nic",
+          "none",
+          "-device",
+          "virtio-rng-pci,disable-modern=on",
+          "-no-reboot",
+          "-no-shutdown"
+        ],
+        "elf_sha256": "33b8b1cf02fbc4a366d6f4bf4d9e9e0ac3dc4b2d36f439867e2da6a1ad1f0430",
+        "iso_sha256": "6327ca9a6872d8649ddec4dbec52bdbc0e9a5f6896d9e8b4fe79b612afae0a91",
+        "source_manifest_sha256": "fc2dbb97cc17668e495b179fc092c44fe77ee0d7b198adeb32d410c2ca4bddd8",
+        "serial_sha256": "d5bc676ce8c153b3b7075223740e5f51c9f6b58a6f8b0bab761769b14bf5ade1",
+        "reason": "panic",
+        "host_terminated": true,
+        "elapsed_seconds": 22.489714246999938,
+        "frames": [
+          [
+            "137439412224",
+            "274235392",
+            "true",
+            "117486288",
+            "false",
+            "0",
+            "0"
+          ]
+        ],
+        "acknowledgments": [
+          [
+            "274137088",
+            "22",
+            "109",
+            "2",
+            "0",
+            "Quarantined"
+          ]
+        ]
+      }
+    ]
+  },
+  "unchanged_source_paths": [
+    "kernel/src/process/address_space.rs:reclaim_user_space",
+    "kernel/src/memory/shared.rs:cleanup_shared_pages",
+    "kernel/src/memory/tlb.rs",
+    "kernel/src/memory/retirement.rs",
+    "kernel/src/memory/shared_quota.rs"
+  ],
+  "source_invariants": [
+    "all same-VM borrowers Reaped before owner reclaim",
+    "outgoing stack pin/current/core/queue guards unchanged",
+    "active VM mask zero before owner reclaim",
+    "persistent retirement obligations assert before reclaim",
+    "SHM withdrawal failure retains ownership and fails stop"
+  ],
+  "unqualified": [
+    "TLB/retirement failure while final native borrower retires",
+    "interrupted group cleanup callback",
+    "group-specific exact mapping/backing/quota release census",
+    "borrower-created SHM view continuity: sys_shm_alloc/map/free still use current_process_mut and mapped_shared remains per-task"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "changed_source_files": [],
+  "baseline": "source-identity.json",
+  "scope": "Pinned CPython regular source files, compared again after full compilation"
+}

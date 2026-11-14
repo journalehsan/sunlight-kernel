@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 1,
+    "stdout": "chdir denied directory returned 0, expected -4\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

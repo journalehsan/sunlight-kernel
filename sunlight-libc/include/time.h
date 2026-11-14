@@ -2,15 +2,8 @@
 #define SUNLIGHT_TIME_H
 /* Narrow native x86-64 LP64 slice, available with base, POSIX or GNU feature
  * macros. No POSIX version/option or CPU-time-clock support is advertised. */
-typedef long time_t;
-typedef long clock_t;
-typedef int clockid_t;
-struct timespec {
-    time_t tv_sec;
-    long tv_nsec;
-};
-#define CLOCK_REALTIME 0
-#define CLOCK_MONOTONIC 1
+#include <sys/types.h>
+#include <bits/time.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,6 +11,8 @@ extern "C" {
  * granularity. No wall-clock accuracy guarantee. Success preserves errno.
  * NULL output fails EFAULT, unsupported IDs fail EINVAL. Non-NULL storage
  * must be valid and writable; arbitrary mapping faults are not recovered. */
+/* NULL resolution output is permitted; unknown IDs fail EINVAL. */
+int clock_getres(clockid_t clock_id, struct timespec *resolution);
 int clock_gettime(clockid_t clock_id, struct timespec *tp);
 /* Relative monotonic sleep. Negative seconds or nanoseconds outside
  * [0, 1000000000) fail EINVAL. Duration and absolute deadline must fit below

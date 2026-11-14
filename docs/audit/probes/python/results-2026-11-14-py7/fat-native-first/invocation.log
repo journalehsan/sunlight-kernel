@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/py7-filesystem.elf --expect-exit 0 --fat-fixture docs/audit/probes/python/results-2026-11-14-py7/fat-fixture.img --cpus 1 --timeout 150 --out docs/audit/probes/python/results-2026-11-14-py7/fat-native-first

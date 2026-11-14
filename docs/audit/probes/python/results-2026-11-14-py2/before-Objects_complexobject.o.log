@@ -1,0 +1,59 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:9:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_call.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_pystate.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_runtime.h:15:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_floatobject.h:12:
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_unicodeobject.h:12:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:145:16: error: call to undeclared function 'hypot'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  145 |         vabs = hypot(a.real,a.imag);
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:146:15: error: call to undeclared function 'pow'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  146 |         len = pow(vabs,b.real);
+      |               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:147:14: error: call to undeclared function 'atan2'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  147 |         at = atan2(a.imag, a.real);
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:147:14: note: did you mean 'atanh'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/math.h:27:8: note: 'atanh' declared here
+   27 | double atanh(double x);
+      |        ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:150:20: error: call to undeclared function 'exp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  150 |             len /= exp(at*b.imag);
+      |                    ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:153:22: error: call to undeclared function 'cos'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  153 |         r.real = len*cos(phase);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:154:22: error: call to undeclared function 'sin'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  154 |         r.imag = len*sin(phase);
+      |                      ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:209:14: error: call to undeclared function 'hypot'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  209 |     result = hypot(z.real, z.imag);
+      |              ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:393:31: error: call to undeclared function 'copysign'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  393 |     if (v->cval.real == 0. && copysign(1.0, v->cval.real)==1.0) {
+      |                               ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Objects/complexobject.c:547:36: error: call to undeclared function 'floor'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  547 |     if (b.imag == 0.0 && b.real == floor(b.real) && fabs(b.real) <= 100.0) {
+      |                                    ^
+5 warnings and 9 errors generated.

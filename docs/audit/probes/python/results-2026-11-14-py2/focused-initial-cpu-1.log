@@ -1,0 +1,9 @@
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py2/focused-initial-cpu-1
+Building isolated native C guest (4 ELFs, 1 CPUs)
+Booting disposable TCG guest
+py2-format: FAIL exit=0 expected=0
+guest py2-format stdout: b'PY2 FORMAT PASS oracle=1780\n'
+py2-stream: FAIL exit=0 expected=0
+guest py2-stream stdout: b'PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n'
+py2-wide: FAIL exit= expected=0
+py2-header: FAIL exit= expected=0

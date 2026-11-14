@@ -1,0 +1,80 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:4:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:155:17: error: call to undeclared function 'wcscmp'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  155 |                 wcscmp(&path[len - suffixLen], suffix) != 0
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:186:21: error: variable has incomplete type 'struct stat'
+  186 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:186:16: note: forward declaration of 'struct stat'
+  186 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:187:44: error: use of undeclared identifier 'S_IFDIR'
+  187 |         r = (_Py_wstat(path, &st) == 0) && S_ISDIR(st.st_mode) ? Py_True : Py_False;
+      |                                            ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:211:21: error: variable has incomplete type 'struct stat'
+  211 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:211:16: note: forward declaration of 'struct stat'
+  211 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:212:44: error: use of undeclared identifier 'S_IFREG'
+  212 |         r = (_Py_wstat(path, &st) == 0) && S_ISREG(st.st_mode) ? Py_True : Py_False;
+      |                                            ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:240:21: error: variable has incomplete type 'struct stat'
+  240 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:240:16: note: forward declaration of 'struct stat'
+  240 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:242:13: error: use of undeclared identifier 'S_IFREG'
+  242 |             S_ISREG(st.st_mode) &&
+      |             ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:317:17: error: call to undeclared function 'wcscpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  317 |                 wcscpy(final, parts[i]);
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:395:18: error: call to undeclared function 'wcschr'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  395 |     while ((p2 = wcschr(p1, L'\n')) != NULL) {
+      |                  ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:395:16: error: incompatible integer to pointer conversion assigning to 'wchar_t *' (aka 'int *') from 'int' [-Wint-conversion]
+  395 |     while ((p2 = wcschr(p1, L'\n')) != NULL) {
+      |                ^ ~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:702:21: error: call to undeclared function 'getenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  702 |     const char *v = getenv(&key[4]);
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:702:17: error: incompatible integer to pointer conversion initializing 'const char *' with an expression of type 'int' [-Wint-conversion]
+  702 |     const char *v = getenv(&key[4]);
+      |                 ^   ~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:725:9: error: call to undeclared function 'unsetenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  725 |         unsetenv(&key[4]);
+      |         ^
+5 warnings and 13 errors generated.

@@ -1,0 +1,23 @@
+tools/native-std/overlay/fs/sunlightos.rs:356:pub fn canonicalize(_p: &Path) -> io::Result<PathBuf> {
+melody-mina/src/model.rs:267:    fn six_second_timeline_normalizes_to_endpoints_and_halfway() {
+melody-mina/src/library.rs:90:    let size = usize::try_from(sunlight_libc::stat(path.as_bytes()).ok()?.size).ok()?;
+melody-mina/src/library.rs:94:    let fd = sunlight_libc::open_with_flags(path.as_bytes(), O_RDONLY).ok()?;
+melody-mina/src/library.rs:182:        let Ok(count) = sunlight_libc::read_dir(directory.as_bytes(), &mut entries) else {
+melody-mina/src/library.rs:208:            let Ok(stat) = sunlight_libc::stat(path.as_bytes()) else {
+melody-mina/src/library.rs:215:            let Ok(fd) = sunlight_libc::open_with_flags(path.as_bytes(), O_RDONLY) else {
+melody-mina/src/library.rs:278:    use std::fs;
+melody-mina/src/library.rs:303:            let normalized = path_string;
+melody-mina/src/library.rs:304:            let (display_title, artist, album) = labels_for(&normalized, format, &bytes);
+melody-mina/src/library.rs:307:                path: normalized,
+sunlight-docview/src/main.rs:156:        std::fs::write(
+sunlight-edit/src/main.rs:1154:        let range = self.buffer.normalized_range(anchor, caret);
+sunlight-edit/src/main.rs:2407:    let fd = libc::open(path).map_err(|_| "Could not open file")?;
+sunlight-edit/src/main.rs:2428:    let fd = libc::open_with_flags(path, libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC)
+sunlight-docserv/src/main.rs:46:        std::fs::write(path, include_bytes!("../tests/fixtures/sample.pdf"))?;
+sunlight-docserv/src/main.rs:121:            std::fs::write(ps, include_bytes!("../tests/fixtures/sample.ps"))?;
+sunlight-docserv/src/main.rs:277:        std::fs::File::open("/tmp/native\0invalid")
+sunlight-docserv/src/main.rs:284:    std::fs::write(shared_path, b"shared descriptors")?;
+sunlight-docserv/src/main.rs:285:    let file = Arc::new(std::fs::File::open(shared_path)?);
+sunlight-docserv/src/main.rs:318:    std::fs::write(path, include_bytes!("../tests/fixtures/sample.pdf"))?;
+sunlight-docserv/src/main.rs:319:    let mut file = std::fs::File::open(path)?;
+sunlight-docserv/src/main.rs:370:    std::fs::write(

@@ -1,0 +1,91 @@
+{
+  "status": "PARTIAL",
+  "classification": "Source contract inventory; not native qualification of every identity",
+  "identities": [
+    {
+      "name": "Process",
+      "identity": "PID + foreground.incarnation; recipient grants additionally bind VM generation",
+      "authority": "Task authority and grant delivery",
+      "source": "kernel/src/capability/delivery.rs",
+      "source_sha256": "5257c18cf66f4ea518198d8d1026e0ee738a3b3df796474580a57471dc6d56c2"
+    },
+    {
+      "name": "Thread",
+      "identity": "Process PID/incarnation; libc public pthread token separate",
+      "authority": "Own scheduler/task/stack resources; token authorizes runtime handle operations",
+      "source": "kernel/src/sched/thread_admission.rs",
+      "source_sha256": "5a97dcba070bb2579990f75b29c21b299b16c0d040497abc2e8a00ae19cb9aed"
+    },
+    {
+      "name": "Thread group",
+      "identity": "Retained original Process + exact VM root/generation",
+      "authority": "Shared lifetime, one terminal receipt; no task authority impersonation",
+      "source": "kernel/src/sched/native_group.rs",
+      "source_sha256": "52cd659ad2025832bb2910cef04d786b0ef68b61892baf5d3d4d60b625fd1d88"
+    },
+    {
+      "name": "VM",
+      "identity": "AddressSpaceIdentity physical root and generation",
+      "authority": "Shared page tables, region ledger and active CPU set",
+      "source": "kernel/src/process/address_space.rs",
+      "source_sha256": "3fab49655f9e5349eaf6bf01997061d104c327e2ad016dce9aafb78459f92b7e"
+    },
+    {
+      "name": "PTY session",
+      "identity": "Broker publication + session + generation",
+      "authority": "Exact session membership, foreground controller and teardown",
+      "source": "kernel/src/process/foreground.rs",
+      "source_sha256": "a0f0cdeb2b47cc9f9a9d0e30dde538c94a62c525099901a74b07cf85757f1b3e"
+    },
+    {
+      "name": "Account session",
+      "identity": "SessionRef id/epoch + authorized owner/issuer + live registry",
+      "authority": "Authenticated launch/allocation/channel authorization",
+      "source": "kernel/src/capability/channel_native.rs",
+      "source_sha256": "1274246aefd81e0f7635cae98f48064b1b4b483f000f691c69feb841e4ee3618"
+    },
+    {
+      "name": "Legacy endpoint",
+      "identity": "Opaque token + rights, endpoint ID and owner PID",
+      "authority": "SEND bearer; RECV and destroy additionally current task owner; Endpoint has no explicit generation",
+      "source": "kernel/src/capability/mod.rs",
+      "source_sha256": "bc829424b169347d18c0a4a19fe03ed8b22654633303f65d49508b3361b547e5"
+    },
+    {
+      "name": "Restricted channel",
+      "identity": "Handle token/generation + recipient/issuer identities + session",
+      "authority": "Per-role native channel authority; exclusive VM requirement preserved",
+      "source": "kernel/src/capability/channel_native.rs",
+      "source_sha256": "1274246aefd81e0f7635cae98f48064b1b4b483f000f691c69feb841e4ee3618"
+    },
+    {
+      "name": "SHM backing",
+      "identity": "Broker token, frame vector and immutable process/session quota receipt",
+      "authority": "Backing persists across view ownership until legitimate final release",
+      "source": "kernel/src/memory/shared.rs",
+      "source_sha256": "f5b5b4b8cf8d798e58b8b615b05f505148cf74780e7cc91d932e5ed2534d3210"
+    },
+    {
+      "name": "Mapping",
+      "identity": "VM root/generation + base/extent + kind/backing; task mapped_shared tuple",
+      "authority": "Group VM ledger with task-local view cleanup ownership",
+      "source": "kernel/src/memory/shared.rs",
+      "source_sha256": "f5b5b4b8cf8d798e58b8b615b05f505148cf74780e7cc91d932e5ed2534d3210"
+    },
+    {
+      "name": "Retirement",
+      "identity": "Slot/generation, root/VM, exact VA/backing, shootdown sequence and target/received masks",
+      "authority": "Durable retirement obligation; quarantine prevents release/reuse",
+      "source": "kernel/src/memory/retirement.rs",
+      "source_sha256": "bcbf4e316be77ba8a37f5f119ecb36af9b743f39110b4dd89f85b9f5a39e9efc"
+    },
+    {
+      "name": "Cleanup",
+      "identity": "Group receipt + per-task pending/pins + broker backing + retirement owner",
+      "authority": "Logical terminal publication distinct from physical task/group/resource reclamation",
+      "source": "kernel/src/sched/mod.rs",
+      "source_sha256": "c68d4148171387554504f902375ecde0ac471fba2b6ec1b370412f654c2fcca9"
+    }
+  ],
+  "numeric_identity_warning": "Matching numeric IDs alone never satisfy generation-qualified authority; legacy numeric APIs remain distinct"
+}

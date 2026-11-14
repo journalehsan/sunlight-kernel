@@ -1,0 +1,31 @@
+{
+  "sources": {
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/borrower-shm.c": "87732fc96eb362b3793f5a71119937d5a1a6e27e28fde6d1ef7b4dc0468fa3f2",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/borrower-shm-attempt-01.c": "87732fc96eb362b3793f5a71119937d5a1a6e27e28fde6d1ef7b4dc0468fa3f2",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-continuity.c": "287725bf6b90c4675da387c6960ead9297d4c17668cd2509f102286b0768c622",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/ipc-continuity-attempt-01.c": "d664c245924800e2a848fbffb306f012c10018bfa6e514704226958137992752",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-condvar.c": "9fe60dea8a63db800cff33d0f7aeeb8fdf2f85b65dbb263839fac89987886868",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-strncpy.c": "4828bfd82cfb89d2b9dce41221d9c83fe6ceebbd0e984aad3d8c1748f6547568",
+    "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-_Exit.c": "7b7a1907e7b8de15a2e71cc128798c66530f17248ba7c564a87f488ae48e9320"
+  },
+  "ELFs": {
+    "target/r2b5-lifecycle.elf": "9a85fb973d61391c89cdc2ce55cf317867a012bc65ff3a2f712aee54fce64fb9",
+    "target/r2b5-exit-matrix.elf": "76493a1d18bc1a280ec0e63bedb29999e4d4e5c6527a48b546099bb5c1e91b00",
+    "target/r2b5-borrower-shm.elf": "d2574c80ae73a70b0d12ff37d19937586ea7c151b6a5b4af966ddc9a7ece1db3",
+    "target/r2b5-pthread-tsd-once.elf": "f849f80489b557bed5d85d35dbf00f6a266adeb9e40029b5387c788a902fb8e6",
+    "target/r2b5-pthread-tsd-exit-race.elf": "e4500e3c4fd408dd32f804e6587883dbf86c9bb64bbab7378e83d0876a55ca8a",
+    "target/r2b5-pthread-once-recursive.elf": "b4169e74b5727fe24a3b8cdd9fdc6584190f5e8cd073ffeae840892da71d4ee3",
+    "target/r2b5-strerror-threads.elf": "9b8e78bf5da7e000734d0778ccdbf45a2c45ec38f48543c8696cd1c1153439e9",
+    "target/r2b5-ipc-continuity.elf": "8b45b20ef2a0e16cb6cecf5c146b1d49ff10024e726099798a050cf907bbee72",
+    "target/r2b5-heap.elf": "54b82b7591f8055e234abdd1000f295b1ec26a5ba13eb11adef026e3231bdfb6",
+    "target/r2b5-admission.elf": "873be2b4021b8ca59cd95dcc7fc44a83350afda25ff0f1559d4644e979a1d665",
+    "target/r2b5-ipc-continuity-v2.elf": "e6fc4a5ad70f41b4e7b5642ccc4a34cabb1b11fc1ff63a050396baece9201ca1"
+  },
+  "attempts": [
+    "attempt-01/: wrong inherited source path",
+    "resources-cpu-*/: missing allocation authority",
+    "ipc-cpu-*/: incorrect same-rights derivation expectation",
+    "pty-host.log: wrong manifest path"
+  ],
+  "no_production_changes": true
+}

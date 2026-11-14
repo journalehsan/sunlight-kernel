@@ -1,0 +1,43 @@
+START qualified-locked
+END qualified-locked 0
+START qualified-format-build
+END qualified-format-build 0
+START qualified-stream-build
+END qualified-stream-build 0
+START qualified-wide-build
+END qualified-wide-build 0
+START qualified-header-build
+END qualified-header-build 0
+START qualified-math-declarations-build
+END qualified-math-declarations-build 0
+START qualified-condvar-build
+END qualified-condvar-build 0
+START qualified-libc-build
+END qualified-libc-build 0
+START qualified-exit-build
+END qualified-exit-build 0
+START qualified-heap-build
+END qualified-heap-build 0
+START qualified-admission-build
+END qualified-admission-build 0
+START qualified-pthread-tsd-once-build
+END qualified-pthread-tsd-once-build 0
+START qualified-pthread-tsd-exit-race-build
+END qualified-pthread-tsd-exit-race-build 0
+START qualified-pthread-once-recursive-build
+END qualified-pthread-once-recursive-build 0
+START qualified-strerror-threads-build
+END qualified-strerror-threads-build 0
+START qualified-condvar-timeout-build
+END qualified-condvar-timeout-build 0
+START qualified-string-guard-build
+END qualified-string-guard-build 0
+START qualified-header-abi-build
+END qualified-header-abi-build 0
+START qualified-exit-controls-build
+END qualified-exit-controls-build 0
+START qualified-lifecycle-build
+END qualified-lifecycle-build 0
+START qualified-exit-matrix-build
+END qualified-exit-matrix-build 0
+START qualified-functional-cpu-1

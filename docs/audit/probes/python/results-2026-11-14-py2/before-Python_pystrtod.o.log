@@ -1,0 +1,4 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/pystrtod.c:1204:19: error: call to undeclared function 'sprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+ 1204 |         exp_len = sprintf(p, "%+.02d", exp);
+      |                   ^
+1 error generated.

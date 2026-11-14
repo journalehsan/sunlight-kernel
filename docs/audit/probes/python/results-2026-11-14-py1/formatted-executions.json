@@ -1,0 +1,448 @@
+[
+  {
+    "name": "locked-formatted",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 4.913094438990811,
+    "source_matches": true
+  },
+  {
+    "name": "condvar-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/condvar.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-condvar.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.30024059099378064,
+    "source_matches": true
+  },
+  {
+    "name": "libc-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/libc.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-libc.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.29632372298510745,
+    "source_matches": true
+  },
+  {
+    "name": "exit-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/immediate-exit.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.43514861099538393,
+    "source_matches": true
+  },
+  {
+    "name": "heap-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r1/heap-abi.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-heap.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.4301240280037746,
+    "source_matches": true
+  },
+  {
+    "name": "admission-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/retained-admission.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-admission.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.4845902330125682,
+    "source_matches": true
+  },
+  {
+    "name": "pthread-tsd-once-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-once.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-tsd-once.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.4023381930019241,
+    "source_matches": true
+  },
+  {
+    "name": "pthread-tsd-exit-race-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-tsd-exit-race.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-tsd-exit-race.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.18900946201756597,
+    "source_matches": true
+  },
+  {
+    "name": "pthread-once-recursive-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/pthread-once-recursive.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-pthread-once-recursive.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.1720733889960684,
+    "source_matches": true
+  },
+  {
+    "name": "strerror-threads-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-fno-builtin",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/strerror-threads.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-strerror-threads.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.17789728398201987,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b4/lifecycle.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-lifecycle.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.18205036598374136,
+    "source_matches": true
+  },
+  {
+    "name": "exit-matrix-formatted-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-matrix.elf"
+    ],
+    "exit": 0,
+    "seconds": 0.185735631006537,
+    "source_matches": true
+  },
+  {
+    "name": "focused-formatted-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/final-focused-cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-formatted-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 53.40468751601293,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-formatted-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-cases.json",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-formatted-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 54.98667846000171,
+    "source_matches": true
+  },
+  {
+    "name": "regression-formatted-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "1",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/regression-formatted-cpu-1"
+    ],
+    "exit": 0,
+    "seconds": 153.31433075500536,
+    "source_matches": true
+  },
+  {
+    "name": "focused-formatted-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/final-focused-cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-formatted-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 35.943333813978825,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-formatted-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-cases.json",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-formatted-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 43.268255582021084,
+    "source_matches": true
+  },
+  {
+    "name": "regression-formatted-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "2",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/regression-formatted-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 107.57210631598718,
+    "source_matches": true
+  },
+  {
+    "name": "focused-formatted-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/final-focused-cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/focused-formatted-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 35.827671682985965,
+    "source_matches": true
+  },
+  {
+    "name": "lifecycle-formatted-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--cases",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-cases.json",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/lifecycle-formatted-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 50.58127183400211,
+    "source_matches": true
+  },
+  {
+    "name": "regression-formatted-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--timeout",
+      "240",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/regression-formatted-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 110.50765555998078,
+    "source_matches": true
+  },
+  {
+    "name": "tcp-formatted-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "2",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/tcp-formatted-cpu-2"
+    ],
+    "exit": 0,
+    "seconds": 21.285481201019138,
+    "source_matches": true
+  },
+  {
+    "name": "tcp-formatted-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/tcp-formatted-cpu-4"
+    ],
+    "exit": 0,
+    "seconds": 21.82145426198258,
+    "source_matches": false
+  },
+  {
+    "name": "pthread-abi-formatted",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_pthread.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/pthread-abi-formatted"
+    ],
+    "exit": 0,
+    "seconds": 1.4233333360170946,
+    "source_matches": false
+  },
+  {
+    "name": "cxx-abi-formatted",
+    "command": [
+      "python3",
+      "tools/native-c/tests/run_cxx_runtime.py",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/cxx-abi-formatted"
+    ],
+    "exit": 0,
+    "seconds": 4.856905590975657,
+    "source_matches": false
+  },
+  {
+    "name": "locked-formatted-repeat",
+    "command": [
+      "bash",
+      "tools/build_native_c.sh"
+    ],
+    "exit": 0,
+    "seconds": 0.26918417200795375,
+    "source_matches": false
+  }
+]

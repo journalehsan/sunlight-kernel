@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

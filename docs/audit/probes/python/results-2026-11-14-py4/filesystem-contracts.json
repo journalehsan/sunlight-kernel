@@ -1,0 +1,70 @@
+{
+  "status": "BLOCKED",
+  "native_subset_validation": "PASS",
+  "posix_stat": "BLOCKED",
+  "lstat": "BLOCKED",
+  "fstat": "Existing 24-byte native record, not POSIX struct stat",
+  "authoritative_sources": [
+    "sunlight-fs/src/vfs.rs:FileStat/FileSystem/Vfs::stat",
+    "sunlight-fs/src/tmpfs.rs",
+    "kernel/src/arch/x86_64/syscall.rs:sys_stat_path/sys_fstat",
+    "sunlight-libc/src/lib.rs:Stat",
+    "sunlight-libc/src/stdio.rs:fstat"
+  ],
+  "wire_ABI": {
+    "size": 24,
+    "alignment": 8,
+    "fields": {
+      "size": "u64 @0",
+      "uid": "u32 @8",
+      "gid": "u32 @12",
+      "mode": "u16 @16",
+      "file_type": "u8 @18",
+      "padding": "u8 @19",
+      "nlinks": "u32 @20"
+    }
+  },
+  "supported": [
+    "File/Directory type",
+    "size",
+    "uid/gid",
+    "native mode bits",
+    "nlinks",
+    "root and tmpfs directory metadata",
+    "mount selection by longest component-boundary prefix"
+  ],
+  "missing": [
+    "backend-owned device/inode identity with uniqueness and lifetime rules",
+    "authoritative timestamps and update policy",
+    "versioned extended metadata ABI",
+    "native symlink/readlink and lstat distinction",
+    "authorized component traversal/canonical resolver"
+  ],
+  "semantics": {
+    "RAMFS_tmpfs": "Return stored authoritative subset fields; no new synthetic metadata",
+    "FAT": "Existing adapter explicitly exposes fixed root-owned 0755 policy; this is not on-disk POSIX ownership/permissions",
+    "relative_paths": "StatPath61 does not use resolve_current_path; native Open40 does use cwd expansion. Do not generalize one syscall to the other.",
+    "mounts": "Native mount selection exists; query does not expose mount identity.",
+    "symlinks": "FileType only File/Directory; no supported symlink creation/readlink API. POSIX adapters are absent rather than reporting links as regular files.",
+    "errno": "Existing mapping kept; native ENOENT=-3 EINVAL=-6 map through sys::check. Other fstat VFS failures collapse to generic EIO; no complete POSIX errno claim."
+  },
+  "native_tests": [
+    "PY3 existing file/path/fd metadata and error fixture",
+    "PY4 root / and /etc plus tmpfs /tmp",
+    "PY4 starts a writer worker while querying file size/type/mode/link invariants; final size checked. Functional concurrent callers only; mutation/read overlap not forced",
+    "PY4 missing, relative, dot-component rejection, close/unlink"
+  ],
+  "not_run": [
+    "Permission-denial/traversal authority injection",
+    "Symlink chain/loop creation (no API)",
+    "Persistent FAT volume guest run",
+    "Concurrent rename/mount-change interleavings; precise write/stat overlap remains UNQUALIFIED",
+    "POSIX stat/lstat native operations (no implementation)"
+  ],
+  "evidence": [
+    "filesystem-test.c",
+    "validated-functional-cpu-1/results.json",
+    "validated-functional-cpu-2/results.json",
+    "validated-functional-cpu-4/results.json"
+  ]
+}

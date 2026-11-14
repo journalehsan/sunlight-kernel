@@ -1,0 +1,1640 @@
+[
+  {
+    "cpu": 1,
+    "case": "initial",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "4",
+        "7",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "4",
+        "7",
+        "101",
+        "5",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "101"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "multiple",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "7",
+        "9",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "7",
+        "9",
+        "102",
+        "8",
+        "0"
+      ],
+      [
+        "7",
+        "9",
+        "103",
+        "10",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "102",
+      "103"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "forced-after-owner",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "12",
+        "11",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "12",
+        "11",
+        "104",
+        "13",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "104"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "exit-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "17",
+        "13",
+        "17",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "exit-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "20",
+        "15",
+        "23",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "exit-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "23",
+        "17",
+        "29",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "exit-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "26",
+        "19",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "29",
+        "21",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "29",
+        "21",
+        "110",
+        "30",
+        "0"
+      ],
+      [
+        "29",
+        "21",
+        "111",
+        "32",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "110",
+      "111"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "34",
+        "23",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "34",
+        "23",
+        "112",
+        "35",
+        "0"
+      ],
+      [
+        "34",
+        "23",
+        "113",
+        "37",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "112",
+      "113"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "39",
+        "25",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "39",
+        "25",
+        "114",
+        "40",
+        "0"
+      ],
+      [
+        "39",
+        "25",
+        "115",
+        "42",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "114",
+      "115"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "44",
+        "27",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "44",
+        "27",
+        "116",
+        "45",
+        "0"
+      ],
+      [
+        "44",
+        "27",
+        "117",
+        "47",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "116",
+      "117"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-4",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "49",
+        "29",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "49",
+        "29",
+        "118",
+        "50",
+        "0"
+      ],
+      [
+        "49",
+        "29",
+        "119",
+        "52",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "118",
+      "119"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-5",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "54",
+        "31",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "54",
+        "31",
+        "120",
+        "55",
+        "0"
+      ],
+      [
+        "54",
+        "31",
+        "121",
+        "57",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "120",
+      "121"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-6",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "59",
+        "33",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "59",
+        "33",
+        "122",
+        "60",
+        "0"
+      ],
+      [
+        "59",
+        "33",
+        "123",
+        "62",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "122",
+      "123"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-7",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "64",
+        "35",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "64",
+        "35",
+        "124",
+        "65",
+        "0"
+      ],
+      [
+        "64",
+        "35",
+        "125",
+        "67",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "124",
+      "125"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-8",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "69",
+        "37",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "69",
+        "37",
+        "126",
+        "70",
+        "0"
+      ],
+      [
+        "69",
+        "37",
+        "127",
+        "72",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "126",
+      "127"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 1,
+    "case": "churn-9",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "74",
+        "39",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "74",
+        "39",
+        "128",
+        "75",
+        "0"
+      ],
+      [
+        "74",
+        "39",
+        "129",
+        "77",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "128",
+      "129"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-1/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "initial",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "4",
+        "7",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "4",
+        "7",
+        "101",
+        "5",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "101"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "multiple",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "7",
+        "9",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "7",
+        "9",
+        "103",
+        "10",
+        "1"
+      ],
+      [
+        "7",
+        "9",
+        "102",
+        "8",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "103",
+      "102"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "forced-after-owner",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "12",
+        "11",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "12",
+        "11",
+        "105",
+        "15",
+        "1"
+      ],
+      [
+        "12",
+        "11",
+        "104",
+        "13",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "105",
+      "104"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "exit-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "17",
+        "13",
+        "17",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "exit-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "20",
+        "15",
+        "23",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "exit-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "23",
+        "17",
+        "29",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "exit-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "26",
+        "19",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "29",
+        "21",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "29",
+        "21",
+        "110",
+        "30",
+        "0"
+      ],
+      [
+        "29",
+        "21",
+        "111",
+        "32",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "110",
+      "111"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "34",
+        "23",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "34",
+        "23",
+        "113",
+        "37",
+        "1"
+      ],
+      [
+        "34",
+        "23",
+        "112",
+        "35",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "113",
+      "112"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "39",
+        "25",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "39",
+        "25",
+        "115",
+        "42",
+        "1"
+      ],
+      [
+        "39",
+        "25",
+        "114",
+        "40",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "115",
+      "114"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "44",
+        "27",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "44",
+        "27",
+        "117",
+        "47",
+        "1"
+      ],
+      [
+        "44",
+        "27",
+        "116",
+        "45",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "117",
+      "116"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-4",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "49",
+        "29",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "49",
+        "29",
+        "119",
+        "52",
+        "1"
+      ],
+      [
+        "49",
+        "29",
+        "118",
+        "50",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "119",
+      "118"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-5",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "54",
+        "31",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "54",
+        "31",
+        "121",
+        "57",
+        "1"
+      ],
+      [
+        "54",
+        "31",
+        "120",
+        "55",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "121",
+      "120"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-6",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "59",
+        "33",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "59",
+        "33",
+        "123",
+        "62",
+        "1"
+      ],
+      [
+        "59",
+        "33",
+        "122",
+        "60",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "123",
+      "122"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-7",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "64",
+        "35",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "64",
+        "35",
+        "125",
+        "67",
+        "1"
+      ],
+      [
+        "64",
+        "35",
+        "124",
+        "65",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "125",
+      "124"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-8",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "69",
+        "37",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "69",
+        "37",
+        "127",
+        "72",
+        "1"
+      ],
+      [
+        "69",
+        "37",
+        "126",
+        "70",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "127",
+      "126"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 2,
+    "case": "churn-9",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "74",
+        "39",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "74",
+        "39",
+        "129",
+        "77",
+        "1"
+      ],
+      [
+        "74",
+        "39",
+        "128",
+        "75",
+        "0"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "129",
+      "128"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-2/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "initial",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "4",
+        "7",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "4",
+        "7",
+        "101",
+        "5",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "101"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "multiple",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "7",
+        "9",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "7",
+        "9",
+        "102",
+        "8",
+        "0"
+      ],
+      [
+        "7",
+        "9",
+        "103",
+        "10",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "102",
+      "103"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "forced-after-owner",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "12",
+        "11",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "12",
+        "11",
+        "104",
+        "13",
+        "0"
+      ],
+      [
+        "12",
+        "11",
+        "105",
+        "15",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "104"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "exit-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "17",
+        "13",
+        "17",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "exit-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "20",
+        "15",
+        "23",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "exit-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "23",
+        "17",
+        "29",
+        "exit"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "exit-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "26",
+        "19",
+        "137",
+        "signal(SIGKILL)"
+      ]
+    ],
+    "quiescent_worker_receipts": [],
+    "workers_observed_before_progress": [],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-0",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "29",
+        "21",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "29",
+        "21",
+        "110",
+        "30",
+        "0"
+      ],
+      [
+        "29",
+        "21",
+        "111",
+        "32",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "110",
+      "111"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-1",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "34",
+        "23",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "34",
+        "23",
+        "112",
+        "35",
+        "0"
+      ],
+      [
+        "34",
+        "23",
+        "113",
+        "37",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "112",
+      "113"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-2",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "39",
+        "25",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "39",
+        "25",
+        "114",
+        "40",
+        "0"
+      ],
+      [
+        "39",
+        "25",
+        "115",
+        "42",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "114",
+      "115"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-3",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "44",
+        "27",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "44",
+        "27",
+        "116",
+        "45",
+        "0"
+      ],
+      [
+        "44",
+        "27",
+        "117",
+        "47",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "116",
+      "117"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-4",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "49",
+        "29",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "49",
+        "29",
+        "118",
+        "50",
+        "0"
+      ],
+      [
+        "49",
+        "29",
+        "119",
+        "52",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "118",
+      "119"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-5",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "54",
+        "31",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "54",
+        "31",
+        "120",
+        "55",
+        "0"
+      ],
+      [
+        "54",
+        "31",
+        "121",
+        "57",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "120",
+      "121"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-6",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "59",
+        "33",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "59",
+        "33",
+        "122",
+        "60",
+        "0"
+      ],
+      [
+        "59",
+        "33",
+        "123",
+        "62",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "122",
+      "123"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-7",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "64",
+        "35",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "64",
+        "35",
+        "124",
+        "65",
+        "0"
+      ],
+      [
+        "64",
+        "35",
+        "125",
+        "67",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "124",
+      "125"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-8",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "69",
+        "37",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "69",
+        "37",
+        "126",
+        "70",
+        "0"
+      ],
+      [
+        "69",
+        "37",
+        "127",
+        "72",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "126",
+      "127"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  },
+  {
+    "cpu": 4,
+    "case": "churn-9",
+    "status": "PASS",
+    "terminal_receipts": [
+      [
+        "74",
+        "39",
+        "0",
+        "last-native-thread"
+      ]
+    ],
+    "quiescent_worker_receipts": [
+      [
+        "74",
+        "39",
+        "128",
+        "75",
+        "0"
+      ],
+      [
+        "74",
+        "39",
+        "129",
+        "77",
+        "1"
+      ]
+    ],
+    "workers_observed_before_progress": [
+      "128",
+      "129"
+    ],
+    "source_manifest": "source-baseline.json",
+    "evidence": "lifecycle-cpu-4/",
+    "overlap": "NOT_RUN",
+    "scope": "Existing lifecycle control; terminal log count does not prove independent race arbitration"
+  }
+]

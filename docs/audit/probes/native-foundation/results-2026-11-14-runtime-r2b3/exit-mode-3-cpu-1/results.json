@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 137,
+    "stdout": "EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

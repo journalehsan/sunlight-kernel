@@ -1,0 +1,224 @@
+{
+  "condvar": {
+    "exit": 0,
+    "stdout": "PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "libc": {
+    "exit": 0,
+    "stdout": "PY1 strings and strtol PASS\nPY1 strncpy PASS: 81 boundary cases and canaries\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "exit": {
+    "exit": 37,
+    "stdout": "PY1 worker _Exit(37)\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "heap": {
+    "exit": 0,
+    "stdout": "R1 heap and SysV ABI PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "admission": {
+    "exit": 0,
+    "stdout": "A retained group liveness=1\nA nested thread after original exit\nA post-owner create join PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-tsd-once": {
+    "exit": 0,
+    "stdout": "TLS deletion-before-exit and stale-generation witness PASS\nonce contention publication nested-init abandonment PASS\nTLS lifecycle exhaustion churn and strerror PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-tsd-exit-race": {
+    "exit": 0,
+    "stdout": "in-flight destructor delete/reuse witness PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "pthread-once-recursive": {
+    "exit": 0,
+    "stdout": "recursive once: no completion in bounded window; independent thread progressed\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "strerror-threads": {
+    "exit": 0,
+    "stdout": "strerror all 40 supported numbers across four threads PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "condvar-timeout": {
+    "exit": 0,
+    "stdout": "PY1 signal/timeout stress PASS wakes=38 timeouts=22; exact race UNQUALIFIED\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "string-guard": {
+    "exit": 0,
+    "stdout": "PY1 strncpy guard-page PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "header-abi": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-0": {
+    "exit": 0,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-37": {
+    "exit": 37,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "owner-exit-255": {
+    "exit": 255,
+    "stdout": "PY1 initial owner immediate group exit\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-initial": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=458 owner=115 mode=0\nW initial pthread_exit owner=115 workers=1\nW tls actor=3 tid=115\nW progress actor=0 tid=458 after-owner-query\nW tls actor=1 tid=458\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-multiple": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=459 owner=116 mode=1\nW alive actor=1 tid=460 owner=116 mode=1\nW initial pthread_exit owner=116 workers=2\nW tls actor=3 tid=116\nW progress actor=0 tid=459 after-owner-query\nW progress actor=1 tid=460 after-owner-query\nW tls actor=1 tid=459\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=460\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-forced-after-owner": {
+    "exit": 137,
+    "stdout": "W alive actor=1 tid=462 owner=117 mode=2\nW alive actor=0 tid=461 owner=117 mode=2\nW initial pthread_exit owner=117 workers=2\nW tls actor=3 tid=117\nW progress actor=0 tid=461 after-owner-query\nW progress actor=1 tid=462 after-owner-query\nW forced retained-owner SIGKILL\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-exit-0": {
+    "exit": 17,
+    "stdout": "EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-exit-1": {
+    "exit": 23,
+    "stdout": "EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-exit-2": {
+    "exit": 29,
+    "stdout": "EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-exit-3": {
+    "exit": 137,
+    "stdout": "EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-0": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=467 owner=122 mode=1\nW alive actor=1 tid=468 owner=122 mode=1\nW initial pthread_exit owner=122 workers=2\nW tls actor=3 tid=122\nW progress actor=0 tid=467 after-owner-query\nW tls actor=1 tid=467\nW progress actor=1 tid=468 after-owner-query\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=468\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-1": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=469 owner=123 mode=1\nW alive actor=1 tid=470 owner=123 mode=1\nW initial pthread_exit owner=123 workers=2\nW tls actor=3 tid=123\nW progress actor=0 tid=469 after-owner-query\nW progress actor=1 tid=470 after-owner-query\nW tls actor=1 tid=469\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=470\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-2": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=471 owner=124 mode=1\nW alive actor=1 tid=472 owner=124 mode=1\nW initial pthread_exit owner=124 workers=2\nW tls actor=3 tid=124\nW progress actor=0 tid=471 after-owner-query\nW progress actor=1 tid=472 after-owner-query\nW tls actor=1 tid=471\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=472\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-3": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=473 owner=125 mode=1\nW alive actor=1 tid=474 owner=125 mode=1\nW initial pthread_exit owner=125 workers=2\nW tls actor=3 tid=125\nW progress actor=0 tid=473 after-owner-query\nW progress actor=1 tid=474 after-owner-query\nW tls actor=1 tid=473\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=474\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-4": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=475 owner=126 mode=1\nW alive actor=1 tid=476 owner=126 mode=1\nW initial pthread_exit owner=126 workers=2\nW tls actor=3 tid=126\nW progress actor=0 tid=475 after-owner-query\nW progress actor=1 tid=476 after-owner-query\nW tls actor=1 tid=475\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=476\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-5": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=477 owner=127 mode=1\nW alive actor=1 tid=478 owner=127 mode=1\nW initial pthread_exit owner=127 workers=2\nW tls actor=3 tid=127\nW progress actor=0 tid=477 after-owner-query\nW progress actor=1 tid=478 after-owner-query\nW tls actor=1 tid=477\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=478\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-6": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=479 owner=128 mode=1\nW alive actor=1 tid=480 owner=128 mode=1\nW initial pthread_exit owner=128 workers=2\nW tls actor=3 tid=128\nW progress actor=0 tid=479 after-owner-query\nW progress actor=1 tid=480 after-owner-query\nW tls actor=1 tid=479\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=480\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-7": {
+    "exit": 0,
+    "stdout": "W alive actor=1 tid=482 owner=129 mode=1\nW alive actor=0 tid=481 owner=129 mode=1\nW initial pthread_exit owner=129 workers=2\nW tls actor=3 tid=129\nW progress actor=0 tid=481 after-owner-query\nW progress actor=1 tid=482 after-owner-query\nW tls actor=1 tid=481\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=482\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-8": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=483 owner=130 mode=1\nW alive actor=1 tid=484 owner=130 mode=1\nW initial pthread_exit owner=130 workers=2\nW tls actor=3 tid=130\nW progress actor=0 tid=483 after-owner-query\nW progress actor=1 tid=484 after-owner-query\nW tls actor=1 tid=483\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=484\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "lifecycle-churn-9": {
+    "exit": 0,
+    "stdout": "W alive actor=0 tid=485 owner=131 mode=1\nW alive actor=1 tid=486 owner=131 mode=1\nW initial pthread_exit owner=131 workers=2\nW tls actor=3 tid=131\nW progress actor=0 tid=485 after-owner-query\nW progress actor=1 tid=486 after-owner-query\nW tls actor=1 tid=485\nW first-borrower-reaped final-borrower-exiting\nW tls actor=2 tid=486\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-format": {
+    "exit": 0,
+    "stdout": "PY2 FORMAT PASS oracle=1780\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-stream": {
+    "exit": 0,
+    "stdout": "PY2 STREAM PASS checks=ownership,append,eof,error,seek,pushback,concurrency\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-wide": {
+    "exit": 0,
+    "stdout": "PY2 WIDE/ENV/SORT PASS\n",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-header": {
+    "exit": 0,
+    "stdout": "",
+    "stderr": "",
+    "pass_": true
+  },
+  "py2-math-declarations": {
+    "exit": 0,
+    "stdout": "PY2 MATH DECL PASS native archive ABI/value checks\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

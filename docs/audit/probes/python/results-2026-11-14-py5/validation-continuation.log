@@ -1,0 +1,24 @@
+START py5-filesystem-retry-build
+END py5-filesystem-retry-build 0
+START validated-functional-cpu-1
+END validated-functional-cpu-1 0
+START validated-legacy-cpu-1
+END validated-legacy-cpu-1 0
+START validated-functional-cpu-2
+END validated-functional-cpu-2 0
+START validated-legacy-cpu-2
+END validated-legacy-cpu-2 0
+START validated-functional-cpu-4
+END validated-functional-cpu-4 0
+START validated-legacy-cpu-4
+END validated-legacy-cpu-4 0
+START validated-tcp-cpu-2
+END validated-tcp-cpu-2 0
+START validated-tcp-cpu-4
+END validated-tcp-cpu-4 0
+START validated-pthread-abi
+END validated-pthread-abi 0
+START validated-cxx-abi
+END validated-cxx-abi 0
+START validated-locked-repeat
+END validated-locked-repeat 0

@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-tls-controlled.elf --cpus 4 --timeout 120 --expect-exit 0 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tls-controlled-cpu-4
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tls-controlled-cpu-4
+Building isolated native C guest (1 ELFs, 4 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=0 expected=0
+guest elf stdout: b'T1 holder=0x2 old=128 index=0 generation=1 cell=populated\nT2 deleting=0x1 old=128 reused=256 old_generation=1 new_generation=2 holder=blocked\nT3 old_get=NULL old_set=EINVAL reused_get=NULL new_set=0\nT4 callback=0x3 key=384 generation=3 cell=cleared reentrancy=complete\nT5 delete/reuse while callback held old=384 reused=512\nT6 selected callback completed after delete/reuse\nT7 joins=2 callbacks=1 outstanding_joinable=0 keys_live=0\n'
+
+exit=0

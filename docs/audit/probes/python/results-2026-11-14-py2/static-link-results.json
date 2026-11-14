@@ -1,0 +1,16 @@
+{
+  "status": "NOT_RUN",
+  "prerequisite": "All required core units compile",
+  "blocking_reason": "Mandatory core compilation still fails; no complete object set or interpreter archive.",
+  "command": null,
+  "library_order": null,
+  "startup_objects": null,
+  "unresolved_symbols": null,
+  "duplicate_symbols": null,
+  "relocations": null,
+  "TLS_ABI": null,
+  "binary_format": null,
+  "entry_point": null,
+  "executable": null,
+  "note": "Archive defined-symbol scan is archive-symbols.log, not a real interpreter-link inventory."
+}

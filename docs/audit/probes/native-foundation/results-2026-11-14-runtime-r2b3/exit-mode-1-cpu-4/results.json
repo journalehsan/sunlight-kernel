@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 23,
+    "stdout": "EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

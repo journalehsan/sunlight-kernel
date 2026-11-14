@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "R2A ctype PASS 257 inputs x 14 functions\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

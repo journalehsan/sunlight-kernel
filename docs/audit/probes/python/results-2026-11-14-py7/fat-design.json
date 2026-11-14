@@ -1,0 +1,15 @@
+{
+  "selected": "C: generation qualified handle plus entry-location authentication and explicit pre-mutation revocation",
+  "alternatives": {
+    "A": "Deferred deletion requires splitting raw FAT namespace and cluster retirement and transactional cleanup; not implemented",
+    "B": "Pinned shared object would preserve POSIX unlinked access but requires backend ownership/recovery changes",
+    "C": "Selected bounded fail-closed approximation; no retained unlinked data",
+    "D": "Reuse existing local handle generations, VFS mount incarnation and open-count admission"
+  },
+  "limitations": [
+    "Not POSIX open-unlink semantics",
+    "Directory rename revokes other existing FAT handles conservatively",
+    "Any uncertain mutating backend failure poisons this mounted adapter until teardown; no recovery guarantee",
+    "Raw backend access or external disk mutation is outside exclusive adapter ownership contract"
+  ]
+}

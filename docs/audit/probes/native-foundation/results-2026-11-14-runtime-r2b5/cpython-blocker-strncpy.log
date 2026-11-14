@@ -1,0 +1,14 @@
+["python3", "tools/native-c/cc.py", "-std=c11", "-Werror", "-fno-builtin", "-fsyntax-only", "docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-strncpy.c"]
+docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-strncpy.c:2:33: error: call to undeclared function 'strncpy'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+    2 | int main(void){char b[8];return strncpy(b,"a",8)!=b;}
+      |                                 ^
+docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-strncpy.c:2:33: note: did you mean 'strncmp'?
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/string.h:25:5: note: 'strncmp' declared here
+   25 | int strncmp(const char *s1, const char *s2, size_t n);
+      |     ^
+docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/cpython-blocker-strncpy.c:2:49: error: comparison between pointer and integer ('int' and 'char *') [-Werror,-Wpointer-integer-compare]
+    2 | int main(void){char b[8];return strncpy(b,"a",8)!=b;}
+      |                                 ~~~~~~~~~~~~~~~~^ ~
+2 errors generated.
+
+exit=1

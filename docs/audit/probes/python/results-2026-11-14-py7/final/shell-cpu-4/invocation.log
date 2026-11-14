@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py --cases /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py6/shell-cases.json --cpus 4 --timeout 120 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/final/shell-cpu-4

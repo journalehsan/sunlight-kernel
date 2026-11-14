@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c.elf --cpus 2 --timeout 180 --expect-exit 134 --arg fail --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c-assert-guest
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/final-headers-c-assert-guest
+Building isolated native C guest (1 ELFs, 2 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=134 expected=134
+guest elf stderr: b'/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/acceptance-focused/headers-native.c:43: main: Assertion `0 && "R2A diagnostic"\' failed.\n'
+
+exit=0

@@ -1,0 +1,6 @@
+{
+  "status": "PASS",
+  "applies": true,
+  "reverses": true,
+  "patch_sha256": "3b1d0c5b31345e29679a37144fa335928d00424ad0d10da89bdf6510fb20e208"
+}

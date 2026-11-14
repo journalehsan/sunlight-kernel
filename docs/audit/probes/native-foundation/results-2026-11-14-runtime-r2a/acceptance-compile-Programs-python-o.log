@@ -1,0 +1,16 @@
+$ make -j1 Programs/python.o
+cwd=/tmp/sunlight-r2a-cpython/cross-acceptance
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2   -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden  -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-r2a-cpython/Python-3.13.0/Include    -DPy_BUILD_CORE -o Programs/python.o /tmp/sunlight-r2a-cpython/Python-3.13.0/Programs/python.c
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Programs/python.c:3:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/Python.h:118:
+In file included from /tmp/sunlight-r2a-cpython/Python-3.13.0/Include/pythread.h:105:
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/cpython/pythread.h:37:5: error: unknown type name 'pthread_key_t'
+   37 |     NATIVE_TSS_KEY_T _key;
+      |     ^
+/tmp/sunlight-r2a-cpython/Python-3.13.0/Include/cpython/pythread.h:18:33: note: expanded from macro 'NATIVE_TSS_KEY_T'
+   18 | #   define NATIVE_TSS_KEY_T     pthread_key_t
+      |                                 ^
+1 error generated.
+make: *** [Makefile:1812: Programs/python.o] Error 1
+
+exit=2

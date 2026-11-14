@@ -1,0 +1,6 @@
+["python3", "tools/native-c/tests/run_cxx_runtime.py", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/cxx-abi"]
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/native-c/tests/run_cxx_runtime.py", line 48, in <module>
+    assert b'undefined symbol' in diag and b'file not found' not in diag
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

@@ -1,0 +1,1 @@
+PASS: required JSONs parse, 180=163+17+0, all invocations retained, final-source regression matrix and static checks pass, production hashes match patch receipt, kernel/CPython/previous evidence unchanged.

@@ -1,0 +1,10 @@
+["python3", "tools/native-c/guest.py", "--cases", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/resource-cases.json", "--cpus", "1", "--timeout", "180", "--out", "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/resources-cpu-1"]
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b5/resources-cpu-1
+Building isolated native C guest (3 ELFs, 1 CPUs)
+Booting disposable TCG guest
+explicit-views: FAIL exit=91 expected=0
+guest explicit-views stdout: b'R2B5 IPC round=0 actor=0 PASS\nR2B5 IPC round=0 actor=1 PASS\nR2B5 original owner pthread_exit\nR2B5 progress actor=0 tid=101 owner=100 vm=7\nR2B5 progress actor=1 tid=102 owner=100 vm=7\nR2B5 IPC round=1 actor=0 PASS\nR2B5 FAIL borrower allocation\n'
+creator-exit: FAIL exit=91 expected=0
+guest creator-exit stdout: b'R2B5 IPC round=0 actor=0 PASS\nR2B5 IPC round=0 actor=1 PASS\nR2B5 original owner pthread_exit\nR2B5 progress actor=0 tid=103 owner=101 vm=9\nR2B5 progress actor=1 tid=104 owner=101 vm=9\nR2B5 IPC round=1 actor=0 PASS\nR2B5 FAIL borrower allocation\n'
+forced-views: FAIL exit=91 expected=137
+guest forced-views stdout: b'R2B5 IPC round=0 actor=0 PASS\nR2B5 IPC round=0 actor=1 PASS\nR2B5 original owner pthread_exit\nR2B5 progress actor=0 tid=105 owner=102 vm=11\nR2B5 progress actor=1 tid=106 owner=102 vm=11\nR2B5 IPC round=1 actor=0 PASS\nR2B5 FAIL borrower allocation\n'

@@ -1,0 +1,27 @@
+{
+  "archive": "target/native-c/sysroot/lib/libsunlight_native_c.a",
+  "archive_sha256": "80075919deb2bf9714631306af52d8a4e3963ef66f8b3337d2cf7ba853fefa7a",
+  "symbols": {
+    "pthread_key_create": [
+      "0000000000000000 T pthread_key_create"
+    ],
+    "pthread_key_delete": [
+      "0000000000000000 T pthread_key_delete"
+    ],
+    "pthread_getspecific": [
+      "0000000000000000 T pthread_getspecific"
+    ],
+    "pthread_setspecific": [
+      "0000000000000000 T pthread_setspecific"
+    ],
+    "pthread_once": [
+      "0000000000000000 T pthread_once"
+    ],
+    "strerror": [
+      "0000000000000000 T strerror"
+    ],
+    "strerror_r": [
+      "0000000000000000 T strerror_r"
+    ]
+  }
+}

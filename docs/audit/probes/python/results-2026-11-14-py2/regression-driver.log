@@ -1,0 +1,47 @@
+START final-locked
+END final-locked 0
+START final-condvar-build
+END final-condvar-build 0
+START final-libc-build
+END final-libc-build 0
+START final-exit-build
+END final-exit-build 0
+START final-heap-build
+END final-heap-build 0
+START final-admission-build
+END final-admission-build 0
+START final-pthread-tsd-once-build
+END final-pthread-tsd-once-build 0
+START final-pthread-tsd-exit-race-build
+END final-pthread-tsd-exit-race-build 0
+START final-pthread-once-recursive-build
+END final-pthread-once-recursive-build 0
+START final-strerror-threads-build
+END final-strerror-threads-build 0
+START final-condvar-timeout-build
+END final-condvar-timeout-build 0
+START final-string-guard-build
+END final-string-guard-build 0
+START final-header-abi-build
+END final-header-abi-build 0
+START final-exit-controls-build
+END final-exit-controls-build 0
+START final-lifecycle-build
+END final-lifecycle-build 0
+START final-exit-matrix-build
+END final-exit-matrix-build 0
+START final-functional-cpu-1
+END final-functional-cpu-1 0
+START final-legacy-cpu-1
+END final-legacy-cpu-1 0
+START final-functional-cpu-2
+END final-functional-cpu-2 0
+START final-legacy-cpu-2
+END final-legacy-cpu-2 0
+START final-functional-cpu-4
+END final-functional-cpu-4 1
+START final-legacy-cpu-4
+END final-legacy-cpu-4 0
+START final-tcp-cpu-2
+END final-tcp-cpu-2 0
+START final-tcp-cpu-4

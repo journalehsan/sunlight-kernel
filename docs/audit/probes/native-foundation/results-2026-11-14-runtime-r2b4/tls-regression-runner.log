@@ -1,0 +1,7 @@
+pthread-tsd-once-build 0
+pthread-tsd-exit-race-build 0
+pthread-once-recursive-build 0
+strerror-threads-build 0
+tls-cpu-1 0
+tls-cpu-2 0
+tls-cpu-4 0

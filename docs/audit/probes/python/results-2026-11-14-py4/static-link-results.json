@@ -1,0 +1,20 @@
+{
+  "status": "NOT_RUN",
+  "reason": "Mandatory objects still fail compilation; real interpreter link prerequisites not met.",
+  "actual_interpreter_link_command": null,
+  "unresolved_symbols": null,
+  "unresolved_inventory_status": "NOT_RUN",
+  "link_map": null,
+  "ABI_relocation_TLS_link_order": "NOT_RUN for interpreter; native runtime/ABI controls are separate evidence",
+  "prospective_command_evidence": "make-dry-run.log (not executed link)",
+  "native_execution": {
+    "status": "NOT_RUN",
+    "sentinel": null,
+    "stdout": null,
+    "stderr": null,
+    "exit": null,
+    "reason": "No linked native CPython executable"
+  },
+  "no_dummy_symbols": true,
+  "no_objects_excluded": true
+}

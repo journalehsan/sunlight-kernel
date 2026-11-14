@@ -1,0 +1,71 @@
+{
+  "verdict": "PARTIAL",
+  "gates": {
+    "G1": "PASS",
+    "G2": "UNQUALIFIED",
+    "G3": "PARTIAL",
+    "G4": "BLOCKED",
+    "G5": "UNQUALIFIED",
+    "G6": "NOT_RUN",
+    "G7": "PARTIAL",
+    "G8": "PARTIAL",
+    "G9": "PASS",
+    "G10": "PASS"
+  },
+  "matrix": [
+    {
+      "cpus": 1,
+      "lifecycle": "17/17",
+      "C": "73/73",
+      "CXX": "21/21",
+      "tls_once": "4/4",
+      "heap_abi": "PASS",
+      "retained_admission": "PASS",
+      "legacy_IPC": "PASS",
+      "W6": "UNQUALIFIED",
+      "authenticated_IPC": "NOT_RUN",
+      "borrower_SHM": "BLOCKED",
+      "integrated_faults": "NOT_RUN",
+      "PTY": "NOT_RUN",
+      "generation_reuse": "NOT_RUN",
+      "tcp": "NOT_RUN",
+      "source": "source-baseline.json"
+    },
+    {
+      "cpus": 2,
+      "lifecycle": "17/17",
+      "C": "73/73",
+      "CXX": "21/21",
+      "tls_once": "4/4",
+      "heap_abi": "PASS",
+      "retained_admission": "PASS",
+      "legacy_IPC": "PASS",
+      "W6": "UNQUALIFIED",
+      "authenticated_IPC": "NOT_RUN",
+      "borrower_SHM": "BLOCKED",
+      "integrated_faults": "NOT_RUN",
+      "PTY": "NOT_RUN",
+      "generation_reuse": "NOT_RUN",
+      "tcp": "PASS",
+      "source": "source-baseline.json"
+    },
+    {
+      "cpus": 4,
+      "lifecycle": "17/17",
+      "C": "73/73",
+      "CXX": "21/21",
+      "tls_once": "4/4",
+      "heap_abi": "PASS",
+      "retained_admission": "PASS",
+      "legacy_IPC": "PASS",
+      "W6": "UNQUALIFIED",
+      "authenticated_IPC": "NOT_RUN",
+      "borrower_SHM": "BLOCKED",
+      "integrated_faults": "NOT_RUN",
+      "PTY": "NOT_RUN",
+      "generation_reuse": "NOT_RUN",
+      "tcp": "PASS",
+      "source": "source-baseline.json"
+    }
+  ]
+}

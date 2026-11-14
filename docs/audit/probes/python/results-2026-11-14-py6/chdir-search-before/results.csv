@@ -1,0 +1,2 @@
+probe,historical,build,guest_run,acceptance,exit,expected_exit,detail,sha256
+elf,False,PASS,FAIL,FAIL,1,0,guest contract or infrastructure failed,7155ac825672e074bf2c0698d35d166b055bd4210b7173005c83fcc2b3afccdb

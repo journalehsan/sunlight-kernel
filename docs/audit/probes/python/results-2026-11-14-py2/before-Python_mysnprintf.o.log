@@ -1,0 +1,4 @@
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/mysnprintf.c:72:11: error: call to undeclared function 'vsnprintf'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+   72 |     len = vsnprintf(str, size, format, va);
+      |           ^
+1 error generated.

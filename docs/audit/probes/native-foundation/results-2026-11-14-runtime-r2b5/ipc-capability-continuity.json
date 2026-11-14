@@ -1,0 +1,108 @@
+{
+  "status": "PARTIAL",
+  "legacy_native_controls": [
+    {
+      "cpu": 1,
+      "status": "PASS",
+      "scope": "Legacy task-owned IPC endpoint, same-VM borrowers, no authenticated account/channel/session",
+      "identities": [
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=101 wi=5 owner_finished=1 quiescent=1 group_live=1 cpu=0",
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=102 wi=7 owner_finished=1 quiescent=1 group_live=1 cpu=0"
+      ],
+      "endpoints": [
+        "[CAP] Created endpoint 0 for pid=1",
+        "[CAP] Created endpoint 1 for pid=2",
+        "[CAP] Created endpoint 2 for pid=101",
+        "[CAP] Created endpoint 3 for pid=102"
+      ],
+      "terminal": [
+        "[NATIVE-GROUP] terminal pid=100 incarnation=4 vm=7 code=0 reason=last-native-thread"
+      ],
+      "accounting": [
+        "[NATIVE-C-REAP-END] case=0 exit=0 user_frames=1810 page_tables=12 owned_frames=0 fds=0 stack=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=382 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ],
+      "coordinator": "User-space release/acquire rendezvous; pre/post RPCs; endpoint-owner Reaped acknowledgment before stale-token checks",
+      "observed_overlap": false,
+      "evidence": "ipc-v2-cpu-1/",
+      "source": "source-baseline.json",
+      "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-ipc-continuity-v2.elf",
+      "elf_sha256": "e6fc4a5ad70f41b4e7b5642ccc4a34cabb1b11fc1ff63a050396baece9201ca1"
+    },
+    {
+      "cpu": 2,
+      "status": "PASS",
+      "scope": "Legacy task-owned IPC endpoint, same-VM borrowers, no authenticated account/channel/session",
+      "identities": [
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=101 wi=5 owner_finished=1 quiescent=1 group_live=1 cpu=1",
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=102 wi=7 owner_finished=1 quiescent=1 group_live=1 cpu=0"
+      ],
+      "endpoints": [
+        "[CAP] Created endpoint 0 for pid=1",
+        "[CAP] Created endpoint 1 for pid=2",
+        "[CAP] Created endpoint 2 for pid=101",
+        "[CAP] Created endpoint 3 for pid=102"
+      ],
+      "terminal": [
+        "[NATIVE-GROUP] terminal pid=100 incarnation=4 vm=7 code=0 reason=last-native-thread"
+      ],
+      "accounting": [
+        "[NATIVE-C-REAP-END] case=0 exit=0 user_frames=1810 page_tables=12 owned_frames=0 fds=0 stack=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=382 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ],
+      "coordinator": "User-space release/acquire rendezvous; pre/post RPCs; endpoint-owner Reaped acknowledgment before stale-token checks",
+      "observed_overlap": false,
+      "evidence": "ipc-v2-cpu-2/",
+      "source": "source-baseline.json",
+      "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-ipc-continuity-v2.elf",
+      "elf_sha256": "e6fc4a5ad70f41b4e7b5642ccc4a34cabb1b11fc1ff63a050396baece9201ca1"
+    },
+    {
+      "cpu": 4,
+      "status": "PASS",
+      "scope": "Legacy task-owned IPC endpoint, same-VM borrowers, no authenticated account/channel/session",
+      "identities": [
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=101 wi=5 owner_finished=1 quiescent=1 group_live=1 cpu=0",
+        "[NATIVE-GROUP-WITNESS] owner=100 incarnation=4 vm=7 worker=102 wi=7 owner_finished=1 quiescent=1 group_live=1 cpu=1"
+      ],
+      "endpoints": [
+        "[CAP] Created endpoint 0 for pid=1",
+        "[CAP] Created endpoint 1 for pid=2",
+        "[CAP] Created endpoint 2 for pid=101",
+        "[CAP] Created endpoint 3 for pid=102"
+      ],
+      "terminal": [
+        "[NATIVE-GROUP] terminal pid=100 incarnation=4 vm=7 code=0 reason=last-native-thread"
+      ],
+      "accounting": [
+        "[NATIVE-C-REAP-END] case=0 exit=0 user_frames=1810 page_tables=12 owned_frames=0 fds=0 stack=0",
+        "[NATIVE-C-RESULT] case=0 exit=0 stdout=382 stderr=0 clean=1 file_before=0 file_after=0 private_before=1036 private_after=1036 pt_before=16 pt_after=16 handles_before=0 handles_after=0 names_before=2 names_after=2"
+      ],
+      "coordinator": "User-space release/acquire rendezvous; pre/post RPCs; endpoint-owner Reaped acknowledgment before stale-token checks",
+      "observed_overlap": false,
+      "evidence": "ipc-v2-cpu-4/",
+      "source": "source-baseline.json",
+      "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/r2b5-ipc-continuity-v2.elf",
+      "elf_sha256": "e6fc4a5ad70f41b4e7b5642ccc4a34cabb1b11fc1ff63a050396baece9201ca1"
+    }
+  ],
+  "contracts": {
+    "endpoint": "Task PID owns receive/destroy authority; opaque broker token carries rights. Shared VM does not transfer task ownership.",
+    "derive": "derive permits equal or reduced rights; deriving SEND_ONLY from itself returns existing token. endpoint_bind comment is stricter than actual broker contract. No privilege escalation demonstrated.",
+    "closure": "Task exit closes owned endpoints. After endpoint-owner Reaped, old token cannot derive or destroy successor; successor owner can derive and destroy.",
+    "restricted_channel": "Handle token/generation plus RecipientIdentity(pid,incarnation,vm_generation), active Account SessionRef(id,epoch), issuer and role checks. channel_vm_exclusive requires no unreaped same-VM peer. Native borrowed group continuity is not authorized by this contract."
+  },
+  "not_run": [
+    "Authenticated channel/session creation and continuity",
+    "Original-owner exclusive endpoint/capability access after its exit",
+    "Channel generation and process incarnation reuse",
+    "Controlled concurrent borrower-exit/IPC-cleanup overlap",
+    "Independent endpoint/capability census and exact refund observer"
+  ],
+  "failed_attempts": [
+    "ipc-cpu-1/",
+    "ipc-cpu-2/",
+    "ipc-cpu-4/"
+  ],
+  "failure_classification": "Fixture expected same-rights SEND_ONLY rederive to fail; source derive contract explicitly permits it. Corrected fixture in ipc-v2-* preserves receive/destroy denial checks. No production change."
+}

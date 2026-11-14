@@ -1,0 +1,7 @@
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c:15:16: error: static assertion failed due to requirement 'sizeof(struct control) == 80': Control audit layout
+   15 | _Static_assert(sizeof(struct control)==80,"Control audit layout");
+      |                ^~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/detached-accounting.c:15:38: note: expression evaluates to '72 == 80'
+   15 | _Static_assert(sizeof(struct control)==80,"Control audit layout");
+      |                ~~~~~~~~~~~~~~~~~~~~~~^~~~
+1 error generated.

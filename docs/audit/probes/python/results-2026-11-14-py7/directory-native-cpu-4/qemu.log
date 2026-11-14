@@ -1,0 +1,3 @@
+$ qemu-system-x86_64 -accel tcg -cpu max -m 2048M -smp 4 -cdrom /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/directory-native-cpu-4/guest.iso -boot d -display none -monitor none -serial file:/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/directory-native-cpu-4/serial.log -device virtio-rng-pci,disable-modern=on -device isa-debug-exit,iobase=0xf4,iosize=0x04 -no-reboot -drive file=/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/directory-native-cpu-4/fat-fixture.img,format=raw,if=none,id=fixture -device virtio-blk-pci,drive=fixture,disable-modern=on -nic none
+
+exit=33

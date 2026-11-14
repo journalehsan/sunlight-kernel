@@ -1,0 +1,39 @@
+{
+  "status": "PARTIAL",
+  "migrated": [
+    "Interactive cmd_cd",
+    "Native script Runtime.directory",
+    "Kernel chdir including final search permission"
+  ],
+  "shared_client": "sunlight-libc resolve_directory_path; no lexical removal of components before cd lookup",
+  "pwd": "Shell context receives canonical directory spelling; actual script stdout checked separately",
+  "remaining": [
+    "ls/external argument lexical normalization",
+    "Existence helpers",
+    "Completion",
+    "readlink command",
+    "All shell cwd/subshell and whitespace fixtures"
+  ],
+  "guest": {
+    "1": {
+      "status": "PASS",
+      "passed": 1,
+      "total": 1,
+      "observed": 1
+    },
+    "2": {
+      "status": "PASS",
+      "passed": 1,
+      "total": 1,
+      "observed": 1
+    },
+    "4": {
+      "status": "PASS",
+      "passed": 1,
+      "total": 1,
+      "observed": 1
+    }
+  },
+  "interactive_PTY": "NOT_RUN",
+  "first_search_failure": "chdir-search-before.log: actual native uid1000 mode000 directory was wrongly accepted; fixed in final kernel"
+}

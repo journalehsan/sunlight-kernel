@@ -1,0 +1,36 @@
+[
+  {
+    "name": "condvar-timeout",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-condvar-timeout.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "string-guard",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-string-guard.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "owner-exit-0",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-controls.elf",
+    "expected_exit": 0,
+    "args": [
+      "0"
+    ]
+  },
+  {
+    "name": "owner-exit-37",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-controls.elf",
+    "expected_exit": 37,
+    "args": [
+      "37"
+    ]
+  },
+  {
+    "name": "owner-exit-255",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py1-formatted-exit-controls.elf",
+    "expected_exit": 255,
+    "args": [
+      "255"
+    ]
+  }
+]

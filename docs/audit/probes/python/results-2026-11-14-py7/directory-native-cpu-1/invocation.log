@@ -1,0 +1,1 @@
+$ tools/native-c/guest.py target/py7-directory.elf --expect-exit 0 --fat-fixture /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/fat-fixture.img --cpus 1 --timeout 150 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py7/directory-native-cpu-1

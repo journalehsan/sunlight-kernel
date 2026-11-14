@@ -1,0 +1,8 @@
+$ python3 tools/native-c/guest.py /home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf --arg 2 --cpus 1 --timeout 120 --expect-exit 29 --out /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-1
+Evidence: /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-1
+Building isolated native C guest (1 ELFs, 1 CPUs)
+Booting disposable TCG guest
+elf: PASS exit=29 expected=29
+guest elf stdout: b'EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n'
+
+exit=0

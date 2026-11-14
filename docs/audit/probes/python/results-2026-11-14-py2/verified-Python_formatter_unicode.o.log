@@ -1,0 +1,41 @@
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:6:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:12: warning: declaration of 'struct lconv' will not be visible outside of this function [-Wvisibility]
+  245 |     struct lconv *lc,
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:708:28: error: call to undeclared function 'localeconv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  708 |         struct lconv *lc = localeconv();
+      |                            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:708:23: error: incompatible integer to pointer conversion initializing 'struct lconv *' with an expression of type 'int' [-Wint-conversion]
+  708 |         struct lconv *lc = localeconv();
+      |                       ^    ~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:709:38: error: incompatible pointer types passing 'struct lconv *' to parameter of type 'struct lconv *' [-Wincompatible-pointer-types]
+  709 |         if (_Py_GetLocaleconvNumeric(lc,
+      |                                      ^~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:245:19: note: passing argument to parameter 'lc' here
+  245 |     struct lconv *lc,
+      |                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:718:56: error: incomplete definition of type 'struct lconv'
+  718 |         locale_info->grouping_buffer = _PyMem_Strdup(lc->grouping);
+      |                                                      ~~^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Python/formatter_unicode.c:708:16: note: forward declaration of 'struct lconv'
+  708 |         struct lconv *lc = localeconv();
+      |                ^
+5 warnings and 4 errors generated.

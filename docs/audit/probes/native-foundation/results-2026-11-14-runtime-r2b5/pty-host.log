@@ -1,0 +1,2 @@
+["cargo", "test", "--locked", "--offline", "--target", "x86_64-unknown-linux-gnu", "--manifest-path", "pty_server/Cargo.toml"]
+error: manifest path `pty_server/Cargo.toml` does not exist

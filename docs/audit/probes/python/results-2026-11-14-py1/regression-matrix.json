@@ -1,0 +1,56 @@
+[
+  {
+    "cpus": 1,
+    "C": "73/73",
+    "CXX": "21/21",
+    "lifecycle": "17/17",
+    "TLS_once": "4/4",
+    "heap_ABI": "PASS",
+    "retained_admission": "PASS",
+    "condvar": "PASS (bounded functional)",
+    "signal_timeout_stress": {
+      "wakes": 38,
+      "timeouts": 22,
+      "exact_race": "UNQUALIFIED"
+    },
+    "strncpy_strings": "PASS",
+    "immediate_exit": "PASS",
+    "TCP": "NOT_RUN (unsupported)"
+  },
+  {
+    "cpus": 2,
+    "C": "73/73",
+    "CXX": "21/21",
+    "lifecycle": "17/17",
+    "TLS_once": "4/4",
+    "heap_ABI": "PASS",
+    "retained_admission": "PASS",
+    "condvar": "PASS (bounded functional)",
+    "signal_timeout_stress": {
+      "wakes": 38,
+      "timeouts": 22,
+      "exact_race": "UNQUALIFIED"
+    },
+    "strncpy_strings": "PASS",
+    "immediate_exit": "PASS",
+    "TCP": "PASS"
+  },
+  {
+    "cpus": 4,
+    "C": "73/73",
+    "CXX": "21/21",
+    "lifecycle": "17/17",
+    "TLS_once": "4/4",
+    "heap_ABI": "PASS",
+    "retained_admission": "PASS",
+    "condvar": "PASS (bounded functional)",
+    "signal_timeout_stress": {
+      "wakes": 35,
+      "timeouts": 25,
+      "exact_race": "UNQUALIFIED"
+    },
+    "strncpy_strings": "PASS",
+    "immediate_exit": "PASS",
+    "TCP": "PASS"
+  }
+]

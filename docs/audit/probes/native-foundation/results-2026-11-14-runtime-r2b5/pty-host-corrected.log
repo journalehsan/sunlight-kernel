@@ -1,0 +1,163 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Blocking waiting for file lock on build directory
+warning: module `NetOp` should have a snake case name
+ --> ipc/src/netop.rs:2:9
+  |
+2 | pub mod NetOp {
+  |         ^^^^^ help: convert the identifier to snake case: `net_op`
+  |
+  = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: module `NetWait` should have a snake case name
+  --> ipc/src/netop.rs:47:9
+   |
+47 | pub mod NetWait {
+   |         ^^^^^^^ help: convert the identifier to snake case: `net_wait`
+
+warning: module `NetStatus` should have a snake case name
+  --> ipc/src/netop.rs:59:9
+   |
+59 | pub mod NetStatus {
+   |         ^^^^^^^^^ help: convert the identifier to snake case: `net_status`
+
+warning: module `NetReady` should have a snake case name
+  --> ipc/src/netop.rs:77:9
+   |
+77 | pub mod NetReady {
+   |         ^^^^^^^^ help: convert the identifier to snake case: `net_ready`
+
+warning: module `NetDiagnostic` should have a snake case name
+  --> ipc/src/netop.rs:88:9
+   |
+88 | pub mod NetDiagnostic {
+   |         ^^^^^^^^^^^^^ help: convert the identifier to snake case: `net_diagnostic`
+
+warning: `sunlight-ipc` (lib) generated 5 warnings
+   Compiling pty_server v0.2.7279-alpha.2 (/home/ehsantor/Projects/sunlightos-kernel/services/pty_server)
+warning: fields `uid`, `gid`, `creator_pid`, and `creator_generation` are never read
+   --> services/pty_server/src/main.rs:97:5
+    |
+ 96 | struct PtyOwner {
+    |        -------- fields in this struct
+ 97 |     uid: u32,
+    |     ^^^
+ 98 |     gid: u32,
+    |     ^^^
+ 99 |     creator_pid: u64,
+    |     ^^^^^^^^^^^
+100 |     creator_generation: u64,
+    |     ^^^^^^^^^^^^^^^^^^
+    |
+    = note: `PtyOwner` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `state_bits` is never used
+   --> services/pty_server/src/main.rs:201:14
+    |
+162 | impl PtySession {
+    | --------------- method in this implementation
+...
+201 |     const fn state_bits(&self) -> u64 {
+    |              ^^^^^^^^^^
+
+warning: function `handle_message` is never used
+   --> services/pty_server/src/main.rs:786:4
+    |
+786 | fn handle_message(server: &mut PtyServer, msg: &IpcMsg) -> IpcMsg {
+    |    ^^^^^^^^^^^^^^
+
+warning: function `attach_slave` is never used
+   --> services/pty_server/src/main.rs:873:4
+    |
+873 | fn attach_slave(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    |    ^^^^^^^^^^^^
+
+warning: function `set_mode` is never used
+   --> services/pty_server/src/main.rs:923:4
+    |
+923 | fn set_mode(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    |    ^^^^^^^^
+
+warning: function `set_window_size` is never used
+   --> services/pty_server/src/main.rs:936:4
+    |
+936 | fn set_window_size(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `get_window_size` is never used
+   --> services/pty_server/src/main.rs:959:4
+    |
+959 | fn get_window_size(server: &PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+    |    ^^^^^^^^^^^^^^^
+
+warning: function `set_foreground_process` is never used
+   --> services/pty_server/src/main.rs:972:4
+    |
+972 | fn set_foreground_process(
+    |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_foreground_process` is never used
+    --> services/pty_server/src/main.rs:1000:4
+     |
+1000 | fn get_foreground_process(
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `write_slave` is never used
+    --> services/pty_server/src/main.rs:1047:4
+     |
+1047 | fn write_slave(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+     |    ^^^^^^^^^^^
+
+warning: function `read_master` is never used
+    --> services/pty_server/src/main.rs:1067:4
+     |
+1067 | fn read_master(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+     |    ^^^^^^^^^^^
+
+warning: function `read_slave` is never used
+    --> services/pty_server/src/main.rs:1085:4
+     |
+1085 | fn read_slave(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+     |    ^^^^^^^^^^
+
+warning: function `close_endpoint` is never used
+    --> services/pty_server/src/main.rs:1180:4
+     |
+1180 | fn close_endpoint(
+     |    ^^^^^^^^^^^^^^
+
+warning: function `close_session` is never used
+    --> services/pty_server/src/main.rs:1211:4
+     |
+1211 | fn close_session(server: &mut PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+     |    ^^^^^^^^^^^^^
+
+warning: function `get_state` is never used
+    --> services/pty_server/src/main.rs:1227:4
+     |
+1227 | fn get_state(server: &PtyServer, msg: &IpcMsg, caller: PtyCallerCredentials) -> IpcMsg {
+     |    ^^^^^^^^^
+
+warning: `pty_server` (bin "pty_server" test) generated 15 warnings
+    Finished `test` profile [optimized + debuginfo] target(s) in 12.76s
+     Running unittests src/main.rs (target/x86_64-unknown-linux-gnu/debug/deps/pty_server-c6a47679739387a2)
+
+running 11 tests
+test tests::endpoint_closure_retains_buffer_until_drain ... ok
+test tests::ring_is_bounded_and_preserves_order ... ok
+test tests::geometry_rejects_invalid_values ... ok
+test tests::capacity_is_bounded ... ok
+test tests::bulk_rejects_wrong_authority_generation_and_oversized_pages ... ok
+test tests::reused_slot_receives_a_new_generation ... ok
+test tests::reused_pid_cannot_use_previous_role_authority ... ok
+test tests::slave_readiness_checks_authority_generation_space_and_closure ... ok
+test tests::bulk_pages_preserve_order_across_backpressure_and_wraparound ... ok
+test tests::sessions_keep_independent_authoritative_sizes ... ok
+test tests::session_generation_exhaustion_never_wraps_to_stale_handle ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

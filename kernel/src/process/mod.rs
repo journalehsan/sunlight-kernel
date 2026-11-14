@@ -141,6 +141,10 @@ pub struct Process {
     pub state: ProcessState,
     pub address_space: AddressSpace,
     pub owns_address_space: bool,
+    /// Native group terminal receipt, independent of the original task state.
+    /// Only the retained VM owner is authoritative. Written under SCHEDULER;
+    /// None permits surviving members, Some fences admission and fixes status.
+    pub(crate) native_group_exit: Option<i32>,
     /// True for a borrower created through native syscalls 22 or 158. Synthetic
     /// MM-0 test borrowers leave this false so runtime diagnostics stay exact.
     pub native_thread: bool,
@@ -433,7 +437,39 @@ impl Process {
     /// Cleanup remains pending until that CPU safely releases this task.
     pub(crate) fn is_exiting(&self) -> bool {
         self.exit_cleanup_pending
+            || (self.native_group_owner() && self.native_group_exit.is_some())
             || matches!(self.state, ProcessState::Finished | ProcessState::Reaped)
+    }
+
+    pub(crate) fn native_group_owner(&self) -> bool {
+        self.owns_address_space && self.linux_tgid.is_none() && !self.is_linux_compat()
+    }
+
+    pub(crate) fn retained_native_group_live(&self) -> bool {
+        self.native_group_owner()
+            && self.state == ProcessState::Finished
+            && self.native_group_exit.is_none()
+    }
+
+    /// Session/PTY supervision follows the retained group, not its first task.
+    pub(crate) fn process_lifetime_live(&self) -> bool {
+        self.state != ProcessState::Reaped
+            && if self.native_group_owner() {
+                self.native_group_exit.is_none()
+            } else {
+                !self.is_exiting()
+            }
+    }
+
+    /// Parent waits concern group completion; Finished alone is task death.
+    pub(crate) fn wait_exit_code(&self) -> Option<i32> {
+        if self.native_group_owner() {
+            self.native_group_exit
+        } else if matches!(self.state, ProcessState::Finished | ProcessState::Reaped) {
+            Some(self.exit_code)
+        } else {
+            None
+        }
     }
 
     pub fn is_linux_compat(&self) -> bool {
@@ -501,6 +537,7 @@ impl Process {
             state: ProcessState::Ready,
             address_space,
             owns_address_space: true,
+            native_group_exit: None,
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,
@@ -742,6 +779,7 @@ impl Process {
             state: ProcessState::Ready,
             address_space,
             owns_address_space: false,
+            native_group_exit: None,
             native_thread: false,
             native_futex_wait: None,
             native_futex_deadline: None,

@@ -1,0 +1,1 @@
+Pinned libm 0.2.16 copied from rustc 8954863c81df429ebf96ea38a16c76f209995833 compiler-builtins/libm in the R1 native-std source overlay. MIT and per-file Sun/FreeBSD notices retained. Numerical sources unchanged. Cargo.toml removes only the test-only no-panic dependency. Native C wrappers live in src/math.rs. Long-double ABI is x87 f80 and is deliberately not narrowed to f64.

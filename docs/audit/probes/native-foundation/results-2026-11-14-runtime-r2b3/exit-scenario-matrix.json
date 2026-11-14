@@ -1,0 +1,227 @@
+{
+  "E1": {
+    "status": "BLOCKED",
+    "contract": "FAIL",
+    "cpus": {
+      "1": {
+        "status": "BLOCKED",
+        "required_contract": "FAIL",
+        "runner_status": "PASS",
+        "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+        "borrower_kill_trace": [
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+        ],
+        "evidence": "initial-exit-cpu-1/serial.log"
+      },
+      "2": {
+        "status": "BLOCKED",
+        "required_contract": "FAIL",
+        "runner_status": "PASS",
+        "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+        "borrower_kill_trace": [
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+        ],
+        "evidence": "initial-exit-cpu-2/serial.log"
+      },
+      "4": {
+        "status": "BLOCKED",
+        "required_contract": "FAIL",
+        "runner_status": "PASS",
+        "stdout": "I1 worker independently alive\nI3 initial calling pthread_exit with live worker\nI2 initial TLS cleanup entered\n",
+        "borrower_kill_trace": [
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit"
+        ],
+        "evidence": "initial-exit-cpu-4/serial.log"
+      }
+    }
+  },
+  "E2": {
+    "status": "PASS",
+    "evidence": [
+      "focused-cpu-1/results.json",
+      "focused-cpu-2/results.json",
+      "focused-cpu-4/results.json"
+    ],
+    "scope": "Worker return/explicit pthread_exit, TSD cleanup, join, main progress; detached callbacks also measured separately"
+  },
+  "E3": {
+    "status": "PASS",
+    "cpus": {
+      "1": {
+        "elf": {
+          "exit": 17,
+          "stdout": "EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "2": {
+        "elf": {
+          "exit": 17,
+          "stdout": "EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "4": {
+        "elf": {
+          "exit": 17,
+          "stdout": "EXIT live worker established\nEXIT returning main\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    "scope": "return main with live worker, callback exactly once, exit17 and runner physical cleanup"
+  },
+  "E4": {
+    "status": "PARTIAL",
+    "exit": {
+      "1": {
+        "elf": {
+          "exit": 23,
+          "stdout": "EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "2": {
+        "elf": {
+          "exit": 23,
+          "stdout": "EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "4": {
+        "elf": {
+          "exit": 23,
+          "stdout": "EXIT live worker established\nEXIT calling exit\nEXIT atexit callback\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    "_Exit": "BLOCKED: missing declaration and export; fresh compile/link negative probes retained",
+    "callback_free_group_157": {
+      "1": {
+        "elf": {
+          "exit": 29,
+          "stdout": "EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "2": {
+        "elf": {
+          "exit": 29,
+          "stdout": "EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n",
+          "stderr": "",
+          "pass_": true
+        }
+      },
+      "4": {
+        "elf": {
+          "exit": 29,
+          "stdout": "EXIT live worker established\nEXIT callback-free group syscall157 (not public _Exit)\n",
+          "stderr": "",
+          "pass_": true
+        }
+      }
+    },
+    "warning": "Raw syscall157 witness does not implement or validate public _Exit"
+  },
+  "E5": {
+    "status": "BLOCKED",
+    "reason": "Final surviving worker after initial thread-only exit is unreachable; normal group reaping does not qualify this case"
+  },
+  "E6": {
+    "status": "PARTIAL",
+    "external_owner_kill": {
+      "1": {
+        "runner_status": "PASS",
+        "result": {
+          "elf": {
+            "exit": 137,
+            "stdout": "EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n",
+            "stderr": "",
+            "pass_": true
+          }
+        },
+        "trace": [
+          "[SCHED] process_exit_begin external pid=100 reason=signal(SIGKILL)",
+          "[SCHED] process_mark_finished pid=100 name='elf' reason=signal(SIGKILL) code=137 (external)",
+          "[SCHED] terminating pid=100 name='elf' reason=signal(SIGKILL)",
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit",
+          "[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1",
+          "[NATIVE-C-REAP-END] case=0 exit=137 user_frames=1294 page_tables=11 owned_frames=0 fds=0 stack=0"
+        ]
+      },
+      "2": {
+        "runner_status": "PASS",
+        "result": {
+          "elf": {
+            "exit": 137,
+            "stdout": "EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n",
+            "stderr": "",
+            "pass_": true
+          }
+        },
+        "trace": [
+          "[SCHED] process_exit_begin external pid=100 reason=signal(SIGKILL)",
+          "[SCHED] process_mark_finished pid=100 name='elf' reason=signal(SIGKILL) code=137 (external)",
+          "[SCHED] terminating pid=100 name='elf' reason=signal(SIGKILL)",
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit",
+          "[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1",
+          "[NATIVE-C-REAP-END] case=0 exit=137 user_frames=1294 page_tables=11 owned_frames=0 fds=0 stack=0"
+        ]
+      },
+      "4": {
+        "runner_status": "PASS",
+        "result": {
+          "elf": {
+            "exit": 137,
+            "stdout": "EXIT live worker established\nEXIT worker issuing external owner SIGKILL\n",
+            "stderr": "",
+            "pass_": true
+          }
+        },
+        "trace": [
+          "[SCHED] process_exit_begin external pid=100 reason=signal(SIGKILL)",
+          "[SCHED] process_mark_finished pid=100 name='elf' reason=signal(SIGKILL) code=137 (external)",
+          "[SCHED] terminating pid=100 name='elf' reason=signal(SIGKILL)",
+          "[SCHED] shared-address-space borrower pid=101 terminated reason=address-space-owner-exit",
+          "[NATIVE-C-REAP-BEGIN] case=0 fds=3 file_frames=1",
+          "[NATIVE-C-REAP-END] case=0 exit=137 user_frames=1294 page_tables=11 owned_frames=0 fds=0 stack=0"
+        ]
+      }
+    },
+    "scope": "Borrower invokes authorized raw kill72 on live initial owner; expected137; final native runner accounting retained",
+    "unqualified": [
+      "forced termination after initial thread-only exit",
+      "live endpoint/capability/session authority revocation"
+    ]
+  },
+  "E7": {
+    "status": "NOT_RUN",
+    "source_review": "process/foreground.rs:142-207 and terminate_process_by_pid cancel_foreground paths examined",
+    "reason": "No authenticated PTY/session guest fixture executed; generic headless reaping cannot qualify tab lifecycle"
+  },
+  "E8": {
+    "status": "PARTIAL",
+    "public_handle_reuse": "256 stale join/detach cycles per CPU plus 64 retained/reaped controls and reuse",
+    "scheduler_slot_reuse": {
+      "1": [
+        "[THREAD-LIFECYCLE] created=65 finished=65 reaped=65 borrower_reclaim_skipped=65 stale_wake_rejected=0 borrower_slots_reused=64 max_live=1"
+      ],
+      "2": [
+        "[THREAD-LIFECYCLE] created=65 finished=65 reaped=65 borrower_reclaim_skipped=65 stale_wake_rejected=0 borrower_slots_reused=64 max_live=1"
+      ],
+      "4": [
+        "[THREAD-LIFECYCLE] created=65 finished=65 reaped=65 borrower_reclaim_skipped=65 stale_wake_rejected=0 borrower_slots_reused=64 max_live=1"
+      ]
+    },
+    "stale_kernel_generation_targeting": "NOT_RUN",
+    "reason": "Monotonic TIDs and slot reuse are distinct; public token tests do not qualify stale kernel identity rejection"
+  }
+}

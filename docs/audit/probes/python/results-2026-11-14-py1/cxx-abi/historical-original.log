@@ -1,0 +1,12 @@
+$ clang++ --target=x86_64-unknown-none-elf -nostdinc -I/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include -nostdlib -fuse-ld=lld /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/python/results-2026-11-14-py1/cxx-abi/original.elf
+In file included from /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/cpp-runtime.cpp:4:
+In file included from /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/thread:1:
+In file included from /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/../../sunlight-cxx/include/thread:3:
+In file included from /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/pthread.h:15:
+In file included from /home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/time.h:5:
+/home/ehsantor/Projects/sunlightos-kernel/sunlight-libc/include/sys/types.h:3:10: fatal error: 'stddef.h' file not found
+    3 | #include <stddef.h>
+      |          ^~~~~~~~~~
+1 error generated.
+
+exit=1

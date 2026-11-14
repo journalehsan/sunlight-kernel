@@ -1,12 +1,16 @@
 //! Raw syscall plumbing: numbers and inline-assembly stubs.
 
 // Mirror of `SunlightSyscall` (kernel/src/arch/x86_64/syscall.rs).
+/// Calling-thread exit; used by native worker and pthread trampolines.
 pub const SYS_PROCESS_EXIT: u64 = 20;
+pub const SYS_PROCESS_EXIT_GROUP: u64 = 157;
 pub const SYS_PROCESS_YIELD: u64 = 21;
 pub const SYS_FORK: u64 = 30;
 pub const SYS_EXEC: u64 = 31;
 pub const SYS_WAITPID: u64 = 32;
 pub const SYS_GETPID: u64 = 33;
+/// Read-only retained native group pid/ppid or calling task tid (selector 0/1/2).
+pub const SYS_NATIVE_PROCESS_IDENTITY: u64 = 178;
 pub const SYS_GETUID: u64 = 35;
 pub const SYS_GETGID: u64 = 36;
 pub const SYS_SPAWN: u64 = 39;
@@ -40,6 +44,7 @@ pub const SYS_FILE_RESERVE: u64 = 150;
 pub const SYS_FILE_SYNC: u64 = 153;
 pub const SYS_DIR_SYNC: u64 = 154;
 pub const SYS_STAT: u64 = 61;
+pub const SYS_RESOLVE_PATH: u64 = 179;
 pub const SYS_MKDIR: u64 = 62;
 pub const SYS_CHDIR: u64 = 63;
 pub const SYS_GETCWD: u64 = 64;

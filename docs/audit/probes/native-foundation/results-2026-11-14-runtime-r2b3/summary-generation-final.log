@@ -1,0 +1,20 @@
+{
+  "gates": {
+    "G1": "PASS",
+    "G2": "BLOCKED",
+    "G3": "PARTIAL",
+    "G4": "PARTIAL",
+    "G5": "PARTIAL",
+    "G6": "UNQUALIFIED",
+    "G7": "PARTIAL",
+    "G8": "PASS",
+    "G9": "PASS"
+  },
+  "changed_files": [
+    "sunlight-libc/include/pthread.h",
+    "sunlight-libc/src/pthread.rs"
+  ],
+  "missing": [],
+  "symlinks_changed": [],
+  "unexpected_run_failures": []
+}

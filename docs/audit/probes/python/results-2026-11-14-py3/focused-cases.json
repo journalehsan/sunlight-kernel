@@ -1,0 +1,17 @@
+[
+  {
+    "name": "py3-contracts",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py3-contracts.elf",
+    "expected_exit": 0
+  },
+  {
+    "name": "py3-exit",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py3-exit.elf",
+    "expected_exit": 38
+  },
+  {
+    "name": "py3-filesystem",
+    "elf": "/home/ehsantor/Projects/sunlightos-kernel/target/py3-filesystem.elf",
+    "expected_exit": 0
+  }
+]

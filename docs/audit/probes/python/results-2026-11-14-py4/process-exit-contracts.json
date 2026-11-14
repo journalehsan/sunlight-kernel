@@ -1,0 +1,55 @@
+{
+  "status": "PARTIAL",
+  "retained_owner_witness": {
+    "1": [
+      "[NATIVE-GROUP-WITNESS] owner=144 incarnation=852 vm=95 worker=503 wi=853 owner_finished=1 quiescent=1 group_live=1 cpu=0"
+    ],
+    "2": [
+      "[NATIVE-GROUP-WITNESS] owner=144 incarnation=852 vm=95 worker=503 wi=853 owner_finished=1 quiescent=1 group_live=1 cpu=0"
+    ],
+    "4": [
+      "[NATIVE-GROUP-WITNESS] owner=144 incarnation=852 vm=95 worker=503 wi=853 owner_finished=1 quiescent=1 group_live=1 cpu=0"
+    ]
+  },
+  "identity_query": "PASS",
+  "ABI": "syscall 178 rdi=0 group PID, 1 stored group PPID, 2 task TID; native sentinels EINVAL/EIO; libc pid_t int with EOVERFLOW check",
+  "implementation": [
+    "kernel/src/arch/x86_64/syscall.rs:sys_native_process_identity",
+    "kernel/src/sched/native_group.rs:native_group_owner_index",
+    "ipc/src/lib.rs:SunlightSyscall::NativeProcessIdentity",
+    "sunlight-libc/src/c_file.rs:identity/getpid/getppid/gettid",
+    "sunlight-libc/include/unistd.h",
+    "sunlight-libc/src/sys.rs"
+  ],
+  "group_generation": "Existing full AddressSpaceIdentity comparison, under SCHEDULER; retained owner survives until all borrowers reap. Syscall accepts no target and grants no authority.",
+  "historical_identity": "Raw syscall33 and Rust crate::getpid remain historical task identities; C group query uses separate ABI.",
+  "parent_limit": "getppid returns the stored parent of the retained native group. Orphan reparenting is not implemented or validated; no full POSIX parent-lifecycle claim.",
+  "exit": {
+    "_Exit": "Existing callback-free process-group syscall157",
+    "_exit": "Same existing process-group syscall157",
+    "exit": "Existing atexit then group termination",
+    "main_return": "Existing normal process-wide termination",
+    "pthread_exit": "Existing caller-thread-only exit; live borrowers retain owner and shared resources",
+    "wait_waitpid": "Existing native child wait primitives unchanged; no new POSIX waitpid C ABI or conformance claim"
+  },
+  "tests": [
+    "live group PID common to owner/worker and distinct thread IDs",
+    "stored group parent stable across owner/worker",
+    "invalid selectors rejected",
+    "owner pthread_exit followed by independent worker identity check and kernel Finished/quiescent witness",
+    "existing 17 lifecycle cases and process-wide exit controls per CPU"
+  ],
+  "not_run": [
+    "Orphan/reparented child execution",
+    "PID overflow injection",
+    "PID/generation reuse adversarial targeting (no new target API)",
+    "Controlled competing termination/retirement schedules"
+  ],
+  "evidence": [
+    "process-test.c",
+    "process-identity-design.json",
+    "validated-functional-cpu-1/serial.log",
+    "validated-functional-cpu-2/serial.log",
+    "validated-functional-cpu-4/serial.log"
+  ]
+}

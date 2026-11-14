@@ -1,0 +1,1 @@
+PY7 directory subset PASS: open/dup/rename/fstat/close; pinned lookup/enumeration/removal NOT_RUN

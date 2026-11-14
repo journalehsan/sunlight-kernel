@@ -1,0 +1,8 @@
+{
+  "py2-format": {
+    "exit": 1,
+    "stdout": "FAIL line=19 case=0\n",
+    "stderr": "",
+    "pass_": false
+  }
+}

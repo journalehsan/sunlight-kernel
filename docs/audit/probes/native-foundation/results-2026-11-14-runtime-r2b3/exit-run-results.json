@@ -1,0 +1,412 @@
+[
+  {
+    "name": "exit-matrix-build",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-O2",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-matrix.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-0-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "0",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "17",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-0-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "0",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "17",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-0-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "0",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "17",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-0-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-1-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "1",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "23",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-1-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "1",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "23",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-1-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "1",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "23",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-1-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-2-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "2",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "29",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-2-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "2",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "29",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-2-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "2",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "29",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-2-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-3-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "3",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "137",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-3-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "3",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "137",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-mode-3-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-matrix.elf",
+      "--arg",
+      "3",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "137",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/exit-mode-3-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "exit-api-negative",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "-std=c11",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-c",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-api-probe.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-api.o"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "exit-link-negative",
+    "command": [
+      "python3",
+      "tools/native-c/cc.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b2/exit-link-probe.c",
+      "-o",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-exit-link.elf"
+    ],
+    "exit": 1
+  },
+  {
+    "name": "detached-capacity-build",
+    "command": [
+      "python3",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/build-detached-capacity.py"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "detached-capacity-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+      "--cpus",
+      "1",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "detached-capacity-cpu-2",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+      "--cpus",
+      "2",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-2"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "detached-capacity-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-detached-capacity.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "120",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/detached-capacity-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "regression-suite-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "1",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/regression-suite-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "heap-abi-cpu-1",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf",
+      "--cpus",
+      "1",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/heap-abi-cpu-1"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "regression-suite-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "--suite",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/regression-suite-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "heap-abi-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/guest.py",
+      "/home/ehsantor/Projects/sunlightos-kernel/target/r2b3-heap-abi.elf",
+      "--cpus",
+      "4",
+      "--timeout",
+      "90",
+      "--expect-exit",
+      "0",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/heap-abi-cpu-4"
+    ],
+    "exit": 0
+  },
+  {
+    "name": "tcp-loopback-cpu-4",
+    "command": [
+      "python3",
+      "tools/native-c/run_poll_tcp.py",
+      "--mode",
+      "loopback",
+      "--cpus",
+      "4",
+      "--timeout",
+      "180",
+      "--out",
+      "/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2b3/tcp-loopback-cpu-4"
+    ],
+    "exit": 0
+  }
+]

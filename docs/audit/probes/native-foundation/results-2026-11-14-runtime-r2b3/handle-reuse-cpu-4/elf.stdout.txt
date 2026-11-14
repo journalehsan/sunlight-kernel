@@ -1,0 +1,3 @@
+HANDLE generation old=0x2 current=0x3 stale rejected iteration=0
+HANDLE generation old=0x101 current=0x102 stale rejected iteration=255
+HANDLE 256 reuse cycles: stale join/detach rejected; live joins intact

@@ -1,0 +1,1 @@
+PY1 condvar PASS: 40 rounds x 4 waiters; realtime/monotonic; busy destroy; reacquire

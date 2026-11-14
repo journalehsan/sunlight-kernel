@@ -1,0 +1,69 @@
+python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -c -fno-strict-overflow -Wsign-compare -Wunreachable-code -DNDEBUG -g -O3 -Wall -O2 -O2 -std=c11 -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -Wstrict-prototypes -Werror=implicit-function-declaration -fvisibility=hidden -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/mimalloc -IObjects -IInclude -IPython -I. -I/tmp/sunlight-py1-cpython/Python-3.13.0/Include -DPy_BUILD_CORE '-DPYTHONPATH=""' '-DPREFIX="/usr/local"' '-DEXEC_PREFIX="/usr/local"' '-DVERSION="3.13"' '-DVPATH="/tmp/sunlight-py1-cpython/Python-3.13.0"' '-DPLATLIBDIR="lib"' '-DPYTHONFRAMEWORK=""' -o Modules/getpath.o /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c
+In file included from /tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:4:
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:107:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  107 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:112:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  112 |     struct _Py_stat_struct *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:101:27: note: expanded from macro '_Py_stat_struct'
+  101 | #  define _Py_stat_struct stat
+      |                           ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:117:12: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  117 |     struct stat *status);
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/internal/pycore_fileutils.h:232:35: warning: declaration of 'struct stat' will not be visible outside of this function [-Wvisibility]
+  232 | _Py_wstat(const wchar_t *, struct stat *);
+      |                                   ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:186:21: error: variable has incomplete type 'struct stat'
+  186 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:186:16: note: forward declaration of 'struct stat'
+  186 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:187:44: error: use of undeclared identifier 'S_IFDIR'
+  187 |         r = (_Py_wstat(path, &st) == 0) && S_ISDIR(st.st_mode) ? Py_True : Py_False;
+      |                                            ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:27:41: note: expanded from macro 'S_ISDIR'
+   27 | #  define S_ISDIR(x) (((x) & S_IFMT) == S_IFDIR)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:211:21: error: variable has incomplete type 'struct stat'
+  211 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:211:16: note: forward declaration of 'struct stat'
+  211 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:212:44: error: use of undeclared identifier 'S_IFREG'
+  212 |         r = (_Py_wstat(path, &st) == 0) && S_ISREG(st.st_mode) ? Py_True : Py_False;
+      |                                            ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:240:21: error: variable has incomplete type 'struct stat'
+  240 |         struct stat st;
+      |                     ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:240:16: note: forward declaration of 'struct stat'
+  240 |         struct stat st;
+      |                ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:242:13: error: use of undeclared identifier 'S_IFREG'
+  242 |             S_ISREG(st.st_mode) &&
+      |             ^~~~~~~~~~~~~~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Include/fileutils.h:24:41: note: expanded from macro 'S_ISREG'
+   24 | #  define S_ISREG(x) (((x) & S_IFMT) == S_IFREG)
+      |                                         ^~~~~~~
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:480:17: error: variable has incomplete type 'struct stat'
+  480 |     struct stat st;
+      |                 ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:480:12: note: forward declaration of 'struct stat'
+  480 |     struct stat st;
+      |            ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:491:9: error: call to undeclared function 'lstat'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  491 |     if (lstat(narrow, &st)) {
+      |         ^
+/tmp/sunlight-py1-cpython/Python-3.13.0/Modules/getpath.c:725:9: error: call to undeclared function 'unsetenv'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]
+  725 |         unsetenv(&key[4]);
+      |         ^
+4 warnings and 9 errors generated.

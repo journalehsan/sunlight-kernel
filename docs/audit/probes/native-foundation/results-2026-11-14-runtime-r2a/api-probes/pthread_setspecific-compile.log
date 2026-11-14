@@ -1,0 +1,7 @@
+$ python3 /home/ehsantor/Projects/sunlightos-kernel/tools/native-c/cc.py -std=c11 -Werror -c /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_setspecific.c -o /home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_setspecific.o
+/home/ehsantor/Projects/sunlightos-kernel/docs/audit/probes/native-foundation/results-2026-11-14-runtime-r2a/api-probes/pthread_setspecific.c:2:44: error: use of undeclared identifier 'pthread_setspecific'
+    2 | void * volatile required_symbol = (void *)&pthread_setspecific;
+      |                                            ^~~~~~~~~~~~~~~~~~~
+1 error generated.
+
+exit=1

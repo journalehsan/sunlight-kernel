@@ -1,0 +1,8 @@
+{
+  "elf": {
+    "exit": 0,
+    "stdout": "PY7 directory subset PASS: open/dup/rename/fstat/close; pinned lookup/enumeration/removal NOT_RUN\n",
+    "stderr": "",
+    "pass_": true
+  }
+}

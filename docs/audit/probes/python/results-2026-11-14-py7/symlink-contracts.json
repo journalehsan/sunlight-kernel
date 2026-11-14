@@ -1,0 +1,8 @@
+{
+  "status": "BLOCKED",
+  "dependency": "G4 retained directory contract incomplete",
+  "Tmpfs": "Possible inode/quota-owned representation, not implemented",
+  "FAT": "Unsupported; no representation approved or invented",
+  "source": "sunlight-fs/src/vfs.rs FileType; sunlight-fs/src/vfs/lookup.rs BackendCapabilities",
+  "second_resolver_added": false
+}
