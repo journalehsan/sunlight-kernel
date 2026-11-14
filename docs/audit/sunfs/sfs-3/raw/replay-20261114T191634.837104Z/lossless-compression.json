@@ -1,0 +1,188 @@
+{
+  "raw/replay-20261114T191634.837104Z/sfs3/create-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/create-committed.img.gz": {
+    "original_sha256": "81266671aad42dbc2b0b142c269fa912861198f977a84cb5e186f9558d0202b9",
+    "compressed_sha256": "c604f363bc273c2f6b37cbf4a1088f58be772b5afe406684520c080c33f38356",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20564
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/directory-move-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/directory-move-committed.img.gz": {
+    "original_sha256": "01d41d7242aeb3c70973e44cf5ba1a188b1c5d12b64960b97cc6d0f9f5b0aa5c",
+    "compressed_sha256": "fccf5733052deacad99ec839ff0180bf09da3dec57077fa3ac9a1dcfb4f18ae0",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20357
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/directory-replace-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/directory-replace-committed.img.gz": {
+    "original_sha256": "767bf17487feca381637c2e68d213512f50d51c613839f9d03a9b49fc6d38278",
+    "compressed_sha256": "5510d7cd6aa3f92f1c15f8aaa21c6b4f0ccf5cb77dad0332d74c200f253a82cb",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20397
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/last-close-reap-before.img.gz": {
+    "original_sha256": "1b896df7d5af9b2b8f14c7e413dbf59d968979510429f1dbfc257b2259fe0a10",
+    "compressed_sha256": "3d55872809f4c0a937519dc012d44ccc398cbb7395a09dea78828a2a37780eae",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20343
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/last-close-reap-committed.img.gz": {
+    "original_sha256": "f66ac3f7db71b7be999f7d739722e542a0bfd9f7203b27175dcb495b736a9145",
+    "compressed_sha256": "3a0c0f07d1c052a9b5716f660239ec0c580a70fcc6d8767b42b82a5b6cf3a4fc",
+    "original_bytes": 16777216,
+    "compressed_bytes": 21000
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/mkdir-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/mkdir-committed.img.gz": {
+    "original_sha256": "802aff14880a0f7f2929ec2b86923a6483b55bd6c18ed985274e06367cac7e36",
+    "compressed_sha256": "772be2946ebeb513f407fc1fdceb6965e2200b3989c89dfea836949c726bebcc",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20480
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/orphan-write-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/orphan-write-committed.img.gz": {
+    "original_sha256": "2ed9748deb5d91d38f2a5583478ebd4d731ca0976cde93a97257122fbd4b7e49",
+    "compressed_sha256": "9437d5dd760c403a94cb42bfa871ecf13452d430a522ccdbd68f3489ab7db345",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20340
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/recovery-reap-before.img.gz": {
+    "original_sha256": "1b896df7d5af9b2b8f14c7e413dbf59d968979510429f1dbfc257b2259fe0a10",
+    "compressed_sha256": "3d55872809f4c0a937519dc012d44ccc398cbb7395a09dea78828a2a37780eae",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20343
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/recovery-reap-committed.img.gz": {
+    "original_sha256": "f66ac3f7db71b7be999f7d739722e542a0bfd9f7203b27175dcb495b736a9145",
+    "compressed_sha256": "3a0c0f07d1c052a9b5716f660239ec0c580a70fcc6d8767b42b82a5b6cf3a4fc",
+    "original_bytes": 16777216,
+    "compressed_bytes": 21000
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rename-cross-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rename-cross-committed.img.gz": {
+    "original_sha256": "3b69b145fd65b015cec2cbe3a3b0397d52fc17277fb19a7c0511d583e2907e04",
+    "compressed_sha256": "31521e0a4b0cb92c36e6434c5ed967d380410f4254cb2671b806742e8579ff58",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20312
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rename-same-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rename-same-committed.img.gz": {
+    "original_sha256": "dc5fbdfa4a2fb106170a3c8e7c4f894aee98a77fd61abe9a2db9749a48fc73fd",
+    "compressed_sha256": "011ebf712f7f45d601ca00bcffb0e738c2896e0c375582a9f2f1ca7085f1a804",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20341
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/replace-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/replace-committed.img.gz": {
+    "original_sha256": "e00d0677edaf2233c8408b0061cf97ed600d95c8dbfcd77b552767e6f91f1bfa",
+    "compressed_sha256": "79b30d40cc900264ae4e522662c89ee2182b2794be2c595bd6302319c10b4d0d",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20347
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rmdir-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/rmdir-committed.img.gz": {
+    "original_sha256": "a9f7f33a511803da26347a1a01eb9d4fbe3cd41a4de1fcda6326ad7550ba21d1",
+    "compressed_sha256": "6b038ae8322bb187287129ceeedae894df004117189a464ef98d5a08509bfe5c",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20388
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/three-reap-before.img.gz": {
+    "original_sha256": "a7fb511e51a23a2cdac474d825cb76eedf65acfe8d82f278202fbd7e37c50529",
+    "compressed_sha256": "314cd29c5e87db8d2307f6ad7844d207a2d4801076a381536223b65953d07cf8",
+    "original_bytes": 16777216,
+    "compressed_bytes": 21295
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/three-reap-committed.img.gz": {
+    "original_sha256": "0291b3e13a94d70c361eb4709d7bbedea4886607d5f057ab07a60911f5197750",
+    "compressed_sha256": "6a30e60091a193499cce62843bb59620dc3dca851842a91eb8218a5b93626489",
+    "original_bytes": 16777216,
+    "compressed_bytes": 22506
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/three-replace-before.img.gz": {
+    "original_sha256": "239855d11f01ab743885fc12f1ef387541b30cd1f0a62834a12012ee5b135483",
+    "compressed_sha256": "210f4a4e29c367a74def42311f426bb8a7e039b20fc312e2c10e46160b03946e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20409
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/three-replace-committed.img.gz": {
+    "original_sha256": "e3e16c6627cf094a26125650eb64c2944cd70be7e268445274399faa9a4bacdd",
+    "compressed_sha256": "22f0d2c0cb39c5b36e0462e9a1b25dd55f5f88c1b5c082cb9bae697e2df9d042",
+    "original_bytes": 16777216,
+    "compressed_bytes": 21817
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/traces/replace-seed-1397117747-event-0-power-before.trace.gz": {
+    "original_sha256": "664fd9bb9fe221c7a4ce49e28e1bab68636b3bf373525a92c17f3f527ddb81bb",
+    "compressed_sha256": "9b7eebc79186e0e04d2ffe47540b6f75d92b1064c6c416ec03e82076a93d54bb",
+    "original_bytes": 12359,
+    "compressed_bytes": 808
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/unlink-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/unlink-committed.img.gz": {
+    "original_sha256": "1b896df7d5af9b2b8f14c7e413dbf59d968979510429f1dbfc257b2259fe0a10",
+    "compressed_sha256": "3d55872809f4c0a937519dc012d44ccc398cbb7395a09dea78828a2a37780eae",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20343
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/write-before.img.gz": {
+    "original_sha256": "fa2d5fa99cde92bb94db2d9072232859f4ffbb71ac51830a4a9b257fbed7f07f",
+    "compressed_sha256": "607365cdc2faa8d8ca7387096b8e11cf404525d6487f71d422ba34a850bad23e",
+    "original_bytes": 16777216,
+    "compressed_bytes": 18819
+  },
+  "raw/replay-20261114T191634.837104Z/sfs3/write-committed.img.gz": {
+    "original_sha256": "46fd1f1fdda3198357c8998406007c0035fd914ff06882ca6778a142a943367e",
+    "compressed_sha256": "819858052a8ffa24cbcac357917b7d62b82f0f709220e9f550a52631e179d9db",
+    "original_bytes": 16777216,
+    "compressed_bytes": 20343
+  }
+}

@@ -1,0 +1,1 @@
+{"case":"mixed-seed-1397117748-event-0-power-before","geometry_bps":64,"initial_generation":5,"event":200,"fault":"Some(PowerLoss)","operation":"read","expected":[5],"selected":5,"acknowledged":false,"initial_protected":194,"reserved_blocks":29,"recovery_floor":541,"checker":"CLEAN","bytes_namespace_ownership":"PASS","retry":"PASS_OR_READONLY","status":"PASS"}

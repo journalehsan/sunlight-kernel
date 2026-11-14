@@ -1,0 +1,92 @@
+{
+  "milestone": "SFS-4",
+  "overall": "SFS-4 COMPLETE",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS",
+    "G8": "PASS",
+    "G9": "PASS",
+    "G10": "PASS"
+  },
+  "gate_evidence": {
+    "G1": [
+      "source-baseline.json",
+      "allocation-retention-model.json"
+    ],
+    "G2": [
+      "cleaner-progress.json"
+    ],
+    "G3": [
+      "segment-liveness.json",
+      "checker-agreement.json"
+    ],
+    "G4": [
+      "cleaner-relocation.json",
+      "crash-matrix.json"
+    ],
+    "G5": [
+      "cleaner-admission.json"
+    ],
+    "G6": [
+      "cleaner-progress.json",
+      "performance-baseline.json"
+    ],
+    "G7": [
+      "orphan-cleaner-interaction.json"
+    ],
+    "G8": [
+      "crash-matrix.json",
+      "checker-agreement.json",
+      "cpu-independent-replay.json"
+    ],
+    "G9": [
+      "regression-results.json"
+    ],
+    "G10": [
+      "source-integrity.json",
+      "modified-production-files.json"
+    ]
+  },
+  "scope": "bounded hosted exclusive-owner, explicit one-checkpoint full-snapshot cleaner on a clean working epoch",
+  "attempt": "raw/qualification-20261114T204037.540668Z",
+  "source_manifest": "raw/qualification-20261114T204037.540668Z/compiled-source.json",
+  "source_manifest_sha256": "54ba24c9cb961201aac97ca65b9f0b2434c33ff86adaf416977ca0d71c35b638",
+  "incoming_revision": "24aa8186b8abd55099727d37d3da53e04d83c6be",
+  "incoming_branch": "main",
+  "tests_per_profile": {
+    "dev": 54,
+    "release": 54
+  },
+  "new_tests_per_profile": 11,
+  "new_cleaner_schedules_per_profile": 2960,
+  "legacy_schedules_per_profile": 10182,
+  "total_schedules_per_profile": 13142,
+  "new_checker_defects_per_profile": {
+    "image_mutations": 7,
+    "manifest_mutations": 5
+  },
+  "storage_regressions": 139,
+  "positive_net_reclaim": {
+    "segment_blocks": 64,
+    "blocks": 128,
+    "bytes": 524288
+  },
+  "negative_geometries": [
+    256,
+    512
+  ],
+  "native_guest": "NOT_RUN",
+  "threaded_concurrency": "NOT_RUN",
+  "cross_isa": "NOT_RUN",
+  "physical_durability": "UNQUALIFIED",
+  "format": "experimental v0.2 unchanged",
+  "commit": false,
+  "push": false,
+  "completion_local_date": "2026-11-15",
+  "integrity_verification": "python3 tools/sunfs4_validate.py --integrity-only"
+}

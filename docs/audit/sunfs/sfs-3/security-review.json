@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "scope": "source inspection and executed bounded malformed-image/mode/stale/cap/admission tests; not independent external audit",
+  "source_sha256": {
+    "sunlight-sunfs/src/engine.rs": "28578e3b7bc7434811050aa248fa13e3141d402a94b50ed491386aad217fe6ab",
+    "sunlight-sunfs/src/engine/namespace.rs": "3fd14f6a264b552b0266c070a00b0119ea5027dbf08302f69b551f80601a78fa",
+    "sunlight-sunfs/src/engine/handles.rs": "8d6fc0e88f9bc5689c33fcc6ae1d5425607f04bd226cecdd3672145c2706eb3e",
+    "sunlight-sunfs/src/engine/recovery.rs": "0d79d6d5027564179203d40a145c990c78ad97740be6ed50ab340d5a658c3dcf",
+    "sunlight-sunfs-check/src/lib.rs": "7356b9725c02f46696e2b877a042f2ee019132a53bb889a5cd105e3100692fb9"
+  },
+  "checks": {
+    "name_allocation": "length checked before bounded name copy; codec validates UTF-8, slash, NUL, dot and dot-dot",
+    "tree": "directory type before walk; root clamp; checked depth/entry/object caps; no recursive graph traversal",
+    "descriptor_authority": "private session/token registration; modes and shared offsets belong to descriptions; no identity-based orphan open",
+    "last_close": "checked reference consumption, no device I/O, no allocator/free path",
+    "rename": "all fallible semantic admission before binding changes; one working epoch/sole full-volume publication",
+    "orphans": "capacity before mutation; zero links/mapped backing; explicit unpinned reap; admission rollback and uncertain-I/O quarantine",
+    "cold_media": "full graph and complete retained closure validation before any writable operation; independent checker traversal",
+    "dependencies": "no dependency, codec, formatter, geometry or lockfile change"
+  },
+  "confirmed_unresolved_defects": [],
+  "limits": [
+    "core open/legacy selector APIs trust their caller; VFS authentication/credentials remain outside this engine",
+    "global heap OOM retains inherited fail-stop behavior; recoverable allocation failure is UNQUALIFIED",
+    "thread-race, DMA fencing, driver durability and native integration are NOT_RUN or UNQUALIFIED",
+    "read-only corruption fallback requires future explicit operator recovery; no repair path",
+    "NoSpace can defer orphan retirement; no cleaner/progress guarantee"
+  ]
+}

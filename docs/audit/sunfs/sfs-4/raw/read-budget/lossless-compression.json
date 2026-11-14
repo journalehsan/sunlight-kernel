@@ -1,0 +1,20 @@
+[
+  {
+    "path": "changed-source-budget.trace.gz",
+    "original_bytes": 4151,
+    "original_sha256": "cc4b39256e87b1d112a8a444766fc8f77dca9804339631306bdf0aedf810559a",
+    "compressed_sha256": "7c5f60ae7c86bc442e7617204d12f887d2b6eacc4e275d7ca9a1ae31d551a3ce"
+  },
+  {
+    "path": "changed-source.img.gz",
+    "original_bytes": 16777216,
+    "original_sha256": "8d6d6b201dbd2f962d4e87d70bb528ab8c9eab512499cc76208fda7dbde06a8d",
+    "compressed_sha256": "80dc24803cde3d4f3ec62d1552d8b0a9ef0d3484b92fe4e3fc1be04a259b2517"
+  },
+  {
+    "path": "changed-source.trace.gz",
+    "original_bytes": 29548,
+    "original_sha256": "88007c309531a3d00033d2db5d79dc7cfd22d2a67210991a9823be87b5ca4cee",
+    "compressed_sha256": "819bef2e93ed3c626e21b34fd44f03acb0806d075b46e6192ef8c3f359c67d7f"
+  }
+]

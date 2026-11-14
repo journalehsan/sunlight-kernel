@@ -7,6 +7,8 @@ use std::{
     path::Path,
 };
 use sunlight_sunfs::codec::*;
+mod relocation;
+pub use relocation::{check_relocation, RelocationAudit, RelocationManifest};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
     Clean,
@@ -123,10 +125,15 @@ pub struct Slot {
 }
 #[derive(Clone, Debug)]
 pub struct CheckedNode {
+    pub inode: Inode,
     pub id: NodeId,
     pub kind: u8,
     pub size: u64,
+    pub content_generation: u64,
     pub extents: Vec<Extent>,
+    pub parent: NodeId,
+    pub nlink: u32,
+    pub entries: Vec<DirEntry>,
 }
 #[derive(Clone, Debug)]
 pub struct CheckedGeneration {
@@ -135,6 +142,7 @@ pub struct CheckedGeneration {
     pub blocks: Vec<u64>,
     pub nodes: Vec<CheckedNode>,
     pub root_entries: Vec<DirEntry>,
+    pub orphans: Vec<Orphan>,
 }
 #[derive(Clone, Debug)]
 pub struct Report {
@@ -442,10 +450,15 @@ impl<R: ReadImage> Walker<'_, R> {
                 require(total == count, "extent root count")?;
             }
             checked_nodes.push(CheckedNode {
+                inode: inode.clone(),
                 id: inode.id.clone(),
                 kind: inode.kind,
                 size: inode.size,
+                content_generation: inode.content_generation,
                 extents: checked_extents,
+                parent: inode.parent.clone(),
+                nlink: inode.nlink,
+                entries: bindings.get(&inode.id.nid).cloned().unwrap_or_default(),
             });
             require(
                 nodes.insert(inode.id.nid, inode).is_none(),
@@ -613,6 +626,7 @@ impl<R: ReadImage> Walker<'_, R> {
                     blocks: self.owned.keys().copied().collect(),
                     nodes: checked_nodes,
                     root_entries: bindings.remove(&1).unwrap_or_default(),
+                    orphans,
                 },
                 cp,
                 owned: self.owned,

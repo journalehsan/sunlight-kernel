@@ -1,0 +1,60 @@
+{
+  "status": "PASS",
+  "attempt": "raw/qualification-20261114T191407.625977Z",
+  "profiles": [
+    "dev",
+    "release"
+  ],
+  "compiled_source_sha256": {
+    "Cargo.lock": "f43121caace0ae9c45bd8fb6435e4ef8c1f24a3a2820dde36b685313447bd1ca",
+    "Cargo.toml": "ee5d2639492fe5fc4be1ece52a320a51d6ee023a59f0d8f34f1021030f1c4e24",
+    "docs/filesystems/sunfs/adr/0003-sfs3-bounded-namespace-lifetime.md": "9afd2f26eaeda9eb5fcde1b8e94591faa44e74be16aaaabe56a16fde134250d8",
+    "sunlight-sunfs/Cargo.toml": "bba6004aec9fb2404c89abb235cbbb0c49088d1c64744dc6dc22d9eeb9d9a6ad",
+    "sunlight-sunfs/src/block.rs": "59a809159fc4db9d2a2c478d4e52285eb66cd399e6cbec6ee6312a5568471ed0",
+    "sunlight-sunfs/src/bootstrap.rs": "d7de04c628887f0b85fa2975f7298f60f017a64e51068b38d25ce0ee3a4b61f9",
+    "sunlight-sunfs/src/codec.rs": "621fb92ebdebf31710ce20d78c7fa1dc1a6564d61cfe5b0219e7e015739da71e",
+    "sunlight-sunfs/src/engine/handles.rs": "8d6fc0e88f9bc5689c33fcc6ae1d5425607f04bd226cecdd3672145c2706eb3e",
+    "sunlight-sunfs/src/engine/namespace.rs": "3fd14f6a264b552b0266c070a00b0119ea5027dbf08302f69b551f80601a78fa",
+    "sunlight-sunfs/src/engine/recovery.rs": "0d79d6d5027564179203d40a145c990c78ad97740be6ed50ab340d5a658c3dcf",
+    "sunlight-sunfs/src/engine.rs": "28578e3b7bc7434811050aa248fa13e3141d402a94b50ed491386aad217fe6ab",
+    "sunlight-sunfs/src/geometry.rs": "5a78f09d4e3574b24f8d388fc75bf30503f997e08192d0a56970ba519fc3e896",
+    "sunlight-sunfs/src/lib.rs": "382511660e261840a1d4b2d3acfb6bfeef32a0bbde1acfdc545287f2a97b9226",
+    "sunlight-sunfs/tests/codecs.rs": "790187288032509678f088f56ebe9318f118bf7a665686b30cc1927d3785a488",
+    "sunlight-sunfs/tests/fixtures/directory.bin": "0f2bd30384e0912f0149f7201e46f1b200c797d46b405832d62f95546707b148",
+    "sunlight-sunfs/tests/fixtures/empty-orphan-root.bin": "92628416ab3febccdd25c577d70c9f37bb1c605df9b05a2850bcb6b3f03ae10f",
+    "sunlight-sunfs/tests/fixtures/inode.bin": "54f0042b0055cb4ff246126fc7ea59bf3931ee4ec158b90fb0c9637123c6df3d",
+    "sunlight-sunfs/tests/fixtures/superblock.bin": "482e42b87c627d518a59d0077ed7397eb7a7b673c757c60f29af2d9bbb27a1f9",
+    "sunlight-sunfs-check/Cargo.toml": "a0c9a593862eb4d88ca4e159ca52cf7645f1298b5ce23b5c57fc04128d625ce0",
+    "sunlight-sunfs-check/src/bin/sunfs-check.rs": "0c2ac19324d50a4a5d343517512b4033bc80f7b97c205c4e24134b658bd48d21",
+    "sunlight-sunfs-check/src/lib.rs": "7356b9725c02f46696e2b877a042f2ee019132a53bb889a5cd105e3100692fb9",
+    "sunlight-sunfs-lab/Cargo.toml": "568e2d58d0d0f3e197b6603a3038f384db78b5960be3e17f13d038b9e82e18c4",
+    "sunlight-sunfs-lab/examples/baseline.rs": "5358b1281a543019b545666be6d80c74ad53d9467248147443637cb07c540f2a",
+    "sunlight-sunfs-lab/examples/transactions.rs": "ad575abefa767a60cf0203e90ccf7e7df5e516cbf57f5b4e992cb935aab40905",
+    "sunlight-sunfs-lab/src/bin/sunfs-format.rs": "4aec9156ec99f260028b87b4da8fc8be21d0093069a5d820986098800559839e",
+    "sunlight-sunfs-lab/src/image.rs": "5886dd322c5cdcae94d530e6d9992dd9a00d57847f2ad40540876a634a405176",
+    "sunlight-sunfs-lab/src/lib.rs": "3a31d22723db1704f5ef54f7081ae01a884d10e08c44edc18454ac49213cc2df",
+    "sunlight-sunfs-lab/src/simulator.rs": "5cd4b88cf8a92d08cd8399e2a755a83360845b543769b82b864cf551d5174ced",
+    "sunlight-sunfs-lab/tests/laboratory.rs": "0da16f93d545075257abbed52ee32825b4329caa0403876d2fb1e9d916bc70ed",
+    "sunlight-sunfs-lab/tests/namespace.rs": "50e0bf176b071f65787d68907d77cabb9a3c35bf1e293c40fc039bc20a83b0c2",
+    "sunlight-sunfs-lab/tests/transactions.rs": "34feb367aeb3218d329b2edc19104339d163682775a080287b19ab276f3131a8",
+    "tools/sunfs3_validate.py": "d4890f7f3efba247e8c9172adce60f93b4e9a2aeb0c4460656d707b45f589a90"
+  },
+  "atomicity": "one working namespace epoch and one full-volume checkpoint for both parents, replacement and nlinks",
+  "supported": [
+    "same-directory",
+    "cross-directory",
+    "open file",
+    "open destination",
+    "directory subtree move",
+    "empty directory replacement",
+    "self rename no-op"
+  ],
+  "rejections": [
+    "cycle",
+    "resulting depth",
+    "type mismatch",
+    "nonempty destination directory",
+    "entry/orphan cap"
+  ],
+  "durable_oracle": "exact handcrafted paths, node identities, bytes and orphan records; old/new singleton generation per schedule"
+}

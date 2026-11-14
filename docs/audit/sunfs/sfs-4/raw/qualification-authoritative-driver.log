@@ -1,0 +1,12 @@
+toolchain.log 0
+no-std.log 0
+compile-tests-dev.log 0
+tests-dev-1-sunlight_sunfs.log 0
+tests-dev-3-sunlight_sunfs_check.log 0
+tests-dev-2-sunfs-check.log 0
+tests-dev-0-codecs.log 0
+tests-dev-7-sunfs-format.log 0
+tests-dev-8-sunlight_sunfs_lab.log 0
+tests-dev-5-laboratory.log 0
+tests-dev-9-transactions.log 0
+tests-dev-4-cleaning.log 0

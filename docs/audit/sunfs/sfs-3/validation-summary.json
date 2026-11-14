@@ -1,0 +1,33 @@
+{
+  "milestone": "SFS-3",
+  "overall": "SFS-3 COMPLETE",
+  "gates": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS",
+    "G8": "PASS",
+    "G9": "PASS",
+    "G10": "PASS"
+  },
+  "execution_scope": "bounded hosted exclusive-owner engine; finite deterministic schedules",
+  "attempt": "raw/qualification-20261114T191407.625977Z",
+  "tests_per_profile": {
+    "dev": 43,
+    "release": 43
+  },
+  "new_sfs3_tests_per_profile": 11,
+  "new_namespace_schedules_per_profile": 6691,
+  "legacy_sfs2_schedules_per_profile": 3491,
+  "all_mutation_schedules_per_profile": 10182,
+  "storage_regressions": 139,
+  "thread_races": "NOT_RUN",
+  "native_guest": "NOT_RUN",
+  "physical_durability": "UNQUALIFIED",
+  "directory_pins_openat": "UNSUPPORTED",
+  "commit": false,
+  "push": false
+}

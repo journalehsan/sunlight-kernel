@@ -1,0 +1,39 @@
+{
+  "attempts": [
+    {
+      "path": "raw/baseline/",
+      "status": "FAIL",
+      "reason": "driver omitted output directories required by legacy evidence writers; no engine source modified"
+    },
+    {
+      "path": "raw/baseline-retry/",
+      "status": "PASS",
+      "reason": "unchanged baseline: no_std plus 32 tests per profile and hosted builds"
+    },
+    {
+      "path": "raw/namespace-first.log",
+      "status": "FAIL",
+      "reason": "8 MiB fixture insufficient for established retained snapshots and reserve; no reserve weakened"
+    },
+    {
+      "path": "raw/namespace-second.log",
+      "status": "PASS",
+      "scope": "five early lifetime tests only; not final source qualification"
+    },
+    {
+      "path": "raw/namespace-third.log",
+      "status": "PASS",
+      "scope": "nine development tests including 6616 crash schedules; not final source"
+    },
+    {
+      "path": "raw/clippy-first.log",
+      "status": "FAIL",
+      "reason": "test-only drop_non_drop warning"
+    },
+    {
+      "path": "raw/qualification-20261114T191210.314913Z",
+      "status": "NOT_RUN",
+      "reason": "qualification interrupted by agent to correct peak backing measurement and add direct enumeration assertions; partial outputs are not final evidence"
+    }
+  ]
+}

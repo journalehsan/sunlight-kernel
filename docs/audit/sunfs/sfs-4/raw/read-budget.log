@@ -1,0 +1,16 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+   Compiling sunlight-sunfs-check v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+    Finished `test` profile [optimized + debuginfo] target(s) in 18.88s
+     Running tests/cleaning.rs (target/sfs4-counters/x86_64-unknown-linux-gnu/debug/deps/cleaning-b8cebc1fcccb2c97)
+
+running 1 test
+test inode_attributes_survive_and_changed_source_freezes_before_writes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.33s
+

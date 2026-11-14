@@ -1,0 +1,18 @@
+
+running 8 tests
+test handles_from_an_abandoned_mount_never_alias_new_nodes ... ok
+test admission_low_space_is_readonly_and_exact ... ok
+test configured_extent_cap_and_counter_exhaustion_reject_before_io ... ok
+test writes_limits_identity_and_multiple_commits ... ok
+test hello_power_loss_and_volatile_semantics ... ok
+SFS2_REORDER cases=23
+test reordered_dependency_persistence_never_publishes_without_checkpoint ... ok
+SFS2_CORRUPTION cases=9 resealed_semantic=7
+test recovery_semantic_corruption_fallback_and_read_errors ... ok
+test deterministic_d_p_r_r0_crash_fault_matrix has been running for over 60 seconds
+SFS2_CRASH campaign=two cases=1538 events=27 seeds=4
+SFS2_CRASH campaign=three cases=1930 events=34 seeds=4
+test deterministic_d_p_r_r0_crash_fault_matrix ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 181.24s
+

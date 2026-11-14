@@ -1,0 +1,33 @@
+
+running 11 tests
+test low_space_reap_failure_preserves_working_orphans_and_reservations ... ok
+test maximum_bounded_namespace_and_full_orphan_table ... ok
+test handles_dup_access_offsets_and_stale_sessions ... ok
+test rename_open_replacement_directory_cycles_and_types ... ok
+test recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe ... ok
+test open_unlink_name_reuse_last_close_and_retained_closures ... ok
+test hierarchy_dot_type_depth_and_entry_bounds ... ok
+test crc_valid_directory_and_orphan_corruptions_fallback_without_writes ... ok
+test metadata_costs_and_repeated_namespace_churn ... ok
+SFS3_REORDER cases=75
+test reordered_namespace_dependencies_preserve_previous_complete_state ... ok
+SFS3_CRASH scenario=mkdir cases=476 events=33
+SFS3_CRASH scenario=create cases=506 events=35
+test namespace_d_p_r_r0_crash_fault_matrix has been running for over 60 seconds
+SFS3_CRASH scenario=write cases=446 events=31
+SFS3_CRASH scenario=rename-same cases=446 events=31
+SFS3_CRASH scenario=rename-cross cases=431 events=30
+SFS3_CRASH scenario=replace cases=446 events=31
+SFS3_CRASH scenario=directory-move cases=446 events=31
+SFS3_CRASH scenario=directory-replace cases=461 events=32
+SFS3_CRASH scenario=unlink cases=446 events=31
+SFS3_CRASH scenario=orphan-write cases=446 events=31
+SFS3_CRASH scenario=rmdir cases=461 events=32
+SFS3_CRASH scenario=last-close-reap cases=371 events=26
+SFS3_CRASH scenario=recovery-reap cases=371 events=26
+SFS3_CRASH scenario=three-replace cases=469 events=33
+SFS3_CRASH scenario=three-reap cases=394 events=28
+test namespace_d_p_r_r0_crash_fault_matrix ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 255.10s
+

@@ -1,0 +1,2 @@
+{"case":"rename-same-admission-false","expected":[3],"selected":3,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}
+{"case":"rename-same-admission-true","expected":[3],"selected":3,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}

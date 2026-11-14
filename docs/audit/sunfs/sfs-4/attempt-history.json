@@ -1,0 +1,59 @@
+{
+  "status": "PASS",
+  "history_preserved": true,
+  "baseline": {
+    "attempt": "raw/baseline",
+    "status": "PASS",
+    "tests_per_profile": {
+      "dev": 43,
+      "release": 43
+    }
+  },
+  "development": {
+    "status": "UNQUALIFIED",
+    "logs": [
+      "raw/fixtures-first.log",
+      "raw/fixtures-second.log",
+      "raw/cleaning-third.log",
+      "raw/cleaning-fourth.log",
+      "raw/fixtures-fifth.log",
+      "raw/fixtures-sixth.log",
+      "raw/fixtures-seventh.log",
+      "raw/fixtures-eighth.log",
+      "raw/counter-replay.log",
+      "raw/read-budget.log"
+    ],
+    "observations": [
+      "Initial 8 MiB fixture could not preserve ordinary reserve under large geometries; production NoSpace was correct. Corrected fixture to 16 MiB and retained the failing run.",
+      "Initial reserve-exhaustion fixture fit its tranche; added directories to exercise actual full-plan rejection without changing production reserve.",
+      "Raw data is not metadata; corrected test decoder.",
+      "Power loss after the final source read can reach admission before the first write fails; corrected pending-reservation oracle.",
+      "CRC-resealed regular nlink=2 is locally rejected by the encoder; used locally valid nlink=0 for semantic closure rejection.",
+      "Added complete inode preservation, independent reserve floor and whole-segment target exclusion.",
+      "Added exact attempted/confirmed I/O counters and hard source-verification read bound."
+    ]
+  },
+  "qualification_attempts": [
+    {
+      "attempt": "raw/qualification-20261114T202858.970919Z",
+      "status": "UNQUALIFIED",
+      "reason": "compiled source changed; source-binding assertion rejected qualification; raw logs/corpora retained"
+    },
+    {
+      "attempt": "raw/qualification-20261114T203207.433227Z",
+      "status": "UNQUALIFIED",
+      "reason": "compiled source changed; source-binding assertion rejected qualification; raw logs/corpora retained"
+    },
+    {
+      "attempt": "raw/qualification-20261114T203449.701623Z",
+      "status": "PARTIAL",
+      "reason": "explicitly stopped owned superseded test session while refining hard read budget; not counted as final-source qualification"
+    },
+    {
+      "attempt": "raw/qualification-20261114T204037.540668Z",
+      "status": "PASS",
+      "reason": "both profiles, all required suites, unchanged compiled source, deterministic corpora and CPU replay passed"
+    }
+  ],
+  "coverage": "Only the final attempt contributes qualification counts; superseded passes do not qualify later source."
+}

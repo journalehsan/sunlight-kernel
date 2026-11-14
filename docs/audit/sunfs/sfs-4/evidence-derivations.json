@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "script": "docs/audit/sunfs/sfs-4/derive.py",
+  "source_manifest_sha256": "54ba24c9cb961201aac97ca65b9f0b2434c33ff86adaf416977ca0d71c35b638",
+  "schedule_indexes": [
+    {
+      "profile": "dev",
+      "path": "raw/qualification-20261114T204037.540668Z/schedule-index-dev.jsonl.gz",
+      "schedules": 13142,
+      "sha256": "349c7afd2a00c7bb6702d84ff12f10f01353177cce1c3c09fce7358c0a201e39"
+    },
+    {
+      "profile": "release",
+      "path": "raw/qualification-20261114T204037.540668Z/schedule-index-release.jsonl.gz",
+      "schedules": 13142,
+      "sha256": "ff6a9016c8033e4aa99ff7d3cbf9b34cd03a3ceecbda613ef622f36043e86724"
+    }
+  ],
+  "geometry_basis": "Compiled fixture constructors: SFS2 committed_fixture fresh(256,16); SFS3 fixture(64) fresh(64,16); SFS4 fresh(64) 16 MiB. Default reserve formula gives 1063 and 874 blocks.",
+  "counting": "Source-derived fixed fixture calls are operational measurements, not added fault coverage. F2/F3 is one request. Each profile indexes legacy 10182 plus new 2960. CPU replays are excluded."
+}

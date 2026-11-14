@@ -1,0 +1,10 @@
+{"case":"duplicate-target","checker_rejected":true,"status":"PASS"}
+{"case":"unreserved-target","checker_rejected":true,"status":"PASS"}
+{"case":"quarantine","checker_rejected":true,"status":"PASS"}
+{"case":"runtime-pin","checker_rejected":true,"status":"PASS"}
+{"case":"floor","checker_rejected":true,"status":"PASS"}
+{"case":"orphan-loss","checker_rejected":true,"status":"PASS"}
+{"case":"generation","checker_rejected":true,"status":"PASS"}
+{"case":"source-overwrite","checker_rejected":true,"status":"PASS"}
+{"case":"node-size","checker_rejected":true,"status":"PASS"}
+{"case":"content-generation","checker_rejected":true,"status":"PASS"}

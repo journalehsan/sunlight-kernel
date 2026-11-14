@@ -1,0 +1,38 @@
+[
+  {
+    "name": "no-std",
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "elapsed_ns": 97108876
+  },
+  {
+    "name": "debug",
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 101,
+    "elapsed_ns": 721936033
+  }
+]

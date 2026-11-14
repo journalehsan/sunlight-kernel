@@ -1,0 +1,64 @@
+[
+  {
+    "name": "debug",
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "elapsed_ns": 52076545746
+  },
+  {
+    "name": "release",
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--release",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "elapsed_ns": 57776750324
+  },
+  {
+    "name": "bins",
+    "argv": [
+      "cargo",
+      "build",
+      "-p",
+      "sunlight-sunfs-lab",
+      "-p",
+      "sunlight-sunfs-check",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "--bins",
+      "--examples"
+    ],
+    "returncode": 0,
+    "elapsed_ns": 90808782
+  }
+]

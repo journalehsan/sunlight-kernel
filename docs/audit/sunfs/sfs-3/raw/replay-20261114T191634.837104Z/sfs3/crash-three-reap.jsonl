@@ -1,0 +1,2 @@
+{"case":"three-reap-admission-false","expected":[5],"selected":5,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}
+{"case":"three-reap-admission-true","expected":[5],"selected":5,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}

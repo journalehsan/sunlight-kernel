@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "basis": "source traversal and locked baseline reproduction before production edits",
+  "graph": "docs/filesystems/sunfs/sfs-4-segment-cleaner-forward-progress.md#source-baseline-and-allocation-ownership",
+  "authorities": {
+    "current": "latest fully verified Snapshot.owned map",
+    "fallback": "union of every older complete retained Snapshot.owned map, including third root after interrupted retirement",
+    "runtime": "NodeId descriptions own byte vectors; conservatively annotated on matching disk owners, no independent physical backing outside closure union",
+    "pending": "complete Plan.admission.blocks held in Filesystem.quarantine under exclusive owner",
+    "orphan": "current mapped node and extent/directory closure plus orphan record, copied even when unpinned until explicit reap",
+    "quarantine": "failed publication retains plan; any uncertain/degraded owner denies mutation and marks all segments quarantined",
+    "cleaner": "full immutable plan; no target intersects any initially retained occupied segment"
+  },
+  "sets": {
+    "protected": "C_current UNION C_fallbacks UNION P_pending; runtime bytes covered by copied object ownership; degraded volumes deny all reuse",
+    "occupied_segments": "unique segment indices of protected block union",
+    "reusable": "all complete segment blocks minus whole occupied segment capacity; never snapshot free_blocks header",
+    "ordinary_admissible": "reusable >= round_up(actual transaction blocks, segment_blocks) + SB.cleaner_reserve",
+    "cleaner_admissible": "actual rounded full snapshot <= SB.cleaner_reserve - floor AND reusable - rounded snapshot >= floor; floor=2*geometry.metadata_bound+3",
+    "retirement": "only oldest CP slot zero followed by successful R or R0 flush releases its closure; all initially protected blocks excluded from target planning even when R0 will retire them"
+  },
+  "sources": [
+    "sunlight-sunfs/src/engine.rs:285",
+    "sunlight-sunfs/src/engine.rs:391",
+    "sunlight-sunfs/src/engine.rs:398",
+    "sunlight-sunfs/src/engine.rs:436",
+    "sunlight-sunfs/src/engine/recovery.rs:445",
+    "sunlight-sunfs/src/engine/namespace.rs:289",
+    "sunlight-sunfs/src/engine/handles.rs:140"
+  ],
+  "shared_internal_metadata": "bootstrap generations share equal Owner references; conflicting owners rejected at mount; never relocated while shared with fallback",
+  "obsolete": "old unreferenced bytes and unused offsets carry no authority; offsets in an occupied segment remain unavailable until complete segment release"
+}

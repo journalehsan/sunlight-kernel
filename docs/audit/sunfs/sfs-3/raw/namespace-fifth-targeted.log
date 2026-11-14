@@ -1,0 +1,26 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+   Compiling sunlight-sunfs-check v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.32s
+     Running tests/namespace.rs (target/x86_64-unknown-linux-gnu/debug/deps/namespace-81437e17e0a76d78)
+
+running 10 tests
+test low_space_reap_failure_preserves_working_orphans_and_reservations ... ok
+test maximum_bounded_namespace_and_full_orphan_table ... ok
+test handles_dup_access_offsets_and_stale_sessions ... ok
+test rename_open_replacement_directory_cycles_and_types ... ok
+test recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe ... ok
+test hierarchy_dot_type_depth_and_entry_bounds ... ok
+test open_unlink_name_reuse_last_close_and_retained_closures ... ok
+test crc_valid_directory_and_orphan_corruptions_fallback_without_writes ... ok
+test metadata_costs_and_repeated_namespace_churn ... ok
+SFS3_REORDER cases=75
+test reordered_namespace_dependencies_preserve_previous_complete_state ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.35s
+

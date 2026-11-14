@@ -1,4 +1,4 @@
-//! Bounded, exclusive-owner root filesystem. All mutations are volatile until fsync.
+//! Bounded, exclusive-owner filesystem with a directory tree and retained orphans. All mutations are volatile until fsync.
 //! No native adapter, locks, host APIs, implicit sync on drop, or automatic repair.
 use crate::{
     block::*,
@@ -17,6 +17,20 @@ static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 mod recovery;
 pub use recovery::MountState;
 pub const MAX_FILES: usize = 16;
+pub const MAX_DIRECTORIES: usize = 16; // excludes root
+pub const MAX_ENTRIES: usize = 16;
+pub const MAX_DEPTH: usize = 8;
+pub const MAX_COMPONENTS: usize = 64;
+pub const MAX_ORPHANS: usize = 16;
+pub const MAX_HANDLES: usize = 64;
+pub const MAX_DESCRIPTIONS: usize = 32;
+mod cleaner;
+mod handles;
+mod namespace;
+pub use cleaner::{
+    CleanBudget, CleanPolicy, CleanResult, CleanStop, SegmentLiveness, SegmentState,
+};
+pub use handles::{AccessMode, Handle, RuntimeAccounting};
 pub const MAX_NAME: usize = 64;
 pub const MAX_FILE_BYTES: usize = 16 * PAGE;
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -31,6 +45,11 @@ pub enum FsError {
     Stale,
     Limit,
     NoSpace,
+    NotDirectory,
+    IsDirectory,
+    NotEmpty,
+    Access,
+    Cycle,
 }
 impl From<Error> for FsError {
     fn from(e: Error) -> Self {
@@ -50,8 +69,9 @@ fn ensure(v: bool) -> Result<()> {
         Err(FsError::Corrupt)
     }
 }
-/// Mount-scoped handle. The public UUID/node tuple is the persistent identity;
-/// reacquire a handle through lookup after remount, even for the same identity.
+/// Trusted mount-scoped selector for linked objects, not an open pin or capability.
+/// The UUID/node tuple identifies the persistent object; opaque Handle registrations
+/// carry retained-open lifetime and access mode. Reacquire selectors after remount.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FileId {
     pub volume: [u8; 16],
@@ -63,12 +83,16 @@ pub struct Entry {
     pub name: Vec<u8>,
     pub id: FileId,
     pub size: u64,
+    pub kind: u8,
 }
 #[derive(Clone)]
 struct File {
     name: Vec<u8>,
     id: NodeId,
     data: Vec<u8>,
+    kind: u8,
+    parent: NodeId,
+    orphan_generation: u64,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Owner {
@@ -85,6 +109,7 @@ struct Snapshot {
     cp: Checkpoint,
     owned: BTreeMap<u64, Owner>,
     files: Vec<File>,
+    inodes: BTreeMap<u64, Inode>,
 }
 #[derive(Clone, Debug, Default)]
 pub struct Accounting {
@@ -93,6 +118,11 @@ pub struct Accounting {
     pub placement_overhead_blocks: u64,
     pub available_blocks: u64,
     pub recovery_reserve_blocks: u64,
+    pub current_checkpoint_blocks: u64,
+    pub retained_only_blocks: u64,
+    pub pending_reserved_blocks: u64,
+    /// Whole-segment capacity available after the separate reserve; not a cleaner.
+    pub reclaimable_blocks: u64,
 }
 #[derive(Clone, Debug, Default)]
 pub struct Admission {
@@ -110,6 +140,10 @@ struct Plan {
     dependencies: Vec<(u64, [u8; PAGE])>,
     snapshot: Snapshot,
     checkpoint: [u8; PAGE],
+    written_bytes: u64,
+    submitted_bytes: u64,
+    flush_count: u64,
+    flush_attempts: u64,
 }
 /// Owns the device exclusively. Errors during persistent I/O latch read-only until
 /// drop/remount; reservations and uncertain ownership remain held by this owner.
@@ -127,6 +161,9 @@ pub struct Filesystem<D: BlockDevice> {
     dirty: bool,
     frozen: bool,
     quarantine: Option<Plan>,
+    handles: BTreeMap<u64, u64>,
+    descriptions: BTreeMap<u64, handles::Description>,
+    next_handle: u64,
 }
 impl<D: BlockDevice> Filesystem<D> {
     pub fn mount(mut device: D) -> Result<Self> {
@@ -161,6 +198,9 @@ impl<D: BlockDevice> Filesystem<D> {
             dirty: false,
             frozen: false,
             quarantine: None,
+            handles: BTreeMap::new(),
+            descriptions: BTreeMap::new(),
+            next_handle: 1,
         })
     }
     pub fn state(&self) -> MountState {
@@ -186,79 +226,27 @@ impl<D: BlockDevice> Filesystem<D> {
         }
         Ok(())
     }
-    pub fn entries(&self) -> Vec<Entry> {
-        self.files
-            .iter()
-            .map(|f| Entry {
-                name: f.name.clone(),
-                id: FileId {
-                    volume: self.uuid,
-                    node: f.id.clone(),
-                    session: self.session,
-                },
-                size: f.data.len() as u64,
-            })
-            .collect()
-    }
-    pub fn lookup(&self, name: &[u8]) -> Result<FileId> {
-        self.files
-            .iter()
-            .find(|f| f.name == name)
-            .map(|f| FileId {
-                volume: self.uuid,
-                node: f.id.clone(),
-                session: self.session,
-            })
-            .ok_or(FsError::NotFound)
-    }
+    /// Legacy trusted selector. It is not a pin or a public capability.
     fn index(&self, id: &FileId) -> Result<usize> {
-        if id.volume != self.uuid || id.session != self.session {
-            return Err(FsError::Stale);
-        }
+        self.identity(id)?;
         self.files
             .iter()
-            .position(|f| f.id == id.node)
+            .position(|f| f.id == id.node && f.orphan_generation == 0)
             .ok_or(FsError::Stale)
     }
     pub fn create(&mut self, name: &[u8]) -> Result<FileId> {
-        self.writable()?;
-        DirEntry {
-            name: name.to_vec(),
-            target: NodeId::ROOT,
-            kind: 1,
-        }
-        .validate()?;
-        if name.len() > MAX_NAME
-            || self.files.len() >= MAX_FILES
-            || self.files.len() as u64 + 1 >= self.sb.maximum_nodes
-        {
-            return Err(FsError::Limit);
-        }
-        if self.files.iter().any(|f| f.name == name) {
-            return Err(FsError::Exists);
-        }
-        let next = self.next_nid.checked_add(1).ok_or(Error::Overflow)?;
-        let id = NodeId {
-            nid: self.next_nid,
-            incarnation: 1,
-        };
-        self.files.push(File {
-            name: name.to_vec(),
-            id: id.clone(),
-            data: Vec::new(),
-        });
-        self.files.sort_by(|a, b| a.name.cmp(&b.name));
-        self.next_nid = next;
-        self.dirty = true;
-        Ok(FileId {
-            volume: self.uuid,
-            node: id,
-            session: self.session,
-        })
+        self.create_at(&self.root(), name)
     }
     pub fn write(&mut self, id: &FileId, offset: u64, bytes: &[u8]) -> Result<usize> {
         self.writable()?;
         let i = self.index(id)?;
+        self.write_index(i, offset, bytes)
+    }
+    fn write_index(&mut self, i: usize, offset: u64, bytes: &[u8]) -> Result<usize> {
+        self.writable()?;
+        if self.files[i].kind != 1 {
+            return Err(FsError::IsDirectory);
+        }
         let end = offset
             .checked_add(bytes.len() as u64)
             .ok_or(Error::Overflow)?;
@@ -280,7 +268,13 @@ impl<D: BlockDevice> Filesystem<D> {
         Ok(bytes.len())
     }
     pub fn read(&self, id: &FileId, offset: u64, out: &mut [u8]) -> Result<usize> {
-        let file = &self.files[self.index(id)?];
+        self.read_index(self.index(id)?, offset, out)
+    }
+    fn read_index(&self, i: usize, offset: u64, out: &mut [u8]) -> Result<usize> {
+        let file = &self.files[i];
+        if file.kind != 1 {
+            return Err(FsError::IsDirectory);
+        }
         if offset >= file.data.len() as u64 {
             return Ok(0);
         }
@@ -297,6 +291,12 @@ impl<D: BlockDevice> Filesystem<D> {
                 segments.insert((b - self.sb.segment_start) / self.sb.segment_blocks as u64);
             }
         }
+        let current_checkpoint_blocks = self.retained.last().map_or(0, |s| s.owned.len() as u64);
+        let retained_only_blocks = blocks.len() as u64 - current_checkpoint_blocks;
+        let pending_reserved_blocks = self
+            .quarantine
+            .as_ref()
+            .map_or(0, |p| p.admission.blocks.len() as u64);
         if let Some(p) = &self.quarantine {
             for &b in &p.admission.blocks {
                 blocks.insert(b);
@@ -310,6 +310,11 @@ impl<D: BlockDevice> Filesystem<D> {
             placement_overhead_blocks: capacity - blocks.len() as u64,
             available_blocks: self.sb.segment_count * self.sb.segment_blocks as u64 - capacity,
             recovery_reserve_blocks: self.sb.cleaner_reserve,
+            current_checkpoint_blocks,
+            retained_only_blocks,
+            pending_reserved_blocks,
+            reclaimable_blocks: (self.sb.segment_count * self.sb.segment_blocks as u64 - capacity)
+                .saturating_sub(self.sb.cleaner_reserve),
         }
     }
     /// Exact read-only plan. This is repeated by fsync under the exclusive owner;
@@ -320,7 +325,16 @@ impl<D: BlockDevice> Filesystem<D> {
     }
     pub fn fsync(&mut self, id: &FileId) -> Result<()> {
         self.writable()?;
-        self.index(id)?;
+        if id.node == NodeId::ROOT {
+            self.identity(id)?;
+        } else {
+            self.index(id)?;
+        }
+        self.sync_all()
+    }
+    /// Commit the complete serialized epoch, including namespace and orphans.
+    pub fn sync_all(&mut self) -> Result<()> {
+        self.writable()?;
         if !self.dirty {
             return Ok(());
         }
@@ -341,13 +355,37 @@ impl<D: BlockDevice> Filesystem<D> {
     }
     fn put(&mut self, b: u64, bytes: &[u8; PAGE]) -> Result<()> {
         self.checked_session()?;
-        self.device
-            .write(b.checked_mul(PAGE as u64).ok_or(Error::Overflow)?, bytes)?;
+        let offset = b.checked_mul(PAGE as u64).ok_or(Error::Overflow)?;
+        if let Some(p) = &mut self.quarantine {
+            p.submitted_bytes = p
+                .submitted_bytes
+                .checked_add(PAGE as u64)
+                .ok_or(Error::Overflow)?;
+        }
+        let result = self.device.write(offset, bytes);
+        let completed = match &result {
+            Ok(_) => PAGE as u64,
+            Err(e) => e.completed.unwrap_or(0),
+        };
+        ensure(completed <= PAGE as u64)?;
+        if let Some(p) = &mut self.quarantine {
+            p.written_bytes = p
+                .written_bytes
+                .checked_add(completed)
+                .ok_or(Error::Overflow)?;
+        }
+        result?;
         self.checked_session()
     }
     fn barrier(&mut self) -> Result<()> {
         self.checked_session()?;
+        if let Some(p) = &mut self.quarantine {
+            p.flush_attempts = p.flush_attempts.checked_add(1).ok_or(Error::Overflow)?;
+        }
         self.device.flush()?;
+        if let Some(p) = &mut self.quarantine {
+            p.flush_count = p.flush_count.checked_add(1).ok_or(Error::Overflow)?;
+        }
         self.checked_session()
     }
     fn retire(&mut self) -> Result<()> {
@@ -393,6 +431,9 @@ impl<D: BlockDevice> Filesystem<D> {
         Ok(())
     }
     fn plan(&self) -> Result<Plan> {
+        self.plan_for(false)
+    }
+    fn plan_for(&self, cleaning: bool) -> Result<Plan> {
         let generation = self.generation().checked_add(1).ok_or(Error::Overflow)?;
         let mut used = BTreeSet::new();
         for s in &self.retained {
@@ -403,11 +444,30 @@ impl<D: BlockDevice> Filesystem<D> {
         let data_count: usize = self.files.iter().map(|f| f.data.len().div_ceil(PAGE)).sum();
         // root inode/root, optional directory page, map page/root, orphan root,
         // segment root/pages; file inode/extent root and optional extent page.
+        let directory_ids = core::iter::once(NodeId::ROOT).chain(
+            self.files
+                .iter()
+                .filter(|f| f.kind == 2)
+                .map(|f| f.id.clone()),
+        );
+        let directory_pages = directory_ids
+            .filter(|id| {
+                self.files
+                    .iter()
+                    .any(|f| f.orphan_generation == 0 && f.parent == *id)
+            })
+            .count();
+        let orphan_count = self
+            .files
+            .iter()
+            .filter(|f| f.orphan_generation != 0)
+            .count();
         let base = 6
             + self.geometry.segment_table_pages as usize
-            + usize::from(!self.files.is_empty())
+            + directory_pages
             + self.files.len() * 2
             + self.files.iter().filter(|f| !f.data.is_empty()).count()
+            + usize::from(orphan_count != 0)
             + data_count;
         let summaries =
             crate::geometry::summary_fixed_point(base as u64, self.sb.segment_blocks as u64)?.0
@@ -417,9 +477,19 @@ impl<D: BlockDevice> Filesystem<D> {
             return Err(FsError::NoSpace);
         }
         let segment_need = (count as u64).div_ceil(self.sb.segment_blocks as u64);
-        let free = self.sb.segment_count - used.len() as u64;
-        if free * (self.sb.segment_blocks as u64)
-            < segment_need * self.sb.segment_blocks as u64 + self.sb.cleaner_reserve
+        let free = self
+            .sb
+            .segment_count
+            .checked_sub(used.len() as u64)
+            .ok_or(Error::Overflow)?;
+        let reserved = segment_need
+            .checked_mul(self.sb.segment_blocks as u64)
+            .ok_or(Error::Overflow)?;
+        let reserve = if cleaning { 0 } else { self.sb.cleaner_reserve };
+        if free
+            .checked_mul(self.sb.segment_blocks as u64)
+            .ok_or(Error::Overflow)?
+            < reserved.checked_add(reserve).ok_or(Error::Overflow)?
         {
             return Err(FsError::NoSpace);
         }
@@ -452,11 +522,23 @@ impl<D: BlockDevice> Filesystem<D> {
             owned: BTreeMap::new(),
         };
         let mut maps = Vec::new();
-        let mut bindings = Vec::new();
+        let mut inodes = BTreeMap::new();
         // Data first; every snapshot has private dense blocks and zero EOF tails.
-        for f in &self.files {
+        for f in self.files.iter().filter(|f| f.kind == 1) {
             let mut extents = Vec::new();
             for (logical, chunk) in f.data.chunks(PAGE).enumerate() {
+                let content_generation = if cleaning {
+                    self.retained
+                        .last()
+                        .ok_or(FsError::Corrupt)?
+                        .owned
+                        .values()
+                        .find(|o| o.kind == 0 && o.node == f.id && o.key == logical as u64)
+                        .ok_or(FsError::Corrupt)?
+                        .birth
+                } else {
+                    generation
+                };
                 let b = builder.allocate()?;
                 let mut bytes = [0; PAGE];
                 bytes[..chunk.len()].copy_from_slice(chunk);
@@ -465,7 +547,7 @@ impl<D: BlockDevice> Filesystem<D> {
                     &f.id,
                     logical as u64,
                     generation,
-                    generation,
+                    content_generation,
                     &bytes,
                 )?;
                 builder.owned.insert(
@@ -475,7 +557,7 @@ impl<D: BlockDevice> Filesystem<D> {
                         kind: 0,
                         node: f.id.clone(),
                         key: logical as u64,
-                        birth: generation,
+                        birth: content_generation,
                         crc,
                     },
                 );
@@ -484,7 +566,7 @@ impl<D: BlockDevice> Filesystem<D> {
                     logical: logical as u64,
                     physical: b,
                     epoch: generation,
-                    content_generation: generation,
+                    content_generation,
                     blocks: 1,
                     data_crc: crc,
                     ..Default::default()
@@ -523,92 +605,130 @@ impl<D: BlockDevice> Filesystem<D> {
                 5,
                 0,
             )?;
-            let node = builder.page(
-                Payload::Inode(Inode {
+            let inode = if cleaning {
+                let mut n = self
+                    .retained
+                    .last()
+                    .ok_or(FsError::Corrupt)?
+                    .inodes
+                    .get(&f.id.nid)
+                    .ok_or(FsError::Corrupt)?
+                    .clone();
+                n.extents = ext;
+                n
+            } else {
+                Inode {
                     id: f.id.clone(),
                     kind: 1,
                     mode: 0o644,
-                    nlink: 1,
+                    nlink: u32::from(f.orphan_generation == 0),
                     size: f.data.len() as u64,
                     content_generation: generation,
                     extents: ext,
                     ..Default::default()
-                }),
-                f.id.clone(),
-                0,
-                0,
-            )?;
+                }
+            };
+            inodes.insert(inode.id.nid, inode.clone());
+            let node = builder.page(Payload::Inode(inode), f.id.clone(), 0, 0)?;
             maps.push(MapEntry {
                 id: f.id.clone(),
                 node,
                 kind: 1,
                 ..Default::default()
             });
-            bindings.push(DirEntry {
-                name: f.name.clone(),
-                target: f.id.clone(),
-                kind: 1,
-            });
         }
-        let directory_size = bindings
-            .iter()
-            .map(|e| (32 + e.name.len() as u64).div_ceil(8) * 8)
-            .sum();
-        let pages = if bindings.is_empty() {
-            Vec::new()
-        } else {
-            let count = bindings.len() as u32;
-            let page = builder.page(
-                Payload::Directory {
-                    owner: NodeId::ROOT,
-                    ordinal: 0,
-                    entries: bindings,
+        for (id, parent, linked) in core::iter::once((NodeId::ROOT, NodeId::ROOT, true)).chain(
+            self.files
+                .iter()
+                .filter(|f| f.kind == 2)
+                .map(|f| (f.id.clone(), f.parent.clone(), f.orphan_generation == 0)),
+        ) {
+            let mut bindings: Vec<_> = self
+                .files
+                .iter()
+                .filter(|f| f.orphan_generation == 0 && f.parent == id)
+                .map(|f| DirEntry {
+                    name: f.name.clone(),
+                    target: f.id.clone(),
+                    kind: f.kind,
+                })
+                .collect();
+            bindings.sort_by(|a, b| a.name.cmp(&b.name));
+            let directory_size = bindings
+                .iter()
+                .map(|e| (32 + e.name.len() as u64).div_ceil(8) * 8)
+                .sum();
+            let count = bindings.len() as u64;
+            let nlink = if linked {
+                2 + bindings.iter().filter(|b| b.kind == 2).count() as u32
+            } else {
+                0
+            };
+            let pages = if bindings.is_empty() {
+                Vec::new()
+            } else {
+                let page = builder.page(
+                    Payload::Directory {
+                        owner: id.clone(),
+                        ordinal: 0,
+                        entries: bindings,
+                    },
+                    id.clone(),
+                    0,
+                    0,
+                )?;
+                vec![Descriptor {
+                    first: 0,
+                    last: 0,
+                    page,
+                    count: count as u32,
+                    ..Default::default()
+                }]
+            };
+            let directory = builder.page(
+                Payload::Root {
+                    kind: 4,
+                    count,
+                    entry_bytes: 0,
+                    pages,
                 },
-                NodeId::ROOT,
-                0,
+                id.clone(),
+                4,
                 0,
             )?;
-            vec![Descriptor {
-                first: 0,
-                last: 0,
-                page,
-                count,
-                ..Default::default()
-            }]
-        };
-        let directory = builder.page(
-            Payload::Root {
-                kind: 4,
-                count: self.files.len() as u64,
-                entry_bytes: 0,
-                pages,
-            },
-            NodeId::ROOT,
-            4,
-            0,
-        )?;
-        let root = builder.page(
-            Payload::Inode(Inode {
-                id: NodeId::ROOT,
+            let inode = if cleaning {
+                let mut n = self
+                    .retained
+                    .last()
+                    .ok_or(FsError::Corrupt)?
+                    .inodes
+                    .get(&id.nid)
+                    .ok_or(FsError::Corrupt)?
+                    .clone();
+                n.directory = directory;
+                n
+            } else {
+                Inode {
+                    id: id.clone(),
+                    kind: 2,
+                    mode: 0o755,
+                    nlink,
+                    size: directory_size,
+                    content_generation: generation,
+                    parent,
+                    directory,
+                    ..Default::default()
+                }
+            };
+            inodes.insert(inode.id.nid, inode.clone());
+            let node = builder.page(Payload::Inode(inode), id.clone(), 0, 0)?;
+            maps.push(MapEntry {
+                id,
+                node,
                 kind: 2,
-                mode: 0o755,
-                nlink: 2,
-                size: directory_size,
-                content_generation: generation,
-                parent: NodeId::ROOT,
-                directory,
                 ..Default::default()
-            }),
-            NodeId::ROOT,
-            0,
-            0,
-        )?;
-        maps.push(MapEntry {
-            id: NodeId::ROOT,
-            node: root,
-            kind: 2,
-            ..Default::default()
-        });
+            });
+        }
         maps.sort_by_key(|m| m.id.nid);
         let last = maps.last().ok_or(FsError::Corrupt)?.id.nid;
         let nodes = maps.len() as u64;
@@ -639,7 +759,52 @@ impl<D: BlockDevice> Filesystem<D> {
             1,
             0,
         )?;
-        let orphan_table = builder.page(empty_root(3, 32), NodeId::default(), 3, 0)?;
+        let mut orphans: Vec<_> = self
+            .files
+            .iter()
+            .filter(|f| f.orphan_generation != 0)
+            .map(|f| Orphan {
+                id: f.id.clone(),
+                unlink_generation: f.orphan_generation,
+                reason: 1,
+                ..Default::default()
+            })
+            .collect();
+        orphans.sort_by_key(|o| o.id.nid);
+        let orphan_pages = if orphans.is_empty() {
+            Vec::new()
+        } else {
+            let first = orphans[0].id.nid;
+            let last = orphans[orphans.len() - 1].id.nid;
+            let page = builder.page(
+                Payload::Table {
+                    first,
+                    last,
+                    records: Records::Orphans(orphans),
+                },
+                NodeId::default(),
+                3,
+                0,
+            )?;
+            vec![Descriptor {
+                first,
+                last,
+                page,
+                count: orphan_count as u32,
+                ..Default::default()
+            }]
+        };
+        let orphan_table = builder.page(
+            Payload::Root {
+                kind: 3,
+                count: orphan_count as u64,
+                entry_bytes: 32,
+                pages: orphan_pages,
+            },
+            NodeId::default(),
+            3,
+            0,
+        )?;
         // Reserve segment root/pages and summary locations, then fill circular
         // ownership dependencies. Metadata summary CRCs are zero by v0.2 design.
         let seg_root = builder.allocate()?;
@@ -768,7 +933,7 @@ impl<D: BlockDevice> Filesystem<D> {
             allocated_blocks: count as u64,
             free_blocks: self.sb.segment_count * self.sb.segment_blocks as u64 - count as u64,
             live_nodes: nodes,
-            orphan_nodes: 0,
+            orphan_nodes: orphan_count as u64,
             transaction_blocks: count as u64,
             state: 1,
             ..Default::default()
@@ -783,6 +948,10 @@ impl<D: BlockDevice> Filesystem<D> {
         .encode()?;
         let reserved_segment_blocks = segment_need * self.sb.segment_blocks as u64;
         Ok(Plan {
+            written_bytes: 0,
+            submitted_bytes: 0,
+            flush_count: 0,
+            flush_attempts: 0,
             admission: Admission {
                 generation,
                 dependency_blocks: count as u64,
@@ -799,6 +968,7 @@ impl<D: BlockDevice> Filesystem<D> {
                 cp,
                 owned: builder.owned,
                 files: self.files.clone(),
+                inodes,
             },
             checkpoint,
         })

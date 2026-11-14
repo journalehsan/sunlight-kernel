@@ -1,0 +1,9 @@
+{"kind":"checkpoint","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"data","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"node","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"links","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"extent","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"duplicate","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"generation","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"binding","expected":3,"read_only":true,"status":"PASS"}
+{"kind":"allocation","expected":3,"read_only":true,"status":"PASS"}

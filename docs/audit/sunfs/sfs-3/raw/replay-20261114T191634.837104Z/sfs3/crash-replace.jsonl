@@ -1,0 +1,3 @@
+{"case":"replace-admission-false","expected":[3],"selected":3,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}
+{"case":"replace-admission-true","expected":[3],"selected":3,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}
+{"case":"replace-seed-1397117747-event-0-power-before","seed":1397117747,"event":41,"operation":"write","fault":"Some(PowerLoss)","acknowledged":false,"expected":[3],"selected":3,"classification":"CLEAN","D":true,"P":true,"R":true,"R0":true,"status":"PASS"}

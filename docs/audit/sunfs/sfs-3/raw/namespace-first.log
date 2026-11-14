@@ -1,0 +1,75 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs)
+   Compiling sunlight-sunfs-check v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-check)
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+warning: unused import: `time::Instant`
+ --> sunlight-sunfs-lab/tests/namespace.rs:2:84
+  |
+2 | use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, path::PathBuf, rc::Rc, time::Instant};
+  |                                                                                    ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Fault`
+ --> sunlight-sunfs-lab/tests/namespace.rs:5:37
+  |
+5 | use sunlight_sunfs_lab::simulator::{Fault, Simulator};
+  |                                     ^^^^^
+
+warning: function `next` is never used
+  --> sunlight-sunfs-lab/tests/namespace.rs:22:4
+   |
+22 | fn next(d:&Device)->u64 { d.0.borrow().trace.last().map_or(1,|e|e.id+1) }
+   |    ^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `save` is never used
+  --> sunlight-sunfs-lab/tests/namespace.rs:24:4
+   |
+24 | fn save(name:&str,bytes:&[u8]) {
+   |    ^^^^
+
+warning: `sunlight-sunfs-lab` (test "namespace") generated 4 warnings (run `cargo fix --test "namespace" -p sunlight-sunfs-lab` to apply 2 suggestions)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.00s
+     Running tests/namespace.rs (target/x86_64-unknown-linux-gnu/debug/deps/namespace-81437e17e0a76d78)
+
+running 5 tests
+
+thread 'recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe' (319) panicked at sunlight-sunfs-lab/tests/namespace.rs:182:52:
+called `Result::unwrap()` on an `Err` value: NoSpace
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe ... FAILED
+
+thread 'handles_dup_access_offsets_and_stale_sessions' (316) panicked at sunlight-sunfs-lab/tests/namespace.rs:133:93:
+called `Result::unwrap()` on an `Err` value: NoSpace
+test handles_dup_access_offsets_and_stale_sessions ... FAILED
+
+thread 'rename_open_replacement_directory_cycles_and_types' (320) panicked at sunlight-sunfs-lab/tests/namespace.rs:170:78:
+called `Result::unwrap()` on an `Err` value: NoSpace
+
+thread 'open_unlink_name_reuse_last_close_and_retained_closures' (318) panicked at sunlight-sunfs-lab/tests/namespace.rs:151:192:
+called `Result::unwrap()` on an `Err` value: NoSpace
+test open_unlink_name_reuse_last_close_and_retained_closures ... FAILED
+test rename_open_replacement_directory_cycles_and_types ... FAILED
+
+thread 'hierarchy_dot_type_depth_and_entry_bounds' (317) panicked at sunlight-sunfs-lab/tests/namespace.rs:119:23:
+called `Result::unwrap()` on an `Err` value: NoSpace
+test hierarchy_dot_type_depth_and_entry_bounds ... FAILED
+
+failures:
+
+failures:
+    handles_dup_access_offsets_and_stale_sessions
+    hierarchy_dot_type_depth_and_entry_bounds
+    open_unlink_name_reuse_last_close_and_retained_closures
+    recovery_orphans_are_eligible_readonly_never_reaps_and_exhaustion_is_safe
+    rename_open_replacement_directory_cycles_and_types
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `-p sunlight-sunfs-lab --test namespace`

@@ -1,0 +1,42 @@
+toolchain.log 0
+no-std.log 0
+compile-tests-dev.log 0
+tests-dev-2-sunfs-check.log 0
+tests-dev-3-sunlight_sunfs_check.log 0
+tests-dev-1-sunlight_sunfs.log 0
+tests-dev-0-codecs.log 0
+tests-dev-7-sunfs-format.log 0
+tests-dev-8-sunlight_sunfs_lab.log 0
+tests-dev-5-laboratory.log 0
+tests-dev-9-transactions.log 0
+tests-dev-4-cleaning.log 0
+tests-dev-6-namespace.log 0
+doctests-dev.log 0
+build-dev.log 0
+compile-tests-release.log 0
+tests-release-1-sunlight_sunfs.log 0
+tests-release-2-sunfs-check.log 0
+tests-release-3-sunlight_sunfs_check.log 0
+tests-release-0-codecs.log 0
+tests-release-7-sunfs-format.log 0
+tests-release-8-sunlight_sunfs_lab.log 0
+tests-release-5-laboratory.log 0
+tests-release-9-transactions.log 0
+tests-release-4-cleaning.log 0
+tests-release-6-namespace.log 0
+doctests-release.log 0
+build-release.log 0
+storage-regressions.log 0
+clippy.log 0
+format.log 0
+golden.log 0
+cpu-0.log 0
+cpu-1.log 0
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs4_validate.py", line 202, in <module>
+    qualify()
+    ~~~~~~~^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs4_validate.py", line 151, in qualify
+    assert before==sources(),'compiled source changed'
+           ^^^^^^^^^^^^^^^^^
+AssertionError: compiled source changed

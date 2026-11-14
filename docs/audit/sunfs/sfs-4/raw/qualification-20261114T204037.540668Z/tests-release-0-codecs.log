@@ -1,0 +1,16 @@
+
+running 11 tests
+test crc_known_answers ... ok
+test geometry_boundaries ... ok
+test geometry_limits_and_devices ... ok
+test bootstrap_all_page_roundtrips ... ok
+test malformed_record_lengths_and_references ... ok
+test independent_python_golden_pages ... ok
+test record_roundtrips_and_endian ... ok
+test header_negatives ... ok
+test unused_structure_roundtrips ... ok
+test payload_negatives ... ok
+test geometry_properties_and_fixed_point ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+

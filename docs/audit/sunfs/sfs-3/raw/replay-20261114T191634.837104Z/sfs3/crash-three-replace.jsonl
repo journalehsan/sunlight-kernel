@@ -1,0 +1,2 @@
+{"case":"three-replace-admission-false","expected":[4],"selected":4,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}
+{"case":"three-replace-admission-true","expected":[4],"selected":4,"D":true,"P":true,"R":true,"R0":true,"status":"PASS"}

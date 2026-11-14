@@ -1,0 +1,20 @@
+
+running 11 tests
+test f2_dead_and_f3_fully_protected_segments_are_not_rewritten ... ok
+test f5_runtime_orphan_pins_offsets_close_and_distinct_reaping ... ok
+test f4_fallback_releases_only_after_publication_and_retirement ... ok
+test f12_reserve_and_plan_exhaustion_reject_before_io ... ok
+test inode_attributes_survive_and_changed_source_freezes_before_writes ... ok
+test f6_near_full_uses_cleaner_reserve_but_keeps_recovery_floor ... ok
+test f1_mixed_relocation_positive_capacity_and_eventual_source_reuse ... ok
+test f7_no_progress_budget_dirty_and_repeated_refusal_are_bounded ... ok
+test f8_overwrite_and_f9_namespace_churn_reuse_without_ownership_loss ... ok
+test cleaner_checker_rejects_crc_resealed_semantic_and_manifest_defects ... ok
+test f10_interrupted_relocation_and_f11_retry_crash_matrix has been running for over 60 seconds
+SFS4_CRASH mixed cases=1086 events=233
+SFS4_CRASH three cases=1196 events=264
+SFS4_CRASH orphan cases=678 events=97
+test f10_interrupted_relocation_and_f11_retry_crash_matrix ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 303.94s
+

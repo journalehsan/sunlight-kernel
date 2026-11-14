@@ -1,0 +1,27 @@
+[
+  {
+    "argv": [
+      "rustc",
+      "--version",
+      "--verbose"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T191210.314913Z/toolchain.log",
+    "elapsed_ns": 20811991
+  },
+  {
+    "argv": [
+      "cargo",
+      "check",
+      "-p",
+      "sunlight-sunfs",
+      "--offline",
+      "--locked",
+      "--target",
+      "x86_64-unknown-none"
+    ],
+    "returncode": 0,
+    "log": "raw/qualification-20261114T191210.314913Z/core-no-std.log",
+    "elapsed_ns": 377516350
+  }
+]

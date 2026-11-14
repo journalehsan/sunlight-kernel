@@ -1,0 +1,22 @@
+
+running 13 tests
+test reordered_persistence_and_repeated_blocks ... ok
+test persistence_ack_flush_loss_and_reset ... ok
+test checker_read_failure_is_indeterminate ... ok
+test persistence_failures_uncertainty_and_dishonesty ... ok
+test geometry_io_and_sector_adapter ... ok
+test disposable_image_safety_and_readonly_check ... ok
+test semantic_corruption_with_valid_checksums ... ok
+SFS1_CORRUPTION cases=16
+test corruption_classification_and_generation_selection ... ok
+test checker_nonempty_graph_and_corruptions ... ok
+test formatter_checker_clean_geometries ... ok
+SFS1_FAULT_MATRIX cases=480 tear_offsets=[0, 1, 511, 512, 1024, 1536, 2048, 2560, 3072, 3584, 4095, 4096]
+test formatter_torn_partial_failed_and_uncertain_operations ... ok
+SFS1_CRASH_BOUNDARIES cases=112 events=14 clean=4 degraded=0 invalid=108
+test formatter_crashes_each_operation_boundary ... ok
+SFS1_FUZZ cases=4096 seeds=0,1,2,5457491 checker_images=2048 arbitrary_pages=2048
+test bounded_codec_and_checker_fuzz ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.11s
+

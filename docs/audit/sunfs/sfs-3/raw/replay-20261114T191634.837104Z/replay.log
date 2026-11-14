@@ -1,0 +1,28 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.07s
+     Running tests/namespace.rs (target/x86_64-unknown-linux-gnu/debug/deps/namespace-81437e17e0a76d78)
+
+running 1 test
+SFS3_CRASH scenario=mkdir cases=2 events=33
+SFS3_CRASH scenario=create cases=2 events=35
+SFS3_CRASH scenario=write cases=2 events=31
+SFS3_CRASH scenario=rename-same cases=2 events=31
+SFS3_CRASH scenario=rename-cross cases=2 events=30
+SFS3_CRASH scenario=replace cases=3 events=31
+SFS3_CRASH scenario=directory-move cases=2 events=31
+SFS3_CRASH scenario=directory-replace cases=2 events=32
+SFS3_CRASH scenario=unlink cases=2 events=31
+SFS3_CRASH scenario=orphan-write cases=2 events=31
+SFS3_CRASH scenario=rmdir cases=2 events=32
+SFS3_CRASH scenario=last-close-reap cases=2 events=26
+SFS3_CRASH scenario=recovery-reap cases=2 events=26
+SFS3_CRASH scenario=three-replace cases=2 events=33
+SFS3_CRASH scenario=three-reap cases=2 events=28
+test namespace_d_p_r_r0_crash_fault_matrix ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.95s
+

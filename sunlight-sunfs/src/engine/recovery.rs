@@ -1,4 +1,4 @@
-//! Engine-specific bounded recovery. Independently traverses the root-only subset;
+//! Engine-specific bounded recovery. Independently traverses the bounded namespace and orphan subset;
 //! the hosted checker does not call this code and has its own wider graph walker.
 use super::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -156,14 +156,15 @@ impl<D: BlockDevice> Scan<'_, D> {
             _ => return Err(FsError::Corrupt),
         };
         ensure(!maps.is_empty() && maps.len() as u64 <= self.sb.maximum_nodes)?;
-        if maps.len() > MAX_FILES + 1 {
+        if maps.len() > MAX_FILES + MAX_DIRECTORIES + 1 {
             return Err(Error::Unsupported.into());
         }
         let orphans = match self.records(&cp.orphan_table, 3)? {
             Records::Orphans(v) => v,
             _ => return Err(FsError::Corrupt),
         };
-        if !orphans.is_empty() {
+        ensure(orphans.len() as u64 <= self.sb.maximum_orphans)?;
+        if orphans.len() > MAX_ORPHANS {
             return Err(Error::Unsupported.into());
         }
         let segments = match self.records(&cp.segment_table, 2)? {
@@ -173,7 +174,7 @@ impl<D: BlockDevice> Scan<'_, D> {
         ensure(segments.len() as u64 == self.sb.segment_count)?;
         let mut nodes = BTreeMap::new();
         let mut contents = BTreeMap::new();
-        let mut bindings = Vec::new();
+        let mut directories = BTreeMap::new();
         for m in &maps {
             ensure(m.id.nid < cp.next_nid)?;
             let inode = match self.object(&m.node, 5, &m.id, 0, 0)? {
@@ -186,12 +187,9 @@ impl<D: BlockDevice> Scan<'_, D> {
                     && inode.content_generation <= cp.generation,
             )?;
             if inode.kind == 2 {
-                if inode.id != NodeId::ROOT {
-                    return Err(Error::Unsupported.into());
-                }
-                ensure(inode.parent == NodeId::ROOT && inode.nlink == 2)?;
+                let mut bindings = Vec::new();
                 let (count, ds) = self.root(&inode.directory, 4, &inode.id)?;
-                if count > MAX_FILES as u64 {
+                if count > MAX_ENTRIES as u64 {
                     return Err(Error::Unsupported.into());
                 }
                 for (i, d) in ds.iter().enumerate() {
@@ -220,11 +218,14 @@ impl<D: BlockDevice> Scan<'_, D> {
                     .map(|b| (32 + b.name.len() as u64).div_ceil(8) * 8)
                     .sum();
                 ensure(size == inode.size)?;
+                directories.insert(inode.id.nid, bindings);
             } else {
                 if inode.size > MAX_FILE_BYTES as u64 {
                     return Err(Error::Unsupported.into());
                 }
-                ensure(inode.nlink == 1)?;
+                if inode.kind != 1 {
+                    return Err(Error::Unsupported.into());
+                }
                 let (count, ds) = self.root(&inode.extents, 5, &inode.id)?;
                 ensure(count <= self.sb.maximum_extents as u64)?;
                 let mut extents = Vec::new();
@@ -289,23 +290,86 @@ impl<D: BlockDevice> Scan<'_, D> {
                 .get(&1)
                 .is_some_and(|n| n.id == NodeId::ROOT && n.kind == 2),
         )?;
+        ensure(nodes[&1].parent == NodeId::ROOT)?;
+        if nodes.values().filter(|n| n.kind == 1).count() > MAX_FILES
+            || nodes.values().filter(|n| n.kind == 2).count() > MAX_DIRECTORIES + 1
+        {
+            return Err(Error::Unsupported.into());
+        }
+        let mut orphan_ids = BTreeMap::new();
+        for o in &orphans {
+            let n = nodes.get(&o.id.nid).ok_or(FsError::Corrupt)?;
+            ensure(
+                n.id == o.id
+                    && n.nlink == 0
+                    && o.unlink_generation <= cp.generation
+                    && orphan_ids.insert(o.id.nid, o.unlink_generation).is_none(),
+            )?;
+            if n.kind == 2 {
+                ensure(directories[&n.id.nid].is_empty())?;
+            }
+        }
         let mut seen = BTreeSet::new();
+        let mut stack = vec![(1u64, 0usize)];
         let mut files = Vec::new();
-        for b in bindings {
-            if b.name.len() > MAX_NAME {
+        while let Some((nid, depth)) = stack.pop() {
+            ensure(seen.insert(nid) && !orphan_ids.contains_key(&nid))?;
+            if depth > MAX_DEPTH {
                 return Err(Error::Unsupported.into());
             }
-            let inode = nodes.get(&b.target.nid).ok_or(FsError::Corrupt)?;
-            ensure(
-                b.kind == 1 && inode.kind == 1 && b.target == inode.id && seen.insert(b.target.nid),
-            )?;
+            let n = nodes.get(&nid).ok_or(FsError::Corrupt)?;
+            if n.kind == 1 {
+                ensure(n.nlink == 1)?;
+                continue;
+            }
+            let bindings = directories.get(&nid).ok_or(FsError::Corrupt)?;
+            let mut nlink = 2;
+            for b in bindings {
+                if b.name.len() > MAX_NAME {
+                    return Err(Error::Unsupported.into());
+                }
+                let child = nodes.get(&b.target.nid).ok_or(FsError::Corrupt)?;
+                ensure(child.id == b.target && child.kind == b.kind)?;
+                if child.kind == 2 {
+                    ensure(child.parent == n.id)?;
+                    nlink += 1;
+                }
+                files.push(File {
+                    name: b.name.clone(),
+                    id: child.id.clone(),
+                    kind: child.kind,
+                    parent: n.id.clone(),
+                    orphan_generation: 0,
+                    data: if child.kind == 1 {
+                        contents.remove(&child.id.nid).ok_or(FsError::Corrupt)?
+                    } else {
+                        Vec::new()
+                    },
+                });
+                stack.push((child.id.nid, depth + 1));
+            }
+            ensure(n.nlink == nlink)?;
+        }
+        for o in &orphans {
+            let n = &nodes[&o.id.nid];
             files.push(File {
-                name: b.name,
-                id: b.target,
-                data: contents.remove(&inode.id.nid).ok_or(FsError::Corrupt)?,
+                name: Vec::new(),
+                id: n.id.clone(),
+                kind: n.kind,
+                parent: if n.kind == 2 {
+                    n.parent.clone()
+                } else {
+                    NodeId::ROOT
+                },
+                orphan_generation: o.unlink_generation,
+                data: if n.kind == 1 {
+                    contents.remove(&n.id.nid).ok_or(FsError::Corrupt)?
+                } else {
+                    Vec::new()
+                },
             });
         }
-        ensure(files.len() + 1 == nodes.len() && contents.is_empty())?;
+        ensure(seen.len() + orphans.len() == nodes.len() && contents.is_empty())?;
         // Independently reconstruct all ownership before comparing every segment
         // bit and summary entry; counters alone cannot establish free space.
         let mut summaries = BTreeMap::new();
@@ -367,13 +431,14 @@ impl<D: BlockDevice> Scan<'_, D> {
                 && cp.free_blocks
                     == self.sb.segment_count * self.sb.segment_blocks as u64 - cp.allocated_blocks
                 && cp.live_nodes == nodes.len() as u64
-                && cp.orphan_nodes == 0,
+                && cp.orphan_nodes == orphans.len() as u64,
         )?;
         Ok(Snapshot {
             slot,
             cp,
             owned: self.owned,
             files,
+            inodes: nodes,
         })
     }
 }

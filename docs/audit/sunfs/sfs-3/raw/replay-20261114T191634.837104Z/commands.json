@@ -1,0 +1,22 @@
+[
+  {
+    "argv": [
+      "cargo",
+      "test",
+      "-p",
+      "sunlight-sunfs-lab",
+      "--offline",
+      "--locked",
+      "--test",
+      "namespace",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "namespace_d_p_r_r0_crash_fault_matrix",
+      "--",
+      "--nocapture"
+    ],
+    "returncode": 0,
+    "log": "raw/replay-20261114T191634.837104Z/replay.log",
+    "elapsed_ns": 1057831965
+  }
+]

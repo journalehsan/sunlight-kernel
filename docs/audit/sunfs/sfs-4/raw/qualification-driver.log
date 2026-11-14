@@ -1,0 +1,20 @@
+toolchain.log 0
+no-std.log 0
+tests-dev.log 0
+build-dev.log 0
+tests-release.log 0
+build-release.log 0
+storage-regressions.log 0
+clippy.log 0
+format.log 0
+golden.log 0
+cpu-0.log 0
+cpu-1.log 0
+Traceback (most recent call last):
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs4_validate.py", line 186, in <module>
+    for profile in ['dev','release']:
+        ^^^^^^^^^
+  File "/home/ehsantor/Projects/sunlightos-kernel/tools/sunfs4_validate.py", line 135, in qualify
+    assert regressions==[29,9,101],regressions
+           ^^^^^^^^^^^^^^^^^
+AssertionError: compiled source changed

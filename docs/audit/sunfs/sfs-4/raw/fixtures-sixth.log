@@ -1,0 +1,23 @@
+warning: services/sunlight-startup-fixture/Cargo.toml: file `/home/ehsantor/Projects/sunlightos-kernel/services/sunlight-startup-fixture/src/d2_fixture.rs` found to be present in multiple build targets:
+  * `bin` target `d2-fixture`
+  * `bin` target `d3-leaf`
+  * `bin` target `d3-parent`
+warning: `sunlight-startup-fixture` (manifest) generated 1 warning
+   Compiling sunlight-sunfs-lab v0.1.0 (/home/ehsantor/Projects/sunlightos-kernel/sunlight-sunfs-lab)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.54s
+     Running tests/cleaning.rs (target/x86_64-unknown-linux-gnu/debug/deps/cleaning-b8cebc1fcccb2c97)
+
+running 10 tests
+test f2_dead_and_f3_fully_protected_segments_are_not_rewritten ... ok
+test f5_runtime_orphan_pins_offsets_close_and_distinct_reaping ... ok
+test f4_fallback_releases_only_after_publication_and_retirement ... ok
+test f12_reserve_and_plan_exhaustion_reject_before_io ... ok
+test f6_near_full_uses_cleaner_reserve_but_keeps_recovery_floor ... ok
+test inode_attributes_survive_and_changed_source_freezes_before_writes ... ok
+test f7_no_progress_budget_dirty_and_repeated_refusal_are_bounded ... ok
+test cleaner_checker_rejects_crc_resealed_semantic_and_manifest_defects ... ok
+test f1_mixed_relocation_positive_capacity_and_eventual_source_reuse ... ok
+test f8_overwrite_and_f9_namespace_churn_reuse_without_ownership_loss ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.44s
+

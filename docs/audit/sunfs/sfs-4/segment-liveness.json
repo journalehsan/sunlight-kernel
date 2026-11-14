@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "api": "Filesystem::segment_liveness(limit)",
+  "source": "sunlight-sunfs/src/engine/cleaner.rs:107",
+  "authority": "explicit block lists reconstructed by validated metadata/data closure traversal; never segment counters alone",
+  "states": {
+    "Free": "no retained or pending owner; old bytes need no erasure",
+    "Active": "conceptual only; allocator seals complete full-snapshot segments without exposed append mode",
+    "Sealed": "current closure owns blocks; no new allocation to unused offsets",
+    "Cleaning": "admitted plan reservation (transient under exclusive synchronous API)",
+    "Retired": "fallback-only ownership; blocked until durable slot invalidation",
+    "Quarantined": "frozen/degraded owner marks every segment unsafe"
+  },
+  "runtime_only_disk_blocks": "unsupported by design; handles own copied memory and every remaining orphan stays mapped. Runtime-only physical liveness fixture is NOT_APPLICABLE, not a simulated hidden owner.",
+  "tests": {
+    "dead": "F2 plus F1 actual obsolete nonzero tail and eventual source release",
+    "live": "F12 populated segments and protected bootstrap shared ownership",
+    "mixed": "F1 observed reused dense segment with obsolete nonzero tail",
+    "fallback": "F3/F4 and three-generation crash campaign",
+    "runtime": "F5 actual open/dup/unlink/read offsets, copied orphan backing",
+    "reservation": "fault matrix exact pending block counts after admission",
+    "uncertain": "fault matrix and changed-source test freeze all segments"
+  },
+  "traversal_budget": "actual aggregate caller read limit enforced by a read-only device wrapper, plus 65536 reads per closure; changed-larger-valid-graph test exhausts exactly its declared read budget with no writes and frozen owner",
+  "selection": "sort current-only sealed candidates by live block count then index; equal segment sizes make this exact ratio ordering; fallback-only and shared segments skipped",
+  "evidence": "raw final qualification profile/sfs4 fixtures, ownership dumps, traces and images"
+}

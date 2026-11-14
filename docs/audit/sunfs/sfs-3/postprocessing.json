@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "operation": "lossless gzip of only SFS-3 earlier raw images/traces; no source change",
+  "directories": [
+    "docs/audit/sunfs/sfs-3/raw/baseline",
+    "docs/audit/sunfs/sfs-3/raw/baseline-retry",
+    "docs/audit/sunfs/sfs-3/raw/qualification-20261114T191210.314913Z"
+  ],
+  "method": "tools/sunfs3_validate.py compress(), validates decompressed equality and original/compressed SHA256; per-directory lossless-compression.json retained"
+}
