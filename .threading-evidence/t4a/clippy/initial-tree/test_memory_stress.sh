@@ -1,1 +1,0 @@
-/home/ehsantor/Projects/sunlightos-kernel/test_memory_stress.sh

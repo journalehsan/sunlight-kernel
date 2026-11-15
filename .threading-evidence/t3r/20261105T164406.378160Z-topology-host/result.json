@@ -1,9 +1,0 @@
-{
-  "pass": true,
-  "timeout": false,
-  "command": [
-    "target/t3r-topology-test"
-  ],
-  "exit_code": 0,
-  "seconds": 0.25063737100572325
-}

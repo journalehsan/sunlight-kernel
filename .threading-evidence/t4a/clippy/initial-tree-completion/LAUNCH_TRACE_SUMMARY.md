@@ -1,1 +1,0 @@
-/home/ehsantor/Projects/sunlightos-kernel/LAUNCH_TRACE_SUMMARY.md

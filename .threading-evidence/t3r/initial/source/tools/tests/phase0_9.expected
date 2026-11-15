@@ -1,2 +1,0 @@
-# Phase 0.9 secure-randomness qualification gate.
-[ENTROPY] secure source=virtio-rng conditioner=ChaCha20 readiness=ready
